@@ -21,7 +21,8 @@ dset/
 old
 OLD
 Log
-log
+*log*
+*Log*
 
 
 # Distribution / packaging
