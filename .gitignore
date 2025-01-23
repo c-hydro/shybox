@@ -22,8 +22,9 @@ old
 OLD
 Log
 *old*.txt
-*OLD*
-
+*OLD*.txt
+*old*.py
+*OLD*.py
 
 
 # Distribution / packaging
