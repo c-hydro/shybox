@@ -16,13 +16,14 @@ __pycache__/
 
 # Project
 dset/
-*.log/
-*.LOG/
+*.log
+*.LOG
 old
 OLD
 Log
 *old*.txt
 *OLD*
+
 
 
 # Distribution / packaging
