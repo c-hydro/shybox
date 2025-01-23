@@ -21,6 +21,8 @@ dset/
 old
 OLD
 Log
+*log*.txt
+*Log*.txt
 *old*.txt
 *OLD*.txt
 *old*.py
