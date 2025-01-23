@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyms"
+version = "1.0.0"
+description = "A package to set and run hydrological models and analyze results, developed by CIMA Research Foundation"
+authors = [
+    { name = "Fabio Delogu", email = "fabio.delogu@cimafoundation.org" },
+    { name = "Andrea Libertino"},
+    { name = "Francesco Avanzi"}
+]
+maintainers = [
+    { name = "Fabio Delogu", email = "fabio.delogu@cimafoundation.org"}
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: ECPL License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy>=1.21.5",
+    "xarray>=2024.3.0",
+    "scipy>=1.8.0",
+    "netCDF4>=1.5.8",
+]
+
+[project.urls]
+Repository = "https://github.com/c-hydro/hyms"
+
+[project.optional-dependencies]
+
+# dependencies for creating thumbnails
+thumbnails = []
+
+# dependencies for reading and writing remote data
+remote-data = []
