@@ -1,0 +1,75 @@
+{
+  "__comment__" : "configuration file for the runner information",
+  "settings": {
+    "priority": {"reference": "environment", "other": "user"},
+    "flags": {"update_executable": true},
+    "variables": {
+      "lut": {
+        "user": {
+          "time_run": "{time_run}", "time_restart": "{time_restart}",
+          "path_source": "$HOME/data/static/point/",
+          "time_start": null, "time_end": null,
+          "time_period": 23, "time_rounding": "H", "time_frequency": "H",
+          "execution_name": "exec_det", "execution_mode": "run_det"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "path_source" : "PATH_SRC", "path_destination" : "PATH_DST",
+          "time_run" : "TIME_RUN", "time_restart": "TIME_RESTART", "time_period" : "TIME_PERIOD",
+          "file_log": "FILE_LOG", "path_log": "PATH_LOG",
+          "path_namelist": "PATH_NAMELIST", "file_namelist": "FILE_NAMELIST"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_source": "string", "path_destination": "string",
+        "time_run": "timestamp", "time_restart": "timestamp", "time_period": "int",
+        "time_start": "string", "time_end": "string",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_log": "string", "file_log": "string",
+        "path_namelist": "string", "file_namelist": "string",
+        "execution_name": "string", "execution_mode": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_source": "string", "path_destination": "string",
+        "time_run": "%Y%m%d%H00", "time_restart": "%Y%m%d%H00", "time_period": "int",
+        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_log": "string", "file_log": "string",
+        "path_namelist": "string", "file_namelist": "string",
+        "execution_name": "string", "execution_mode": "string"
+      }
+    }
+  },
+  "application": {
+    "description": {
+      "execution_name": "{execution_name}", "execution_mode": "{execution_mode}"
+    },
+    "executable": {
+      "location": "/$HOME/Desktop/hmc-suite/workflow/run/{execution_name}/{execution_mode}/exec/HMC_Model_V3_{execution_name}.x",
+      "arguments": "{path_namelist}/{file_namelist}"
+    },
+    "info": {
+      "location": "/$HOME/Desktop/hmc-suite/workflow/run/{execution_name}/{execution_mode}/exec/HMC_Model_V3_{execution_name}.info"
+    },
+    "library": {
+      "location": "/home/fabio/fp_system_apps/hmc/HMC_Model_V3_$RUN.x",
+      "dependencies": ["$HOME/fp_system_libs_hmc/nc4/lib/"]
+    }
+  },
+  "configuration": {
+    "time_run": "{time_run}",
+    "time_restart": "{time_restart}",
+    "time_period": "{time_period}",
+    "time_start": "{time_start}",
+    "time_end": "{time_end}",
+    "time_rounding": "{time_rounding}",
+    "domain_name": "{domain_name}",
+    "path_source": "{path_source}", "path_destination": "{path_destination}",
+    "file_namelist": "{file_namelist}", "path_namelist": "{path_namelist}",
+    "file_log": "{file_log}", "path_log": "{path_log}",
+    "file_tmp": null, "path_tmp": "$HOME/tmp/",
+    "execution_name": "{execution_name}", "execution_mode": "{execution_mode}"
+  }
+}
