@@ -1,0 +1,45 @@
+{
+  "__comment__" : "configuration file for the settings information",
+  "information": {
+    "priority": {"reference":  "environment", "other": "user"},
+    "flags": {},
+    "variables": {
+      "lut": {
+        "user": {
+          "time_run": null,
+          "domain_name": "test",
+          "file_namelist": "namelist_test.txt", "path_namelist": "$HOME/namelist/",
+          "file_tmp": null, "path_tmp": "$HOME/tmp/"
+        },
+        "environment": {
+          "time_run": "TIME_RUN",
+          "domain_name": "DOMAIN_NAME",
+          "file_namelist": "FILE_NAMELIST", "path_namelist": "PATH_NAMELIST",
+          "file_log": "FILE_LOG", "path_log": "PATH_LOG"
+        }
+      },
+      "format": {
+        "time_run": "timestamp",
+        "domain_name": "string",
+        "file_namelist": "string", "path_namelist": "string",
+        "file_log": "string", "path_log": "string",
+        "file_tmp": "string", "path_tmp": "string"
+
+      },
+      "template": {
+        "time_run": "%Y%m%d%H00",
+        "domain_name": "string",
+        "file_namelist": "string", "path_namelist": "string",
+        "file_log": "string", "path_log": "string",
+        "file_tmp": "string", "path_tmp": "string"
+      }
+    }
+  },
+  "configuration": {
+    "time_run": "{time_run}",
+    "domain_name": "{domain_name}",
+    "file_namelist": "{file_namelist}", "path_namelist": "{path_namelist}",
+    "file_log": "{file_log}", "path_log": "{path_log}",
+    "file_tmp": null, "path_tmp": "$HOME/tmp/"
+  }
+}

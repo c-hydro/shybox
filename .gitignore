@@ -14,6 +14,22 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Project
+dset/
+example/
+*.log
+*.LOG
+old
+OLD
+Log
+*log*.txt
+*Log*.txt
+*old*.txt
+*OLD*.txt
+*old*.py
+*OLD*.py
+
+
 # Distribution / packaging
 .Python
 build/

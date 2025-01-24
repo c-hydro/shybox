@@ -1,0 +1,82 @@
+{
+  "__comment__" : "configuration file for the namelist information",
+  "settings": {
+    "priority": {"reference":  "environment", "other": "user"},
+    "flags": {"update_namelist": true},
+    "variables": {
+      "lut": {
+        "user": {
+          "time_run": "{time_run}", "time_restart": "{time_restart}",
+          "path_source": "$HOME/data/static/point/",
+          "time_start": null, "time_end": null,
+          "time_period": 23, "time_rounding": "H", "time_frequency": "H"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "path_source" : "PATH_SRC", "path_destination" : "PATH_DST",
+          "time_run" : "TIME_RUN", "time_restart": "TIME_RESTART", "time_period" : "TIME_PERIOD",
+          "file_log": "FILE_LOG", "path_log": "PATH_LOG",
+          "path_namelist": "PATH_NAMELIST", "file_namelist": "FILE_NAMELIST"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_source": "string", "path_destination": "string",
+        "time_run": "timestamp", "time_restart": "timestamp", "time_period": "int",
+        "time_start": "string", "time_end": "string",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_log": "string", "file_log": "string",
+        "path_namelist": "string", "file_namelist": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_source": "string", "path_destination": "string",
+        "time_run": "%Y%m%d%H00", "time_restart": "%Y%m%d%H00", "time_period": "int",
+        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_log": "string", "file_log": "string",
+        "path_namelist": "string", "file_namelist": "string"
+      }
+    }
+  },
+  "namelist": {
+    "description": {
+      "version": "3.1.6", "type": "hmc"
+    },
+    "file": {
+      "template": "hmc.template.info.v3.1.6.txt",
+      "project": "{path_namelist}/{file_namelist}"
+    },
+    "fields": {
+      "by_value": {
+        "sDomainName": "{domain_name}",
+        "sPathData_Static_Point": ".{path_source}/{domain_name}/",
+        "sPathData_State_Point": "./data/static/point/",
+        "sPathData_Static_Gridded": "./data/static/point/",
+        "sPathData_State_Gridded": "./data/static/point/{domain_name}/",
+        "sPathData_Outcome_Point": "./data/static/point/{domain_name}/%YYYY/%DD/%MM/",
+        "sTimeStart": "{time_run}",
+        "sTimeRestart": "{time_restart}",
+        "iSimLength": "{time_period}",
+        "iTVeg": 800
+      },
+      "by_pattern": {
+        "pattern_dt": {"active": true, "template": "iDt", "value": 3600},
+        "pattern_path_data": {"active": true, "template": "sPathData", "value": "/"}
+      }
+    }
+  },
+  "configuration": {
+    "time_run": "{time_run}",
+    "time_restart": "{time_restart}",
+    "time_period": "{time_period}",
+    "time_start": "{time_start}",
+    "time_end": "{time_end}",
+    "time_rounding": "{time_rounding}",
+    "domain_name": "{domain_name}",
+    "path_source": "{path_source}", "path_destination": "{path_destination}",
+    "file_namelist": "{file_namelist}", "path_namelist": "{path_namelist}",
+    "file_log": "{file_log}", "path_log": "{path_log}",
+    "file_tmp": null, "path_tmp": "$HOME/tmp/"
+  }
+}
