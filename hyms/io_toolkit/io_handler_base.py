@@ -27,7 +27,7 @@ class IOHandler:
         'ascii_time_series': None, 'csv_time_series': None,
     }
 
-    def __init__(self, folder_name: str, file_name: str,
+    def __init__(self, file_name: str,
                  file_type: str = 'raster',
                  file_format: Optional[str] = None,
                  vars_list: Optional[list] = None, vars_mapping: Optional[dict] = None, **kwargs) -> None:
@@ -35,7 +35,6 @@ class IOHandler:
         if file_type is None:
             file_type = 'raster'
 
-        self.folder_name = folder_name
         self.file_name = file_name
         self.file_type = file_type
 
@@ -44,7 +43,7 @@ class IOHandler:
             self.file_format = 'tiff'
         elif self.file_format.lower() in ['txt', 'asc']:
             self.file_format = 'ascii'
-        elif self.file_format.lower() in ['nc', 'netcdf', 'nc4', 'netCDF']:
+        elif self.file_format.lower() in ['nc', 'netcdf', 'nc4']:
             self.file_format = 'netCDF'
         else:
             raise ValueError(f'Format {self.file_format} not supported.')
@@ -78,6 +77,7 @@ class IOHandler:
                 raise ValueError(f'Format {self.file_format} not supported for type {self.file_type}.')
         else:
             raise ValueError(f'Type {self.file_type} not supported.')
+
         self.vars_list = vars_list
         self.vars_mapping = vars_mapping
 

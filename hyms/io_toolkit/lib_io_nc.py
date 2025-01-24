@@ -4,7 +4,7 @@ import xarray as xr
 import numpy as np
 from rasterio.crs import CRS
 
-from hyms.io_toolkit.lib_default_geo import proj_epsg, proj_wkt
+from hyms.default.lib_default_geo import proj_epsg, proj_wkt
 
 
 # ----------------------------------------------------------------------------------------------------------------------
