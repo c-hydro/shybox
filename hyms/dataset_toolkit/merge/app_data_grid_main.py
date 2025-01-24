@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-HYMS PACKAGE - DATA GRID APP
+HYMS PACKAGE - DATA GRID APP test
 
 __date__ = '20250123'
 __version__ = '3.0.0'
