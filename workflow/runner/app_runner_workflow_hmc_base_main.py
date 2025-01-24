@@ -1,13 +1,13 @@
 #!/usr/bin/python3
 """
-HMC-SUITE - WORKFLOW RUNNER BASE
+HYMS - Hydro Models Suite - WORKFLOW RUNNER BASE
 
 __date__ = '20250117'
 __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
-__library__ = 'hmc-suite'
+__library__ = 'hyms'
 
 General command line:
 python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
@@ -21,7 +21,7 @@ PATH_NAMELIST=$HOME/run_base/exec/;
 PATH_EXEC=$HOME/run_base/exec/
 
 Version(s):
-20250117 (1.0.0) --> Beta release for hmc-suite package
+20250117 (1.0.0) --> Beta release for hyms package
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -30,16 +30,16 @@ import logging
 import os
 import time
 
-from apps.generic_toolkit.lib_utils_args import get_args
-from apps.generic_toolkit.lib_utils_logging import set_logging_stream
+from hyms.generic_toolkit.lib_utils_args import get_args
+from hyms.generic_toolkit.lib_utils_logging import set_logging_stream
 
-from apps.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
-from apps.generic_toolkit.lib_default_args import collector_data
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
+from hyms.generic_toolkit.lib_default_args import collector_data
 
-from apps.runner_toolkit.settings.driver_app_settings import DrvSettings
-from apps.runner_toolkit.time.driver_app_time import DrvTime
-from apps.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
-from apps.runner_toolkit.execution.driver_app_execution import DrvExec
+from hyms.runner_toolkit.settings.driver_app_settings import DrvSettings
+from hyms.runner_toolkit.time.driver_app_time import DrvTime
+from hyms.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
+from hyms.runner_toolkit.execution.driver_app_execution import DrvExec
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -47,7 +47,7 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
-project_name = 'hmc-suite'
+project_name = 'hyms'
 alg_name = 'Workflow for runner base configuration'
 alg_type = 'Package'
 alg_version = '1.0.0'

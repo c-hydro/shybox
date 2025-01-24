@@ -21,13 +21,13 @@ Version(s):
 import logging
 import os.path
 
-from apps.generic_toolkit.lib_utils_args import get_args
-from apps.generic_toolkit.lib_utils_logging import set_logging_stream
+from hyms.generic_toolkit.lib_utils_args import get_args
+from hyms.generic_toolkit.lib_utils_logging import set_logging_stream
 
-from apps.generic_toolkit.lib_default_args import logger_name, logger_format
-from apps.generic_toolkit.lib_default_args import collector_data
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_format
+from hyms.generic_toolkit.lib_default_args import collector_data
 
-from apps.runner_toolkit.settings.driver_app_settings import DrvSettings
+from hyms.runner_toolkit.settings.driver_app_settings import DrvSettings
 
 # set logger
 logger_stream = logging.getLogger(logger_name)

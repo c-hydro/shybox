@@ -1,9 +1,9 @@
 import unittest
 import os
 
-from apps.generic_toolkit.lib_utils_test import configure_home, extract_obj_by_list
-from apps.generic_toolkit.lib_default_args import collector_data
-from apps.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
+from hyms.generic_toolkit.lib_utils_test import configure_home, extract_obj_by_list
+from hyms.generic_toolkit.lib_default_args import collector_data
+from hyms.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
 
 class TestNamelist(unittest.TestCase):
 

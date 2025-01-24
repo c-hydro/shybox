@@ -22,15 +22,15 @@ import logging
 import os
 import time
 
-from apps.generic_toolkit.lib_utils_args import get_args
-from apps.generic_toolkit.lib_utils_logging import set_logging_stream
+from hyms.generic_toolkit.lib_utils_args import get_args
+from hyms.generic_toolkit.lib_utils_logging import set_logging_stream
 
-from apps.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
-from apps.generic_toolkit.lib_default_args import collector_data
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
+from hyms.generic_toolkit.lib_default_args import collector_data
 
-from apps.runner_toolkit.settings.driver_app_settings import DrvSettings
-from apps.runner_toolkit.time.driver_app_time import DrvTime
-from apps.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
+from hyms.runner_toolkit.settings.driver_app_settings import DrvSettings
+from hyms.runner_toolkit.time.driver_app_time import DrvTime
+from hyms.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -38,7 +38,7 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
-project_name = 'hmc-suite'
+project_name = 'hyms'
 alg_name = 'Application for namelist'
 alg_type = 'Package'
 alg_version = '1.0.0'

@@ -14,8 +14,8 @@ import pandas as pd
 
 from tabulate import tabulate
 
-from apps.generic_toolkit.lib_utils_dict import flat_dict_key
-from apps.generic_toolkit.lib_utils_namelist import (filter_namelist_settings,
+from hyms.generic_toolkit.lib_utils_dict import flat_dict_key
+from hyms.generic_toolkit.lib_utils_namelist import (filter_namelist_settings,
                                                      read_namelist_group, parse_namelist_settings,
                                                      write_namelist_group, select_namelist_type)
 

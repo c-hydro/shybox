@@ -15,7 +15,7 @@ import re
 
 import numpy as np
 
-from apps.generic_toolkit.lib_default_args import logger_name
+from hyms.generic_toolkit.lib_default_args import logger_name
 
 # logging
 log_stream = logging.getLogger(logger_name)

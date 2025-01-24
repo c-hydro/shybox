@@ -13,15 +13,15 @@ import logging
 import os
 import re
 
-from apps.generic_toolkit.lib_utils_dict import create_dict_from_list
-from apps.generic_toolkit.lib_utils_string import replace_string, fill_tags2string, convert_bytes2string
-from apps.generic_toolkit.lib_utils_file import (split_file_path, join_file_path,
+from hyms.generic_toolkit.lib_utils_dict import create_dict_from_list
+from hyms.generic_toolkit.lib_utils_string import replace_string, fill_tags2string, convert_bytes2string
+from hyms.generic_toolkit.lib_utils_file import (split_file_path, join_file_path,
                                                  sanitize_file_path, expand_file_path, copy_file)
-from apps.generic_toolkit.lib_utils_time import convert_time_frequency
-from apps.generic_toolkit.lib_utils_debug import read_workspace_obj, write_workspace_obj
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow
+from hyms.generic_toolkit.lib_utils_time import convert_time_frequency
+from hyms.generic_toolkit.lib_utils_debug import read_workspace_obj, write_workspace_obj
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
 
-from apps.runner_toolkit.execution.handler_app_execution import ExecutionHandler
+from hyms.runner_toolkit.execution.handler_app_execution import ExecutionHandler
 
 # logging
 logger_stream = logging.getLogger(logger_name)

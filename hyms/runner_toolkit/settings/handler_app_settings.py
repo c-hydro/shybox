@@ -17,16 +17,16 @@ import pandas as pd
 from tabulate import tabulate
 from copy import deepcopy
 
-from apps.generic_toolkit.lib_utils_file import expand_file_path
-from apps.generic_toolkit.lib_utils_time import convert_time_format
-from apps.generic_toolkit.lib_utils_settings import get_data_settings
+from hyms.generic_toolkit.lib_utils_file import expand_file_path
+from hyms.generic_toolkit.lib_utils_time import convert_time_format
+from hyms.generic_toolkit.lib_utils_settings import get_data_settings
 
-from apps.generic_toolkit.lib_utils_string import replace_string, fill_tags2string
-from apps.generic_toolkit.lib_utils_dict import (get_dict_value_by_key, swap_keys_values, filter_dict_by_keys,
+from hyms.generic_toolkit.lib_utils_string import replace_string, fill_tags2string
+from hyms.generic_toolkit.lib_utils_dict import (get_dict_value_by_key, swap_keys_values, filter_dict_by_keys,
                                                  add_dict_key, flat_dict_key)
 
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow
-from apps.generic_toolkit.lib_default_args import collector_data
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
+from hyms.generic_toolkit.lib_default_args import collector_data
 
 # logging
 logger_stream = logging.getLogger(logger_name)

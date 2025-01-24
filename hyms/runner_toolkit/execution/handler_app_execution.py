@@ -18,11 +18,11 @@ from multiprocessing import Pool, cpu_count
 from tabulate import tabulate
 
 
-from apps.generic_toolkit.lib_utils_process import exec_process
-from apps.generic_toolkit.lib_utils_dict import  flat_dict_key
+from hyms.generic_toolkit.lib_utils_process import exec_process
+from hyms.generic_toolkit.lib_utils_dict import  flat_dict_key
 
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow
-from apps.generic_toolkit.lib_default_args import collector_data
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
+from hyms.generic_toolkit.lib_default_args import collector_data
 
 # logging
 logger_stream = logging.getLogger(logger_name)

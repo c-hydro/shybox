@@ -15,7 +15,7 @@ import sys
 import shutil
 import errno, os
 
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
 
 # Sadly, Python fails to provide the following magic number for us.
 ERROR_INVALID_NAME = 123

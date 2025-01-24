@@ -14,15 +14,15 @@ import numpy as np
 import pandas as pd
 from typing import Tuple, List
 
-from apps.generic_toolkit.lib_default_namelist import (
+from hyms.generic_toolkit.lib_default_namelist import (
     type_namelist_hmc_316, structure_namelist_hmc_316, type_namelist_hmc_320, structure_namelist_hmc_320,
     type_namelist_s3m_533, structure_namelist_s3m_533)
-from apps.generic_toolkit.lib_default_args import time_format_datasets
+from hyms.generic_toolkit.lib_default_args import time_format_datasets
 
-from apps.generic_toolkit.lib_utils_string import convert_list2string
-from apps.generic_toolkit.lib_utils_fortran import define_var_format
-from apps.generic_toolkit.lib_utils_time import is_date
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow
+from hyms.generic_toolkit.lib_utils_string import convert_list2string
+from hyms.generic_toolkit.lib_utils_fortran import define_var_format
+from hyms.generic_toolkit.lib_utils_time import is_date
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
 
 # logging
 logger_stream = logging.getLogger(logger_name)

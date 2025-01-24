@@ -12,8 +12,8 @@ Version:       '1.0.0'
 import logging
 import os
 
-from apps.generic_toolkit.lib_utils_file import expand_file_path
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow, time_format_datasets
+from hyms.generic_toolkit.lib_utils_file import expand_file_path
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow, time_format_datasets
 
 # logging
 logger_stream = logging.getLogger(logger_name)

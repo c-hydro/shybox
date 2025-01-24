@@ -14,7 +14,7 @@ import pandas as pd
 
 from datetime import date
 
-from apps.generic_toolkit.lib_default_args import (logger_name, logger_arrow,
+from hyms.generic_toolkit.lib_default_args import (logger_name, logger_arrow,
                                                    time_format_datasets as format_dset,
                                                    time_format_algorithm as format_alg)
 

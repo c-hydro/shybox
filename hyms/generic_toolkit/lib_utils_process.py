@@ -13,7 +13,7 @@ import subprocess
 import time
 import os
 
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
 
 # logging
 logger_stream = logging.getLogger(logger_name)

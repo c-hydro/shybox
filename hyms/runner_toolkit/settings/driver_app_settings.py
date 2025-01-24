@@ -13,12 +13,12 @@ import logging
 import os
 from copy import deepcopy
 
-from apps.runner_toolkit.settings import handler_app_settings as handler_settings
+from hyms.runner_toolkit.settings import handler_app_settings as handler_settings
 
-from apps.generic_toolkit.lib_utils_file import expand_file_path
-from apps.generic_toolkit.lib_utils_dict import check_keys_of_dict, flat_dict_key, add_dict_key
-from apps.generic_toolkit.lib_default_args import logger_name, logger_arrow
-from apps.generic_toolkit.lib_default_args import collector_data
+from hyms.generic_toolkit.lib_utils_file import expand_file_path
+from hyms.generic_toolkit.lib_utils_dict import check_keys_of_dict, flat_dict_key, add_dict_key
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
+from hyms.generic_toolkit.lib_default_args import collector_data
 
 # logging
 logger_stream = logging.getLogger(logger_name)

@@ -17,10 +17,10 @@ import glob
 
 from copy import deepcopy
 
-from apps.generic_toolkit.lib_default_args import logger_name as logger_name_default
-from apps.generic_toolkit.lib_default_args import logger_file as logger_file_default
+from hyms.generic_toolkit.lib_default_args import logger_name as logger_name_default
+from hyms.generic_toolkit.lib_default_args import logger_file as logger_file_default
 # from lib_default_args import logger_handle as logger_handle_default
-from apps.generic_toolkit.lib_default_args import logger_format as logger_format_default
+from hyms.generic_toolkit.lib_default_args import logger_format as logger_format_default
 
 # debugging
 # import matplotlib.pylab as plt
