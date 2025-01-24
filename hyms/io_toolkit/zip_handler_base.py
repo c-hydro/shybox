@@ -4,10 +4,10 @@
 import os
 from copy import deepcopy
 
-from hmc.generic_toolkit.default.lib_default_generic import zip_extension
+from hyms.default.lib_default_generic import zip_extension
 
-from hmc.generic_toolkit.data.lib_io_gzip import (unzip_file_name as unzip_file_name_gzip,
-                                                  zip_file_name as zip_file_name_gzip)
+from hyms.io_toolkit.lib_io_gzip import (unzip_file_name as unzip_file_name_gzip,
+                                         zip_file_name as zip_file_name_gzip)
 # ----------------------------------------------------------------------------------------------------------------------
 
 
