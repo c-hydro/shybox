@@ -5,7 +5,7 @@ import numpy as np
 import rasterio as rio
 from rasterio.crs import CRS
 
-from hmc.generic_toolkit.data.lib_io_utils import create_darray
+from hyms.io_toolkit.lib_io_utils import create_darray
 # ----------------------------------------------------------------------------------------------------------------------
 
 

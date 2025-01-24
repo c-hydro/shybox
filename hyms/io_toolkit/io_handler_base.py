@@ -6,12 +6,12 @@ from datetime import datetime
 import numpy as np
 import xarray as xr
 
-from hmc.generic_toolkit.data.lib_io_ascii_grid import get_file_grid as get_file_grid_ascii
-from hmc.generic_toolkit.data.lib_io_ascii_array import get_file_array as get_file_array_ascii
-from hmc.generic_toolkit.data.lib_io_ascii_point import (
+from hyms.io_toolkit.lib_io_ascii_grid import get_file_grid as get_file_grid_ascii
+from hyms.io_toolkit.lib_io_ascii_array import get_file_array as get_file_array_ascii
+from hyms.io_toolkit.lib_io_ascii_point import (
     get_file_point_section, get_file_point_lake, get_file_point_dam, get_file_point_joint, get_file_point_intake)
-from hmc.generic_toolkit.data.lib_io_tiff import get_file_grid as get_file_grid_tiff
-from hmc.generic_toolkit.data.lib_io_nc import get_file_grid as get_file_grid_nc
+from hyms.io_toolkit.lib_io_tiff import get_file_grid as get_file_grid_tiff
+from hyms.io_toolkit.lib_io_nc import get_file_grid as get_file_grid_nc
 
 import matplotlib.pylab as plt
 
@@ -20,13 +20,11 @@ class IOHandler:
 
     type_class = 'io_base'
     type_data_grid = {
-        'ascii_raster': get_file_grid_ascii, 'tiff_raster': get_file_grid_tiff, 'netCDF_raster': get_file_grid_nc}
+        'ascii_raster': get_file_grid_ascii, 'tiff_raster': get_file_grid_tiff, 'netcdf_raster': get_file_grid_nc}
     type_data_array = {
         'ascii_array': get_file_array_ascii}
     type_data_point = {
-        'ascii_point_section': get_file_point_section, 'ascii_point_lake': get_file_point_lake,
-        'ascii_point_dam': get_file_point_dam, 'ascii_point_joint': get_file_point_joint,
-        'ascii_point_intake': get_file_point_intake
+        'ascii_time_series': None, 'csv_time_series': None,
     }
 
     def __init__(self, folder_name: str, file_name: str,
@@ -46,7 +44,7 @@ class IOHandler:
             self.file_format = 'tiff'
         elif self.file_format.lower() in ['txt', 'asc']:
             self.file_format = 'ascii'
-        elif self.file_format.lower() in ['nc', 'netcdf']:
+        elif self.file_format.lower() in ['nc', 'netcdf', 'nc4', 'netCDF']:
             self.file_format = 'netCDF'
         else:
             raise ValueError(f'Format {self.file_format} not supported.')

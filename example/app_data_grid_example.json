@@ -1,0 +1,46 @@
+{
+  "__comment__" : "configuration file for time information",
+  "information": {
+    "variables": {
+      "priority": {"reference":  "environment", "other": "user"},
+      "lut": {
+        "user": {
+          "time_run": "{time_run}", "time_restart": "{time_restart}",
+          "time_start": null, "time_end": null,
+          "time_period": 23, "time_rounding": "H", "time_frequency": "H"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "file_log": "FILE_LOG", "path_log": "PATH_LOG",
+          "time_run": "TIME_RUN", "time_restart": "TIME_RESTART", "time_period": "TIME_PERIOD"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "file_log": "string", "path_log": "string",
+        "time_run": "timestamp", "time_restart" : "timestamp",
+        "time_start": "timestamp", "time_end": "timestamp",
+        "time_period": "int", "time_rounding": "string", "time_frequency": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "file_log": "string", "path_log": "string",
+        "time_run": "%Y%m%d%H00", "time_restart": "%Y%m%d%H00",
+        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
+        "time_period": "int", "time_rounding": "string", "time_frequency": "string"
+      }
+    }
+  },
+  "configuration": {
+      "time_run": "{time_run}",
+      "time_restart": "{time_restart}",
+      "time_period": "{time_period}",
+      "time_start": "{time_start}",
+      "time_end": "{time_end}",
+      "time_rounding": "{time_rounding}",
+      "domain_name": "{domain_name}",
+      "file_namelist": "{file_namelist}", "path_namelist": "{path_namelist}",
+      "file_log": "{file_log}", "path_log": "{path_log}",
+      "file_tmp": null, "path_tmp": "$HOME/tmp/"
+  }
+}

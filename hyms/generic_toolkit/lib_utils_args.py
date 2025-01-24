@@ -53,8 +53,10 @@ def get_logger_name(logger_name_mode='by_package', logger_name_default='script_l
         logger_name = logger_name_default
     elif logger_name_mode == 'by_script':
         logger_name = os.path.basename(__file__)
-    elif logger_name_mode == 'by_package'
+    elif logger_name_mode == 'by_package':
         logger_name = logger_name_package
+    else:
+        logger_name = logger_name_default
     return logger_name
 # ----------------------------------------------------------------------------------------------------------------------
 

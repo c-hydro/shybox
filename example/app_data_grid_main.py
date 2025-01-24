@@ -25,16 +25,17 @@ Version(s):
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import time
 import os
 
-from hyms.generic_toolkit.lib_default_args import logger_format, logger_arrow
+from hyms.generic_toolkit.lib_utils_args import get_logger_name
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from hyms.generic_toolkit.lib_default_args import collector_data
 
 from hyms.io_toolkit import io_handler_base
 
 # set logger
-logger_name = os.path.basename(__file__)
-logger_stream = logging.getLogger(logger_name)
+logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', logger_name_default=logger_name))
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

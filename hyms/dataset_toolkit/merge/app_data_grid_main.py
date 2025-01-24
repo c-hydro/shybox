@@ -3,7 +3,7 @@
 HYMS PACKAGE - DATA GRID APP
 
 __date__ = '20250123'
-__version__ = '1.0.0'
+__version__ = '3.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -25,20 +25,18 @@ Version(s):
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
-import os
 import time
+import os
 
-from hyms.generic_toolkit.lib_utils_args import get_args
-from hyms.generic_toolkit.lib_utils_logging import set_logging_stream
-
+from hyms.generic_toolkit.lib_utils_args import get_logger_name
 from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from hyms.generic_toolkit.lib_default_args import collector_data
 
-from hyms.runner_toolkit.settings.driver_app_settings import DrvSettings
 from hyms.dataset_toolkit.merge.driver_data_grid import DrvData
+from hyms.io_toolkit import io_handler_base
 
 # set logger
-logger_stream = logging.getLogger(logger_name)
+logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', logger_name_default=logger_name))
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -46,15 +44,15 @@ logger_stream = logging.getLogger(logger_name)
 project_name = 'hyms'
 alg_name = 'Application for data grid'
 alg_type = 'Package'
-alg_version = '1.0.0'
+alg_version = '3.0.0'
 alg_release = '2025-01-24'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# script main
-def main(alg_collectors_settings: dict = None):
 
+# ----------------------------------------------------------------------------------------------------------------------
+# main function
+def main(alg_collectors_settings: dict = None):
 
     # ------------------------------------------------------------------------------------------------------------------
     # info algorithm (start)
@@ -67,29 +65,35 @@ def main(alg_collectors_settings: dict = None):
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
 
+
+    driver_data = DrvData(file_name=alg_collectors_settings['file_name'])
+
+
+
     # ------------------------------------------------------------------------------------------------------------------
     # info algorithm (end)
     alg_time_elapsed = round(time.time() - start_time, 1)
 
     logger_stream.info(logger_arrow.arrow_main_blank)
-    logger_stream.info(logger_arrow.main + alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
+    logger_stream.info(
+        logger_arrow.main + alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
     logger_stream.info(logger_arrow.main + 'TIME ELAPSED: ' + str(alg_time_elapsed) + ' seconds')
     logger_stream.info(logger_arrow.main + '... END')
     logger_stream.info(logger_arrow.main + 'Bye, Bye')
     logger_stream.info(logger_arrow.arrow_main_break)
     # ------------------------------------------------------------------------------------------------------------------
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# call script from external library
-if __name__ == "__main__":
+# call entrypoint
+if __name__ == '__main__':
 
     collector_vars = {
         'file_name': '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
-
     main(alg_collectors_settings=collector_vars)
 # ----------------------------------------------------------------------------------------------------------------------
