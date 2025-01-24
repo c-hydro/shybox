@@ -11,6 +11,8 @@ Version:       '1.0.0'
 # libraries
 import os
 import argparse
+
+from hyms.generic_toolkit.lib_default_args import logger_name as logger_name_package
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -40,3 +42,19 @@ def get_args(settings_folder: str = None):
     return settings_file, settings_time
 
 # ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get logger name
+def get_logger_name(logger_name_mode='by_package', logger_name_default='script_logger') -> str:
+
+    if logger_name_mode == 'by_env':
+        logger_name = os.environ.get('LOGGER_NAME', logger_name_default)
+    elif logger_name_mode == 'by_arg':
+        logger_name = logger_name_default
+    elif logger_name_mode == 'by_script':
+        logger_name = os.path.basename(__file__)
+    elif logger_name_mode == 'by_package'
+        logger_name = logger_name_package
+    return logger_name
+# ----------------------------------------------------------------------------------------------------------------------
+

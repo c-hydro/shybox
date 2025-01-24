@@ -26,18 +26,14 @@ Version(s):
 # libraries
 import logging
 import os
-import time
 
-from hyms.generic_toolkit.lib_utils_args import get_args
-from hyms.generic_toolkit.lib_utils_logging import set_logging_stream
-
-from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
+from hyms.generic_toolkit.lib_default_args import logger_format, logger_arrow
 from hyms.generic_toolkit.lib_default_args import collector_data
 
-from hyms.runner_toolkit.settings.driver_app_settings import DrvSettings
-from hyms.dataset_toolkit.merge.driver_data_grid import DrvData
+from hyms.io_toolkit import io_handler_base
 
 # set logger
+logger_name = os.path.basename(__file__)
 logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -51,10 +47,10 @@ alg_release = '2025-01-24'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-# ----------------------------------------------------------------------------------------------------------------------
-# script main
-def main(alg_collectors_settings: dict = None):
 
+# ----------------------------------------------------------------------------------------------------------------------
+# main function
+def main(alg_collectors_settings: dict = None):
 
     # ------------------------------------------------------------------------------------------------------------------
     # info algorithm (start)
@@ -67,29 +63,40 @@ def main(alg_collectors_settings: dict = None):
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
 
+
+    row_start, row_end, col_start, col_end = 0, 9, 3, 15
+
+    obj_data_handler = io_handler_base.IOHandler(file_name=file_name, folder_name=folder_name)
+    obj_data_domain = obj_data_handler.get_data(
+        row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end, mandatory=True)
+
+    obj_data_handler.view_data(obj_data=obj_data_domain,
+                               var_name='AirTemperature', var_data_min=0, var_data_max=None)
+
     # ------------------------------------------------------------------------------------------------------------------
     # info algorithm (end)
     alg_time_elapsed = round(time.time() - start_time, 1)
 
     logger_stream.info(logger_arrow.arrow_main_blank)
-    logger_stream.info(logger_arrow.main + alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
+    logger_stream.info(
+        logger_arrow.main + alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
     logger_stream.info(logger_arrow.main + 'TIME ELAPSED: ' + str(alg_time_elapsed) + ' seconds')
     logger_stream.info(logger_arrow.main + '... END')
     logger_stream.info(logger_arrow.main + 'Bye, Bye')
     logger_stream.info(logger_arrow.arrow_main_break)
     # ------------------------------------------------------------------------------------------------------------------
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# call script from external library
-if __name__ == "__main__":
+# call entrypoint
+if __name__ == '__main__':
 
     collector_vars = {
         'file_name': '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
-
     main(alg_collectors_settings=collector_vars)
 # ----------------------------------------------------------------------------------------------------------------------

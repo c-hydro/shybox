@@ -1,9 +1,9 @@
 """
 Class Features
 
-Name:          handler_hmc_time
+Name:          handler_data_grid
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20241212'
+Date:          '20250124'
 Version:       '1.0.0'
 """
 
@@ -26,26 +26,18 @@ logger_stream = logging.getLogger(logger_name)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# class time handler
-class TimeHandler:
+# class data handler
+class DataHandler:
 
-    class_type = 'time_handler'
+    class_type = 'data_handler'
 
     # initialize class
-    def __init__(self, time_run: (str, pd.Timestamp) = None, time_restart: (str, pd.Timestamp) = None,
-                 time_rounding: str = 'h', time_period: (int, None) = 1, time_shift: (int, None) = 1,
-                 time_frequency: str = 'h', **kwargs) -> None:
+    def __init__(self, file_name: str, file_time: (str, pd.Timestamp) = None,
+                 file_format: str = None,  **kwargs) -> None:
 
-        self.time_run = convert_time_format(time_run)
-        self.time_period = time_period
-        self.time_frequency = time_frequency
-        self.time_rounding = time_rounding
-        self.time_shift = time_shift
-        self.time_restart = time_restart
-
-        self.time_start, self.time_end = None, None
-
-        self.time_reference, self.time_other = 'environment', 'user'
+        self.file_name = file_name
+        self.file_time = file_time
+        self.file_format = file_format
 
     @classmethod
     def from_time_run(cls, time_run_cmd: (str, pd.Timestamp), time_run_file: (str, pd.Timestamp) = None,
@@ -62,57 +54,12 @@ class TimeHandler:
                    time_rounding=time_rounding, time_period=time_period,
                    time_frequency=time_frequency)
 
-    @classmethod
-    def from_time_period(cls, time_start: (str, pd.Timestamp), time_end: (str, pd.Timestamp),
-                         time_rounding: str = 'h', time_frequency: str = 'h'):
 
-        time_start, time_end = convert_time_format(time_start), convert_time_format(time_end)
-
-        time_start, time_end = time_start.round(time_rounding), time_end.round(time_rounding)
-        time_range = select_time_range(time_start=time_start, time_end=time_end, time_frequency=time_frequency)
-        time_frequency = convert_time_frequency(time_frequency, frequency_conversion='int_to_str')
-
-        time_run, time_period = time_range[0], time_range.size
-
-        return cls(time_run=time_run, time_restart=None,
-                   time_rounding=time_rounding, time_period=time_period, time_frequency=time_frequency)
-
-    # method to compute time restart
-    def compute_time_restart(self, defined_by_user=None):
-
-        if defined_by_user is None:
-            self.time_restart = select_time_restart(
-                time_run=self.time_run, time_frequency=self.time_frequency, time_shift=self.time_shift)
-        else:
-            time_restart = convert_time_format(defined_by_user)
-            self.time_restart = time_restart
-
-        return self.time_restart
-
-    # method to compute time range
-    def compute_time_range(self):
-
-        time_run = self.time_run
-        time_range = pd.date_range(start=time_run, periods=self.time_period, freq=self.time_frequency)
-        self.time_start, self.time_end = time_range[0], time_range[-1]
-
-        return self.time_start, self.time_end
-
-    def select_time_priority(self, priority_obj: dict = None) -> (str, str):
-
-        if priority_obj is not None:
-            if 'reference' in list(priority_obj.keys()):
-                self.time_reference = priority_obj['reference']
-            else:
-                logger_stream.warning(logger_arrow.warning + 'Reference tag is not defined. Use the default priority.')
-            if 'other' in list(priority_obj.keys()):
-                self.time_other = priority_obj['other']
-            else:
-                logger_stream.warning(logger_arrow.warning + 'Other tag is not defined. Use the default priority.')
-        else:
-            logger_stream.error(logger_arrow.error + 'Priority object not defined.')
-
-        return self.time_reference, self.time_other
+    def read(self):
+        """
+        Read the data.
+        """
+        raise NotImplementedError
 
     # method to freeze data
     def freeze(self):
@@ -128,6 +75,13 @@ class TimeHandler:
             self.time_end = convert_time_format(self.time_end, time_conversion="stamp_to_str")
 
         return self.__dict__
+
+    # method to get data
+    def get_data(self):
+        """
+        Error time data.
+        """
+        raise NotImplementedError
 
     # method to error data
     def error(self):
