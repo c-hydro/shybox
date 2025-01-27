@@ -67,14 +67,22 @@ def main(alg_collectors_settings: dict = None):
 
     row_start, row_end, col_start, col_end = 0, 9, 3, 15
 
+    # netcdf case
     file_map_dims = {'X': 'longitude', 'Y': 'latitude', 'time': 'time'}
-    file_map_vars = {'H_S': 'snow_height'}
+    file_map_geo = {'Longitude': 'longitude', 'Latitude': 'latitude'}
+    file_map_data = {'H_S': 'snow_height'}
+    file_format = 'netcdf'
+
+    # grid ascii case
+    file_format = 'ascii'
+    file_map_dims, file_map_geo, file_map_data = None, None, None
 
     # driver data
     driver_data = DrvData.by_file_generic(
         file_name=alg_collectors_settings.get('file_name', None),
         file_time=alg_collectors_settings.get('file_time', None),
-        map_dims=file_map_dims, map_vars=file_map_vars
+        file_format=file_format,
+        map_dims=file_map_dims, map_data=file_map_data, map_geo=file_map_geo
     )
 
     # get variable data
@@ -102,16 +110,23 @@ def main(alg_collectors_settings: dict = None):
 # call entrypoint
 if __name__ == '__main__':
 
-    # defined file name
+    # case 1 - dynamic defined file name
     collector_vars = {
         'file_name': '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
 
-    # undefined file name
+    # case 2 - dynamic undefined file name
     collector_vars = {
         "file_name": '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/{file_sub_path}/S3M_{file_datetime}.nc.gz',
         "file_time": '202501240400',
+        'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+    # case 2 - static defined file name
+    collector_vars = {
+        "file_name": '/home/fabio/Desktop/hyms/dset/data_static/gridded/marche.dem.txt',
+        "file_time": None,
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
 

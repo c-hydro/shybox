@@ -78,20 +78,17 @@ class DrvData(ZipWrapper, IOWrapper):
     # class initialization
     def __init__(self, file_name: str, file_time: pd.Timestamp = None,
                  file_type: str = 'raster', file_format: str = 'netcdf',
-                 map_dims: {} = None, map_vars: dict = None, **kwargs)-> None:
+                 map_dims: dict = None, map_geo: dict = None, map_data: dict = None, **kwargs)-> None:
 
         self.file_name = file_name
         self.file_time = file_time
         self.file_format = file_format
         self.file_type = file_type
 
-        self.map_dims, self.map_vars = map_dims, map_vars
-
-        extra_args = {'map_dims': self.map_dims, 'map_vars': self.map_vars}
-
         super().__init__(file_name_compress=self.file_name, file_name_uncompress=None,
                          zip_extension='.gz')
 
+        extra_args = {}
         if self.zip_check:
             super().from_path(self.file_name_uncompress, file_format=self.file_format, **extra_args)
             self.uncompress_file_name()
@@ -99,15 +96,17 @@ class DrvData(ZipWrapper, IOWrapper):
         else:
             super().from_path(self.file_name_compress, **extra_args)
 
+        self.map_dims, self.map_geo, self.map_data = map_dims, map_geo, map_data
         self.file_handler = io_handler_base.IOHandler(
-            file_name=self.file_name, file_type=self.file_type, file_format=self.file_format)
+            file_name=self.file_name, file_type=self.file_type, file_format=self.file_format,
+            map_dims=self.map_dims, map_geo=self.map_geo, map_data=self.map_data)
 
     @classmethod
     def by_file_generic(cls, file_name: (str, None) = 'hmc.forcing-grid.{file_datetime}.nc.gz',
                        file_time: (str, pd.Timestamp) = None, file_format='netcdf',
                        file_tags: dict = None,
                        file_mandatory: bool = True, file_template: dict = None,
-                       map_dims: dict = None, map_vars: dict = None):
+                       map_dims: dict = None, map_geo: dict = None, map_data: dict = None):
 
         file_time = convert_time_format(file_time, time_conversion='str_to_stamp')
 
@@ -117,8 +116,10 @@ class DrvData(ZipWrapper, IOWrapper):
             file_template = {'file_datetime': '%Y%m%d%H00', 'file_sub_path': '%Y/%m/%d'}
         if map_dims is None:
             map_dims = {}
-        if map_vars is None:
-            map_vars = {}
+        if map_geo is None:
+            map_geo = {}
+        if map_data is None:
+            map_data = {}
 
         file_name = fill_tags2string(file_name, file_template, file_tags)[0]
 
@@ -127,39 +128,61 @@ class DrvData(ZipWrapper, IOWrapper):
                 logger_stream.error(logger_arrow.error + 'File "' + file_name + '" does not exist')
                 raise FileNotFoundError(f'File {file_name} is mandatory and must defined to run the process')
 
-        return cls(file_name, file_format=file_format, map_dims=map_dims, map_vars=map_vars)
+        return cls(file_name, file_format=file_format,
+                   map_dims=map_dims, map_geo=map_geo, map_data=map_data)
 
     # ------------------------------------------------------------------------------------------------------------------
 
 
     # ------------------------------------------------------------------------------------------------------------------
-    # get variable data
+    # organize variable data
     def get_variable_data(self, row_start: int = None, row_end: int = None,
-                                col_start: int = None, col_end: int = None) -> xr.Dataset:
+                               col_start: int = None, col_end: int = None) -> (xr.Dataset, xr.DataArray):
 
+        # info algorithm (start)
+        logger_stream.info(logger_arrow.info(tag='info_method') + 'Get "variable_data" ... ')
 
-        obj_data_domain = self.file_handler.get_data(
+        # method to get data
+        file_data = self.file_handler.get_data(
             row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end, mandatory=True)
 
-        self.file_handler.view_data(obj_data=obj_data_domain,
-                                   var_name='AirTemperature', var_data_min=0, var_data_max=None)
+        # info algorithm (end)
+        logger_stream.info(logger_arrow.info(tag='info_method') + 'Get "variable_data" ... DONE')
+
+        return file_data
 
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    # method to organize data variables
-    def organize_variable_data(self):
-        pass
+    # method to organize data
+    def organize_variable_data(self, file_data: (xr.Dataset, xr.DataArray) = None) -> (xr.Dataset, xr.DataArray):
+
+        # info algorithm (start)
+        logger_stream.info(logger_arrow.info(tag='info_method') + 'Organize "variable_data" ... ')
+
+        # method to select data (if needed)
+        file_data = self.file_handler.select_data(file_data)
+        # method to remap data (if needed)
+        file_data = self.file_handler.remap_data(file_data)
+
+        # info algorithm (end)
+        logger_stream.info(logger_arrow.info(tag='info_method') + 'Organize "variable_data" ... DONE')
+
+        return file_data
+
     # ------------------------------------------------------------------------------------------------------------------
 
 
     # ------------------------------------------------------------------------------------------------------------------
-    # method to view data variable(s)
-    def view_variable_data(self, data: dict = None, mode: bool = True) -> None:
+    # method to view data
+    def view_variable_data(self, data: (xr.Dataset, xr.DataArray) = None,
+                           var_name: str = None, var_min: float = 0, var_max: float = None,
+                           mode: bool = True) -> None:
         # info algorithm (start)
         logger_stream.info(logger_arrow.info(tag='info_method') + 'View "time_variables" ... ')
         if mode:
-            self.data_handler.view(data)
+            self.file_handler.view_data(
+                obj_data=data, var_name=var_name, var_data_min=var_min, var_data_max=var_max)
         # info algorithm (start)
         logger_stream.info(logger_arrow.info(tag='info_method') + 'View "time_variables" ... DONE')
     # ------------------------------------------------------------------------------------------------------------------

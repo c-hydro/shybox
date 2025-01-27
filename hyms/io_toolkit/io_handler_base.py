@@ -49,7 +49,8 @@ class IOHandler:
 
     def __init__(self, file_name: str, file_type: str = 'raster',
                  file_format: Optional[str] = None,
-                 map_dims: Optional[dict] = None, map_vars: Optional[dict] = None, **kwargs) -> None:
+                 map_dims: Optional[dict] = None, map_geo: Optional[dict] = None,
+                 map_data: (list, dict) = None, **kwargs) -> None:
 
         if file_type is None:
             file_type = 'raster'
@@ -60,7 +61,7 @@ class IOHandler:
         self.file_format = file_format if file_format is not None else self.file_name.split('.')[-1]
         if self.file_format.lower() in ['tif', 'tiff', 'geotiff']:
             self.file_format = 'tiff'
-        elif self.file_format.lower() in ['txt', 'asc']:
+        elif self.file_format.lower() in ['txt', 'asc', 'ascii']:
             self.file_format = 'ascii'
         elif self.file_format.lower() in ['nc', 'netcdf', 'nc4']:
             self.file_format = 'netcdf'
@@ -97,7 +98,10 @@ class IOHandler:
         else:
             raise ValueError(f'Type {self.file_type} not supported.')
 
-        self.map_dims, self.map_vars = map_dims, map_vars
+        if isinstance(map_data, list):
+            map_data = {var_name: var_name for var_name in map_data}
+
+        self.map_dims, self.map_geo, self.map_data = map_dims, map_geo, map_data
 
     @staticmethod
     def __compose_type(file_type: str, file_format: str) -> str:
@@ -108,6 +112,7 @@ class IOHandler:
         file_name = os.path.join(folder_name, file_name)
         return cls(file_name=file_name, file_format=file_format, **kwargs)
 
+    # method to get data
     def get_data(self,
                  row_start: int = None, row_end: int = None,
                  col_start: int = None, col_end: int = None,
@@ -116,9 +121,13 @@ class IOHandler:
         Get the data for a given time.
         """
 
-        obj_flag = self.check_data(file_name=self.file_name, mandatory=mandatory)
-        if obj_flag:
-            obj_data = self.fx_data(file_name=self.file_name)
+        exist_flag = self.exist_data(file_name=self.file_name, mandatory=mandatory)
+        if exist_flag:
+
+            obj_data = self.fx_data(
+                file_name=self.file_name,
+                file_map_dims=self.map_dims, file_map_geo=self.map_geo, file_map_data=self.map_data)
+
             if row_start is not None and row_end is not None and col_start is not None and col_end is not None:
                 obj_data = obj_data.isel(latitude=slice(row_start, row_end), longitude=slice(col_start, col_end))
         else:
@@ -126,58 +135,54 @@ class IOHandler:
 
         return obj_data
 
-    def adjust_data(self, obj_data: xr.Dataset, type_data='netcdf_v1') -> xr.Dataset:
-        obj_data = self.filter_data(obj_data)
-        obj_data = self.map_data(obj_data)
-        return
-
-    def filter_data(self, obj_data: xr.Dataset) -> xr.Dataset:
-        vars_list = self.vars_list
-        if vars_list is not None:
+    # method to select data
+    def select_data(self, obj_data: xr.Dataset) -> xr.Dataset:
+        map_data = self.map_data
+        if map_data is not None:
             if isinstance(obj_data, xr.Dataset):
                 vars_data = list(obj_data.variables)
-                vars_found = []
-                for var_name in vars_list:
-                    if var_name in vars_data:
-                        vars_found.append(var_name)
+                select_vars = []
+                for var_in, var_out in list(map_data.items()):
+                    if var_in in vars_data:
+                        select_vars.append(var_in)
                     else:
-                        warnings.warn(f'Variable {var_name} not found in dataset.')
-                obj_data = obj_data[vars_found]
+                        warnings.warn(f'Variable {var_in} not found in dataset.')
+                obj_data = obj_data[select_vars]
+
         return obj_data
 
-    def map_data(self, obj_data: xr.Dataset) -> xr.Dataset:
-        vars_mapping = self.vars_mapping
-        if vars_mapping is not None:
+    # method to remap data
+    def remap_data(self, obj_data: xr.Dataset) -> xr.Dataset:
+        map_data = self.map_data
+        if map_data is not None:
             if isinstance(obj_data, xr.Dataset):
                 vars_data = list(obj_data.variables)
-                vars_found = {}
-                for var_name_in, var_name_out in vars_mapping.items():
-                    if var_name_in in vars_data:
-                        vars_found[var_name_in] = var_name_out
+                remap_vars = {}
+                for var_in, var_out in map_data.items():
+                    if var_in in vars_data:
+                        remap_vars[var_in] = var_out
                     else:
-                        warnings.warn(f'Variable {var_name_in} not found in dataset.')
-                obj_data = obj_data.rename(vars_found)
+                        warnings.warn(f'Variable {var_in} not found in dataset.')
+                obj_data = obj_data.rename(remap_vars)
         return obj_data
 
+    # method to fill data
     def fill_data(self, default_value: (int, float) = np.nan) -> xr.DataArray:
         """
         Fill the data for a given .
         """
         raise NotImplementedError
 
-    def error_data(self):
-        """
-        Error data.
-        """
-        raise NotImplementedError
-    
+    # method to write data
     def write_data(self, data: xr.DataArray, time: Optional[datetime], tags: dict, **kwargs):
         """
         Write the data for a given time.
         """
         raise NotImplementedError
-    
-    def view_data(self, obj_data: (xr.DataArray, xr.Dataset),
+
+    # method to view data
+    @staticmethod
+    def view_data(obj_data: (xr.DataArray, xr.Dataset),
                   var_name: str = None,
                   var_data_min: (int, float) = None, var_data_max: (int, float) = None,
                   var_fill_data: (int, float) = np.nan, var_null_data: (int, float) = np.nan,
@@ -211,7 +216,9 @@ class IOHandler:
         else:
             raise ValueError(f'View type {view_type} not supported.')
 
-    def check_data(self, file_name : str, mandatory: bool = False, **kwargs) -> bool:
+    # method to check data
+    @staticmethod
+    def exist_data(file_name : str, mandatory: bool = False, **kwargs) -> bool:
         """
         Check if data is available for a given time.
         """
@@ -222,3 +229,10 @@ class IOHandler:
                 logger_stream.error(logger_arrow.error + 'File "' + file_name + '" does not exist')
                 raise IOError(f'File {file_name} not found. Mandatory file is required to run the process')
             return False
+
+    # raise error data for not implemented methods
+    def error_data(self):
+        """
+        Error data.
+        """
+        raise NotImplementedError
