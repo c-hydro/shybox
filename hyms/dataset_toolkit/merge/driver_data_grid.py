@@ -19,6 +19,8 @@ from copy import deepcopy
 
 from hyms.dataset_toolkit.merge import handler_data_grid as handler_data
 
+from hyms.generic_toolkit.lib_utils_settings import get_data_template
+
 from hyms.generic_toolkit.lib_utils_time import convert_time_format
 from hyms.generic_toolkit.lib_utils_string import fill_tags2string
 from hyms.generic_toolkit.lib_utils_dict import create_dict_from_list
@@ -100,6 +102,36 @@ class DrvData(ZipWrapper, IOWrapper):
         self.file_handler = io_handler_base.IOHandler(
             file_name=self.file_name, file_type=self.file_type, file_format=self.file_format,
             map_dims=self.map_dims, map_geo=self.map_geo, map_data=self.map_data)
+
+    @classmethod
+    def by_template(cls, file_name: str, file_time: (str, pd.Timestamp) = None,
+                    file_template: dict = None, **kwargs):
+
+        file_time = convert_time_format(file_time, time_conversion='str_to_stamp')
+
+        if file_template is None or not file_template:
+            logger_stream.error(logger_arrow.error + 'File template is not defined')
+            raise ValueError('File template must be defined to run the process')
+        else:
+            data_template = get_data_template(file_template)
+
+        file_type, file_format = None, None
+        if 'format' in list(data_template.keys()):
+            file_format = data_template['format']
+        if 'type' in list(data_template.keys()):
+            file_type = data_template['type']
+
+        map_data, map_geo, map_dims = {}, {}, {}
+        if 'map_data' in list(data_template.keys()):
+            map_data = data_template['map_data']
+        if 'map_geo' in list(data_template.keys()):
+            map_geo = data_template['map_geo']
+        if 'map_dims' in list(data_template.keys()):
+            map_dims = data_template['map_dims']
+
+        return cls(file_name, file_time=file_time, file_type=file_type, file_format=file_format,
+                   map_dims=map_dims, map_geo=map_geo, map_data=map_data, **kwargs)
+
 
     @classmethod
     def by_file_generic(cls, file_name: (str, None) = 'hmc.forcing-grid.{file_datetime}.nc.gz',

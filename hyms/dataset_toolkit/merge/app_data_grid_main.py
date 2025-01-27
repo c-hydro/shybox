@@ -67,16 +67,20 @@ def main(alg_collectors_settings: dict = None):
 
     row_start, row_end, col_start, col_end = 0, 9, 3, 15
 
-    # netcdf case
-    file_map_dims = {'X': 'longitude', 'Y': 'latitude', 'time': 'time'}
-    file_map_geo = {'Longitude': 'longitude', 'Latitude': 'latitude'}
-    file_map_data = {'H_S': 'snow_height'}
-    file_format = 'netcdf'
 
-    # grid ascii case
-    file_format = 'ascii'
-    file_map_dims, file_map_geo, file_map_data = None, None, None
+    driver_data = DrvData.by_template(
+        file_name=alg_collectors_settings.get('file_name', None),
+        file_time=alg_collectors_settings.get('file_time', None),
+        file_template=alg_collectors_settings.get('file_template', None)
+    )
 
+    # get variable data
+    file_data = driver_data.get_variable_data(
+        row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
+    # select variable data
+    file_data = driver_data.select_data(file_data)
+
+    # ------------------------------------------------------------------------------------------------------------------
     # driver data
     driver_data = DrvData.by_file_generic(
         file_name=alg_collectors_settings.get('file_name', None),
@@ -88,6 +92,9 @@ def main(alg_collectors_settings: dict = None):
     # get variable data
     file_data = driver_data.get_variable_data(
         row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
+    # select variable data
+    file_data = driver_data.select_data(file_data)
+
 
     # ------------------------------------------------------------------------------------------------------------------
     # info algorithm (end)
@@ -120,13 +127,15 @@ if __name__ == '__main__':
     collector_vars = {
         "file_name": '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/{file_sub_path}/S3M_{file_datetime}.nc.gz',
         "file_time": '202501240400',
-        'path_log': '$HOME/log', 'file_log': 'log.txt',
+        "file_template": "",
+        'path_log': '$HOME/log', 'file_log': 'log.txt'
     }
 
     # case 2 - static defined file name
     collector_vars = {
         "file_name": '/home/fabio/Desktop/hyms/dset/data_static/gridded/marche.dem.txt',
         "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
 

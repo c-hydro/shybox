@@ -1,0 +1,13 @@
+{
+  "format": "netcdf",
+  "type": "grid",
+  "map_dims": {
+    "X": "longitude", "Y": "latitude", "time": "time"
+  },
+  "map_geo": {
+    "Longitude": "longitude", "Latitude": "latitude"
+  },
+  "map_data": {
+    "H_S": "snow_height"
+  }
+}
