@@ -1,4 +1,15 @@
+"""
+Class Features
+
+Name:          handler_io_base
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20250124'
+Version:       '1.0.0'
+"""
+
+# ----------------------------------------------------------------------------------------------------------------------
 # libraries
+import logging
 import os
 import warnings
 from typing import Optional
@@ -8,14 +19,23 @@ import xarray as xr
 
 from hyms.io_toolkit.lib_io_ascii_grid import get_file_grid as get_file_grid_ascii
 from hyms.io_toolkit.lib_io_ascii_array import get_file_array as get_file_array_ascii
-from hyms.io_toolkit.lib_io_ascii_point import (
-    get_file_point_section, get_file_point_lake, get_file_point_dam, get_file_point_joint, get_file_point_intake)
 from hyms.io_toolkit.lib_io_tiff import get_file_grid as get_file_grid_tiff
 from hyms.io_toolkit.lib_io_nc import get_file_grid as get_file_grid_nc
 
+from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
+
 import matplotlib.pylab as plt
 
+# logging
+logger_stream = logging.getLogger(logger_name)
 
+# debugging
+# import matplotlib.pylab as plt
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# class io base
 class IOHandler:
 
     type_class = 'io_base'
@@ -27,16 +47,15 @@ class IOHandler:
         'ascii_time_series': None, 'csv_time_series': None,
     }
 
-    def __init__(self, file_name: str,
-                 file_type: str = 'raster',
+    def __init__(self, file_name: str, file_type: str = 'raster',
                  file_format: Optional[str] = None,
-                 vars_list: Optional[list] = None, vars_mapping: Optional[dict] = None, **kwargs) -> None:
+                 map_dims: Optional[dict] = None, map_vars: Optional[dict] = None, **kwargs) -> None:
 
         if file_type is None:
             file_type = 'raster'
 
         self.file_name = file_name
-        self.file_type = file_type
+        self.file_type = file_type.lower()
 
         self.file_format = file_format if file_format is not None else self.file_name.split('.')[-1]
         if self.file_format.lower() in ['tif', 'tiff', 'geotiff']:
@@ -44,12 +63,12 @@ class IOHandler:
         elif self.file_format.lower() in ['txt', 'asc']:
             self.file_format = 'ascii'
         elif self.file_format.lower() in ['nc', 'netcdf', 'nc4']:
-            self.file_format = 'netCDF'
+            self.file_format = 'netcdf'
         else:
             raise ValueError(f'Format {self.file_format} not supported.')
 
         if 'raster' in self.file_type:
-            if self.file_format == 'ascii' or self.file_format == 'netCDF':
+            if self.file_format == 'ascii' or self.file_format == 'netcdf':
 
                 if self.file_format not in self.file_type:
                     self.file_type = self.__compose_type(self.file_type, self.file_format)
@@ -78,17 +97,16 @@ class IOHandler:
         else:
             raise ValueError(f'Type {self.file_type} not supported.')
 
-        self.vars_list = vars_list
-        self.vars_mapping = vars_mapping
+        self.map_dims, self.map_vars = map_dims, map_vars
 
     @staticmethod
     def __compose_type(file_type: str, file_format: str) -> str:
         return f'{file_format}_{file_type}'
 
     @classmethod
-    def from_path(cls, path: str, format: Optional[None] = None, **kwargs):
-        path, file = os.path.split(path)
-        return cls(path, file)
+    def from_path(cls, folder_name: str, file_name: str, file_format: Optional[None] = None, **kwargs):
+        file_name = os.path.join(folder_name, file_name)
+        return cls(file_name=file_name, file_format=file_format, **kwargs)
 
     def get_data(self,
                  row_start: int = None, row_end: int = None,
@@ -98,11 +116,9 @@ class IOHandler:
         Get the data for a given time.
         """
 
-        path_name = os.path.join(self.folder_name, self.file_name)
-
-        obj_flag = self.check_data(path_name=path_name, mandatory=mandatory)
+        obj_flag = self.check_data(file_name=self.file_name, mandatory=mandatory)
         if obj_flag:
-            obj_data = self.fx_data(path_name)
+            obj_data = self.fx_data(file_name=self.file_name)
             if row_start is not None and row_end is not None and col_start is not None and col_end is not None:
                 obj_data = obj_data.isel(latitude=slice(row_start, row_end), longitude=slice(col_start, col_end))
         else:
@@ -195,13 +211,14 @@ class IOHandler:
         else:
             raise ValueError(f'View type {view_type} not supported.')
 
-    def check_data(self, path_name : str, mandatory: bool = False, **kwargs) -> bool:
+    def check_data(self, file_name : str, mandatory: bool = False, **kwargs) -> bool:
         """
         Check if data is available for a given time.
         """
-        if os.path.exists(path_name):
+        if os.path.exists(file_name):
             return True
         else:
             if mandatory:
-                raise IOError(f'File {path_name} not found.')
+                logger_stream.error(logger_arrow.error + 'File "' + file_name + '" does not exist')
+                raise IOError(f'File {file_name} not found. Mandatory file is required to run the process')
             return False

@@ -1,3 +1,13 @@
+"""
+Library Features:
+
+Name:          lib_io_nc
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20250127'
+Version:       '1.0.0'
+"""
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
 import logging
 import rasterio
 import xarray as xr
@@ -5,20 +15,29 @@ import numpy as np
 from rasterio.crs import CRS
 
 from hyms.default.lib_default_geo import proj_epsg, proj_wkt
+# ----------------------------------------------------------------------------------------------------------------------
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to adjust dimensions naming
+def __adjust_dims_naming(file_obj: xr.Dataset, file_map_geo: dict) -> xr.Dataset:
+    for dim_in, dim_out in file_map_geo.items():
+        if dim_in in file_obj.dims:
+            file_obj = file_obj.rename({dim_in: 'dim_tmp'})
+            file_obj = file_obj.rename_dims({'dim_tmp': dim_out})
+    return file_obj
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to read netcdf file
 def get_file_grid(file_name: str,
-                  file_epsg: str = 'EPSG:4326', file_crs: CRS = None,
-                  file_transform: rasterio.transform = None, file_no_data: float = -9999.0):
+                  file_epsg: str = 'EPSG:4326', file_crs: CRS = None, file_dims=
+                  file_transform: rasterio.transform = None, file_no_data: float = -9999.0,
+                  **kwargs):
 
     file_obj = xr.open_dataset(file_name)
 
-    if 'south_north' in file_obj.dims and 'west_east' in file_obj.dims:
-        file_obj = file_obj.rename({'longitude': 'lon', 'latitude': 'lat'})
-        file_obj = file_obj.rename_dims({'west_east': 'longitude', 'south_north': 'latitude'})
-        file_obj = file_obj.rename({'lon': 'longitude', 'lat': 'latitude'})
+    file_obj = __adjust_dims_naming(file_obj, file_map_geo={'X': 'longitude', 'Y': 'latitude'})
 
     file_x_values, file_y_values = file_obj['longitude'].values, file_obj['latitude'].values
     file_height, file_width = file_y_values.shape[0], file_x_values.shape[1]

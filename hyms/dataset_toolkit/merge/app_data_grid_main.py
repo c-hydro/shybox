@@ -65,10 +65,21 @@ def main(alg_collectors_settings: dict = None):
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
 
+    row_start, row_end, col_start, col_end = 0, 9, 3, 15
 
-    driver_data = DrvData(file_name=alg_collectors_settings['file_name'])
+    file_map_dims = {'X': 'longitude', 'Y': 'latitude', 'time': 'time'}
+    file_map_vars = {'H_S': 'snow_height'}
 
+    # driver data
+    driver_data = DrvData.by_file_generic(
+        file_name=alg_collectors_settings.get('file_name', None),
+        file_time=alg_collectors_settings.get('file_time', None),
+        map_dims=file_map_dims, map_vars=file_map_vars
+    )
 
+    # get variable data
+    file_data = driver_data.get_variable_data(
+        row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
 
     # ------------------------------------------------------------------------------------------------------------------
     # info algorithm (end)
@@ -91,9 +102,19 @@ def main(alg_collectors_settings: dict = None):
 # call entrypoint
 if __name__ == '__main__':
 
+    # defined file name
     collector_vars = {
         'file_name': '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
+
+    # undefined file name
+    collector_vars = {
+        "file_name": '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/{file_sub_path}/S3M_{file_datetime}.nc.gz',
+        "file_time": '202501240400',
+        'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+
     main(alg_collectors_settings=collector_vars)
 # ----------------------------------------------------------------------------------------------------------------------

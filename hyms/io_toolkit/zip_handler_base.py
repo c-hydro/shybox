@@ -74,7 +74,7 @@ class ZipHandler:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check if zip extension is a known string
-def check_zip_extension(zip_extension, zip_extension_expected=None):
+def check_zip_extension(zip_extension: str = 'gz', zip_extension_expected: list = None) -> str:
 
     if zip_extension_expected is None:
         zip_extension_expected = ['gz']

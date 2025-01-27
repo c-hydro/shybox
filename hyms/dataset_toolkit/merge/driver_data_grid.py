@@ -12,13 +12,15 @@ Version:       '4.0.0'
 import logging
 import os
 import pandas as pd
+import xarray as xr
 
 from typing import Optional
 from copy import deepcopy
 
 from hyms.dataset_toolkit.merge import handler_data_grid as handler_data
 
-from hyms.generic_toolkit.lib_utils_file import split_file_path
+from hyms.generic_toolkit.lib_utils_time import convert_time_format
+from hyms.generic_toolkit.lib_utils_string import fill_tags2string
 from hyms.generic_toolkit.lib_utils_dict import create_dict_from_list
 from hyms.generic_toolkit.lib_default_args import time_format_datasets, time_format_algorithm
 from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
@@ -39,7 +41,6 @@ logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-
 # class to wrap zip handler
 class ZipWrapper(ZipHandler):
     def __init__(self, file_name_compress: str, file_name_uncompress: str = None,
@@ -48,12 +49,18 @@ class ZipWrapper(ZipHandler):
 
 # class to wrap io handler
 class IOWrapper(IOHandler):
-    def __init__(self, folder_name: str, file_name: str, file_format: Optional[str] = None, **kwargs) -> None:
-        super().__init__(folder_name, file_name, file_format, **kwargs)
+    def __init__(self, file_name, file_format: str = None, **kwargs) -> None:
+        super().__init__(file_name, file_format, **kwargs)
 
-    def from_path(self, file_path: str, file_format: Optional[str] = None, **kwargs):
-        folder_name, file_name = os.path.split(file_path)
-        return super().__init__(folder_name, file_name, file_format, **kwargs)
+    def from_path(self, file_name: str, file_format: str = None, **kwargs):
+
+        if file_format is None:
+            file_format = file_name.split('.')[-1]
+            logger_stream.warning(
+                logger_arrow.warning +
+                'File format not provided. Trying to infer it from file name. Select: "' + file_format + '"')
+
+        return super().__init__(file_name=file_name, file_format=file_format, **kwargs)
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -71,72 +78,70 @@ class DrvData(ZipWrapper, IOWrapper):
     # class initialization
     def __init__(self, file_name: str, file_time: pd.Timestamp = None,
                  file_type: str = 'raster', file_format: str = 'netcdf',
-                 file_vars: list = None, file_mapping: dict = None, **kwargs)-> None:
+                 map_dims: {} = None, map_vars: dict = None, **kwargs)-> None:
 
         self.file_name = file_name
         self.file_time = file_time
         self.file_format = file_format
         self.file_type = file_type
 
-        self.file_handler = io_handler_base.IOHandler(
-            file_name=self.file_name, file_type=self.file_type, file_format=self.file_format)
+        self.map_dims, self.map_vars = map_dims, map_vars
 
-        self.file_vars = file_vars
-        self.file_mapping = file_mapping
-
-        extra_args = {'vars_list': self.file_vars, 'vars_mapping': self.file_mapping}
+        extra_args = {'map_dims': self.map_dims, 'map_vars': self.map_vars}
 
         super().__init__(file_name_compress=self.file_name, file_name_uncompress=None,
                          zip_extension='.gz')
 
         if self.zip_check:
-            super().from_path(self.file_name_uncompress, **extra_args)
+            super().from_path(self.file_name_uncompress, file_format=self.file_format, **extra_args)
+            self.uncompress_file_name()
+            self.file_name, self.file_tmp = self.file_name_uncompress, self.file_name_compress
         else:
             super().from_path(self.file_name_compress, **extra_args)
 
+        self.file_handler = io_handler_base.IOHandler(
+            file_name=self.file_name, file_type=self.file_type, file_format=self.file_format)
+
     @classmethod
-    def organize_file_data(cls, folder_name: str, file_name: str = 'hmc.forcing-grid.{datetime_dynamic_src_grid}.nc.gz',
-                           file_time: pd.Timestamp = None,
-                           file_tags: dict = None,
-                           file_mandatory: bool = True, file_template: dict = None,
-                           vars_list: dict = None, vars_tags: dict = None):
+    def by_file_generic(cls, file_name: (str, None) = 'hmc.forcing-grid.{file_datetime}.nc.gz',
+                       file_time: (str, pd.Timestamp) = None, file_format='netcdf',
+                       file_tags: dict = None,
+                       file_mandatory: bool = True, file_template: dict = None,
+                       map_dims: dict = None, map_vars: dict = None):
+
+        file_time = convert_time_format(file_time, time_conversion='str_to_stamp')
 
         if file_tags is None:
-            file_tags = {}
+            file_tags = {'file_datetime': file_time, 'file_sub_path': file_time}
         if file_template is None:
-            file_template = {}
-        if vars_list is None:
-            vars_list = {}
-        if vars_tags is None:
-            vars_tags = {}
+            file_template = {'file_datetime': '%Y%m%d%H00', 'file_sub_path': '%Y/%m/%d'}
+        if map_dims is None:
+            map_dims = {}
+        if map_vars is None:
+            map_vars = {}
 
-        vars_mapping = dict(zip(vars_list, vars_tags))
-
-        folder_name = substitute_string_by_tags(folder_name, file_tags)
-        folder_name = substitute_string_by_date(folder_name, file_time, file_template)
-        file_name = substitute_string_by_tags(file_name, file_tags)
-        file_name = substitute_string_by_date(file_name, file_time, file_template)
+        file_name = fill_tags2string(file_name, file_template, file_tags)[0]
 
         if file_mandatory:
-            if not os.path.exists(os.path.join(folder_name, file_name)):
-                raise FileNotFoundError(f'File {file_name} does not exist in path {folder_name}.')
+            if not os.path.exists(file_name):
+                logger_stream.error(logger_arrow.error + 'File "' + file_name + '" does not exist')
+                raise FileNotFoundError(f'File {file_name} is mandatory and must defined to run the process')
 
-        return cls(folder_name, file_name, vars_list=vars_list, vars_mapping=vars_mapping)
-
-    # ------------------------------------------------------------------------------------------------------------------
-
+        return cls(file_name, file_format=file_format, map_dims=map_dims, map_vars=map_vars)
 
     # ------------------------------------------------------------------------------------------------------------------
-    # configure data variable(s)
-    def configure_variable_data(self):
-
-        row_start, row_end, col_start, col_end = 0, 9, 3, 15
 
 
-        obj_data_domain = obj_data_handler.get_data(
+    # ------------------------------------------------------------------------------------------------------------------
+    # get variable data
+    def get_variable_data(self, row_start: int = None, row_end: int = None,
+                                col_start: int = None, col_end: int = None) -> xr.Dataset:
+
+
+        obj_data_domain = self.file_handler.get_data(
             row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end, mandatory=True)
 
-        obj_data_handler.view_data(obj_data=obj_data_domain,
+        self.file_handler.view_data(obj_data=obj_data_domain,
                                    var_name='AirTemperature', var_data_min=0, var_data_max=None)
 
     # ------------------------------------------------------------------------------------------------------------------
