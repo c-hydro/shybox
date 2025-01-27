@@ -1,7 +1,7 @@
-HMC Algorithm Suite
-=============================
+HYdrological Models Suite
+=========================
 
-Welcome to the **Flood-PROOFS Modelling System** GitHub repository. This is a Modelling System supported by the Italian Civil Department (DPC) and is used for preventing and reducing hydrogeological risk.
+Welcome to the **Hydrological Model Suite** GitHub repository (hyms). This is a Modelling System supported by the Italian Civil Department (DPC) and is used for preventing and reducing hydrogeological risk.
 
 Background
 **********
@@ -10,16 +10,16 @@ Background
 
 The Flood-PROOFS system manages the data flow deriving from various modelling tools developed by the CIMA Research Foundation to return a quantitative assessment of the effects that precipitation can have on the territory in terms of flow and probability to overcome the critical thresholds in the different basins. 
 
-The system has been operating since 2008 at various Functional Centers (Autonomous Region of Valle d'Aosta and Marche) where it is used for the issue of hydro-meteorological warnings for civil protection purposes. At the technical offices of the Valle d'Aosta Water Company (CVA) it is instead useful to study and implement strategies to mitigate flood events or to secure facilities in the event of flooding.
+The system has been operating since 2008 at various Functional Centers (Autonomous Region of Valle d'Aosta, Marche and Liguria) where it is used for the issue of hydro-meteorological warnings for civil protection purposes. At the technical offices of the Valle d'Aosta Water Company (CVA) it is instead useful to study and implement strategies to mitigate flood events or to secure facilities in the event of flooding.
 
 Components
 **********
 
 The Flood-PROOFS forecasting chain consists in the following different parts, which are summarized as follows:
 
-    • **Processing**: tools to organize input and output datasets written in python3 language usually named **Hydrological Data Engines [hyde]** package;
-    • **Simulation**: tools to set and run Hydrological Model Continuum (HMC) written both in python3 and fortran programming language usually named **Hydrological Model Continuum [hmc]** package;
-    • **Publishing and Visualization**: tools to control, view and analyze results written both in python3 and R programming language usually named as **Hydrological Analysis tools [hat]** package;
+    • **Datasets**: tools to organize input and output datasets written in python3 language usually named **Hydrological Data Engines [hyde]** package;
+    • **Execution**: tools to set and run models developed by CIMA Reasearch Foundation (Continuum and S3M) written both in python3.x and fortran programming language usually named **S3M** package and **Hydrological Model Continuum [hmc]** package;
+    • **Publishing and Visualization**: tools to control, view and analyze results written both in python3 and R programming language usually named as **Hydrological Analysis tools** package;
     • **Labs**: laboratories for running components of the modelling system, for trainings and educational use;
     • **Utilities**: common functionality required by the previous components.
 
@@ -28,7 +28,7 @@ All codes and datasets are freely available and users can be get them from our g
 Prerequisites
 *************
 
-In order to use the Flood-PROOFS forecasting chain, users are strongly raccomanted to control if the following characteristics, libraries and packages are available and correctly installed on their machine.
+In order to use the **hyms** package, users are strongly raccomanted to control if the following characteristics, libraries and packages are available and correctly installed on their machine.
 
 Usually, Flood-PROOFS libraries are installed on **Linux Debian/Ubuntu 64bit** environment and all libraries, packages and applications must be compilled and/or installed in according with this operative system.
 
