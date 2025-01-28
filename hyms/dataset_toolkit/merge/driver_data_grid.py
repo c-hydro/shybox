@@ -105,15 +105,29 @@ class DrvData(ZipWrapper, IOWrapper):
 
     @classmethod
     def by_template(cls, file_name: str, file_time: (str, pd.Timestamp) = None,
-                    file_template: dict = None, **kwargs):
+                    file_template: dict = None, file_mandatory: bool = True,
+                    tags_value: dict = None, tags_format: dict = None,
+                    **kwargs):
 
         file_time = convert_time_format(file_time, time_conversion='str_to_stamp')
+
+        if tags_value is None:
+            tags_value = {'file_datetime': file_time, 'file_sub_path': file_time, 'domain_name': 'default'}
+        if tags_format is None:
+            tags_format = {'file_datetime': '%Y%m%d%H00', 'file_sub_path': '%Y/%m/%d', 'domain_name': 'string'}
 
         if file_template is None or not file_template:
             logger_stream.error(logger_arrow.error + 'File template is not defined')
             raise ValueError('File template must be defined to run the process')
         else:
             data_template = get_data_template(file_template)
+
+        file_name = fill_tags2string(file_name, tags_format, tags_value)[0]
+
+        if file_mandatory:
+            if not os.path.exists(file_name):
+                logger_stream.error(logger_arrow.error + 'File "' + file_name + '" does not exist')
+                raise FileNotFoundError(f'File {file_name} is mandatory and must defined to run the process')
 
         file_type, file_format = None, None
         if 'format' in list(data_template.keys()):
@@ -135,17 +149,16 @@ class DrvData(ZipWrapper, IOWrapper):
 
     @classmethod
     def by_file_generic(cls, file_name: (str, None) = 'hmc.forcing-grid.{file_datetime}.nc.gz',
-                       file_time: (str, pd.Timestamp) = None, file_format='netcdf',
-                       file_tags: dict = None,
-                       file_mandatory: bool = True, file_template: dict = None,
+                       file_time: (str, pd.Timestamp) = None, file_format='netcdf', file_mandatory: bool = True,
+                       tags_value: dict = None, tags_format: dict = None,
                        map_dims: dict = None, map_geo: dict = None, map_data: dict = None):
 
         file_time = convert_time_format(file_time, time_conversion='str_to_stamp')
 
-        if file_tags is None:
-            file_tags = {'file_datetime': file_time, 'file_sub_path': file_time}
-        if file_template is None:
-            file_template = {'file_datetime': '%Y%m%d%H00', 'file_sub_path': '%Y/%m/%d'}
+        if tags_value is None:
+            tags_value = {'file_datetime': file_time, 'file_sub_path': file_time, 'domain_name': 'default'}
+        if tags_format is None:
+            tags_format = {'file_datetime': '%Y%m%d%H00', 'file_sub_path': '%Y/%m/%d', 'domain_name': 'string'}
         if map_dims is None:
             map_dims = {}
         if map_geo is None:
@@ -153,7 +166,7 @@ class DrvData(ZipWrapper, IOWrapper):
         if map_data is None:
             map_data = {}
 
-        file_name = fill_tags2string(file_name, file_template, file_tags)[0]
+        file_name = fill_tags2string(file_name, tags_format, tags_value)[0]
 
         if file_mandatory:
             if not os.path.exists(file_name):
@@ -211,12 +224,45 @@ class DrvData(ZipWrapper, IOWrapper):
                            var_name: str = None, var_min: float = 0, var_max: float = None,
                            mode: bool = True) -> None:
         # info algorithm (start)
-        logger_stream.info(logger_arrow.info(tag='info_method') + 'View "time_variables" ... ')
+        logger_stream.info(logger_arrow.info(tag='info_method') + 'View "variable_data" ... ')
         if mode:
             self.file_handler.view_data(
                 obj_data=data, var_name=var_name, var_data_min=var_min, var_data_max=var_max)
         # info algorithm (start)
-        logger_stream.info(logger_arrow.info(tag='info_method') + 'View "time_variables" ... DONE')
+        logger_stream.info(logger_arrow.info(tag='info_method') + 'View "variable_data" ... DONE')
     # ------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# class to handle multi data
+class MultiData(DrvData):
+
+    def __init__(self, file_handler):
+
+        self.file_handler = file_handler
+
+    @classmethod
+    def by_iterable(cls, file_iterable: (str, list, dict) = None, file_time: (str, pd.Timestamp) = None,
+                    file_template: dict = None, file_mandatory: bool = True,
+                    tags_value: dict = None, tags_format: dict = None):
+
+        if isinstance(file_iterable, str):
+            file_iterable = [file_iterable]
+        if isinstance(file_iterable, list):
+            tmp_iterable = {}
+            for n, v in enumerate(file_iterable):
+                tmp_iterable[n] = v
+            file_iterable = tmp_iterable
+
+        # using list comprehension to append instances to list
+        return cls({file_key: DrvData.by_template(
+            file_name=file_name, file_time=file_time,
+            file_template=file_template, file_mandatory=file_mandatory,
+            tags_value=tags_value, tags_format=tags_format) for file_key, file_name in file_iterable.items()})
+
+    def get_variable_data(self, row_start: int = None, row_end: int = None,
+                                 col_start: int = None, col_end: int = None) -> (xr.Dataset, xr.DataArray):
+
+          file_data = {file_key: file_handler.get_variable_data(
+                row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end) for file_key, file_handler in self.file_handler.items()}
+
+          return file_data

@@ -32,7 +32,7 @@ from hyms.generic_toolkit.lib_utils_args import get_logger_name
 from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from hyms.generic_toolkit.lib_default_args import collector_data
 
-from hyms.dataset_toolkit.merge.driver_data_grid import DrvData
+from hyms.dataset_toolkit.merge.driver_data_grid import DrvData, MultiData
 from hyms.io_toolkit import io_handler_base
 
 # set logger
@@ -65,7 +65,22 @@ def main(alg_collectors_settings: dict = None):
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
 
-    row_start, row_end, col_start, col_end = 0, 9, 3, 15
+    #row_start, row_end, col_start, col_end = 0, 9, 3, 15
+    row_start, row_end, col_start, col_end = None, None, None, None
+
+    driver_multi_data = MultiData.by_iterable(
+        file_iterable=alg_collectors_settings.get('file_name', None),
+        file_time=alg_collectors_settings.get('file_time', None),
+        file_template=alg_collectors_settings.get('file_template', None)
+    )
+
+    # get variable data
+    file_data = driver_multi_data.get_variable_data(
+        row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
+    # select variable data
+    file_data = driver_multi_data.select_data(file_data)
+
+
 
 
     driver_data = DrvData.by_template(
@@ -85,8 +100,7 @@ def main(alg_collectors_settings: dict = None):
     driver_data = DrvData.by_file_generic(
         file_name=alg_collectors_settings.get('file_name', None),
         file_time=alg_collectors_settings.get('file_time', None),
-        file_format=file_format,
-        map_dims=file_map_dims, map_data=file_map_data, map_geo=file_map_geo
+        file_template=alg_collectors_settings.get('file_template', None)
     )
 
     # get variable data
@@ -131,7 +145,7 @@ if __name__ == '__main__':
         'path_log': '$HOME/log', 'file_log': 'log.txt'
     }
 
-    # case 2 - static defined file name
+    # case 3 - static defined file name
     collector_vars = {
         "file_name": '/home/fabio/Desktop/hyms/dset/data_static/gridded/marche.dem.txt',
         "file_time": None,
@@ -139,6 +153,28 @@ if __name__ == '__main__':
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
 
+    # case 4 - static undefined file name
+    collector_vars = {
+        "file_name": '/home/fabio/Desktop/hyms/dset/data_static/gridded/{domain_name}.dem.txt',
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+    # case 5 - static defined file name
+    collector_vars = {
+        "file_name": [
+            '/home/fabio/Desktop/hyms/dset/merge_data/EntellaDomain.dem.txt',
+            '/home/fabio/Desktop/hyms/dset/merge_data/LevanteGenoveseDomain.dem.txt',
+            '/home/fabio/Desktop/hyms/dset/merge_data/PonenteGenoveseDomain.dem.txt'
+        ],
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+    # /home/fabio/Desktop/hyms/dset/merge_data/geo_liguria.tiff
+    # /home/fabio/Desktop/hyms/dset/merge_data/LiguriaDomain.dem.txt
 
     main(alg_collectors_settings=collector_vars)
 # ----------------------------------------------------------------------------------------------------------------------
