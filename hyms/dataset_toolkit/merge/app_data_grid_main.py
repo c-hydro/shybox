@@ -175,7 +175,7 @@ if __name__ == '__main__':
 
     # /home/fabio/Desktop/hyms/dset/merge_data/geo_liguria.tiff
     # /home/fabio/Desktop/hyms/dset/merge_data/LiguriaDomain.dem.txt
-    #test
+    # testing tags
 
     main(alg_collectors_settings=collector_vars)
 # ----------------------------------------------------------------------------------------------------------------------
