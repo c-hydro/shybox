@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-HYMS - Hydro Models Suite - WORKFLOW RUNNER BASE
+SHYBOX - Snow HYdro toolBOX - WORKFLOW RUNNER BASE
 
 __date__ = '20250117'
 __version__ = '1.0.0'
