@@ -49,3 +49,17 @@ def get_data_settings(file_name: str, key_reference: str = 'default',
 
     return data_settings
 # ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get data template
+def get_data_template(file_name):
+
+    if os.path.exists(file_name):
+        with open(file_name) as file_handle:
+            data_template = json.load(file_handle)
+    else:
+        logger_stream.error(logger_arrow.error + ' Error in reading template file "' + file_name + '"')
+        raise IOError('File not found')
+
+    return data_template
+# ----------------------------------------------------------------------------------------------------------------------

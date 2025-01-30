@@ -2,6 +2,7 @@
 # libraries
 import logging
 import numpy as np
+import xarray as xr
 import rasterio as rio
 from rasterio.crs import CRS
 
@@ -15,7 +16,7 @@ def get_file_grid(file_name: str, file_epsg: str = 'EPSG:4326', file_dtype: str 
                   var_limit_min: (int, float) = None, var_limit_max: (int, float) = None,
                   var_null_data: (int, float) = np.nan,
                   coord_name_x: str = 'longitude', coord_name_y: str = 'latitude',
-                  dim_name_x: str = 'longitude', dim_name_y: str = 'latitude'):
+                  dim_name_x: str = 'longitude', dim_name_y: str = 'latitude', **kwargs) -> xr.DataArray:
 
     dset = rio.open(file_name)
     bounds, res, transform = dset.bounds, dset.res, dset.transform

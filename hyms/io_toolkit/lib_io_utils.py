@@ -12,7 +12,9 @@ Version:       '1.0.0'
 import logging
 import re
 from datetime import datetime
+import dateutil.parser as dparser
 
+import numpy as np
 import pandas as pd
 import xarray as xr
 # ----------------------------------------------------------------------------------------------------------------------
@@ -20,7 +22,7 @@ import xarray as xr
 
 # -------------------------------------------------------------------------------------
 # Method to parse complex row to string
-def parse_row2str(row_obj, row_delimiter='#'):
+def parse_row2str_OLD(row_obj, row_delimiter='#'):
 
     # Check if line starts with {number}######
     if row_obj.count(row_delimiter) > 1:
@@ -40,8 +42,23 @@ def parse_row2str(row_obj, row_delimiter='#'):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to extract time from string
+def extract_time_from_string(string: str, time_format: str = None):
+    time_tmp = dparser.parse(string, fuzzy=True)
+    if time_format is not None:
+        time_str = time_tmp.strftime(time_format)
+        time_stamp = pd.Timestamp(time_str)
+    else:
+        time_stamp = pd.Timestamp(time_tmp)
+    return time_stamp
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 # method to substitute string by tags
-def substitute_string_by_tags(string: str, tags: dict = {}) -> str:
+def substitute_string_by_tags(string: str, tags: dict = None) -> str:
+    if tags is None:
+        tags = {}
     for key, value in tags.items():
         key = '{' + key + '}'
         string = string.replace(key, value)
@@ -51,13 +68,15 @@ def substitute_string_by_tags(string: str, tags: dict = {}) -> str:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to substitute string by date
-def substitute_string_by_date(string, date: pd.Timestamp, tags_template: dict = {}):
+def substitute_string_by_date(string: str, date: pd.Timestamp, tags: dict = None) -> str:
+    if tags is None:
+        tags = {}
     if date is not None:
-        for tag_key, tag_value in tags_template.items():
-            tag_key = '{' + tag_key + '}'
-            if tag_key in string:
-                date_str = date.strftime(tag_value)
-                string = string.replace(tag_key, date_str)
+        for key, value in tags.items():
+            key = '{' + key + '}'
+            if key in string:
+                date_str = date.strftime(value)
+                string = string.replace(key, date_str)
     return string
 # ----------------------------------------------------------------------------------------------------------------------
 

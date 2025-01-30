@@ -28,12 +28,19 @@ import logging
 import time
 import os
 
+import pandas as pd
+
 from hyms.generic_toolkit.lib_utils_args import get_logger_name
 from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from hyms.generic_toolkit.lib_default_args import collector_data
 
-from hyms.dataset_toolkit.merge.driver_data_grid import DrvData
+from hyms.dataset_toolkit.merge.driver_data_grid import DrvData, MultiData
 from hyms.io_toolkit import io_handler_base
+
+from hyms.processing_toolkit.lib_proc_mask import mask_data
+from hyms.processing_toolkit.lib_proc_interp import interpolate_data
+
+from hyms.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
 
 # set logger
 logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', logger_name_default=logger_name))
@@ -65,9 +72,58 @@ def main(alg_collectors_settings: dict = None):
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
 
+    #row_start, row_end, col_start, col_end = 0, 9, 3, 15
+    row_start, row_end, col_start, col_end = None, None, None, None
 
-    driver_data = DrvData(file_name=alg_collectors_settings['file_name'])
+    driver_geo_data = DrvData.by_template(
+        file_name=alg_collectors_settings.get('geo_name', None),
+        file_time=alg_collectors_settings.get('geo_time', None),
+        file_template=alg_collectors_settings.get('geo_template', None)
+    )
+    # get variable data
+    geo_data = driver_geo_data.get_variable_data()
 
+    driver_dyn_data = MultiData.by_iterable(
+        file_iterable=alg_collectors_settings.get('file_name', None),
+        file_time=alg_collectors_settings.get('file_time', None),
+        file_template=alg_collectors_settings.get('file_template', None)
+    )
+
+    # get variable data
+    dyn_data = driver_dyn_data.get_variable_data()
+
+
+    orc_process = Orchestrator(
+        data_in=dyn_data, data_ref=geo_data, data_out=None, options={})
+
+    orc_process.add_process(interpolate_data, ref=geo_data)
+    orc_process.add_process(mask_data, ref=geo_data)
+
+    orc_process.run(time=pd.date_range('1980-01-01 05:00', '1980-01-01 07:00', freq='H'))
+
+    driver_data = DrvData.by_template(
+        file_name=alg_collectors_settings.get('file_name', None),
+        file_time=alg_collectors_settings.get('file_time', None),
+        file_template=alg_collectors_settings.get('file_template', None)
+    )
+
+    # get variable data
+    file_data = driver_data.get_variable_data()
+    # select variable data
+    file_data = driver_data.select_data(file_data)
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # driver data
+    driver_data = DrvData.by_file_generic(
+        file_name=alg_collectors_settings.get('file_name', None),
+        file_time=alg_collectors_settings.get('file_time', None),
+        file_template=alg_collectors_settings.get('file_template', None)
+    )
+
+    # get variable data
+    file_data = driver_data.get_variable_data()
+    # select variable data
+    file_data = driver_data.select_data(file_data)
 
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -91,9 +147,64 @@ def main(alg_collectors_settings: dict = None):
 # call entrypoint
 if __name__ == '__main__':
 
+    # case 1 - dynamic defined file name
     collector_vars = {
         'file_name': '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
+
+    # case 2 - dynamic undefined file name
+    collector_vars = {
+        "file_name": '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/{file_sub_path}/S3M_{file_datetime}.nc.gz',
+        "file_time": '202501240400',
+        "file_template": "",
+        'path_log': '$HOME/log', 'file_log': 'log.txt'
+    }
+
+    # case 3 - static defined file name
+    collector_vars = {
+        "file_name": '/home/fabio/Desktop/hyms/dset/data_static/gridded/marche.dem.txt',
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+    # case 4 - static undefined file name
+    collector_vars = {
+        "file_name": '/home/fabio/Desktop/hyms/dset/data_static/gridded/{domain_name}.dem.txt',
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+    # case 5 - static defined file name
+    collector_vars = {
+        "file_name": [
+            '/home/fabio/Desktop/hyms/dset/merge_data/EntellaDomain.dem.txt',
+            '/home/fabio/Desktop/hyms/dset/merge_data/LevanteGenoveseDomain.dem.txt',
+            '/home/fabio/Desktop/hyms/dset/merge_data/PonenteGenoveseDomain.dem.txt'
+        ],
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+    collector_vars = {
+        "file_name": [
+            '/home/fabio/Desktop/hyms/dset/itwater/T_19810101.nc',
+            '/home/fabio/Desktop/hyms/dset/itwater/R_19810101.nc'
+        ],
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_netcdf_gridded_itwater.json",
+        "geo_name": "/home/fabio/Desktop/hyms/dset/data_static/gridded/marche.dem.txt",
+        "geo_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        "geo_time": None,
+        'path_log': '$HOME/log', 'file_log': 'log.txt'
+    }
+
+    # /home/fabio/Desktop/hyms/dset/merge_data/geo_liguria.tiff
+    # /home/fabio/Desktop/hyms/dset/merge_data/LiguriaDomain.dem.txt
+    # testing tags
+
     main(alg_collectors_settings=collector_vars)
 # ----------------------------------------------------------------------------------------------------------------------

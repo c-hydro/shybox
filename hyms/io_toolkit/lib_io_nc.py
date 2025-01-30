@@ -1,43 +1,92 @@
+"""
+Library Features:
+
+Name:          lib_io_nc
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20250127'
+Version:       '1.0.0'
+"""
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
 import logging
 import rasterio
 import xarray as xr
 import numpy as np
 from rasterio.crs import CRS
 
+#from hyms.dataset_toolkit.merge.app_data_grid_main import logger_name, logger_arrow
 from hyms.default.lib_default_geo import proj_epsg, proj_wkt
 
+# logging
+#logger_stream = logging.getLogger(logger_name)
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to adjust geographical naming
+def __adjust_geo_naming(file_obj: xr.Dataset, file_map_geo: dict) -> xr.Dataset:
+    for var_in, var_out in file_map_geo.items():
+        if var_in in list(file_obj.variables.keys()):
+            file_obj = file_obj.rename({var_in: 'var_tmp'})
+            file_obj = file_obj.rename({'var_tmp': var_out})
+    return file_obj
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to adjust dimensions naming
+def __adjust_dims_naming(file_obj: xr.Dataset, file_map_dims: dict) -> xr.Dataset:
+    for dim_in, dim_out in file_map_dims.items():
+        if dim_in in file_obj.dims:
+            file_obj = file_obj.rename({dim_in: 'dim_tmp'})
+            file_obj = file_obj.rename_dims({'dim_tmp': dim_out})
+    return file_obj
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to read netcdf file
 def get_file_grid(file_name: str,
                   file_epsg: str = 'EPSG:4326', file_crs: CRS = None,
-                  file_transform: rasterio.transform = None, file_no_data: float = -9999.0):
+                  file_transform: rasterio.transform = None,
+                  file_map_dims: dict = None, file_map_geo: dict = None, file_map_data: dict = None,
+                  **kwargs):
 
     file_obj = xr.open_dataset(file_name)
 
-    if 'south_north' in file_obj.dims and 'west_east' in file_obj.dims:
-        file_obj = file_obj.rename({'longitude': 'lon', 'latitude': 'lat'})
-        file_obj = file_obj.rename_dims({'west_east': 'longitude', 'south_north': 'latitude'})
-        file_obj = file_obj.rename({'lon': 'longitude', 'lat': 'latitude'})
+    if file_map_geo is not None:
+        file_obj = __adjust_geo_naming(file_obj, file_map_geo=file_map_geo)
 
     file_x_values, file_y_values = file_obj['longitude'].values, file_obj['latitude'].values
-    file_height, file_width = file_y_values.shape[0], file_x_values.shape[1]
+    file_obj = file_obj.drop_vars(['longitude', 'latitude'])
+    if file_x_values.ndim == 2:
+        file_x_values = file_x_values[0, :]
+    elif file_x_values.ndim == 1:
+        pass
+    else:
+        #logger_stream.error(logger_arrow.error + 'Geographical dimensions of "longitude" is not expected')
+        assert RuntimeError('Geographical dimensions of "longitude" must be 1D or 2D')
+    if file_y_values.ndim == 2:
+        file_y_values = file_y_values[:, 0]
+    elif file_y_values.ndim == 1:
+        pass
+    else:
+        #logger_stream.error(logger_arrow.error + 'Geographical dimensions of "latitude" is not expected')
+        assert RuntimeError('Geographical dimensions of "latitude" must be 1D or 2D')
 
-    if 'xllcorner' in list(file_obj.attrs.keys()):
-        file_x_left_check = file_obj.attrs['xllcorner']
-    if 'yllcorner' in list(file_obj.attrs.keys()):
-        file_y_bottom_check = file_obj.attrs['yllcorner']
+    if file_map_dims is not None:
+        file_obj = __adjust_dims_naming(file_obj, file_map_dims=file_map_dims)
+
+    file_obj['longitude'] = xr.DataArray(file_x_values, dims='longitude')
+    file_obj['latitude'] = xr.DataArray(file_y_values, dims='latitude')
+
+    file_height, file_width = file_obj['latitude'].shape[0], file_obj['longitude'].shape[0]
 
     file_x_left = np.min(np.min(file_x_values))
     file_x_right = np.max(np.max(file_x_values))
     file_y_bottom = np.min(np.min(file_y_values))
     file_y_top = np.max(np.max(file_y_values))
 
-    if 'cellsize' in list(file_obj.attrs.keys()):
-        file_x_res, file_y_res = file_obj.attrs['cellsize'], file_obj.attrs['cellsize']
-    else:
-        file_x_res = (file_x_right - file_x_left) / file_height
-        file_y_res = (file_y_top - file_y_bottom) / file_width
+    file_x_res = (file_x_right - file_x_left) / file_width
+    file_y_res = (file_y_top - file_y_bottom) / file_height
 
     if file_epsg is None:
         file_epsg = proj_epsg
