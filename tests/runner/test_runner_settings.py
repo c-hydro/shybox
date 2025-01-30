@@ -1,9 +1,9 @@
 import unittest
 import os
 
-from hyms.generic_toolkit.lib_utils_test import configure_home
-from hyms.generic_toolkit.lib_default_args import collector_data
-from hyms.runner_toolkit.settings.driver_app_settings import DrvSettings
+from shybox.generic_toolkit.lib_utils_test import configure_home
+from shybox.generic_toolkit.lib_default_args import collector_data
+from shybox.runner_toolkit.settings.driver_app_settings import DrvSettings
 
 class TestSettings(unittest.TestCase):
 

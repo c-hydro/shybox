@@ -7,7 +7,7 @@ __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
-__library__ = 'hyms'
+__library__ = 'shybox'
 
 General command line:
 python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
@@ -30,16 +30,16 @@ import logging
 import os
 import time
 
-from hyms.generic_toolkit.lib_utils_args import get_args
-from hyms.generic_toolkit.lib_utils_logging import set_logging_stream
+from shybox.generic_toolkit.lib_utils_args import get_args
+from shybox.generic_toolkit.lib_utils_logging import set_logging_stream
 
-from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
-from hyms.generic_toolkit.lib_default_args import collector_data
+from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
+from shybox.generic_toolkit.lib_default_args import collector_data
 
-from hyms.runner_toolkit.settings.driver_app_settings import DrvSettings
-from hyms.runner_toolkit.time.driver_app_time import DrvTime
-from hyms.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
-from hyms.runner_toolkit.execution.driver_app_execution import DrvExec
+from shybox.runner_toolkit.settings.driver_app_settings import DrvSettings
+from shybox.runner_toolkit.time.driver_app_time import DrvTime
+from shybox.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
+from shybox.runner_toolkit.execution.driver_app_execution import DrvExec
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -47,7 +47,7 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
-project_name = 'hyms'
+project_name = 'shybox'
 alg_name = 'Workflow for runner base configuration'
 alg_type = 'Package'
 alg_version = '1.0.0'

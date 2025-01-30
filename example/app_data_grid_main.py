@@ -7,13 +7,13 @@ __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
-__library__ = 'hyms'
+__library__ = 'shybox'
 
 General command line:
 python app_data_grid_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
-20250123 (3.0.0) --> Beta release for hyms package
+20250123 (3.0.0) --> Beta release for shybox package
 20221013 (2.1.0) --> Add codes to manage tiff format and fix bug in output variable(s)
 20220412 (2.0.3) --> Add codes to manage interpolating (nearest, linear, sample) and masking (watermark) method(s)
 20220322 (2.0.2) --> Add codes and functions to merge hmc and s3m subdomains datasets
@@ -28,11 +28,11 @@ import logging
 import time
 import os
 
-from hyms.generic_toolkit.lib_utils_args import get_logger_name
-from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
-from hyms.generic_toolkit.lib_default_args import collector_data
+from shybox.generic_toolkit.lib_utils_args import get_logger_name
+from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
+from shybox.generic_toolkit.lib_default_args import collector_data
 
-from hyms.io_toolkit import io_handler_base
+from shybox.io_toolkit import io_handler_base
 
 # set logger
 logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', logger_name_default=logger_name))
@@ -40,7 +40,7 @@ logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
-project_name = 'hyms'
+project_name = 'shybox'
 alg_name = 'Application for data grid'
 alg_type = 'Package'
 alg_version = '1.0.0'
@@ -96,7 +96,7 @@ def main(alg_collectors_settings: dict = None):
 if __name__ == '__main__':
 
     collector_vars = {
-        'file_name': '/home/fabio/Desktop/hyms/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
+        'file_name': '/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
         'path_log': '$HOME/log', 'file_log': 'log.txt',
     }
     main(alg_collectors_settings=collector_vars)
