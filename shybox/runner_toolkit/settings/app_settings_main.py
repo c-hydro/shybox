@@ -1,19 +1,19 @@
 #!/usr/bin/python3
 """
-HMC-SUITE - SETTINGS APP
+SHYBOX - Snow HYdro toolBOX - RUNNER SETTINGS APP
 
 __date__ = '20241209'
 __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
-__library__ = 'hmc-suite'
+__library__ = 'shybox'
 
 General command line:
 python app_settings_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
-20241209 (1.0.0) --> Beta release for hmc-suite package
+20241209 (1.0.0) --> Beta release for shybox package
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -35,9 +35,9 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
-project_name = 'hmc-suite'
-alg_name = 'Application for settings'
-alg_type = 'Package'
+project_name = 'shybox'
+alg_name = 'runner - settings application'
+alg_type = 'package'
 alg_version = '1.0.0'
 alg_release = '2024-12-09'
 # ----------------------------------------------------------------------------------------------------------------------

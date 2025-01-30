@@ -1,19 +1,19 @@
 #!/usr/bin/python3
 """
-HMC-SUITE - EXECUTION APP
+SHYBOX - Snow HYdro toolBOX - RUNNER EXECUTION APP
 
 __date__ = '20250117'
 __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
-__library__ = 'hmc-suite'
+__library__ = 'shybox'
 
 General command line:
 python app_execution_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
-20250117 (1.0.0) --> Beta release for hmc-suite package
+20250117 (1.0.0) --> Beta release for shybox package
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -40,8 +40,8 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
-project_name = 'hmc-suite'
-alg_name = 'Application for execution method'
+project_name = 'shybox'
+alg_name = 'runner - execution app'
 alg_type = 'Package'
 alg_version = '1.0.0'
 alg_release = '2025-01-15'
