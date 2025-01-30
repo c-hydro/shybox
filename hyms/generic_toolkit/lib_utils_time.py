@@ -99,14 +99,19 @@ def convert_time_frequency(time_frequency: (str, int), frequency_conversion: str
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check string has the date format
-def is_date(string: str, date_format: str = '%Y%m%d%H%M') -> bool:
+def is_date(date_obj: (str, pd.Timestamp), date_format: str = '%Y%m%d%H%M') -> bool:
     """
     Return whether the string can be interpreted as a date.
-    :param string: str, string to check for date
+    :param date_obj: str, string to check for date
     :param date_format: str, format of the date
     """
     try:
-        pd.to_datetime(string, format=date_format, errors='raise')
+        if isinstance(date_obj, str):
+            pd.to_datetime(date_obj, format=date_format, errors='raise')
+        elif isinstance(date_obj, pd.Timestamp):
+            pd.to_datetime(date_obj.strftime(date_format), format=date_format, errors='raise')
+        else:
+            raise ValueError('Date type is not recognized')
         return True
     except ValueError:
         return False

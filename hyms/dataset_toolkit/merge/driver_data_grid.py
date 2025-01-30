@@ -30,7 +30,8 @@ from hyms.generic_toolkit.lib_default_args import collector_data
 
 from hyms.io_toolkit import io_handler_base
 
-from hyms.io_toolkit.lib_io_utils import substitute_string_by_date, substitute_string_by_tags
+from hyms.generic_toolkit.lib_utils_time import is_date
+from hyms.io_toolkit.lib_io_utils import substitute_string_by_date, substitute_string_by_tags, extract_time_from_string
 from hyms.io_toolkit.lib_io_variables import fill_var_generic, fill_var_air_pressure, fill_var_error
 from hyms.io_toolkit.io_handler_base import IOHandler
 from hyms.io_toolkit.zip_handler_base import ZipHandler
@@ -83,7 +84,6 @@ class DrvData(ZipWrapper, IOWrapper):
                  map_dims: dict = None, map_geo: dict = None, map_data: dict = None, **kwargs)-> None:
 
         self.file_name = file_name
-        self.file_time = file_time
         self.file_format = file_format
         self.file_type = file_type
 
@@ -98,9 +98,11 @@ class DrvData(ZipWrapper, IOWrapper):
         else:
             super().from_path(self.file_name_compress, **extra_args)
 
+        self.file_time = file_time
         self.map_dims, self.map_geo, self.map_data = map_dims, map_geo, map_data
         self.file_handler = io_handler_base.IOHandler(
-            file_name=self.file_name, file_type=self.file_type, file_format=self.file_format,
+            file_name=self.file_name, file_time=self.file_time,
+            file_type=self.file_type, file_format=self.file_format,
             map_dims=self.map_dims, map_geo=self.map_geo, map_data=self.map_data)
 
     @classmethod
@@ -190,6 +192,8 @@ class DrvData(ZipWrapper, IOWrapper):
         # method to get data
         file_data = self.file_handler.get_data(
             row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end, mandatory=True)
+        # method to remap time (if needed)
+        file_data = self.file_handler.remap_time(file_data)
 
         # info algorithm (end)
         logger_stream.info(logger_arrow.info(tag='info_method') + 'Get "variable_data" ... DONE')
@@ -241,7 +245,8 @@ class MultiData(DrvData):
         self.file_handler = file_handler
 
     @classmethod
-    def by_iterable(cls, file_iterable: (str, list, dict) = None, file_time: (str, pd.Timestamp) = None,
+    def by_iterable(cls, file_iterable: (str, list, dict) = None,
+                    file_time: (str, pd.Timestamp) = None, format_time: str = None,
                     file_template: dict = None, file_mandatory: bool = True,
                     tags_value: dict = None, tags_format: dict = None):
 
@@ -253,16 +258,24 @@ class MultiData(DrvData):
                 tmp_iterable[n] = v
             file_iterable = tmp_iterable
 
+        if file_time is None:
+            file_time = None
+            for file_key, file_name in file_iterable.items():
+                tmp_time = extract_time_from_string(file_name, time_format=format_time)
+                if file_time is None:
+                    file_time = tmp_time
+                elif file_time is not None and file_time != tmp_time:
+                    logger_stream.error(logger_arrow.error + 'Time format is not consistent')
+                    raise ValueError('Time format is not consistent')
+
         # using list comprehension to append instances to list
         return cls({file_key: DrvData.by_template(
             file_name=file_name, file_time=file_time,
             file_template=file_template, file_mandatory=file_mandatory,
             tags_value=tags_value, tags_format=tags_format) for file_key, file_name in file_iterable.items()})
 
-    def get_variable_data(self, row_start: int = None, row_end: int = None,
-                                 col_start: int = None, col_end: int = None) -> (xr.Dataset, xr.DataArray):
-
-          file_data = {file_key: file_handler.get_variable_data(
-                row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end) for file_key, file_handler in self.file_handler.items()}
-
-          return file_data
+    def get_variable_data(self, **kwargs) -> (xr.Dataset, xr.DataArray):
+        file_data = {file_key: file_handler.get_variable_data(
+            row_start=None, row_end=None, col_start=None, col_end=None)
+            for file_key, file_handler in self.file_handler.items()}
+        return file_data

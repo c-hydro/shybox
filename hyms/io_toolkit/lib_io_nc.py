@@ -28,7 +28,7 @@ def __adjust_geo_naming(file_obj: xr.Dataset, file_map_geo: dict) -> xr.Dataset:
     for var_in, var_out in file_map_geo.items():
         if var_in in list(file_obj.variables.keys()):
             file_obj = file_obj.rename({var_in: 'var_tmp'})
-            file_obj = file_obj.rename_vars({'var_tmp': var_out})
+            file_obj = file_obj.rename({'var_tmp': var_out})
     return file_obj
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -54,18 +54,19 @@ def get_file_grid(file_name: str,
 
     if file_map_geo is not None:
         file_obj = __adjust_geo_naming(file_obj, file_map_geo=file_map_geo)
+
     file_x_values, file_y_values = file_obj['longitude'].values, file_obj['latitude'].values
     file_obj = file_obj.drop_vars(['longitude', 'latitude'])
     if file_x_values.ndim == 2:
         file_x_values = file_x_values[0, :]
-    elif file_x_values == 1:
+    elif file_x_values.ndim == 1:
         pass
     else:
         #logger_stream.error(logger_arrow.error + 'Geographical dimensions of "longitude" is not expected')
         assert RuntimeError('Geographical dimensions of "longitude" must be 1D or 2D')
     if file_y_values.ndim == 2:
         file_y_values = file_y_values[:, 0]
-    elif file_y_values == 1:
+    elif file_y_values.ndim == 1:
         pass
     else:
         #logger_stream.error(logger_arrow.error + 'Geographical dimensions of "latitude" is not expected')
@@ -73,6 +74,7 @@ def get_file_grid(file_name: str,
 
     if file_map_dims is not None:
         file_obj = __adjust_dims_naming(file_obj, file_map_dims=file_map_dims)
+
     file_obj['longitude'] = xr.DataArray(file_x_values, dims='longitude')
     file_obj['latitude'] = xr.DataArray(file_y_values, dims='latitude')
 

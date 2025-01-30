@@ -1,0 +1,13 @@
+{
+  "format": "netcdf",
+  "type": "grid",
+  "map_dims": {
+    "lon": "longitude", "lat": "latitude", "nt": "time"
+  },
+  "map_geo": {
+    "lon": "longitude", "lat": "latitude"
+  },
+  "map_data": {
+    "Tair": "air_temperature"
+  }
+}

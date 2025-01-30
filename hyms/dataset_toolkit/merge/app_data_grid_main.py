@@ -68,17 +68,24 @@ def main(alg_collectors_settings: dict = None):
     #row_start, row_end, col_start, col_end = 0, 9, 3, 15
     row_start, row_end, col_start, col_end = None, None, None, None
 
-    driver_multi_data = MultiData.by_iterable(
+    driver_geo_data = DrvData.by_template(
+        file_name=alg_collectors_settings.get('geo_name', None),
+        file_time=alg_collectors_settings.get('geo_time', None),
+        file_template=alg_collectors_settings.get('geo_template', None)
+    )
+    # get variable data
+    geo_data = driver_geo_data.get_variable_data()
+
+    driver_dyn_data = MultiData.by_iterable(
         file_iterable=alg_collectors_settings.get('file_name', None),
         file_time=alg_collectors_settings.get('file_time', None),
         file_template=alg_collectors_settings.get('file_template', None)
     )
 
     # get variable data
-    file_data = driver_multi_data.get_variable_data(
-        row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
-    # select variable data
-    file_data = driver_multi_data.select_data(file_data)
+    dyn_data = driver_dyn_data.get_variable_data()
+
+    print()
 
 
 
@@ -90,8 +97,7 @@ def main(alg_collectors_settings: dict = None):
     )
 
     # get variable data
-    file_data = driver_data.get_variable_data(
-        row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
+    file_data = driver_data.get_variable_data()
     # select variable data
     file_data = driver_data.select_data(file_data)
 
@@ -104,8 +110,7 @@ def main(alg_collectors_settings: dict = None):
     )
 
     # get variable data
-    file_data = driver_data.get_variable_data(
-        row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
+    file_data = driver_data.get_variable_data()
     # select variable data
     file_data = driver_data.select_data(file_data)
 
@@ -171,6 +176,19 @@ if __name__ == '__main__':
         "file_time": None,
         "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
         'path_log': '$HOME/log', 'file_log': 'log.txt',
+    }
+
+    collector_vars = {
+        "file_name": [
+            '/home/fabio/Desktop/hyms/dset/itwater/T_19810101.nc',
+            '/home/fabio/Desktop/hyms/dset/itwater/R_19810101.nc'
+        ],
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_netcdf_gridded_itwater.json",
+        "geo_name": "/home/fabio/Desktop/hyms/dset/data_static/gridded/marche.dem.txt",
+        "geo_template": "/home/fabio/Desktop/hyms/hyms/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        "geo_time": None,
+        'path_log': '$HOME/log', 'file_log': 'log.txt'
     }
 
     # /home/fabio/Desktop/hyms/dset/merge_data/geo_liguria.tiff

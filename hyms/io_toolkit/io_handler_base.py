@@ -15,6 +15,7 @@ import warnings
 from typing import Optional
 from datetime import datetime
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from hyms.io_toolkit.lib_io_ascii_grid import get_file_grid as get_file_grid_ascii
@@ -22,6 +23,7 @@ from hyms.io_toolkit.lib_io_ascii_array import get_file_array as get_file_array_
 from hyms.io_toolkit.lib_io_tiff import get_file_grid as get_file_grid_tiff
 from hyms.io_toolkit.lib_io_nc import get_file_grid as get_file_grid_nc
 
+from hyms.generic_toolkit.lib_utils_time import is_date
 from hyms.generic_toolkit.lib_default_args import logger_name, logger_arrow
 
 import matplotlib.pylab as plt
@@ -47,8 +49,8 @@ class IOHandler:
         'ascii_time_series': None, 'csv_time_series': None,
     }
 
-    def __init__(self, file_name: str, file_type: str = 'raster',
-                 file_format: Optional[str] = None,
+    def __init__(self, file_name: str, file_time: (str, pd.Timestamp) = None,
+                 file_type: str = 'raster', file_format: Optional[str] = None,
                  map_dims: Optional[dict] = None, map_geo: Optional[dict] = None,
                  map_data: (list, dict) = None, **kwargs) -> None:
 
@@ -56,6 +58,7 @@ class IOHandler:
             file_type = 'raster'
 
         self.file_name = file_name
+        self.file_time = file_time
         self.file_type = file_type.lower()
 
         self.file_format = file_format if file_format is not None else self.file_name.split('.')[-1]
@@ -148,6 +151,24 @@ class IOHandler:
                     else:
                         warnings.warn(f'Variable {var_in} not found in dataset.')
                 obj_data = obj_data[select_vars]
+
+        return obj_data
+
+    # method to remap time
+    def remap_time(self, obj_data: xr.Dataset, time_dim: str = 'time', time_freq='h') -> xr.Dataset:
+
+        if time_dim in list(obj_data.dims):
+            time_values = obj_data[time_dim].values
+            time_check = is_date(time_values[0])
+            if not time_check:
+                if self.file_time is not None:
+                    time_values = pd.date_range(start=self.file_time, periods=len(time_values), freq=time_freq)
+                    obj_data['time'] = time_values
+                else:
+                    warnings.warn(f'Time values are not defined by dates. Time of the file is defined by NoneType.')
+        else:
+            if obj_data.ndim > 2:
+                warnings.warn(f'Time dimension {time_dim} not found in dataset.')
 
         return obj_data
 
