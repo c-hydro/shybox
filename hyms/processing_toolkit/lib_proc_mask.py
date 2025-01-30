@@ -14,8 +14,14 @@ import logging
 import numpy as np
 import xarray as xr
 
-import gdal
 # ----------------------------------------------------------------------------------------------------------------------
+
+def mask_data(grid_da, ref_da):
+
+    print('mask_data')
+
+    return grid_da
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to execute mask

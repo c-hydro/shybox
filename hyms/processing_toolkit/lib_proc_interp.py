@@ -1,3 +1,6 @@
+import numpy as np
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # method to mask data
 def mask_data(da_obj_in, da_reference, mask_value_min=0, mask_value_max=None, mask_no_data=np.nan,
@@ -26,9 +29,14 @@ def mask_data(da_obj_in, da_reference, mask_value_min=0, mask_value_max=None, ma
 # ----------------------------------------------------------------------------------------------------------------------
 
 
+def interpolate_data(da_obj_in, da_reference):
+
+    print()
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # method to interpolate data
-def interpolate_data(obj_da_in, obj_da_ref,
+def interpolate_data_NEW(obj_da_in, obj_da_ref,
                      var_name_data='surface_soil_moisture', var_name_geo_x='longitude', var_name_geo_y='latitude',
                      coord_name_x='longitude', coord_name_y='latitude', dim_name_x='longitude', dim_name_y='latitude',
                      interpolating_active=True,

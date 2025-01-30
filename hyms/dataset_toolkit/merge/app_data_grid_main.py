@@ -28,12 +28,19 @@ import logging
 import time
 import os
 
+import pandas as pd
+
 from hyms.generic_toolkit.lib_utils_args import get_logger_name
 from hyms.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from hyms.generic_toolkit.lib_default_args import collector_data
 
 from hyms.dataset_toolkit.merge.driver_data_grid import DrvData, MultiData
 from hyms.io_toolkit import io_handler_base
+
+from hyms.processing_toolkit.lib_proc_mask import mask_data
+from hyms.processing_toolkit.lib_proc_interp import interpolate_data
+
+from hyms.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
 
 # set logger
 logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', logger_name_default=logger_name))
@@ -85,10 +92,14 @@ def main(alg_collectors_settings: dict = None):
     # get variable data
     dyn_data = driver_dyn_data.get_variable_data()
 
-    print()
 
+    orc_process = Orchestrator(
+        data_in=dyn_data, data_ref=geo_data, data_out=None, options={})
 
+    orc_process.add_process(interpolate_data, ref=geo_data)
+    orc_process.add_process(mask_data, ref=geo_data)
 
+    orc_process.run(time=pd.date_range('1980-01-01 05:00', '1980-01-01 07:00', freq='H'))
 
     driver_data = DrvData.by_template(
         file_name=alg_collectors_settings.get('file_name', None),

@@ -145,7 +145,7 @@ class DrvData(ZipWrapper, IOWrapper):
         if 'map_dims' in list(data_template.keys()):
             map_dims = data_template['map_dims']
 
-        return cls(file_name, file_time=file_time, file_type=file_type, file_format=file_format,
+        return cls(file_name=file_name, file_time=file_time, file_type=file_type, file_format=file_format,
                    map_dims=map_dims, map_geo=map_geo, map_data=map_data, **kwargs)
 
 
@@ -175,7 +175,7 @@ class DrvData(ZipWrapper, IOWrapper):
                 logger_stream.error(logger_arrow.error + 'File "' + file_name + '" does not exist')
                 raise FileNotFoundError(f'File {file_name} is mandatory and must defined to run the process')
 
-        return cls(file_name, file_format=file_format,
+        return cls(file_name=file_name, file_format=file_format,
                    map_dims=map_dims, map_geo=map_geo, map_data=map_data)
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -240,7 +240,7 @@ class DrvData(ZipWrapper, IOWrapper):
 # class to handle multi data
 class MultiData(DrvData):
 
-    def __init__(self, file_handler):
+    def __init__(self, file_handler: object, **kwargs: object) -> None:
 
         self.file_handler = file_handler
 

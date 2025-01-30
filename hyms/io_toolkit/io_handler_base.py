@@ -138,6 +138,14 @@ class IOHandler:
 
         return obj_data
 
+    @staticmethod
+    def get_var(obj_data: (xr.DataArray, xr.Dataset), variable_data: str = 'AirTemperature') -> xr.DataArray:
+        if isinstance(obj_data, xr.Dataset):
+            if variable_data not in obj_data:
+                raise ValueError(f'Variable {variable_data} not found in dataset.')
+            obj_var = obj_data[variable_data]
+        return obj_var
+
     # method to select data
     def select_data(self, obj_data: xr.Dataset) -> xr.Dataset:
         map_data = self.map_data
