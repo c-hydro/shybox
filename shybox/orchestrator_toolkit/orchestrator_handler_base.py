@@ -12,6 +12,7 @@
 
 Options = dict()
 
+from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
 
@@ -115,51 +116,33 @@ class OrchestratorHandler:
 
         self.processes.append(this_process)
 
-    def run(self, time: (dt.datetime, str, pd.date_range), **kwargs) -> None:
+    def run(self, time: (pd.Timestamp, str, pd.date_range), **kwargs) -> None:
 
-        '''
-        if len(self.processes) == 0:
-            raise ValueError('No processes have been added to the workflow.')
-        elif isinstance(self.processes[-1].output, MemoryDataset) or\
-            (isinstance(self.processes[-1].output, LocalDataset) and
-             hasattr(self, 'tmp_dir') and self.tmp_dir in self.processes[-1].output.dir):
-            if self.output is not None:
-                self.processes[-1].output = self.output.copy()
-            else:
-                raise ValueError('No output dataset has been set.')
-        '''
+        if isinstance(time, str):
+            time = convert_time_format(time, 'str_to_stamp')
 
-        data_time = self.data_in['time'].values
+        #data_time = self.data_in['time'].values
 
-        if hasattr(time, 'start') and hasattr(time, 'end'):
-            timestamps = self.data_in.get_times(time, **kwargs)
-
-            if self.data_in.time_signature == 'end+1':
-                timestamps = [t - dt.timedelta(days = 1) for t in timestamps]
-
-            if len(timestamps) > 5:
-                timestep = estimate_timestep(timestamps)
-            else:
-                timestep = self.data_in.estimate_timestep()
-
-            if timestep is not None:
-                time_steps = [timestep.from_date(t) for t in timestamps]
-            else:
-                time_steps = timestamps
-            
-            if len(time_steps) == 0:
-                return
-            else:
-                for time_step in time_steps:
-                    self.run_single_ts(time_step, **kwargs)
-                return
+        if isinstance(time, pd.DatetimeIndex):
+            time_steps = time
+        elif isinstance(time, str):
+            time_steps = pd.DatetimeIndex(pd.to_datetime(time))
+        elif isinstance(time, pd.Timestamp):
+            time_steps = pd.DatetimeIndex([time])
         else:
-            self.run_single_ts(time, **kwargs)
+            time_steps = pd.DatetimeIndex([time])
+
+        if len(time_steps) == 0:
+            return None
+
+        for ts in time_steps:
+            self.run_single_ts(time=ts, **kwargs)
+        return None
     
-    def run_single_ts(self, time: (dt.datetime, str, pd.date_range), **kwargs) -> None:
+    def run_single_ts(self, time: (pd.Timestamp, str, pd.date_range), **kwargs) -> None:
         
         if isinstance(time, str):
-            time = get_date_from_str(time)
+            time = convert_time_format(time, 'str_to_stamp')
 
         if len(self.break_points) == 0:
             self._run_processes(self.processes, time, **kwargs)

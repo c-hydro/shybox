@@ -18,6 +18,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from shybox.type_toolkit.lib_type_grid import DataGrid
+
 from shybox.io_toolkit.lib_io_ascii_grid import get_file_grid as get_file_grid_ascii
 from shybox.io_toolkit.lib_io_ascii_array import get_file_array as get_file_array_ascii
 from shybox.io_toolkit.lib_io_tiff import get_file_grid as get_file_grid_tiff
@@ -136,15 +138,13 @@ class IOHandler:
         else:
             obj_data = None
 
-        return obj_data
-
-    @staticmethod
-    def get_var(obj_data: (xr.DataArray, xr.Dataset), variable_data: str = 'AirTemperature') -> xr.DataArray:
         if isinstance(obj_data, xr.Dataset):
-            if variable_data not in obj_data:
-                raise ValueError(f'Variable {variable_data} not found in dataset.')
-            obj_var = obj_data[variable_data]
-        return obj_var
+            obj_data = DataGrid(
+                data=obj_data,
+                file_format=self.file_format, file_type=self.file_type, file_name=self.file_name,
+                file_time=self.file_time, map_dims=self.map_dims, map_geo=self.map_geo, map_data=self.map_data)
+
+        return obj_data
 
     # method to select data
     def select_data(self, obj_data: xr.Dataset) -> xr.Dataset:

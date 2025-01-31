@@ -1,11 +1,13 @@
-#from ..tools.data import Dataset
-#from ..tools.timestepping.time_utils import get_date_from_str
 
+
+# libraries
 import datetime as dt
 from typing import Callable
 from functools import partial
 
 import xarray as xr
+
+from shybox.generic_toolkit.lib_utils_time import convert_time_format
 
 class ProcessorContainer:
     def __init__(self,
@@ -40,15 +42,20 @@ class ProcessorContainer:
     def run(self, time: (dt.datetime,str), **kwargs) -> None:
 
         if isinstance(time, str):
-            time = get_date_from_str(time)
+            time = convert_time_format(time, 'str_to_stamp')
 
-        input_options = self.input_options
-        if isinstance(self.data, dict):
+        if 'data' not in kwargs:
+            data_raw = self.data
+        else:
+            data_raw = kwargs['data']
 
-            input_data = (self.data.get_data(time, data=v, **kwargs) for k, v in self.data.items())
+        if isinstance(data_raw, dict):
+            for key, data_tmp in data_raw.items():
+                self.run(time, data = data_tmp, **kwargs)
+            return
 
         else:
-            input_data = self.data.get_data(time, **kwargs)
+            data_selection = data_raw.squeeze_data_by_time(time_data=time, **kwargs)
             metadata = {}
 
         ''''

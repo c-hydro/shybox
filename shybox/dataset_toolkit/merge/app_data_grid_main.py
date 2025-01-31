@@ -101,6 +101,8 @@ def main(alg_collectors_settings: dict = None):
 
     orc_process.run(time=pd.date_range('1980-01-01 05:00', '1980-01-01 07:00', freq='H'))
 
+    ## end test
+
     driver_data = DrvData.by_template(
         file_name=alg_collectors_settings.get('file_name', None),
         file_time=alg_collectors_settings.get('file_time', None),
