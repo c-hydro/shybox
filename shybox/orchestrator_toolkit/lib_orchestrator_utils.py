@@ -15,6 +15,9 @@ import tempfile
 import os
 
 from typing import Iterable
+
+from shybox.type_toolkit.lib_type_grid import DataGrid
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -35,6 +38,8 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **kwargs
             elif input_type == 'file':
                 # convert filename to xr.DataArray
                 data = xarray_to_file(data)
+            elif input_type == 'data_grid':
+                data = grid_to_xarray(data)
 
             # Call the original function
             result = func(data, *args, **kwargs)
@@ -59,13 +64,18 @@ def with_list_input(func):
         if isinstance(data, Iterable) and not isinstance(data, str) and not isinstance(data, xr.DataArray):
             return [func(i, *args, **kwargs) for i in data]
         else:
-            return func(input, *args, **kwargs)
+            return func(data, *args, **kwargs)
     return wrapper
 # ----------------------------------------------------------------------------------------------------------------------
 
 @with_list_input
 def remove(filename: str):
     os.remove(filename)
+
+@with_list_input
+def grid_to_xarray(data: DataGrid) -> (xr.DataArray, xr.Dataset):
+    data = data.data
+    return data
 
 
 @with_list_input
@@ -93,7 +103,6 @@ def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:
 
     # Open the temporary file with GDAL
     gdal_dataset = gdal.Open(temp_file)
-
     # Optionally, delete the temporary file after opening it with GDAL
     os.remove(temp_file)
 

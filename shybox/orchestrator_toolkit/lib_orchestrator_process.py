@@ -15,29 +15,30 @@ class ProcessorContainer:
                  data: dict,
                  args: dict = {},
                  output: dict = None,
-                 wf_options: dict = {}) -> None:
+                 options: dict = {}) -> None:
+
         self.break_point = False
 
-        ds_args = {}
-        static_args = {}
+        fx_args, fx_static = {}, {}
         for arg_name, arg_value in args.items():
-            if isinstance(arg_value, xr.Dataset):
-                if not arg_value.is_static:
-                    ds_args[arg_name] = arg_value
-                else:
-                    static_args[arg_name] = arg_value.get_data()
+            if isinstance(arg_value, (xr.Dataset, xr.DataArray)):
+                fx_args[arg_name] = arg_value
             else:
-                static_args[arg_name] = arg_value
+                fx_static[arg_name] = arg_value
 
-        self.funcname = function.__name__
-        self.function = partial(function, **static_args)
-        self.ds_args = ds_args
+        self.fx_name = function.__name__
+        self.fx_obj = partial(function, **fx_static)
+
+        self.fx_static = fx_static
+        self.fx_args = fx_args
+
         self.data = data
+        self.options = options
 
         self.output = output
 
     def __repr__(self):
-        return f'ProcessorContainer({self.funcname})'
+        return f'ProcessorContainer({self.fx_name})'
 
     def run(self, time: (dt.datetime,str), **kwargs) -> None:
 
@@ -50,32 +51,24 @@ class ProcessorContainer:
             data_raw = kwargs['data']
 
         if isinstance(data_raw, dict):
-            for key, data_tmp in data_raw.items():
-                self.run(time, data = data_tmp, **kwargs)
-            return
-
-        else:
-            data_selection = data_raw.squeeze_data_by_time(time_data=time, **kwargs)
-            metadata = {}
-
-        ''''
-        if 'tile' not in kwargs:
-            all_tiles = self.input.tile_names if input_options['break_on_missing_tiles'] else self.input.find_tiles(time, **kwargs)
-            if not input_options['tiles']:
-                for tile in all_tiles:
-                    self.run(time, tile = tile, **kwargs)
-                return
+            if 'tiles' in list(self.options.keys()):
+                for data_key, data_tmp in data_raw.items():
+                    fx_data = data_tmp.squeeze_data_by_time(time_step=time, **kwargs)
+                metadata = {'tiles': list(data_raw.keys())}
             else:
-                input_data = (self.input.get_data(time, tile = tile, **kwargs) for tile in all_tiles)
-                metadata = {'tiles': all_tiles}
+                for data_key, data_tmp in data_raw.items():
+                    self.run(time, data = data_tmp, **kwargs)
+                return
+
         else:
-            input_data = self.input.get_data(time, **kwargs)
+            fx_data = data_raw.squeeze_data_by_time(time_step=time, **kwargs)
             metadata = {}
-        '''
-        ds_args = {arg_name: arg.get_data(time, **kwargs) for arg_name, arg in self.ds_args.items()}
-        output = self.function(input = input_data, **ds_args)
+
+        #fx_args = {arg_name: arg_value.get_data(time, **kwargs) for arg_name, arg_value in self.fx_args.items()}
+        fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
+        fx_out = self.fx_obj(data=fx_data, **fx_args)
 
         output_options = self.output_options
-        print(f'{self.funcname} - {time}, {kwargs}')
+        print(f'{self.fx_name} - {time}, {kwargs}')
 
         self.output.write_data(output, time, metadata = metadata, **kwargs)

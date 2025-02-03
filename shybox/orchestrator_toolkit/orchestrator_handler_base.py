@@ -105,11 +105,11 @@ class OrchestratorHandler:
             this_input = previous.output
 
         this_output = self.make_output(this_input, output, function)
-        this_process = ProcessorContainer(function = function,
-                                    data = this_input,
-                                    args = kwargs,
-                                    output = this_output,
-                                    wf_options = self.options)
+        this_process = ProcessorContainer(
+            function = function,
+            data = this_input, args = kwargs,
+            output = this_output,
+            options = self.options)
 
         if this_process.break_point:
             self.break_points.append(len(self.processes))

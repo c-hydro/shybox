@@ -28,6 +28,7 @@ import logging
 import time
 import os
 
+import numpy as np
 import pandas as pd
 
 from shybox.generic_toolkit.lib_utils_args import get_logger_name
@@ -96,10 +97,12 @@ def main(alg_collectors_settings: dict = None):
     orc_process = Orchestrator(
         data_in=dyn_data, data_ref=geo_data, data_out=None, options={})
 
-    orc_process.add_process(interpolate_data, ref=geo_data)
+    orc_process.add_process(
+        interpolate_data, ref=geo_data,
+        method='nn', max_distance=25000, neighbours=7, fill_value=np.nan)
     orc_process.add_process(mask_data, ref=geo_data)
 
-    orc_process.run(time=pd.date_range('1980-01-01 05:00', '1980-01-01 07:00', freq='H'))
+    orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))
 
     ## end test
 

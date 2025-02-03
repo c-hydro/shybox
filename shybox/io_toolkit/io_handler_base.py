@@ -143,6 +143,7 @@ class IOHandler:
                 data=obj_data,
                 file_format=self.file_format, file_type=self.file_type, file_name=self.file_name,
                 file_time=self.file_time, map_dims=self.map_dims, map_geo=self.map_geo, map_data=self.map_data)
+            obj_data = obj_data.add_time_period(time_dim='time', time_freq='h')
 
         return obj_data
 

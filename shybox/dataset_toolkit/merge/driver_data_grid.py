@@ -192,8 +192,6 @@ class DrvData(ZipWrapper, IOWrapper):
         # method to get data
         file_data = self.file_handler.get_data(
             row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end, mandatory=True)
-        # method to remap time (if needed)
-        file_data = self.file_handler.remap_time(file_data)
 
         # info algorithm (end)
         logger_stream.info(logger_arrow.info(tag='info_method') + 'Get "variable_data" ... DONE')
