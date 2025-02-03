@@ -15,8 +15,11 @@ __pycache__/
 *$py.class
 
 # Project
+conda/
+old/
 dset/
 example/
+miniconda.sh
 *.log
 *.LOG
 old

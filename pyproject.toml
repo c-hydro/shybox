@@ -3,20 +3,21 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hyms"
+name = "shybox"
 version = "1.0.0"
-description = "A package to set and run hydrological models and analyze results, developed by CIMA Research Foundation"
+description = "A package to set and run snow and hydrological models and analyze results, developed by CIMA Research Foundation"
 authors = [
     { name = "Fabio Delogu", email = "fabio.delogu@cimafoundation.org" },
-    { name = "Andrea Libertino"},
-    { name = "Francesco Avanzi"}
+    { name = "Andrea Libertino", email = "andrea.libertino@cimafoundation.org" },
+    { name = "Francesco Avanzi", email = "francesco.avanzi@cimafoundation.org" }
 ]
 maintainers = [
     { name = "Fabio Delogu", email = "fabio.delogu@cimafoundation.org"}
+    { name = "Andrea Libertino", email = "andrea.libertino@cimafoundation.org"}
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: ECPL License",
@@ -30,7 +31,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/c-hydro/hyms"
+Repository = "https://github.com/c-hydro/shybox"
 
 [project.optional-dependencies]
 
