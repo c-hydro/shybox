@@ -9,7 +9,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import xarray as xr
-import rioxarray as rxr
+#import rioxarray as rxr
 from osgeo import gdal
 import tempfile
 import os
@@ -22,7 +22,7 @@ from shybox.type_toolkit.lib_type_grid import DataGrid
 
 # ----------------------------------------------------------------------------------------------------------------------
 # globals variables
-global DAM_PROCESSES
+global PROCESSES
 PROCESSES = {}
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -38,17 +38,35 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **kwargs
             elif input_type == 'file':
                 # convert filename to xr.DataArray
                 data = xarray_to_file(data)
-            elif input_type == 'data_grid':
-                data = grid_to_xarray(data)
 
             # Call the original function
             result = func(data, *args, **kwargs)
 
-        wrapper.__name__ = func.__name__
+            # remove the temporary file if input is a file
+            if input_type == 'file':
+                remove(data)
 
+            # Ensure the output is in the correct format
+            if output_type == 'gdal':
+                # Add your output validation logic here
+                result = gdal_to_xarray(result)
+            elif output_type == 'file':
+                # Add your output validation logic here
+                result = file_to_xarray(result)
+            return result
+
+        if output_type in ['tif', 'tiff', 'gdal', 'xarray', 'file']:
+            setattr(wrapper, 'output_ext', 'tif')
+        elif output_type in ['table', 'csv', 'pandas']:
+            setattr(wrapper, 'output_ext', 'csv')
+        elif output_type in ['shape', 'dict', 'geojson']:
+            setattr(wrapper, 'output_ext', 'json')
+        elif output_type in ['text', 'txt']:
+            setattr(wrapper, 'output_ext', 'txt')
+
+        wrapper.__name__ = func.__name__
         for key, value in kwargs.items():
             setattr(wrapper, key, value)
-
         # Add the wrapped function to the global list of processes
         PROCESSES[func.__name__] = wrapper
 
@@ -91,11 +109,12 @@ def xarray_to_file(data_array: xr.DataArray) -> str:
     return temp_file.name
 
 
+'''
 @with_list_input
 def file_to_xarray(filename: str) -> xr.DataArray:
     # Open the file with xarray
     return rxr.open_rasterio(filename)
-
+'''
 
 @with_list_input
 def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:

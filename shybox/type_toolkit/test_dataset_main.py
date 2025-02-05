@@ -10,7 +10,7 @@ __author__ =
 __library__ = 'shybox'
 
 General command line:
-python app_data_grid_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
+python test_dataset_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
 20250123 (3.0.0) --> Beta release for shybox package
@@ -43,6 +43,8 @@ from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
 
+from shybox.type_toolkit.io_dataset_grid import DataObj
+
 # set logger
 logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', logger_name_default=logger_name))
 # ----------------------------------------------------------------------------------------------------------------------
@@ -55,10 +57,6 @@ alg_type = 'Package'
 alg_version = '3.0.0'
 alg_release = '2025-01-24'
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-from shybox.type_toolkit.io_dataset_grid import GridDataset
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # main function
@@ -75,11 +73,49 @@ def main(alg_collectors_settings: dict = None):
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
 
-    data = GridDataset(
-        path=None,
-        file_name=alg_collectors_settings.get('file_name', None),
-        time_signature='start')
+    airt_data = DataObj(
+        path='/home/fabio/Desktop/shybox/dset/itwater',
+        file_name='T_19810101.nc',
+        file_template={
+            "format": "netcdf", "type": "grid",
+            "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+            "vars_geo": {"lon": "longitude", "lat": "latitude"},
+            "vars_data": {"Tair": "air_temperature"}
+        },
+        time_signature='start'
+    )
 
+    geo_data = DataObj(
+        path='/home/fabio/Desktop/shybox/dset/data_static/gridded/',
+        file_name='marche.dem.txt',
+        file_mode='grid',
+        file_template={
+            "format": "ascii", "type": "grid",
+            "dims_geo": {"x": "longitude", "y": "latitude"},
+            "vars_geo": {"x": "longitude", "y": "latitude"}
+        },
+        time_signature=None
+    )
+
+    output_data = DataObj(
+        path='/home/fabio/Desktop/shybox/dset/itwater',
+        file_name='test_%Y%m%d%H%M.nc', time_signature='start',
+        file_mode='grid', file_template=None,
+        name='AirT')
+
+
+    orc_process = Orchestrator(
+        data_in=airt_data, data_out=output_data, options={})
+
+    orc_process.add_process(
+        interpolate_data, ref=geo_data,
+        method='nn', max_distance=25000, neighbours=7, fill_value=np.nan)
+    #orc_process.add_process(mask_data, ref=geo_data)
+
+    orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))
+
+
+    print()
 
     #row_start, row_end, col_start, col_end = 0, 9, 3, 15
     row_start, row_end, col_start, col_end = None, None, None, None
@@ -160,48 +196,6 @@ def main(alg_collectors_settings: dict = None):
 # call entrypoint
 if __name__ == '__main__':
 
-    # case 1 - dynamic defined file name
-    collector_vars = {
-        'file_name': '/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/2025/01/24/S3M_202501240400.nc.gz',
-        'path_log': '$HOME/log', 'file_log': 'log.txt',
-    }
-
-    # case 2 - dynamic undefined file name
-    collector_vars = {
-        "file_name": '/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/{file_sub_path}/S3M_{file_datetime}.nc.gz',
-        "file_time": '202501240400',
-        "file_template": "",
-        'path_log': '$HOME/log', 'file_log': 'log.txt'
-    }
-
-    # case 3 - static defined file name
-    collector_vars = {
-        "file_name": '/home/fabio/Desktop/shybox/dset/data_static/gridded/marche.dem.txt',
-        "file_time": None,
-        "file_template": "/home/fabio/Desktop/shybox/shybox/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
-        'path_log': '$HOME/log', 'file_log': 'log.txt',
-    }
-
-    # case 4 - static undefined file name
-    collector_vars = {
-        "file_name": '/home/fabio/Desktop/shybox/dset/data_static/gridded/{domain_name}.dem.txt',
-        "file_time": None,
-        "file_template": "/home/fabio/Desktop/shybox/shybox/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
-        'path_log': '$HOME/log', 'file_log': 'log.txt',
-    }
-
-    # case 5 - static defined file name
-    collector_vars = {
-        "file_name": [
-            '/home/fabio/Desktop/shybox/dset/merge_data/EntellaDomain.dem.txt',
-            '/home/fabio/Desktop/shybox/dset/merge_data/LevanteGenoveseDomain.dem.txt',
-            '/home/fabio/Desktop/shybox/dset/merge_data/PonenteGenoveseDomain.dem.txt'
-        ],
-        "file_time": None,
-        "file_template": "/home/fabio/Desktop/shybox/shybox/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
-        'path_log': '$HOME/log', 'file_log': 'log.txt',
-    }
-
     collector_vars = {
         "file_name": [
             '/home/fabio/Desktop/shybox/dset/itwater/T_19810101.nc',
@@ -215,9 +209,15 @@ if __name__ == '__main__':
         'path_log': '$HOME/log', 'file_log': 'log.txt'
     }
 
-    # /home/fabio/Desktop/shybox/dset/merge_data/geo_liguria.tiff
-    # /home/fabio/Desktop/shybox/dset/merge_data/LiguriaDomain.dem.txt
-    # testing tags
+    collector_vars = {
+        "file_name": '/home/fabio/Desktop/shybox/dset/itwater/T_19810101.nc',
+        "file_time": None,
+        "file_template": "/home/fabio/Desktop/shybox/shybox/dataset_toolkit/template/tmpl_netcdf_gridded_itwater.json",
+        "geo_name": "/home/fabio/Desktop/shybox/dset/data_static/gridded/marche.dem.txt",
+        "geo_template": "/home/fabio/Desktop/shybox/shybox/dataset_toolkit/template/tmpl_ascii_gridded_geo.json",
+        "geo_time": None,
+        'path_log': '$HOME/log', 'file_log': 'log.txt'
+    }
 
     main(alg_collectors_settings=collector_vars)
 # ----------------------------------------------------------------------------------------------------------------------

@@ -63,7 +63,7 @@ class DataGrid(metaclass=DataMeta):
         self.tags = {}
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.name})"
+        return f"{self.__class__.__name__}({self.file_name})"
 
     def _create_new_instance(self, data, options):
         return DataGrid(data, **options)

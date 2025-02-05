@@ -20,27 +20,6 @@ import xarray as xr
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-# -------------------------------------------------------------------------------------
-# Method to parse complex row to string
-def parse_row2str_OLD(row_obj, row_delimiter='#'):
-
-    # Check if line starts with {number}######
-    if row_obj.count(row_delimiter) > 1:
-        pattern = r'[0-9]'
-        row_obj = re.sub(pattern, '', row_obj)
-
-    row_string = row_obj.split(row_delimiter)[0]
-
-    # Check delimiter character (in intake file info there are both '#' and '%')
-    if ('#' not in row_obj) and ('%' in row_string):
-        row_string = row_obj.split('%')[0]
-
-    row_string = row_string.strip()
-
-    return row_string
-# -------------------------------------------------------------------------------------
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 # method to extract time from string
 def extract_time_from_string(string: str, time_format: str = None):

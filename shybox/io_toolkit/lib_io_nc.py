@@ -15,7 +15,7 @@ import numpy as np
 from rasterio.crs import CRS
 
 #from shybox.dataset_toolkit.merge.app_data_grid_main import logger_name, logger_arrow
-from shybox.default.lib_default_geo import proj_epsg, proj_wkt
+from shybox.default.lib_default_geo import crs_epsg, crs_wkt
 
 # logging
 #logger_stream = logging.getLogger(logger_name)

@@ -16,6 +16,8 @@ from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
 
+from shybox.type_toolkit.io_dataset_grid import DataObj
+
 import datetime as dt
 from typing import Optional
 import tempfile
@@ -33,13 +35,11 @@ class OrchestratorHandler:
     }
 
     def __init__(self,
-                 data_in: (xr.Dataset, dict),
-                 data_ref: (xr.Dataset, xr.DataArray, dict),
-                 data_out: Optional[xr.Dataset] = None,
+                 data_in: (dict, DataObj),
+                 data_out: (dict, DataObj) = None,
                  options: Optional[dict] = None) -> None:
         
         self.data_in = data_in
-        self.data_ref = data_ref
         self.data_out = data_out
         self.processes = []
         self.break_points = []
@@ -56,12 +56,11 @@ class OrchestratorHandler:
     @classmethod
     def from_options(cls, options: dict) -> 'Orchestrator':
 
-        wf_options = options.get('options', None, ignore_case=True)
-        data_in = wf_options['in']
-        data_ref = wf_options['ref']
-        data_out = wf_options['out']
+        options = options.get('options', None, ignore_case=True)
+        data_in = options['in']
+        data_out = options['out']
 
-        wf = cls(data_in=data_in, data_ref=data_ref, data_out=data_out, options=wf_options)
+        wf = cls(data_in=data_in, data_out=data_out, options=options)
         processes = options.get(['processes','process_list'], [], ignore_case=True)
         for process in processes:
             function_str = process.pop('function')
@@ -78,24 +77,24 @@ class OrchestratorHandler:
             except Exception as e:
                 print(f'Error cleaning up temporary directory: {e}')
 
-    def make_output(self, input: xr.Dataset,
-                    output: (xr.Dataset,dict) = None,
-                    function = None) -> xr.Dataset:
-        if isinstance(output, xr.Dataset):
-            return output
+    def make_output(self, in_obj: DataObj, out_obj: DataObj = None,
+                    function = None) -> DataObj:
+
+        if isinstance(out_obj, DataObj):
+            return out_obj
 
         output_name = 'test'
         output_type = self.options['intermediate_output']
         if output_type == 'Mem':
-            output_ds = xr.Dataset()
+            out_obj = DataObj
         elif output_type == 'Tmp':
             filename = 'test' #os.path.basename(output_pattern)
-            output_ds = xr.Dataset()
+            out_obj = DataObj(path=self.tmp_dir, filename=filename)
+        out_obj.name = output_name
 
-        # output_ds.name = output_name
-        return output_ds
+        return out_obj
 
-    def add_process(self, function, output: (xr.Dataset,dict) = None, **kwargs) -> None:
+    def add_process(self, function, output: (DataObj, xr.Dataset, dict) = None, **kwargs) -> None:
 
         if len(self.processes) == 0:
             previous = None
@@ -107,9 +106,10 @@ class OrchestratorHandler:
         this_output = self.make_output(this_input, output, function)
         this_process = ProcessorContainer(
             function = function,
-            data = this_input, args = kwargs,
-            output = this_output,
-            options = self.options)
+            in_obj = this_input, in_opts=self.options,
+            args = kwargs,
+            out_obj = this_output, out_opts=self.options)
+
 
         if this_process.break_point:
             self.break_points.append(len(self.processes))
@@ -147,7 +147,7 @@ class OrchestratorHandler:
         if len(self.break_points) == 0:
             self._run_processes(self.processes, time, **kwargs)
         else:
-            # proceed in chuncks: run until the breakpoint, then stop
+            # proceed in chunks: run until the breakpoint, then stop
             i = 0
             processes_to_run = []
             while i < len(self.processes):
