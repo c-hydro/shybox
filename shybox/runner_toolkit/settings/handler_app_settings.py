@@ -592,7 +592,8 @@ def format_variable(var_value: (int, float, str, bool, pd.Timestamp) = None,
                 var_value = bool(var_value)
             elif var_format == 'timestamp':
                 if var_template is not None:
-                    var_value = pd.Timestamp(var_value).strftime(var_template)
+                    tmp_value = var_value.strip("\"")
+                    var_value = pd.Timestamp(tmp_value).strftime(var_template)
                 else:
                     logger_stream.error(logger_arrow.error + 'Template "' + str(var_template) +
                                      '" not defined for format "' + str(var_format) + '".')

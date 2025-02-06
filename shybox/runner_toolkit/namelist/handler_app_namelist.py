@@ -17,7 +17,8 @@ from tabulate import tabulate
 from shybox.generic_toolkit.lib_utils_dict import flat_dict_key
 from shybox.generic_toolkit.lib_utils_namelist import (filter_namelist_settings,
                                                        read_namelist_group, parse_namelist_settings,
-                                                       write_namelist_group, select_namelist_type)
+                                                       write_namelist_group,
+                                                       select_namelist_type_hmc, select_namelist_type_s3m)
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -28,9 +29,9 @@ class NamelistHandler:
 
     class_type = 'namelist_handler'
     select_namelist = {
-        'hmc:3.1.6': select_namelist_type,
-        'hmc:3.2.0': select_namelist_type,
-        's3m:5.3.3': select_namelist_type
+        'hmc:3.1.6': select_namelist_type_hmc,
+        'hmc:3.2.0': select_namelist_type_hmc,
+        's3m:5.3.3': select_namelist_type_s3m
     }
 
     # initialize class

@@ -31,7 +31,7 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select namelist type
-def select_namelist_type(namelist_type: str = 's3m', namelist_version: str = '5.3.3') -> (dict, dict):
+def select_namelist_type_hmc(namelist_type: str = 'hmc', namelist_version: str = '3.1.6') -> (dict, dict):
     # select namelist type and structure
     if namelist_type == 'hmc' and namelist_version == '3.1.6':
         type_namelist = type_namelist_hmc_316
@@ -39,7 +39,17 @@ def select_namelist_type(namelist_type: str = 's3m', namelist_version: str = '5.
     elif namelist_type == 'hmc' and namelist_version == '3.2.0':
         type_namelist = type_namelist_hmc_320
         structure_namelist = structure_namelist_hmc_320
-    elif namelist_type == 's3m' and namelist_version == '5.3.3':
+    else:
+        logger_stream.error(logger_arrow.error + 'Namelist type "' + namelist_type + '" is not allowed')
+        raise NotImplementedError('Namelist type not implemented yet')
+    return type_namelist, structure_namelist
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to select namelist type
+def select_namelist_type_s3m(namelist_type: str = 's3m', namelist_version: str = '5.3.3') -> (dict, dict):
+
+    if namelist_type == 's3m' and namelist_version == '5.3.3':
         type_namelist = type_namelist_s3m_533
         structure_namelist = structure_namelist_s3m_533
     else:
@@ -47,6 +57,7 @@ def select_namelist_type(namelist_type: str = 's3m', namelist_version: str = '5.
         raise NotImplementedError('Namelist type not implemented yet')
     return type_namelist, structure_namelist
 # ----------------------------------------------------------------------------------------------------------------------
+
 
 
 # ----------------------------------------------------------------------------------------------------------------------

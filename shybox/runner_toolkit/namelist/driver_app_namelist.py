@@ -17,7 +17,7 @@ from copy import deepcopy
 
 from shybox.generic_toolkit.lib_utils_string import replace_string, fill_tags2string
 from shybox.generic_toolkit.lib_utils_file import split_file_path, join_file_path, check_file_path
-from shybox.generic_toolkit.lib_utils_namelist import select_namelist_type
+from shybox.generic_toolkit.lib_utils_namelist import select_namelist_type_hmc, select_namelist_type_s3m
 from shybox.generic_toolkit.lib_utils_time import convert_time_frequency
 from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow
 from shybox.generic_toolkit.lib_default_args import collector_data
@@ -40,11 +40,9 @@ class DrvNamelist:
     # global variable(s)
     class_type = 'namelist_driver'
     select_namelist = {
-        'hmc:3.1.4': select_namelist_type,
-        'hmc:3.1.5': select_namelist_type,
-        'hmc:3.1.6': select_namelist_type,
-        'hmc:3.2.0': select_namelist_type,
-        's3m': None
+        'hmc:3.1.6': select_namelist_type_hmc,
+        'hmc:3.2.0': select_namelist_type_hmc,
+        's3m': select_namelist_type_s3m
     }
     # ------------------------------------------------------------------------------------------------------------------
 
