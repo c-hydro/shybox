@@ -298,7 +298,7 @@ class DrvExec:
             # organize execution info
             execution_other = {'exec_time' : self.time_obj, 'exec_response': exec_response}
             # Freeze execution(s) info
-            execution_info = self.execution_handler.freeze(other_settings=execution_other)
+            execution_info = self.exec_handler.freeze(other_settings=execution_other)
 
             # dump execution info
             folder_auxiliary, file_auxiliary = os.path.split(exec_auxiliary)
