@@ -100,7 +100,13 @@ def main(alg_collectors_settings: dict = None):
     output_data = DataObj(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='test_%Y%m%d%H%M.nc', time_signature='start',
-        file_mode='grid', file_template=None,
+        file_mode='grid',
+        file_template={
+            "format": "netcdf", "type": "grid",
+            "dims_geo": {"longitude": "X", "latitude": "Y", "time": "time"},
+            "vars_geo": {"longitude": "X", "latitude": "Y"},
+            "vars_data": {"air_temperature": "AIR_TEMPERATURE"}
+        },
         name='AirT')
 
 

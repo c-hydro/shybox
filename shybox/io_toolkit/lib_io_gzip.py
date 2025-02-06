@@ -15,7 +15,7 @@ import gzip
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to unzip file
-def unzip_file_name(file_name_compress: str, file_name_uncompress : str) -> bool:
+def unzip_file_name(file_name_compress: str, file_name_uncompress: str) -> bool:
 
     file_handle_compress = gzip.GzipFile(file_name_compress, "rb")
     file_handle_uncompress = open(file_name_uncompress, "wb")
@@ -33,7 +33,7 @@ def unzip_file_name(file_name_compress: str, file_name_uncompress : str) -> bool
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to zip file
-def zip_file_name(file_name_uncompress : str, file_name_compress : str) -> bool:
+def zip_file_name(file_name_uncompress: str, file_name_compress: str) -> bool:
 
     file_handle_uncompress = open(file_name_uncompress, 'rb')
     file_handle_compress = gzip.open(file_name_compress, 'wb')

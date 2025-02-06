@@ -181,6 +181,7 @@ else
 	echo " ======> CONDA-DEFAULT CHANNEL INSTALLATION ... DONE"
 	
 	echo " ======> PIP INSTALLATION ... "
+	pip install tabulate
 	pip install pyresample
 	pip install repurpose
 	echo " ======> PIP INSTALLATION ... DONE"

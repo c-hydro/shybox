@@ -1,4 +1,6 @@
 
+import warnings
+
 #import rioxarray as rxr
 import xarray as xr
 import numpy as np
@@ -16,6 +18,8 @@ except ImportError:
     pass
 
 from typing import Optional
+
+from shybox.generic_toolkit.lib_utils_time import is_date
 
 def check_data_format(data, file_format: str) -> None:
     """"
@@ -49,6 +53,15 @@ def check_data_format(data, file_format: str) -> None:
     elif format not in 'file':
         raise ValueError(f'Cannot write a {type(data)} to a {file_format} file.')
 
+def get_zip_from_path(path: str) -> (str, None):
+    # get the zip extension
+    extension = path.split('.')[-1]
+
+    # check if the file is a ggip
+    if extension == 'gz':
+        return 'gzip'
+    else:
+        return None
 
 def get_format_from_path(path: str) -> str:
     # get the file extension
@@ -265,6 +278,31 @@ def __adjust_dims_naming(file_obj: xr.Dataset, file_map_dims: dict) -> xr.Datase
             file_obj = file_obj.rename({dim_in: 'dim_tmp'})
             file_obj = file_obj.rename_dims({'dim_tmp': dim_out})
     return file_obj
+
+# ensure that time are defined by dates and not by numbers
+@withxrds
+def straighten_time(data: xr.DataArray, time_file: pd.Timestamp = None,
+                    time_direction: str = 'left',
+                    time_dim: str = 'time', time_freq: str ='h') -> xr.DataArray:
+
+    if time_dim in list(data.dims):
+        time_values = data[time_dim].values
+        time_check = is_date(time_values[0])
+        if not time_check:
+            if time_file is not None:
+
+                if time_direction == 'right':
+                    time_values = pd.date_range(start=time_file, periods=len(time_values), freq=time_freq)
+                elif time_direction == 'left':
+                    time_values = pd.date_range(end=time_file, periods=len(time_values), freq=time_freq)
+                else:
+                    raise ValueError(f'Time direction {time_direction} not recognized.')
+
+                data[time_dim] = time_values
+            else:
+                warnings.warn(f'Time values are not defined by dates. Time of the file is defined by NoneType.')
+
+    return data
 
 @withxrds
 def straighten_data(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = 'latitude') -> xr.DataArray:
