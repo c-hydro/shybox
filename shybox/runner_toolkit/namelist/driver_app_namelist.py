@@ -40,9 +40,11 @@ class DrvNamelist:
     # global variable(s)
     class_type = 'namelist_driver'
     select_namelist = {
+        'hmc:generic': select_namelist_type_hmc,
         'hmc:3.1.6': select_namelist_type_hmc,
         'hmc:3.2.0': select_namelist_type_hmc,
-        's3m': select_namelist_type_s3m
+        's3m:generic': select_namelist_type_s3m,
+        's3m:5.3.3': select_namelist_type_s3m
     }
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -64,13 +66,21 @@ class DrvNamelist:
             logger_stream.error(logger_arrow.error + 'Namelist fields are not available')
             raise RuntimeError('Namelist fields must be defined')
         # get namelist description
-        if 'version' in list(self.namelist_obj.keys()):
-            self.namelist_version = self.namelist_obj['description']['version']
+        if 'description' in list(self.namelist_obj.keys()):
+            if 'version' in list(self.namelist_obj['description'].keys()):
+                self.namelist_version = self.namelist_obj['description']['version']
+            else:
+                logger_stream.warning(
+                    logger_arrow.warning +
+                    'Namelist version is not available in the description fields. Version "generic" is used.')
+                self.namelist_version = 'generic'
+            if 'type' in list(self.namelist_obj['description'].keys()):
+                self.namelist_type = self.namelist_obj['description']['type']
+            else:
+                logger_stream.error(logger_arrow.error + 'Namelist type is not available in the description fields')
+                raise RuntimeError('Namelist type must be defined if description fields are available')
         else:
             self.namelist_version = namelist_version
-        if 'type' in list(self.namelist_obj.keys()):
-            self.namelist_type = self.namelist_obj['description']['type']
-        else:
             self.namelist_type = namelist_type
 
         # get namelist file (template and application)
@@ -95,7 +105,7 @@ class DrvNamelist:
         self.line_indent = 4 * ' '
 
         namelist_structure_obj = self.select_namelist.get(
-            namelist_type + ':' + namelist_version, self.error_variable_namelist)
+            self.namelist_type + ':' + self.namelist_version, self.error_variable_namelist)
         self.namelist_type_default, self.namelist_structure_default = namelist_structure_obj()
 
         self.driver_namelist_in, self.driver_namelist_out = None, None

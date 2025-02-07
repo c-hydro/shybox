@@ -26,8 +26,8 @@ time_format_algorithm = '%Y-%m-%d %H:%M'
 time_machine = pd.Timestamp.now
 
 # log information
-logger_name = 'app_hmc_suite'
-logger_file = 'app_hmc_suite.txt'
+logger_name = 'app_shybox_runner'
+logger_file = 'app_shybox_runner.txt'
 logger_handle = 'file'  # 'file' or 'stream'
 logger_format = '%(asctime)s %(name)-12s %(levelname)-8s ' \
                 '%(message)-80s %(filename)s:[%(lineno)-6s - %(funcName)-20s()] '
