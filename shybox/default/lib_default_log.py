@@ -3,13 +3,13 @@ Library Features:
 
 Name:          lib_default_log
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20240808'
+Date:          '20250207'
 Version:       '1.0.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # log information
-log_name = 'hmc'
+log_name = 'shybox'
 log_file = 'log.txt'
 log_folder = None
 log_handler = ['file', 'stream']  # 'file' and 'stream'
