@@ -10,7 +10,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # log information
 log_name = 'shybox'
-log_file = 'log.txt'
+log_file = 'shybox.log'
 log_folder = None
 log_handler = ['file', 'stream']  # 'file' and 'stream'
 log_format = '%(asctime)s %(name)-12s %(levelname)-8s ' \
