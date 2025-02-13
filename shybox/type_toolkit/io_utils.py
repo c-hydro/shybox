@@ -19,7 +19,9 @@ except ImportError:
 
 from typing import Optional
 
-from shybox.generic_toolkit.lib_utils_time import is_date
+from shybox.generic_toolkit.lib_utils_time import is_date, convert_time_format
+
+import matplotlib.pyplot as plt
 
 def check_data_format(data, file_format: str) -> None:
     """"
@@ -135,6 +137,10 @@ def read_from_file(
     # read the data from a geotiff
     elif file_format == 'geotiff':
         data = rxr.open_rasterio(path)
+
+        if 'band' in list(data.dims):
+            if data.band.size == 1:
+                data = data.squeeze('band', drop = True)
 
     # read the data from a netcdf
     elif file_format == 'netcdf':
@@ -252,7 +258,7 @@ def flat_dims(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = 'latitu
 
     return data
 
-# map dims
+# method to map dims
 @withxrds
 def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray:
     if dims_geo is not None:
@@ -262,22 +268,25 @@ def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray
                 data = data.rename({'var_tmp': dim_out})
     return data
 
-# method to adjust geographical naming
-def __adjust_geo_naming(file_obj: xr.Dataset, file_map_geo: dict) -> xr.Dataset:
-    for var_in, var_out in file_map_geo.items():
-        if var_in in list(file_obj.variables.keys()):
-            file_obj = file_obj.rename({var_in: 'var_tmp'})
-            file_obj = file_obj.rename({'var_tmp': var_out})
-    return file_obj
+# method to map vars
+@withxrds
+def map_vars(data: xr.DataArray, vars_data: dict = None,  **kwargs) -> xr.DataArray:
+    if vars_data is not None:
+        for var_in, var_out in vars_data.items():
+            if var_in == data.name:
+                data.name = var_out
+    return data
 
+@withxrds
+def select_by_time(data: xr.DataArray, time: (str, pd.Timestamp, None) = None,
+                   method='nearest', **kwargs) -> xr.DataArray:
+    if time is not None:
+        if isinstance(time, pd.Timestamp):
+            time = convert_time_format(time, time_conversion='stamp_to_str')
 
-# method to adjust dimensions naming
-def __adjust_dims_naming(file_obj: xr.Dataset, file_map_dims: dict) -> xr.Dataset:
-    for dim_in, dim_out in file_map_dims.items():
-        if dim_in in file_obj.dims:
-            file_obj = file_obj.rename({dim_in: 'dim_tmp'})
-            file_obj = file_obj.rename_dims({'dim_tmp': dim_out})
-    return file_obj
+        if 'time' in list(data.dims):
+            data = data.sel(time = time, method=method)
+    return data
 
 # ensure that time are defined by dates and not by numbers
 @withxrds
@@ -291,9 +300,9 @@ def straighten_time(data: xr.DataArray, time_file: pd.Timestamp = None,
         if not time_check:
             if time_file is not None:
 
-                if time_direction == 'right':
+                if time_direction == 'forward':
                     time_values = pd.date_range(start=time_file, periods=len(time_values), freq=time_freq)
-                elif time_direction == 'left':
+                elif time_direction == 'backward':
                     time_values = pd.date_range(end=time_file, periods=len(time_values), freq=time_freq)
                 else:
                     raise ValueError(f'Time direction {time_direction} not recognized.')
@@ -310,14 +319,39 @@ def straighten_data(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = '
     Ensure that the data has descending latitudes.
     """
 
+    data_dims = list(data.dims)
+    if 'x' in data_dims:
+        tmp_x = 'x'
+    else:
+        tmp_x = dim_x
+    if 'y' in data_dims:
+        tmp_y = 'y'
+    else:
+        tmp_y = dim_y
+
+    x_idx, y_idx = data_dims.index(tmp_x), data_dims.index(tmp_y)
+    if x_idx < y_idx:
+        if len(data_dims) == 3:
+            tmp_z = data_dims[0]
+            data = data.transpose(tmp_z, tmp_y, tmp_x)
+        elif len(data_dims) == 2:
+            data = data.transpose(tmp_y, tmp_x)
+        else:
+            raise ValueError(f'Cannot transpose data with {len(data_dims)} dimensions.')
+
     # adjust lats
-    if data[dim_y].data[0] < data[dim_y].data[-1]:
-        data = data.sortby(dim_y, ascending = False)
+    if data[tmp_y].data[0] < data[tmp_y].data[-1]:
+        data = data.sortby(tmp_y, ascending = False)
     # adjust lons
-    x_max = np.nanmax(data.coords[dim_x])
+    x_max = np.nanmax(data.coords[tmp_x])
     if x_max > 180:
-        data.coords[dim_x] = (data.coords[dim_x] + 180) % 360 - 180
-        data = data.sortby(data[dim_x])
+        data.coords[tmp_x] = (data.coords[tmp_x] + 180) % 360 - 180
+        data = data.sortby(data[tmp_x])
+
+    if tmp_x != dim_x:
+        data = data.rename({tmp_x: dim_x})
+    if tmp_y != dim_y:
+        data = data.rename({tmp_y: dim_y})
 
     return data
 

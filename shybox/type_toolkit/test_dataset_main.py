@@ -38,7 +38,7 @@ from shybox.generic_toolkit.lib_default_args import collector_data
 from shybox.dataset_toolkit.merge.driver_data_grid import DrvData, MultiData
 from shybox.io_toolkit import io_handler_base
 
-from shybox.processing_toolkit.lib_proc_mask import mask_data
+from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
@@ -79,10 +79,22 @@ def main(alg_collectors_settings: dict = None):
         file_template={
             "format": "netcdf", "type": "grid",
             "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-            "vars_geo": {"lon": "longitude", "lat": "latitude"},
             "vars_data": {"Tair": "air_temperature"}
         },
-        time_signature='start'
+        time_signature='period',
+        time_reference='1981-01-01 00:00', time_period=24, time_freq='h', time_direction='forward',
+    )
+
+    rh_data = DataObj(
+        path='/home/fabio/Desktop/shybox/dset/itwater',
+        file_name='U_19810101.nc',
+        file_template={
+            "format": "netcdf", "type": "grid",
+            "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+            "vars_data": {"RH": "relative_humidity"}
+        },
+        time_signature='period',
+        time_reference='1981-01-01 00:00', time_period=24, time_freq='h', time_direction='forward',
     )
 
     geo_data = DataObj(
@@ -99,7 +111,7 @@ def main(alg_collectors_settings: dict = None):
 
     output_data = DataObj(
         path='/home/fabio/Desktop/shybox/dset/itwater',
-        file_name='test_%Y%m%d%H%M.nc', time_signature='start',
+        file_name='test_%Y%m%d%H%M.nc', time_signature='step',
         file_mode='grid',
         file_template={
             "format": "netcdf", "type": "grid",
@@ -111,12 +123,17 @@ def main(alg_collectors_settings: dict = None):
 
 
     orc_process = Orchestrator(
-        data_in=airt_data, data_out=output_data, options={})
+        data_in=airt_data, data_out=output_data,
+        options={
+            #"intermediate_output": "Tmp",
+            #"tmp_dir": "/home/fabio/Desktop/shybox/dset/itwater/tmp/"
+        })
 
     orc_process.add_process(
         interpolate_data, ref=geo_data,
         method='nn', max_distance=25000, neighbours=7, fill_value=np.nan)
-    #orc_process.add_process(mask_data, ref=geo_data)
+    orc_process.add_process(mask_data_by_limits, mask_min=0, mask_max=10, mask_no_data=np.nan)
+    orc_process.add_process(mask_data_by_ref, ref=geo_data, ref_value=-9999, mask_no_data=np.nan)
 
     orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))
 

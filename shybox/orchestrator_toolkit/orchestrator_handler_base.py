@@ -16,6 +16,7 @@ from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
 
+from shybox.type_toolkit.io_dataset_mem import DataMem
 from shybox.type_toolkit.io_dataset_grid import DataObj
 
 import datetime as dt
@@ -60,15 +61,15 @@ class OrchestratorHandler:
         data_in = options['in']
         data_out = options['out']
 
-        wf = cls(data_in=data_in, data_out=data_out, options=options)
+        workflow = cls(data_in=data_in, data_out=data_out, options=options)
         processes = options.get(['processes','process_list'], [], ignore_case=True)
         for process in processes:
             function_str = process.pop('function')
             function = PROCESSES[function_str]
             output = process.pop('output', None)
-            wf.add_process(function, output, **process)
+            workflow.add_process(function, output, **process)
 
-        return wf
+        return workflow
 
     def clean_up(self):
         if hasattr(self, 'tmp_dir') and os.path.exists(self.tmp_dir):
@@ -83,25 +84,54 @@ class OrchestratorHandler:
         if isinstance(out_obj, DataObj):
             return out_obj
 
-        output_name = 'test'
+        path_in = in_obj.loc_pattern
+        file_name_in = in_obj.file_name
+
+        tile_times, format_times = False, None
+        if hasattr(in_obj ,'tile_times'):
+            tile_times = in_obj.tile_times
+            format_times = "%Y%m%d%H%M%S"
+
+        # create the name of the output file based on the function name
+        if function is not None:
+            # get the name of process fx
+            fx_name = f'_{function.__name__}'
+            # create the output file name pattern
+            ext_in = os.path.splitext(path_in)[1][1:]
+            ext_out = function.__getattribute__('output_ext') or ext_in
+            if tile_times:
+                path_out = path_in.replace(f'.{ext_in}', f'_{fx_name}_time_{format_times}.{ext_out}')
+                file_history = f'{file_name_in}_{fx_name}_tile{tile_times}'
+            else:
+                path_out = path_in.replace(f'.{ext_in}', f'_{fx_name}.{ext_out}')
+                file_history = f'{file_name_in}_{fx_name}'
+
+        if out_obj is None:
+            path_out = path_out
+        elif isinstance(out_obj, dict):
+            path_out = out_obj.get('loc_pattern', path_out)
+        else:
+            raise ValueError('Output must be a Dataset or a dictionary.')
+
         output_type = self.options['intermediate_output']
         if output_type == 'Mem':
-            out_obj = DataObj
+            out_obj = DataMem(loc_pattern=path_out)
         elif output_type == 'Tmp':
-            filename = 'test' #os.path.basename(output_pattern)
-            out_obj = DataObj(path=self.tmp_dir, filename=filename)
-        out_obj.name = output_name
+            file_name_tmp = os.path.basename(path_out)
+            out_obj = DataObj(path=self.tmp_dir, file_name=file_name_tmp)
+
+        out_obj.file_history = file_history
 
         return out_obj
 
     def add_process(self, function, output: (DataObj, xr.Dataset, dict) = None, **kwargs) -> None:
 
         if len(self.processes) == 0:
-            previous = None
+            process_previous = None
             this_input = self.data_in
         else:
-            previous = self.processes[-1]
-            this_input = previous.output
+            process_previous = self.processes[-1]
+            this_input = process_previous.out_obj
 
         this_output = self.make_output(this_input, output, function)
         this_process = ProcessorContainer(
@@ -120,8 +150,6 @@ class OrchestratorHandler:
 
         if isinstance(time, str):
             time = convert_time_format(time, 'str_to_stamp')
-
-        #data_time = self.data_in['time'].values
 
         if isinstance(time, pd.DatetimeIndex):
             time_steps = time

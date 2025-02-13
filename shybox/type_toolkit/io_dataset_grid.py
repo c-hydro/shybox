@@ -11,7 +11,7 @@ from typing import Optional
 
 class DataObj(Dataset):
 
-    type = 'obj_dataset'
+    type = 'local_dataset'
 
     def __init__(self, path: Optional[str] = None, file_name: Optional[str] = None, **kwargs):
 

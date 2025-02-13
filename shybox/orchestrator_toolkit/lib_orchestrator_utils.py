@@ -55,6 +55,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **kwargs
                 result = file_to_xarray(result)
             return result
 
+        # define the output extension based on the output type (attribute of the output object)
         if output_type in ['tif', 'tiff', 'gdal', 'xarray', 'file']:
             setattr(wrapper, 'output_ext', 'tif')
         elif output_type in ['table', 'csv', 'pandas']:
@@ -67,6 +68,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **kwargs
         wrapper.__name__ = func.__name__
         for key, value in kwargs.items():
             setattr(wrapper, key, value)
+
         # Add the wrapped function to the global list of processes
         PROCESSES[func.__name__] = wrapper
 

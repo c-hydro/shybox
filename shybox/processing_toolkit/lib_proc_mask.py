@@ -13,63 +13,66 @@ import logging
 
 import numpy as np
 import xarray as xr
+
+from shybox.io_toolkit.lib_io_utils import create_darray
+from shybox.orchestrator_toolkit.lib_orchestrator_utils import as_process
+
+import matplotlib
+import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to mask data
-def mask_data(data: xr.DataArray, ref: xr.DataArray,
-              mask_data: (float, int) = -9999.0, mask_min: (float, int) = None, mask_max: (float, int) = None,
-              mask_format: str = 'integer',
-              mask_no_data: (float, int) =-9999.0):
+@as_process(input_type='xarray', output_type='xarray')
+def mask_data_by_ref(
+        data: xr.DataArray,
+        ref: xr.DataArray, ref_value: (float, int) = -9999.0,
+        mask_format: str = 'integer', mask_no_data: (float, int) = -9999.0, **kwargs):
 
-    if grid_mask_min is not None:
-        grid_da = xr.where(grid_da >= grid_mask_min, grid_mask_data, grid_mask_no_data)
-    if grid_mask_max is not None:
-        grid_da = xr.where(grid_da <= grid_mask_max, grid_mask_data, grid_mask_no_data)
+    if mask_format is not None:
+        if mask_format == 'integer':
+            if mask_no_data == np.nan:
+                raise RuntimeError('Change the no_data value or the grid format')
 
-    if grid_mask_format == 'integer':
-        if grid_mask_no_data == np.nan:
-            logging.error(' ===> Grid no_data equal to NaN is not supported in integer datasets')
-            raise RuntimeError('Change the no_data value or the grid format in the settings file ')
-
-    if grid_mask_format is not None:
-        if grid_mask_format == 'integer':
-            grid_da = grid_da.astype(int)
-        elif grid_mask_format == 'float':
-            grid_da = grid_da.astype(float)
+    if mask_format is not None:
+        if mask_format == 'integer':
+            data = data.astype(int)
+        elif mask_format == 'float':
+            data = data.astype(float)
         else:
-            logging.error(' ===> Mask format "' + grid_mask_format + '" is not supported')
-            raise NotImplemented('Case not implemented yet')
+            raise NotImplemented('Mask type "' + mask_format + '"not implemented yet')
 
-    return grid_da
+    data = xr.where(ref.values == ref_value, mask_no_data, data)
+
+    return data
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to execute mask
-def compute_grid_mask(grid_da, grid_mask_min=0, grid_mask_max=None, grid_mask_data=1, grid_mask_format='integer',
-                      grid_mask_no_data=-9999.0, grid_mask_active=True):
-    if grid_mask_active:
-        if grid_mask_min is not None:
-            grid_da = xr.where(grid_da >= grid_mask_min, grid_mask_data, grid_mask_no_data)
-        if grid_mask_max is not None:
-            grid_da = xr.where(grid_da <= grid_mask_max, grid_mask_data, grid_mask_no_data)
+# method to mask data
+@as_process(input_type='xarray', output_type='xarray')
+def mask_data_by_limits(
+        data: xr.DataArray,
+        mask_min: (float, int) = None, mask_max: (float, int) = None,
+        mask_format: str = None, mask_no_data: (float, int) = -9999.0, **kwargs):
 
-        if grid_mask_format == 'integer':
-            if grid_mask_no_data == np.nan:
-                logging.error(' ===> Grid no_data equal to NaN is not supported in integer datasets')
-                raise RuntimeError('Change the no_data value or the grid format in the settings file ')
+    if mask_min is not None:
+        data = xr.where(data >= mask_min, data, mask_no_data)
+    if mask_max is not None:
+        data = xr.where(data <= mask_max, data, mask_no_data)
 
-        if grid_mask_format is not None:
-            if grid_mask_format == 'integer':
-                grid_da = grid_da.astype(int)
-            elif grid_mask_format == 'float':
-                grid_da = grid_da.astype(float)
-            else:
-                logging.error(' ===> Mask format "' + grid_mask_format + '" is not supported')
-                raise NotImplemented('Case not implemented yet')
-    else:
-        logging.warning(' ===> Grid masking is not activated')
-    return grid_da
+    if mask_format is not None:
+        if mask_format == 'integer':
+            if mask_no_data == np.nan:
+                raise RuntimeError('Change the no_data value or the grid format')
 
+    if mask_format is not None:
+        if mask_format == 'integer':
+            data = data.astype(int)
+        elif mask_format == 'float':
+            data = data.astype(float)
+        else:
+            raise NotImplemented('Mask type "' + mask_format + '"not implemented yet')
+
+    return data
 # ----------------------------------------------------------------------------------------------------------------------
 

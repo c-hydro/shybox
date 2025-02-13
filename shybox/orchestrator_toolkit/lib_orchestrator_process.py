@@ -43,6 +43,7 @@ class ProcessorContainer:
         self.out_obj = out_obj
         self.out_opts = out_opts
 
+
     def __repr__(self):
         return f'ProcessorContainer({self.fx_name})'
 
@@ -59,7 +60,7 @@ class ProcessorContainer:
         if isinstance(data_raw, dict):
             if 'tiles' in list(self.in_opts.keys()):
                 for data_key, data_tmp in data_raw.items():
-                    fx_data = data_tmp.squeeze_data_by_time(time_step=time, **kwargs)
+                    fx_data = data_tmp.get_data(time=time, **kwargs)
                 metadata = {'tiles': list(data_raw.keys())}
             else:
                 for data_key, data_tmp in data_raw.items():
@@ -67,7 +68,7 @@ class ProcessorContainer:
                 return
 
         else:
-            fx_data = data_raw.get_data(time_step=time, **kwargs)
+            fx_data = data_raw.get_data(time=time, **kwargs)
             metadata = {}
 
         #fx_args = {arg_name: arg_value.get_data(time, **kwargs) for arg_name, arg_value in self.fx_args.items()}

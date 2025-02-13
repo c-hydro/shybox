@@ -23,26 +23,6 @@ from shybox.default.lib_default_geo import crs_epsg, crs_wkt
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to adjust geographical naming
-def __adjust_geo_naming(file_obj: xr.Dataset, file_map_geo: dict) -> xr.Dataset:
-    for var_in, var_out in file_map_geo.items():
-        if var_in in list(file_obj.variables.keys()):
-            file_obj = file_obj.rename({var_in: 'var_tmp'})
-            file_obj = file_obj.rename({'var_tmp': var_out})
-    return file_obj
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
-# method to adjust dimensions naming
-def __adjust_dims_naming(file_obj: xr.Dataset, file_map_dims: dict) -> xr.Dataset:
-    for dim_in, dim_out in file_map_dims.items():
-        if dim_in in file_obj.dims:
-            file_obj = file_obj.rename({dim_in: 'dim_tmp'})
-            file_obj = file_obj.rename_dims({'dim_tmp': dim_out})
-    return file_obj
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
 # method to read netcdf file
 def get_file_grid(file_name: str,
                   file_epsg: str = 'EPSG:4326', file_crs: CRS = None,

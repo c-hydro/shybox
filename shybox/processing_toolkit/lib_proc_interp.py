@@ -20,13 +20,15 @@ from repurpose.resample import resample_to_grid
 
 from shybox.io_toolkit.lib_io_utils import create_darray
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import as_process
+
+import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to interpolate data
 @as_process(input_type='xarray', output_type='xarray')
-def interpolate_data(data: (xr.DataArray, xr.Dataset), ref: xr.DataArray,
+def interpolate_data(data: xr.DataArray, ref: xr.DataArray,
                      method='nn', max_distance=18000, neighbours=8, fill_value=np.nan,
                      var_name_geo_x='longitude', var_name_geo_y='latitude',
                      coord_name_x='longitude', coord_name_y='latitude', dim_name_x='longitude', dim_name_y='latitude',
@@ -45,70 +47,43 @@ def interpolate_data(data: (xr.DataArray, xr.Dataset), ref: xr.DataArray,
     geo_grid_data = GridDefinition(lons=data_x_grid, lats=data_y_grid)
     geo_grid_ref = GridDefinition(lons=ref_x_grid, lats=ref_y_grid)
 
-    var_dict_in = {}
-    if isinstance(data, xr.Dataset):
-        var_list = list(data.data_vars)
-        var_dict_in = {}
-        for var_name in var_list:
-            var_dict_in[var_name] = data[var_name].values
-    elif isinstance(data, xr.DataArray):
-        var_dict_in = {'variable': data.values}
+    if isinstance(data, xr.DataArray):
+        var_data_in = data.values
+        var_name = data.name
+        var_attrs = data.attrs
     else:
         logging.error(' ===> Data format in interpolation method not allowed')
         raise NotImplementedError('Data format not allowed')
 
-    var_dict_out = {}
-    for var_key, var_data_in in var_dict_in.items():
+    if method == 'nn':
+        var_data_out = resample_nearest(
+            geo_grid_data, var_data_in, geo_grid_ref,
+            radius_of_influence=max_distance,
+            fill_value=fill_value)
 
-        if method == 'nn':
-            var_data_tmp = resample_nearest(
-                geo_grid_data, var_data_in, geo_grid_ref,
-                radius_of_influence=max_distance,
-                fill_value=fill_value)
+    elif method == 'gauss':
+        var_data_out = resample_gauss(
+            geo_grid_data, var_data_in, geo_grid_ref,
+            radius_of_influence=max_distance,
+            neighbours=neighbours, sigmas=250000,
+            fill_value=fill_value)
 
-        elif method == 'gauss':
-            var_data_tmp = resample_gauss(
-                geo_grid_data, var_data_in, geo_grid_ref,
-                radius_of_influence=max_distance,
-                neighbours=neighbours, sigmas=250000,
-                fill_value=fill_value)
-
-        elif method == 'idw':
-            weight_fx = lambda r: 1 / r ** 2
-            var_data_tmp = resample_custom(
-                geo_grid_data, var_data_in, geo_grid_ref,
-                radius_of_influence=max_distance, neighbours=neighbours,
-                weight_funcs=weight_fx,
-                fill_value=fill_value)
-        else:
-            logging.error(' ===> Interpolating method "' + method + '" is not available')
-            raise NotImplemented('Interpolation method "' + method + '" not implemented yet')
-
-        if fill_value is None:
-            var_data_out = var_data_tmp.data
-        else:
-            var_data_out = deepcopy(var_data_tmp)
-
-        var_dict_out[var_key] = var_data_out
-
-    if isinstance(data, xr.Dataset):
-        output = xr.Dataset()
-        for var_key, var_data in var_dict_out.items():
-            var_da = create_darray(
-                var_data, ref_x_grid[0, :], ref_y_grid[:, 0], name=var_key,
-                coord_name_x=coord_name_x, coord_name_y=coord_name_y,
-                dim_name_x=dim_name_x, dim_name_y=dim_name_y)
-            output[var_key] = var_da
-
-    elif isinstance(data, xr.DataArray):
-        output = create_darray(
-            var_dict_out['variable'], ref_x_grid[0, :], ref_y_grid[:, 0], name='variable',
-            coord_name_x=coord_name_x, coord_name_y=coord_name_y,
-            dim_name_x=dim_name_x, dim_name_y=dim_name_y)
-
+    elif method == 'idw':
+        weight_fx = lambda r: 1 / r ** 2
+        var_data_out = resample_custom(
+            geo_grid_data, var_data_in, geo_grid_ref,
+            radius_of_influence=max_distance, neighbours=neighbours,
+            weight_funcs=weight_fx,
+            fill_value=fill_value)
     else:
-        logging.error(' ===> Data format in interpolation method not allowed')
-        raise NotImplementedError('Data format not allowed')
+        logging.error(' ===> Interpolating method "' + method + '" is not available')
+        raise NotImplemented('Interpolation method "' + method + '" not implemented yet')
+
+    output = create_darray(
+        var_data_out, ref_x_grid[0, :], ref_y_grid[:, 0], name=var_name,
+        coord_name_x=coord_name_x, coord_name_y=coord_name_y,
+        dim_name_x=dim_name_x, dim_name_y=dim_name_y)
+    output.attrs = var_attrs
 
     return output
 
