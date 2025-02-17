@@ -31,6 +31,11 @@ class ProcessorContainer:
             else:
                 fx_static[arg_name] = arg_value
 
+        if 'variable' in args:
+            self.variable = args.pop('variable')
+        else:
+            self.variable = 'generic'
+
         self.fx_name = function.__name__
         self.fx_obj = partial(function, **fx_static)
 
@@ -43,9 +48,10 @@ class ProcessorContainer:
         self.out_obj = out_obj
         self.out_opts = out_opts
 
+        self.dump_state = False
 
     def __repr__(self):
-        return f'ProcessorContainer({self.fx_name})'
+        return f'ProcessorContainer({self.fx_name, self.variable})'
 
     def run(self, time: (dt.datetime, str, pd.Timestamp), **kwargs) -> None:
 
@@ -76,7 +82,14 @@ class ProcessorContainer:
         fx_out = self.fx_obj(data=fx_data, **fx_args)
 
         out_opts = self.out_opts
-        print(f'{self.fx_name} - {time}, {kwargs}')
+        print(f'{self.fx_name} - {time} - {self.variable}')
+
+        if self.dump_state:
+            if 'collections' in kwargs:
+                fx_collections = kwargs.pop('collections', None)
+                fx_out = fx_out.to_dataset(name = self.variable)
+                for tmp_key, tmp_data in fx_collections.items():
+                    fx_out[tmp_key] = tmp_data
 
         self.out_obj.write_data(fx_out, time, metadata = metadata, **kwargs)
 

@@ -19,6 +19,8 @@ from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContai
 from shybox.type_toolkit.io_dataset_mem import DataMem
 from shybox.type_toolkit.io_dataset_grid import DataObj
 
+from copy import deepcopy
+
 import datetime as dt
 from typing import Optional
 import tempfile
@@ -36,9 +38,9 @@ class OrchestratorHandler:
     }
 
     def __init__(self,
-                 data_in: (dict, DataObj),
-                 data_out: (dict, DataObj) = None,
-                 options: Optional[dict] = None) -> None:
+                 data_in: (DataObj, dict),
+                 data_out: DataObj = None,
+                 options: dict = None) -> None:
         
         self.data_in = data_in
         self.data_out = data_out
@@ -53,6 +55,13 @@ class OrchestratorHandler:
             tmp_dir = self.options.get('tmp_dir', tempfile.gettempdir())
             os.makedirs(tmp_dir, exist_ok = True)
             self.tmp_dir = tempfile.mkdtemp(dir = tmp_dir)
+
+        self.vars_list = []
+        if isinstance(data_in, dict):
+            self.vars_list = list(data_in.keys())
+
+        self.save_var = None
+        self.save_base = None
 
     @classmethod
     def from_options(cls, options: dict) -> 'Orchestrator':
@@ -71,6 +80,43 @@ class OrchestratorHandler:
 
         return workflow
 
+    @classmethod
+    def multi_variable(cls, data_package: dict, data_out: DataObj = None, data_ref: DataObj = None,
+                       configuration: dict = None) -> 'Orchestrator':
+
+        workflow_fx = configuration.get('process_list', [])
+        workflow_options = configuration.get('options', []) # derivare il dizionario come fatto per options per usare ignore_case=True
+
+        workflow_common = OrchestratorHandler(data_in=data_package, data_out=data_out, options=workflow_options)
+
+        for var_tag in list(data_package.keys()):
+
+            process_fx_var = workflow_fx[var_tag]
+
+            for process_fx_args in process_fx_var:
+
+                process_fx_name = process_fx_args.pop('function')
+                process_fx_obj = PROCESSES[process_fx_name]
+
+                '''
+                if hasattr(process_fx_obj, 'output_ext'):
+                    process_fx_out = process_fx_obj.output_ext
+                else:
+                    process_fx_out = None
+                #process_fx_out = process_fx_obj.pop('output', None)
+                '''
+                process_fx_args = {**process_fx_args, **{'variable': var_tag}}
+                workflow_common.add_process(process_fx_obj, ref=data_ref, **process_fx_args)
+
+        return workflow_common
+
+    @property
+    def has_variables(self):
+        if isinstance(self.data_in, dict):
+            return True if len(self.data_in) > 0 else False
+        else:
+            return False
+
     def clean_up(self):
         if hasattr(self, 'tmp_dir') and os.path.exists(self.tmp_dir):
             try:
@@ -79,7 +125,7 @@ class OrchestratorHandler:
                 print(f'Error cleaning up temporary directory: {e}')
 
     def make_output(self, in_obj: DataObj, out_obj: DataObj = None,
-                    function = None) -> DataObj:
+                    function = None, **kwargs) -> DataObj:
 
         if isinstance(out_obj, DataObj):
             return out_obj
@@ -87,24 +133,45 @@ class OrchestratorHandler:
         path_in = in_obj.loc_pattern
         file_name_in = in_obj.file_name
 
-        tile_times, format_times = False, None
-        if hasattr(in_obj ,'tile_times'):
-            tile_times = in_obj.tile_times
+        has_times, format_times = False, None
+        if hasattr(in_obj ,'has_time'):
+            has_times = in_obj.has_time
             format_times = "%Y%m%d%H%M%S"
 
         # create the name of the output file based on the function name
+        file_history = None
         if function is not None:
             # get the name of process fx
             fx_name = f'_{function.__name__}'
             # create the output file name pattern
             ext_in = os.path.splitext(path_in)[1][1:]
             ext_out = function.__getattribute__('output_ext') or ext_in
-            if tile_times:
-                path_out = path_in.replace(f'.{ext_in}', f'_{fx_name}_time_{format_times}.{ext_out}')
-                file_history = f'{file_name_in}_{fx_name}_tile{tile_times}'
+
+            if self.has_variables:
+
+                variable = kwargs['variable']
+
+                name_base, ext_base = os.path.basename(path_in).split('.')
+                save_base = f'{name_base}_{variable}'
+
+                if has_times:
+                    path_out = f'{save_base}_{fx_name}_{format_times}.{ext_out}'
+                    file_history = f'{file_name_in}_{variable}_{fx_name}_{format_times}'
+                else:
+                    path_out = f'{save_base}_{fx_name}.{ext_out}'
+                    file_history = f'{file_name_in}_{variable}_{fx_name}'
+
             else:
-                path_out = path_in.replace(f'.{ext_in}', f'_{fx_name}.{ext_out}')
-                file_history = f'{file_name_in}_{fx_name}'
+
+                name_base, ext_base = os.path.basename(path_in).split('.')
+                save_base = f'{name_base}'
+
+                if has_times:
+                    path_out = f'_{save_base}_{fx_name}_{format_times}.{ext_out}'
+                    file_history = f'{file_name_in}_{fx_name}_{format_times}'
+                else:
+                    path_out = f'_{save_base}_{fx_name}.{ext_out}'
+                    file_history = f'{file_name_in}_{fx_name}'
 
         if out_obj is None:
             path_out = path_out
@@ -119,21 +186,37 @@ class OrchestratorHandler:
         elif output_type == 'Tmp':
             file_name_tmp = os.path.basename(path_out)
             out_obj = DataObj(path=self.tmp_dir, file_name=file_name_tmp)
+        else:
+            raise ValueError('Orchestrator output type must be "Mem" or "Tmp"')
 
         out_obj.file_history = file_history
 
         return out_obj
 
-    def add_process(self, function, output: (DataObj, xr.Dataset, dict) = None, **kwargs) -> None:
+    def add_process(self, function, process_output: (DataObj, xr.Dataset, dict) = None, **kwargs) -> None:
 
-        if len(self.processes) == 0:
+        process_obj = self.processes
+        process_previous = self.processes[-1] if len(process_obj) > 0 else None
+        if (process_previous is not None) and (kwargs['variable'] not in process_previous.variable):
+            process_init = True
+        elif len(process_obj) == 0:
+            process_init = True
+        else:
+            process_init = False
+
+        if process_init:
             process_previous = None
-            this_input = self.data_in
+            if isinstance(self.data_in, dict):
+                this_input = self.data_in[kwargs['variable']]
+            elif isinstance(self.data_in, DataObj):
+                this_input = self.data_in
+            else:
+                raise RuntimeError('Input data must be DataObj or dictionary of DataObj instance.')
         else:
             process_previous = self.processes[-1]
             this_input = process_previous.out_obj
 
-        this_output = self.make_output(this_input, output, function)
+        this_output = self.make_output(this_input, process_output, function, **kwargs)
         this_process = ProcessorContainer(
             function = function,
             in_obj = this_input, in_opts=self.options,
@@ -147,6 +230,18 @@ class OrchestratorHandler:
         self.processes.append(this_process)
 
     def run(self, time: (pd.Timestamp, str, pd.date_range), **kwargs) -> None:
+
+        # manage process execution and process output
+        if len(self.processes) == 0:
+            raise ValueError('No processes have been added to the workflow.')
+        elif isinstance(self.processes[-1].out_obj, DataMem) or \
+            (isinstance(self.processes[-1].out_obj, DataObj) and hasattr(self, 'tmp_dir') and
+             self.tmp_dir in self.processes[-1].out_obj.dir_name):
+            if self.data_out is not None:
+                self.processes[-1].out_obj = self.data_out.copy()
+                self.processes[-1].dump_state = True
+            else:
+                raise ValueError('No output dataset has been set.')
 
         if isinstance(time, str):
             time = convert_time_format(time, 'str_to_stamp')
@@ -202,5 +297,21 @@ class OrchestratorHandler:
         if len(processes) == 0:
             return
 
-        for process in processes:
-            process.run(time, **kwargs)
+        proc_group = {}
+        for proc_obj in processes:
+            proc_var = proc_obj.variable
+            if proc_var not in proc_group:
+                proc_group[proc_var] = [proc_obj]
+            else:
+                tmp_obj = proc_group[proc_var]
+                tmp_obj.append(proc_obj)
+                proc_group[proc_var] = tmp_obj
+
+        proc_ws = {}
+        for proc_var, proc_list in proc_group.items():
+            proc_return = []
+            for proc_name in proc_list:
+                kwargs['collections'] = proc_ws
+                proc_return.append(proc_name.run(time, **kwargs))
+            proc_ws[proc_var] = proc_return[-1]
+

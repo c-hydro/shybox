@@ -1,7 +1,7 @@
 """
 Library Features:
 
-Name:          lib_orch_utils
+Name:          lib_orchestrator_utils
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20250127'
 Version:       '1.0.0'
@@ -9,15 +9,14 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import xarray as xr
-#import rioxarray as rxr
-from osgeo import gdal
+import rioxarray as rxr
 import tempfile
 import os
 
+from osgeo import gdal
 from typing import Iterable
 
 from shybox.type_toolkit.lib_type_grid import DataGrid
-
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

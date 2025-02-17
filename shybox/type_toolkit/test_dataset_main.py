@@ -72,6 +72,25 @@ def main(alg_collectors_settings: dict = None):
     # time algorithm
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
+    configuration = {
+        "WORKFLOW": {
+            "options": {
+                "intermediate_output": "Tmp",
+                "tmp_dir": "tmp"
+            },
+            "process_list": {
+                "airt": [
+                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ],
+                "rh": [
+                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ]
+            }
+        }
+    }
+
 
     airt_data = DataObj(
         path='/home/fabio/Desktop/shybox/dset/itwater',
@@ -122,17 +141,25 @@ def main(alg_collectors_settings: dict = None):
         name='AirT')
 
 
+    orc_process = Orchestrator.multi_variable(
+        data_package={'airt':airt_data, 'rh': rh_data}, data_out=output_data,
+        data_ref=geo_data,
+        configuration=configuration['WORKFLOW']
+    )
+
+    orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))
+
     orc_process = Orchestrator(
         data_in=airt_data, data_out=output_data,
         options={
-            #"intermediate_output": "Tmp",
-            #"tmp_dir": "/home/fabio/Desktop/shybox/dset/itwater/tmp/"
+            "intermediate_output": "Tmp",
+            "tmp_dir": "/home/fabio/Desktop/shybox/dset/itwater/tmp/"
         })
 
     orc_process.add_process(
         interpolate_data, ref=geo_data,
         method='nn', max_distance=25000, neighbours=7, fill_value=np.nan)
-    orc_process.add_process(mask_data_by_limits, mask_min=0, mask_max=10, mask_no_data=np.nan)
+    #orc_process.add_process(mask_data_by_limits, mask_min=0, mask_max=10, mask_no_data=np.nan)
     orc_process.add_process(mask_data_by_ref, ref=geo_data, ref_value=-9999, mask_no_data=np.nan)
 
     orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))

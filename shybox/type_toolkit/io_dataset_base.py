@@ -103,6 +103,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return f"{self.__class__.__name__}({self.file_name}, {self.file_mode})"
 
     def update(self, in_place = False, **kwargs):
+
         new_file_name = substitute_string(self.file_name, kwargs)
         new_loc_pattern = substitute_string(self.loc_pattern, kwargs)
 
@@ -113,14 +114,14 @@ class Dataset(ABC, metaclass=DatasetMeta):
             return self
         else:
             new_options = self.options.copy()
-            new_options.update({'loc_pattern': new_loc_pattern, 'name': new_name})
+            new_options.update({'loc_pattern': new_loc_pattern, 'file_name': new_file_name})
             new_dataset = self.__class__(**new_options)
 
             new_dataset._template = self._template
+            new_dataset.time_signature = self.time_signature
+
             if hasattr(self, '_tile_names'):
                 new_dataset._tile_names = self._tile_names
-
-            new_dataset.time_signature = self.time_signature
             
             new_tags = self.tags.copy()
             new_tags.update(kwargs)
@@ -182,38 +183,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def has_version(self):
         return '{file_version}' in self.loc_pattern
 
-    '''
-    @property
-    def has_tiles (self):
-        return '{tile}' in self.loc_pattern
-
-    @property
-    def tile_names(self):
-        if not self.has_tiles:
-            self._tile_names = ['__tile__']
-        
-        if not hasattr(self, '_tile_names') or self._tile_names is None:
-            self._tile_names = self.available_tags.get('tile')
-
-        return self._tile_names
-    
-    @tile_names.setter
-    def tile_names(self, value):
-        if isinstance(value, str):
-            self._tile_names = self.get_tile_names_from_file(value)
-        elif isinstance(value, list) or isinstance(value, tuple):
-            self._tile_names = list(value)
-        else:
-            raise ValueError('Invalid tile names.')
-        
-    def get_tile_names_from_file(self, filename: str) -> list[str]:
-        with open(filename, 'r') as f:
-            return [l.strip() for l in f.readlines()]
-
-    @property
-    def ntiles(self):
-        return len(self.tile_names)
-    '''
     @property
     def loc_pattern(self):
         raise NotImplementedError
@@ -737,14 +706,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
         else:
             return False
 
-        '''
-        for tile in self.tile_names:
-            if not self.check_data(time, tile = tile, **kwargs):
-                return False
-        else:
-            return True
-        '''
-
     @with_cases
     def find_times_OLD(self, times: list[pd.date_range, dt.datetime],
                    id = False, rev = False, **kwargs) -> (list[pd.Timestamp], list[int]):
@@ -792,9 +753,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
         key = time.strftime(raw_key) if time is not None else raw_key
         return key
 
+    '''
     def set_parents(self, parents:dict[str:'Dataset'], fn:Callable):
         self.parents = parents
         self.fn = fn
+    '''
 
     ## METHODS TO MANIPULATE THE TEMPLATE
     def get_template_dict(self, make_it:bool = True, **kwargs):
