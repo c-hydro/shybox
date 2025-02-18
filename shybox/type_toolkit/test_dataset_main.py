@@ -72,6 +72,9 @@ def main(alg_collectors_settings: dict = None):
     # time algorithm
     start_time = time.time()
     # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # Example of how to use the Orchestrator class
     configuration = {
         "WORKFLOW": {
             "options": {
@@ -79,11 +82,11 @@ def main(alg_collectors_settings: dict = None):
                 "tmp_dir": "tmp"
             },
             "process_list": {
-                "airt": [
+                "air_temperature": [
                     {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ],
-                "rh": [
+                "relative_humidity": [
                     {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
@@ -95,8 +98,8 @@ def main(alg_collectors_settings: dict = None):
     airt_data = DataObj(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='T_19810101.nc',
+        file_format=None, file_mode=None,
         file_template={
-            "format": "netcdf", "type": "grid",
             "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
             "vars_data": {"Tair": "air_temperature"}
         },
@@ -107,8 +110,8 @@ def main(alg_collectors_settings: dict = None):
     rh_data = DataObj(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='U_19810101.nc',
+        file_format=None, file_mode=None,
         file_template={
-            "format": "netcdf", "type": "grid",
             "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
             "vars_data": {"RH": "relative_humidity"}
         },
@@ -131,18 +134,18 @@ def main(alg_collectors_settings: dict = None):
     output_data = DataObj(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='test_%Y%m%d%H%M.nc', time_signature='step',
-        file_mode='grid',
+        file_format='netcdf', file_type='hmc', file_mode='grid',
         file_template={
-            "format": "netcdf", "type": "grid",
-            "dims_geo": {"longitude": "X", "latitude": "Y", "time": "time"},
-            "vars_geo": {"longitude": "X", "latitude": "Y"},
-            "vars_data": {"air_temperature": "AIR_TEMPERATURE"}
+            "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
+            "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+            "vars_data": {"air_temperature": "AIR_TEMPERATURE",
+                          "relative_humidity": "RELATIVE_HUMIDITY"}
         },
-        name='AirT')
+        time_period=1, time_format='%Y%m%d%H%M')
 
 
     orc_process = Orchestrator.multi_variable(
-        data_package={'airt':airt_data, 'rh': rh_data}, data_out=output_data,
+        data_package={'air_temperature': airt_data, 'relative_humidity': rh_data}, data_out=output_data,
         data_ref=geo_data,
         configuration=configuration['WORKFLOW']
     )

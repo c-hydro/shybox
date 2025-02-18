@@ -64,15 +64,9 @@ class ProcessorContainer:
             data_raw = kwargs['data']
 
         if isinstance(data_raw, dict):
-            if 'tiles' in list(self.in_opts.keys()):
-                for data_key, data_tmp in data_raw.items():
-                    fx_data = data_tmp.get_data(time=time, **kwargs)
-                metadata = {'tiles': list(data_raw.keys())}
-            else:
-                for data_key, data_tmp in data_raw.items():
-                    self.run(time, data = data_tmp, **kwargs)
-                return
-
+            for data_key, data_tmp in data_raw.items():
+                self.run(time, data = data_tmp, **kwargs)
+            return
         else:
             fx_data = data_raw.get_data(time=time, **kwargs)
             metadata = {}
@@ -91,6 +85,8 @@ class ProcessorContainer:
                 for tmp_key, tmp_data in fx_collections.items():
                     fx_out[tmp_key] = tmp_data
 
-        self.out_obj.write_data(fx_out, time, metadata = metadata, **kwargs)
+        kwargs['time_format'] = self.out_obj.get_attribute('time_format')
+
+        self.out_obj.write_data(fx_out, time, metadata=metadata, **kwargs)
 
         return fx_out

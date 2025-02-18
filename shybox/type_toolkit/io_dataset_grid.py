@@ -51,10 +51,13 @@ class DataObj(Dataset):
 
     ## INPUT/OUTPUT METHODS
     def _read_data(self, input_path) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
-        return read_from_file(input_path, self.file_format, self.file_mode)
+        return read_from_file(
+            input_path, file_format=self.file_format, file_mode=self.file_mode)
     
     def _write_data(self, output: (xr.DataArray, pd.DataFrame), output_path: str, **kwargs) -> None:
-        write_to_file(output, output_path, self.file_format, **kwargs)
+        write_to_file(output,
+                      output_path, file_format=self.file_format, file_mode=self.file_mode, file_type=self.file_type,
+                      **kwargs)
 
     def _rm_data(self, path) -> None:
         rm_file(path)

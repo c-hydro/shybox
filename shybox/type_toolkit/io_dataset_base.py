@@ -60,17 +60,16 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self.file_format = kwargs.pop('file_format')
         else:
             self.file_format = get_format_from_path(self.loc_pattern)
-
         self.file_mode = None
         if 'file_mode' in kwargs:
             self.file_mode = kwargs.pop('file_mode')
+        self.file_type = None
+        if 'file_type' in kwargs:
+            self.file_type = kwargs.pop('file_type')
 
         self.time_signature = None
         if 'time_signature' in kwargs:
             self.time_signature = kwargs.pop('time_signature')
-
-        if 'tile_names' in kwargs:
-            self.tile_names = kwargs.pop('tile_names')
 
         self.nan_value = None
         if 'nan_value' in kwargs:
@@ -89,6 +88,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self.time_direction = kwargs.pop('time_direction')
         if 'time_period' in kwargs:
             self.time_period = kwargs.pop('time_period')
+        self.time_format = '%Y-%m-%d'
+        if 'time_format' in kwargs:
+            self.time_format = kwargs.pop('time_format')
 
         self.expected_time_steps = (self.time_reference, self.time_period, self.time_freq, self.time_direction)
 
@@ -100,7 +102,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.memory_data = None
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.file_name}, {self.file_mode})"
+        return f"{self.__class__.__name__}({self.file_name}, {self.file_mode}, {self.file_type})"
 
     def update(self, in_place = False, **kwargs):
 
@@ -115,21 +117,20 @@ class Dataset(ABC, metaclass=DatasetMeta):
         else:
             new_options = self.options.copy()
             new_options.update({'loc_pattern': new_loc_pattern, 'file_name': new_file_name})
+
             new_dataset = self.__class__(**new_options)
+            new_dataset.__dict__.update(self.__dict__)
 
-            new_dataset._template = self._template
-            new_dataset.time_signature = self.time_signature
-
-            if hasattr(self, '_tile_names'):
-                new_dataset._tile_names = self._tile_names
-            
             new_tags = self.tags.copy()
             new_tags.update(kwargs)
             new_dataset.tags = new_tags
+
             return new_dataset
 
     def copy(self, template = False):
         new_dataset = self.update()
+        if template:
+            new_dataset._template = self._template
         return new_dataset
 
     ## CLASS METHODS FOR FACTORY
@@ -154,30 +155,33 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return Subclass
     
     @classmethod
-    def get_type(cls, file_type: Optional[str] = None):
-        if file_type is not None:
-            return file_type
-        elif hasattr(cls, 'file_type'):
-            return cls.file_type
+    def get_type(cls, data_mode: Optional[str] = None):
+        if data_mode is not None:
+            return data_mode
+        elif hasattr(cls, 'type'):
+            return cls.data_mode
         else:
-            return cls._defaults['file_type']
+            return cls._defaults['type']
     
     ## PROPERTIES
     @property
     def file_format(self):
         return self._format
-    
     @file_format.setter
     def file_format(self, value):
         self._format = value
-
     @property
     def file_mode(self):
         return self._mode
-
     @file_mode.setter
     def file_mode(self, value):
         self._mode = value
+    @property
+    def file_type(self):
+        return self._type
+    @file_type.setter
+    def file_type(self, value):
+        self._type = value
 
     @property
     def has_version(self):
@@ -186,16 +190,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
     @property
     def loc_pattern(self):
         raise NotImplementedError
-
     @loc_pattern.setter
     def loc_pattern(self, value):
         raise NotImplementedError
 
-
     @property
     def expected_time_steps(self):
         return self._expected_time_steps
-
     @expected_time_steps.setter
     def expected_time_steps(self, value):
         self._expected_time_steps = self.get_expected_times(value[0], value[1], value[2], value[3])
@@ -289,6 +290,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         return all_tags
 
+    # method to get attribute
+    def get_attribute(self, attribute: str) -> (str, int, float, dict, list, pd.Timestamp, None):
+        if attribute in self.__dict__:
+            return self.__dict__[attribute]
+        else:
+            return None
+
     # method to check if time step available in the datasets
     def check_time_step(self, time: (pd.Timestamp, None)) -> (int, bool):
         is_idx, is_valid = None, False
@@ -298,121 +306,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     is_idx = np.argwhere(self._expected_time_steps == time)[0][0]
                     is_valid = True
         return is_idx, is_valid
-
-    def get_last_date_OLD(self, now = None, n = 1, **kwargs) -> (dt.datetime, list[dt.datetime], None):
-        if now is None:
-            now = dt.datetime.now()
-        
-        # the most efficient way, I think is to search my month
-        this_month = Month(now.year, now.month)
-        last_date = []
-        while len(last_date) < n:
-            this_month_times = self.get_times(this_month, **kwargs)
-            if len(this_month_times) > 0:
-                valid_time = [t for t in this_month_times if t <= now]
-                valid_time.sort(reverse = True)
-                last_date.extend(valid_time)
-            elif this_month.start.year < 1900:
-                break
-
-            this_month = this_month - 1
-            
-        if len(last_date) == 0:
-            return None
-        if n == 1:
-            return last_date[0]
-        else:
-            return last_date
-
-    def get_last_ts_OLD(self, **kwargs) -> (pd.Timestamp, None):
-
-        last_dates = self.get_last_date(n = 15, **kwargs)
-        if last_dates is None:
-            return None
-        
-        timestep = estimate_timestep(last_dates)
-        if timestep is None:
-            return None
-
-        if self.time_signature == 'end+1':
-            return timestep.from_date(max(last_dates)) -1
-        else:
-            return timestep.from_date(max(last_dates))
-
-    def estimate_timestep(self) -> pd.Timestamp:
-        last_dates = self.get_last_date(n = 15)
-        timestep = estimate_timestep(last_dates)
-        return timestep
-
-    def get_first_date_OLD(self, start = None, n = 1, **kwargs) -> (dt.datetime, list[dt.datetime], None):
-        if start is None:
-            start = dt.datetime(1900, 1, 1)
-
-        end = self.get_last_date(**kwargs)
-        if end is None:
-            return None
-        
-        start_month = Month(start.year, start.month)
-        end_month   = Month(end.year, end.month)
-
-        # first look for a suitable time to start the search
-        while True:
-            midpoint = start_month.start + (end_month.end - start_month.start) / 2
-            mid_month = Month(midpoint.year, midpoint.month)
-            mid_month_times = self.get_times(mid_month, **kwargs)
-            # if we do actually find some times in the month
-            if len(mid_month_times) > 0:
-
-                    # end goes to midpoint
-                    end_month = mid_month
-            # if we didn't find any times in the month 
-            else:
-                # we start from the midpoint this time
-                start_month = mid_month
-
-            if start_month + 1 == end_month:
-                break
-        
-        first_date = []
-        while len(first_date) < n and start_month.end <= end:
-            this_month_times = self.get_times(start_month, **kwargs)
-            valid_time = [t for t in this_month_times if t >= start]
-            valid_time.sort()
-            first_date.extend(valid_time)
-
-            start_month = start_month + 1
-
-        if len(first_date) == 0:
-            return None
-        if n == 1:
-            return first_date[0]
-        else:
-            return first_date
-
-    def get_first_ts_OLD(self, **kwargs) -> pd.Timestamp:
-
-        first_dates = self.get_first_date(n = 15, **kwargs)
-        if first_dates is None:
-            return None
-        
-        timestep = estimate_timestep(first_dates)
-        if timestep is None:
-            return None
-
-        if self.time_signature == 'end+1':
-            return timestep.from_date(min(first_dates)) -1
-        else:
-            return timestep.from_date(min(first_dates))
-
-    def get_start_OLD(self, **kwargs) -> dt.datetime:
-        """
-        Get the start of the available data.
-        """
-        first_ts = self.get_first_ts(**kwargs)
-        if first_ts is not None:
-            return first_ts.start
-        else:
-            return self.get_first_date(**kwargs)
 
     def is_subdataset(self, other: 'Dataset') -> bool:
         key = self.get_key(time = dt.datetime(1900,1,1))
@@ -428,7 +321,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if not hasattr(self, '_time_signature'):
             self._time_signature = self._defaults['time_signature']
         return self._time_signature
-        
     @time_signature.setter
     def time_signature(self, value):
         if value not in ['period','step', 'start', 'end', 'end+1', None]:
@@ -584,57 +476,64 @@ class Dataset(ABC, metaclass=DatasetMeta):
                    time_format: str = '%Y-%m-%d',
                    metadata = {},
                    **kwargs):
-        
+
+        # check data (format and type)
         check_data_format(data, self.file_format)
 
-        output_file = self.get_key(time, **kwargs)
+        # define the output file
+        out_file = self.get_key(time, **kwargs)
+        out_path, out_name = os.path.dirname(out_file), os.path.basename(out_file)
 
         if self.file_format in ['csv', 'json', 'txt', 'shp']:
             append = kwargs.pop('append', False)
-            self._write_data(data, output_file, append = append)
+            self._write_data(data, out_file, append = append)
             return
         
         if self.file_format == 'file':
-            self._write_data(data, output_file)
+            self._write_data(data, out_file)
             return
         
         # if data is a numpy array, ensure there is a template available
         try:
-            template_dict = self.get_template_dict(**kwargs)
+            default_template = self.get_template_dict(**kwargs)
         except Exception as exc: #PermissionError as permission_error:
-            template_dict = None
+            default_template = None
 
-        if template_dict is None:
+        if default_template is None:
             if isinstance(data, xr.DataArray) or isinstance(data, xr.Dataset):
                 self.set_template(data, **kwargs)
-                template_dict = self.get_template_dict(**kwargs, make_it=False)
+                default_template = self.get_template_dict(**kwargs, make_it=False)
             else:
                 raise ValueError('Cannot write numpy array without a template.')
         
-        output = self.set_data_to_template(data, template_dict)
-        output = set_type(output, self.nan_value)
-        output = straighten_data(output)
-        output.attrs['source_key'] = output_file
+        out_obj = self.set_data_to_template(data, default_template)
+        out_obj = set_type(out_obj, self.nan_value)
 
-        '''
-        # if necessary generate the thubnail
-        if 'parents' in metadata:
-            parents = metadata.pop('parents')
-        else:
-            parents = {}
-        '''
+        # adjust the data orientation
+        out_obj = straighten_data(out_obj)
+        # map the data variables
+        out_obj = map_vars(out_obj, **self.file_template)
+        # map the data dimensions
+        out_obj = map_dims(out_obj, **self.file_template)
+
+        # set attributes
+        out_obj.attrs['source_location'] = out_name
 
         # add the metadata
-        old_attrs = data.attrs if hasattr(data, 'attrs') else {}
-        new_attrs = output.attrs
-        old_attrs.update(new_attrs)
-        output.attrs = old_attrs
-        
-        file_name = substitute_string(self.file_name, kwargs)
-        metadata['file_name'] = file_name
-        output = self.set_metadata(output, time, time_format, **metadata)
+        data_attrs = data.attrs if hasattr(data, 'attrs') else {}
+        out_attrs = out_obj.attrs
+        data_attrs.update(out_attrs)
+        out_obj.attrs = out_attrs
+
+        # add the metadata
+        metadata['file_name'] = out_name
+        out_obj = self.set_metadata(out_obj, time, time_format, **metadata)
+
+        if isinstance(data, xr.Dataset):
+            print()
+
         # write the data
-        self._write_data(output, output_file)
+        self._write_data(out_obj, out_file)
         
 
     def copy_data(self, new_loc_pattern, time: Union[dt.datetime, pd.Timestamp] = None, **kwargs):
@@ -706,41 +605,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
         else:
             return False
 
-    @with_cases
-    def find_times_OLD(self, times: list[pd.date_range, dt.datetime],
-                   id = False, rev = False, **kwargs) -> (list[pd.Timestamp], list[int]):
-        """
-        Find the times for which data is available.
-        """
-        all_ids = list(range(len(times)))
-
-        time_signatures = [self.get_time_signature(t) for t in times]
-        tr = pd.date_range(min(time_signatures), max(time_signatures))
-
-        all_times = self.get_available_tags(tr, **kwargs).get('time', [])
-
-        ids = [i for i in all_ids if time_signatures[i] in all_times] or []
-        if rev:
-            ids = [i for i in all_ids if i not in ids] or []
-
-        if id:
-            return ids
-        else:
-            return [times[i] for i in ids]
-
-    @with_cases
-    def find_tiles_OLD(self, time: Union[pd.Timestamp, dt.datetime] = None, rev = False, **kwargs) -> list[str]:
-        """
-        Find the tiles for which data is available.
-        """
-        all_tiles = self.tile_names
-        available_tiles = self.get_available_tags(time, **kwargs).get('tile', [])
-        
-        if not rev:
-            return [tile for tile in all_tiles if tile in available_tiles]
-        else:
-            return [tile for tile in all_tiles if tile not in available_tiles]
-
     @abstractmethod
     def _check_data(self, data_key) -> bool:
         raise NotImplementedError
@@ -752,12 +616,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
         raw_key = substitute_string(self.loc_pattern, kwargs)
         key = time.strftime(raw_key) if time is not None else raw_key
         return key
-
-    '''
-    def set_parents(self, parents:dict[str:'Dataset'], fn:Callable):
-        self.parents = parents
-        self.fn = fn
-    '''
 
     ## METHODS TO MANIPULATE THE TEMPLATE
     def get_template_dict(self, make_it:bool = True, **kwargs):
@@ -785,14 +643,14 @@ class Dataset(ABC, metaclass=DatasetMeta):
             else:
                 first_date = self.get_first_date(tile = tile, **kwargs)
                 if first_date is not None:
-                    data = self.get_data(time = first_date, tile = tile, as_is=True, **kwargs)
+                    data = self.get_data(time = first_date, as_is=True, **kwargs)
                 else:
                     return None
             
             data = straighten_data(data)
-            #templatearray = self.make_templatearray_from_data(start_data)
-            self.set_template(data, tile = tile)
-            template_dict = self.get_template_dict(make_it = False, tile = tile, **kwargs)
+
+            self.set_template(data)
+            template_dict = self.get_template_dict(make_it = False, **kwargs)
         
         return template_dict
     

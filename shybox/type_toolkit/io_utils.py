@@ -19,6 +19,7 @@ except ImportError:
 
 from typing import Optional
 
+from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc
 from shybox.generic_toolkit.lib_utils_time import is_date, convert_time_format
 
 import matplotlib.pyplot as plt
@@ -158,7 +159,9 @@ def read_from_file(
 
     return data
 
-def write_to_file(data, path, file_format: Optional[str] = None, append = False) -> None:
+def write_to_file(data, path, file_format: Optional[str] = None,
+                  file_mode: Optional[str] = None, file_type: Optional[str] = None,
+                  append = False) -> None:
 
     if file_format is None:
         file_format = get_format_from_path(path)
@@ -197,7 +200,7 @@ def write_to_file(data, path, file_format: Optional[str] = None, append = False)
         elif isinstance(data, gpd.GeoDataFrame):
             data.to_file(path, driver = 'GeoJSON')
 
-    # write a geodataframe to a shapefile
+    # write a geo dataframe to a shapefile
     elif file_format == 'shp':
         data.to_file(path)
 
@@ -215,7 +218,13 @@ def write_to_file(data, path, file_format: Optional[str] = None, append = False)
 
     # write the data to a netcdf
     elif file_format == 'netcdf':
-        data.to_netcdf(path)
+
+        if file_type == 'hmc':
+            write_file_nc_hmc(path, data, {}, None)
+        elif file_type == 's3m':
+            data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
+        else:
+            data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
 
     # write the data to a png or pdf (i.e. move the file)
     elif file_format == 'file':
@@ -228,7 +237,13 @@ def rm_file(path) -> None:
 def withxrds(func):
     def wrapper(*args, **kwargs):
         if isinstance(args[0], xr.Dataset):
-            return xr.Dataset({var: func(args[0][var], **kwargs) for var in args[0]})
+            obj_fx = xr.Dataset()
+            for var in args[0]:
+                tmp_fx = func(args[0][var], **kwargs)
+                if hasattr(tmp_fx, 'name'):
+                    var = tmp_fx.name
+                obj_fx[var] = tmp_fx
+            return obj_fx
         else:
             return func(*args, **kwargs)
     return wrapper
@@ -275,6 +290,8 @@ def map_vars(data: xr.DataArray, vars_data: dict = None,  **kwargs) -> xr.DataAr
         for var_in, var_out in vars_data.items():
             if var_in == data.name:
                 data.name = var_out
+            elif var_out == data.name:
+                data.name = var_in
     return data
 
 @withxrds
