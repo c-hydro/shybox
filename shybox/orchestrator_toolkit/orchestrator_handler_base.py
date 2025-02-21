@@ -87,6 +87,29 @@ class OrchestratorHandler:
         workflow_fx = configuration.get('process_list', [])
         workflow_options = configuration.get('options', [])
 
+        workflow_common = OrchestratorHandler(data_in=data_package, data_out=data_out,
+                                              options=workflow_options)
+
+        for process_fx_args in workflow_fx:
+
+            process_fx_name = process_fx_args.pop('function')
+            process_fx_obj = PROCESSES[process_fx_name]
+
+            '''
+            if hasattr(process_fx_obj, 'output_ext'):
+                process_fx_out = process_fx_obj.output_ext
+            else:
+                process_fx_out = None
+            #process_fx_out = process_fx_obj.pop('output', None)
+            '''
+            process_fx_args = {**process_fx_args, **{'variable': var_tag}}
+            workflow_common.add_process(process_fx_obj, ref=data_ref, **process_fx_args)
+
+        return workflow_common
+
+
+        print()
+
     @classmethod
     def multi_variable(cls, data_package: (dict, list), data_out: DataLocal = None, data_ref: DataLocal = None,
                        configuration: dict = None) -> 'Orchestrator':

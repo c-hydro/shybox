@@ -90,8 +90,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.time_format = '%Y-%m-%d'
         if 'time_format' in kwargs:
             self.time_format = kwargs.pop('time_format')
+        self.time_normalize = False
+        if 'time_normalize' in kwargs:
+            self.time_normalize = kwargs.pop('time_normalize')
 
-        self.expected_time_steps = (self.time_reference, self.time_period, self.time_freq, self.time_direction)
+        self.expected_time_steps = (
+            self.time_reference, self.time_period, self.time_freq, self.time_direction, self.time_normalize)
 
         self._template = {}
         self.options = kwargs
@@ -204,19 +208,21 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return self._expected_time_steps
     @expected_time_steps.setter
     def expected_time_steps(self, value):
-        self._expected_time_steps = self.get_expected_times(value[0], value[1], value[2], value[3])
+        self._expected_time_steps = self.get_expected_times(value[0], value[1], value[2], value[3], value[4])
 
     def get_expected_times(self, time_reference: (pd.Timestamp, None),
-                           time_period: int = None, time_freq: str = 'h', time_direction: str = 'forward') -> pd.date_range:
+                           time_period: int = None, time_freq: str = 'h', time_direction: str = 'forward',
+                           time_normalize: bool = False) -> pd.date_range:
         if time_reference is None or time_period is None:
             return None
 
         if time_direction == 'backward':
-            return pd.date_range(end = time_reference, freq = time_freq, periods = time_period, normalize = True)
+            time_obj = pd.date_range(end=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize)
         elif time_direction == 'forward':
-            return pd.date_range(start = time_reference, freq = time_freq, periods = time_period, normalize = True)
+            time_obj = pd.date_range(start=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize)
         else:
             raise RuntimeError('Invalid time direction.')
+        return time_obj
 
     @property
     def available_keys(self):
@@ -346,7 +352,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return self._time_signature
     @time_signature.setter
     def time_signature(self, value):
-        if value not in ['period','step', 'start', 'end', 'end+1', None]:
+        if value not in ['period', 'step', 'current', 'start', 'end', None]:
             raise ValueError(f"Invalid time signature: {value}")
         self._time_signature = value
 

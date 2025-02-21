@@ -14,27 +14,17 @@ import os
 import pandas as pd
 import xarray as xr
 
-from typing import Optional
-from copy import deepcopy
-
-from shybox.dataset_toolkit.merge import handler_data_grid as handler_data
-
 from shybox.generic_toolkit.lib_utils_settings import get_data_template
 
 from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.generic_toolkit.lib_utils_string import fill_tags2string
-from shybox.generic_toolkit.lib_utils_dict import create_dict_from_list
-from shybox.generic_toolkit.lib_default_args import time_format_datasets, time_format_algorithm
 from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow
-from shybox.generic_toolkit.lib_default_args import collector_data
 
-from shybox.io_toolkit import io_handler_base
+from shybox.io_toolkit.tmp import io_handler_base
 
-from shybox.generic_toolkit.lib_utils_time import is_date
-from shybox.io_toolkit.lib_io_utils import substitute_string_by_date, substitute_string_by_tags, extract_time_from_string
-from shybox.io_toolkit.lib_io_variables import fill_var_generic, fill_var_air_pressure, fill_var_error
-from shybox.io_toolkit.io_handler_base import IOHandler
-from shybox.io_toolkit.zip_handler_base import ZipHandler
+from shybox.io_toolkit.lib_io_utils import extract_time_from_string
+from shybox.io_toolkit.tmp.io_handler_base import IOHandler
+from shybox.io_toolkit.tmp.zip_handler_base import ZipHandler
 
 # logging
 logger_stream = logging.getLogger(logger_name)
