@@ -78,12 +78,12 @@ def main(alg_collectors_settings: dict = None):
                 "tmp_dir": "tmp"
             },
             "process_list": {
-                "air_temperature": [
+                "air_t": [
                     {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ],
-                "relative_humidity": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                "rh": [
+                    {"function": "interpolate_data", "method":'nn', "max_distance": 22000, "neighbours": 7, "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
             }
@@ -93,7 +93,7 @@ def main(alg_collectors_settings: dict = None):
     airt_data = DataLocal(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='T_19810101.nc',
-        file_format=None, file_mode=None,
+        file_format=None, file_mode=None, file_variable='air_t',
         file_template={
             "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
             "vars_data": {"Tair": "air_temperature"}
@@ -105,7 +105,7 @@ def main(alg_collectors_settings: dict = None):
     rh_data = DataLocal(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='U_19810101.nc',
-        file_format=None, file_mode=None,
+        file_format=None, file_mode=None, file_variable='rh',
         file_template={
             "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
             "vars_data": {"RH": "relative_humidity"}
@@ -117,7 +117,7 @@ def main(alg_collectors_settings: dict = None):
     geo_data = DataLocal(
         path='/home/fabio/Desktop/shybox/dset/data_static/gridded/',
         file_name='marche.dem.txt',
-        file_mode='grid',
+        file_mode='grid', file_variable='terrain',
         file_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -128,7 +128,7 @@ def main(alg_collectors_settings: dict = None):
     output_data = DataLocal(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='hmc.forcing.%Y%m%d%H%M.nc', time_signature='step',
-        file_format='netcdf', file_type='hmc', file_mode='grid',
+        file_format='netcdf', file_type='hmc', file_mode='grid', file_variable=None,
         file_template={
             "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
             "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
@@ -139,7 +139,7 @@ def main(alg_collectors_settings: dict = None):
 
     # multi variable
     orc_process = Orchestrator.multi_variable(
-        data_package={'air_temperature': airt_data, 'relative_humidity': rh_data}, data_out=output_data,
+        data_package=[airt_data, rh_data], data_out=output_data,
         data_ref=geo_data,
         configuration=configuration['WORKFLOW']
     )
