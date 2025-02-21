@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from shybox.type_toolkit.lib_type_grid import DataGrid
+from shybox.dataset_toolkit.lib_type_grid import DataGrid
 
 from shybox.io_toolkit.lib_io_ascii_grid import get_file_grid as get_file_grid_ascii
 from shybox.io_toolkit.lib_io_ascii_array import get_file_array as get_file_array_ascii

@@ -15,8 +15,6 @@ import os
 
 from osgeo import gdal
 from typing import Iterable
-
-from shybox.type_toolkit.lib_type_grid import DataGrid
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -90,12 +88,6 @@ def with_list_input(func):
 @with_list_input
 def remove(filename: str):
     os.remove(filename)
-
-@with_list_input
-def grid_to_xarray(data: DataGrid) -> (xr.DataArray, xr.Dataset):
-    data = data.data
-    return data
-
 
 @with_list_input
 def xarray_to_file(data_array: xr.DataArray) -> str:

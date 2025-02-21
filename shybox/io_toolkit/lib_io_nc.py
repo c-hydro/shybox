@@ -9,6 +9,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import time as tm
 import rasterio
 import xarray as xr
 import pandas as pd
@@ -42,7 +43,13 @@ def write_file_nc_hmc(
         var_system: str ='crs',
         var_time: str = 'time', var_x: str = 'longitude', var_y: str = 'latitude',
         dim_time: str = 'time', dim_x: str = 'west_east', dim_y: str = 'south_north',
-        type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64'):
+        type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64', **kwargs):
+
+    # managing attributes objects
+    if attrs_data is None: attrs_data = {}
+    if attrs_system is None: attrs_system = {}
+    if attrs_x is None: attrs_x = {}
+    if attrs_y is None: attrs_y = {}
 
     # get dimensions
     dset_dims = data.dims
@@ -51,31 +58,44 @@ def write_file_nc_hmc(
     else:
         n_cols, n_rows, n_time = dset_dims[dim_x], dset_dims[dim_y], 1
     # get geographical coordinates
-    x, y = deepcopy(data[var_x]), deepcopy(data[var_y])
+    try:
+        x, y = data[var_x].values, data[var_y].values
+    except KeyError:
+        x, y = data[dim_x].values, data[dim_y].values
+
+    if len(x.shape) == 1 and len(y.shape) == 1:
+        x, y = np.meshgrid(x, y)
+    elif len(x.shape) == 2 and len(y.shape) == 2:
+        pass
+    else:
+        raise NotImplementedError('Case not implemented yet')
 
     # Define time dimension
     if time is not None:
-        if not isinstance(time, pd.DatetimeIndex):
-            time = pd.DataFrame(time)
+        # define time reference
+        time_period = [np.array(time)]
+        time_labels = []
+        for time_step in time_period:
+            time_tmp = pd.to_datetime(str(time_step)).strftime(time_format)
+            time_labels.append(time_tmp)
+        time_start = time_labels[0]
+        time_end = time_labels[-1]
+        time_steps = len(time_period)
 
-    # define time reference
-    time_period = np.array(time)
-    time_labels = []
-    for time_step in time_period:
-        time_tmp = pd.to_datetime(str(time_step[0])).strftime(time_format)
-        time_labels.append(time_tmp)
-    time_start = time_labels[0]
-    time_end = time_labels[-1]
+        # Generate datetime from time(s)
+        date_list = []
+        for i, time_step in enumerate(time_period):
+            date_stamp = pd.to_datetime(str(time_step))
+            date_str = date_stamp.strftime(time_format)
 
-    # Generate datetime from time(s)
-    date_list = []
-    for i, time_step in enumerate(time_period):
+            date_list.append(datetime(int(date_str[0:4]), int(date_str[4:6]),
+                                      int(date_str[6:8]), int(date_str[8:10]), int(date_str[10:12])))
 
-        date_stamp = pd.to_datetime(str(time_step[0]))
-        date_str = date_stamp.strftime(time_format)
-
-        date_list.append(datetime(int(date_str[0:4]), int(date_str[4:6]),
-                                  int(date_str[6:8]), int(date_str[8:10]), int(date_str[10:12])))
+    else:
+        # case with time not defined
+        time_start, time_end = 'NaD', 'NaD'
+        time_steps, time_period, time_labels = 0, 0, 'NA'
+        date_list = []
 
     # open file
     handle = Dataset(path, 'w', format=file_format)
@@ -89,7 +109,7 @@ def write_file_nc_hmc(
     handle.createDimension('nens', 1)
 
     # add file attributes
-    handle.filedate = 'Created ' + time.ctime(time.time())
+    handle.filedate = 'Created ' + tm.ctime(tm.time())
     handle.Conventions = file_conventions
     handle.title = file_title
     handle.institution = file_institution
@@ -159,9 +179,9 @@ def write_file_nc_hmc(
     variable_y[:, :] = np.transpose(np.rot90(y, -1))
 
     # variable geo system
-    variable_system = handle.createVariable(var_name_geo_system, 'i')
+    variable_system = handle.createVariable(var_system, 'i')
     if attrs_system is not None:
-        for attr_key, attr_value in geo_system_attrs.items():
+        for attr_key, attr_value in attrs_system.items():
             if attr_key == 'fill_value':
                 fill_value = attr_value
                 variable_system.setncattr(attr_key.lower(), float(attr_value))
@@ -189,12 +209,24 @@ def write_file_nc_hmc(
         if 'format' in list(attrs_data.keys()):
             variable_format = attrs_data['format']
 
-        fill_value = None
+        fill_value = -9999.0
         if 'fill_value' in list(attrs_data.keys()):
             fill_value = attrs_data['fill_value']
         scale_factor = 1
         if 'scale_factor' in list(attrs_data.keys()):
             scale_factor = attrs_data['scale_factor']
+
+        variable_data[np.isnan(variable_data)] = fill_value
+        variable_data[variable_data <= fill_value] = fill_value
+
+        '''
+        import matplotlib
+        matplotlib.use('TkAgg')
+        import matplotlib.pylab as plt
+        plt.figure()
+        plt.imshow(variable_data); plt.colorbar()
+        plt.show()
+        '''
 
         if variable_dims == 3:
             var_handle = handle.createVariable(

@@ -9,21 +9,21 @@ import pandas as pd
 import xarray as xr
 
 from shybox.generic_toolkit.lib_utils_time import convert_time_format
-from shybox.type_toolkit.io_dataset_grid import DataObj
+from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 
 class ProcessorContainer:
     def __init__(self,
                  function: Callable,
-                 in_obj: DataObj,
+                 in_obj: DataLocal,
                  args: dict = {},
-                 out_obj: DataObj = None,
+                 out_obj: DataLocal = None,
                  in_opts: dict = {}, out_opts: dict = {}) -> None:
 
         self.break_point = False
 
         fx_args, fx_static = {}, {}
         for arg_name, arg_value in args.items():
-            if isinstance(arg_value, DataObj):
+            if isinstance(arg_value, DataLocal):
                 if not arg_value.is_static:
                     fx_args[arg_name] = arg_value
                 else:

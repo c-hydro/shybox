@@ -14,6 +14,13 @@ crs_wkt = 'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223
            'UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]'
 crs_epsg = 'EPSG:4326'
 
+# definition of crs
+crs_epsg_code = 4326
+crs_grid_mapping_name = "latitude_longitude"
+crs_longitude_of_prime_meridian = 0.0
+crs_semi_major_axis = 6378137.0
+crs_inverse_flattening = 298.257223563
+
 # definition of time and geographical variables, coords and dims
 time_var_name = 'time'
 time_coord_name = 'time'

@@ -16,8 +16,8 @@ from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
 
-from shybox.type_toolkit.io_dataset_mem import DataMem
-from shybox.type_toolkit.io_dataset_grid import DataObj
+from shybox.dataset_toolkit.dataset_handler_mem import DataMem
+from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 
 from copy import deepcopy
 
@@ -38,8 +38,8 @@ class OrchestratorHandler:
     }
 
     def __init__(self,
-                 data_in: (DataObj, dict),
-                 data_out: DataObj = None,
+                 data_in: (DataLocal, dict),
+                 data_out: DataLocal = None,
                  options: dict = None) -> None:
         
         self.data_in = data_in
@@ -81,7 +81,7 @@ class OrchestratorHandler:
         return workflow
 
     @classmethod
-    def multi_variable(cls, data_package: dict, data_out: DataObj = None, data_ref: DataObj = None,
+    def multi_variable(cls, data_package: dict, data_out: DataLocal = None, data_ref: DataLocal = None,
                        configuration: dict = None) -> 'Orchestrator':
 
         workflow_fx = configuration.get('process_list', [])
@@ -124,10 +124,10 @@ class OrchestratorHandler:
             except Exception as e:
                 print(f'Error cleaning up temporary directory: {e}')
 
-    def make_output(self, in_obj: DataObj, out_obj: DataObj = None,
-                    function = None, **kwargs) -> DataObj:
+    def make_output(self, in_obj: DataLocal, out_obj: DataLocal = None,
+                    function = None, **kwargs) -> DataLocal:
 
-        if isinstance(out_obj, DataObj):
+        if isinstance(out_obj, DataLocal):
             return out_obj
 
         path_in = in_obj.loc_pattern
@@ -185,7 +185,7 @@ class OrchestratorHandler:
             out_obj = DataMem(loc_pattern=path_out)
         elif output_type == 'Tmp':
             file_name_tmp = os.path.basename(path_out)
-            out_obj = DataObj(path=self.tmp_dir, file_name=file_name_tmp)
+            out_obj = DataLocal(path=self.tmp_dir, file_name=file_name_tmp)
         else:
             raise ValueError('Orchestrator output type must be "Mem" or "Tmp"')
 
@@ -193,7 +193,10 @@ class OrchestratorHandler:
 
         return out_obj
 
-    def add_process(self, function, process_output: (DataObj, xr.Dataset, dict) = None, **kwargs) -> None:
+    def add_process(self, function, process_output: (DataLocal, xr.Dataset, dict) = None, **kwargs) -> None:
+
+        if 'variable' not in kwargs:
+            kwargs['variable'] = 'generic'
 
         process_obj = self.processes
         process_previous = self.processes[-1] if len(process_obj) > 0 else None
@@ -208,7 +211,7 @@ class OrchestratorHandler:
             process_previous = None
             if isinstance(self.data_in, dict):
                 this_input = self.data_in[kwargs['variable']]
-            elif isinstance(self.data_in, DataObj):
+            elif isinstance(self.data_in, DataLocal):
                 this_input = self.data_in
             else:
                 raise RuntimeError('Input data must be DataObj or dictionary of DataObj instance.')
@@ -223,7 +226,6 @@ class OrchestratorHandler:
             args = kwargs,
             out_obj = this_output, out_opts=self.options)
 
-
         if this_process.break_point:
             self.break_points.append(len(self.processes))
 
@@ -235,7 +237,7 @@ class OrchestratorHandler:
         if len(self.processes) == 0:
             raise ValueError('No processes have been added to the workflow.')
         elif isinstance(self.processes[-1].out_obj, DataMem) or \
-            (isinstance(self.processes[-1].out_obj, DataObj) and hasattr(self, 'tmp_dir') and
+            (isinstance(self.processes[-1].out_obj, DataLocal) and hasattr(self, 'tmp_dir') and
              self.tmp_dir in self.processes[-1].out_obj.dir_name):
             if self.data_out is not None:
                 self.processes[-1].out_obj = self.data_out.copy()
