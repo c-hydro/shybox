@@ -81,15 +81,38 @@ class OrchestratorHandler:
         return workflow
 
     @classmethod
-    def multi_variable(cls, data_package: dict, data_out: DataLocal = None, data_ref: DataLocal = None,
+    def multi_tile(self, data_package: (dict, list), data_out: DataLocal = None, data_ref: DataLocal = None,
+                   configuration: dict = None) -> 'Orchestrator':
+
+        workflow_fx = configuration.get('process_list', [])
+        workflow_options = configuration.get('options', [])
+
+    @classmethod
+    def multi_variable(cls, data_package: (dict, list), data_out: DataLocal = None, data_ref: DataLocal = None,
                        configuration: dict = None) -> 'Orchestrator':
 
         workflow_fx = configuration.get('process_list', [])
         workflow_options = configuration.get('options', []) # derivare il dizionario come fatto per options per usare ignore_case=True
 
-        workflow_common = OrchestratorHandler(data_in=data_package, data_out=data_out, options=workflow_options)
+        if isinstance(data_package, list):
+            data_collections = {}
+            for data_id, data_obj in enumerate(data_package):
+                data_name = None
+                if hasattr(data_obj, 'file_variable'):
+                    data_name = data_obj.file_variable
+                if data_name is None:
+                    data_name = 'default_{:}'.format(int(data_id))
+                data_collections[data_name] = data_obj
+        else:
+            data_collections = data_package
 
-        for var_tag in list(data_package.keys()):
+        assert data_collections.keys() == workflow_fx.keys(), \
+            'Data collections and workflow functions must have the same keys.'
+
+        workflow_common = OrchestratorHandler(data_in=data_collections, data_out=data_out,
+                                              options=workflow_options)
+
+        for var_tag in list(data_collections.keys()):
 
             process_fx_var = workflow_fx[var_tag]
 

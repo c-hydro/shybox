@@ -62,6 +62,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.file_type = None
         if 'file_type' in kwargs:
             self.file_type = kwargs.pop('file_type')
+        self.file_variable = 'default'
+        if 'file_variable' in kwargs:
+            self.file_variable = kwargs.pop('file_variable')
 
         self.time_signature = None
         if 'time_signature' in kwargs:
@@ -178,6 +181,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
     @file_type.setter
     def file_type(self, value):
         self._type = value
+    @property
+    def file_variable(self):
+        return self._variable
+    @file_variable.setter
+    def file_variable(self, value):
+        self._variable = value
 
     @property
     def has_version(self):
@@ -302,7 +311,25 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     is_idx = np.argwhere(self._expected_time_steps == time)[0][0]
                     is_valid = True
         return is_idx, is_valid
-
+    
+    def get_time_step(self, time_step: pd.Timestamp, time_type: str = 'start', **kwargs) -> (pd.Timestamp, int):
+        
+        if time_type == 'start':
+            idx_select = 0
+            time_select = self._expected_time_steps[idx_select]
+        elif time_type == 'end':
+            idx_select = len(self._expected_time_steps) - 1
+            time_select = self._expected_time_steps[-1]
+        elif time_type == 'current' or time_type == 'step':
+            idx_select, is_valid = self.check_time_step(time_step)
+            if is_valid:
+                time_select = self._expected_time_steps[idx_select]
+            else:
+                time_select = None
+        else:
+            raise ValueError(f"Invalid time type: {time_type}")
+        return time_select, idx_select
+    
     def is_subdataset(self, other: 'Dataset') -> bool:
         key = self.get_key(time = dt.datetime(1900,1,1))
         try:
@@ -374,6 +401,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def get_data(self, time: (dt.datetime, pd.Timestamp) = None, as_is = False, **kwargs):
 
         full_location = self.get_key(time, **kwargs)
+        variable = kwargs.pop('variable', self.file_variable)
 
         if self.memory_active:
             if self.memory_data is not None:
@@ -451,8 +479,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # if there is no template for the dataset, create it from the data
         template_dict = self.get_template_dict(make_it=False, **kwargs)
         if template_dict is None:
-            #template = self.make_templatearray_from_data(data)
-            self.set_template(data, **kwargs)
+            self.set_template(template_array=data, template_key=variable, **kwargs)
         else:
             # otherwise, update the data in the template
             # (this will make sure there is no errors in the coordinates due to minor rounding)
@@ -635,9 +662,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.set_template(data, template_key = template_key)
 
             else:
-                first_date = self.get_first_date(tile = tile, **kwargs)
-                if first_date is not None:
-                    data = self.get_data(time = first_date, as_is=True, **kwargs)
+                time_start, idx_start = self.get_time_step(time_type='start', **kwargs)
+                if time_start is not None:
+                    data = self.get_data(time = time_start, as_is=True, **kwargs)
                 else:
                     return None
             
@@ -649,8 +676,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return template_dict
     
     
-    def set_template(self, template_array: (xr.DataArray,xr.Dataset) = None, template_key: str = 'data',
-                     **kwargs):
+    def set_template(self, template_array: (xr.DataArray,xr.Dataset) = None,
+                     template_key: str = 'data', **kwargs):
         # save in self._template the minimum that is needed to recreate the template
         # get the crs and the nodata value, these are the same for all tiles
         crs = template_array.attrs.get('crs', None)
@@ -756,8 +783,5 @@ class Dataset(ABC, metaclass=DatasetMeta):
             metadata.pop('long_name')
 
         data.attrs.update(metadata)
-
-        #if isinstance(data, xr.DataArray):
-        #    data.name = var_name
 
         return data
