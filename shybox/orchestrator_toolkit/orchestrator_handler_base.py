@@ -338,11 +338,21 @@ class OrchestratorHandler:
                 tmp_obj.append(proc_obj)
                 proc_group[proc_var] = tmp_obj
 
-        proc_ws = {}
+        proc_link, proc_ws = {}, {}
         for proc_var, proc_list in proc_group.items():
+
             proc_return = []
             for proc_name in proc_list:
+
                 kwargs['collections'] = proc_ws
-                proc_return.append(proc_name.run(time, **kwargs))
+
+                proc_obj = proc_name.run(time, **kwargs)
+                proc_return.append(proc_obj)
+
             proc_ws[proc_var] = proc_return[-1]
 
+
+
+def remove_none(lst):
+    # Remove NoneType values from the list
+    return [x for x in lst if x is not None]

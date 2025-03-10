@@ -538,10 +538,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
         out_obj = self.set_data_to_template(data, default_template)
         out_obj = set_type(out_obj, self.nan_value)
 
+        if '.nc' in out_file:
+            print()
+
         # adjust the data orientation
         out_obj = straighten_data(out_obj)
         # map the data variables
-        out_obj = map_vars(out_obj, **self.file_template)
+        out_obj = map_vars(out_obj, vars_force=True, **self.file_template)
         # map the data dimensions
         out_obj = map_dims(out_obj, **self.file_template)
 

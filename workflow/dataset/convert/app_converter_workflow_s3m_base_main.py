@@ -228,10 +228,11 @@ def main(alg_collectors_settings: dict = None):
             path=alg_variables_application['data_destination']['path'],
             file_name=file_name,
             time_signature='step',
-            file_format='netcdf', file_type='hmc', file_mode='grid', file_variable=None,
+            file_format='netcdf', file_mode='grid', file_variable=None,
+            file_type=alg_variables_application['data_destination']['type'],
             file_template={
-                "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
-                "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+                "dims_geo": {"longitude": "X", "latitude": "Y", "time": "time"},
+                "vars_geo": {"longitude": "X", "latitude": "Y"},
                 "vars_data": {"air_temperature": "AIR_TEMPERATURE",
                               "relative_humidity": "RELATIVE_HUMIDITY"}
             },

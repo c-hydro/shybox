@@ -19,7 +19,7 @@ except ImportError:
 
 from typing import Optional
 
-from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc
+from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m
 from shybox.generic_toolkit.lib_utils_time import is_date, convert_time_format
 
 import matplotlib.pyplot as plt
@@ -226,7 +226,8 @@ def write_to_file(data, path, file_format: Optional[str] = None,
         if file_type == 'hmc':
             write_file_nc_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type == 's3m':
-            data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
+            write_file_nc_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
+            #data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
         else:
             data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
 
@@ -289,9 +290,22 @@ def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray
 
 # method to map vars
 @withxrds
-def map_vars(data: xr.DataArray, vars_data: dict = None,  **kwargs) -> xr.DataArray:
+def map_vars(data: xr.DataArray, vars_data: dict = None, vars_force: bool = False,  **kwargs) -> xr.DataArray:
     if vars_data is not None:
         for var_in, var_out in vars_data.items():
+
+            if vars_force:
+                if var_in == 'air_temperature':
+                    var_in = 'air_t'
+                elif var_in == 'relative_humidity':
+                    var_in = 'rh'
+                elif var_in == 'rain':
+                    var_in = 'r'
+                elif var_in == 'wind':
+                    var_in = 'w'
+                elif var_in == 'incoming_radiation':
+                    var_in = 'ir'
+
             if var_in == data.name:
                 data.name = var_out
             elif var_out == data.name:

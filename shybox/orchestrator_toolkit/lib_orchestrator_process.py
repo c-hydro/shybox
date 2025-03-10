@@ -83,6 +83,7 @@ class ProcessorContainer:
                 fx_collections = kwargs.pop('collections', None)
                 fx_out = fx_out.to_dataset(name = self.variable)
                 for tmp_key, tmp_data in fx_collections.items():
+
                     fx_out[tmp_key] = tmp_data
 
         kwargs['time_format'] = self.out_obj.get_attribute('time_format')
