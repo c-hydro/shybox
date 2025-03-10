@@ -93,7 +93,10 @@ class TimeHandler:
     def compute_time_range(self):
 
         time_run = self.time_run
-        time_range = pd.date_range(start=time_run, periods=self.time_period, freq=self.time_frequency)
+        if self.time_period is None or self.time_period == 0:
+            time_range = pd.DatetimeIndex([time_run])
+        else:
+            time_range = pd.date_range(start=time_run, periods=self.time_period, freq=self.time_frequency)
         self.time_start, self.time_end = time_range[0], time_range[-1]
 
         return self.time_start, self.time_end

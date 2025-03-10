@@ -99,6 +99,19 @@ def replace_string(string_text: str, string_replace: dict) -> str:
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to fill string with keyword arguments
+def fill_string(string_raw, **kwargs):
+    """
+    Fill string with keyword arguments
+    :param string_raw: string to fill
+    :param kwargs: dictionary with key-value pairs
+    :return: string filled
+    """
+    return string_raw.format(**kwargs)
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 # method to add format(s) string (path or filename)
 def fill_tags2string(string_raw, tags_format=None, tags_filling=None, tags_template='[TMPL_TAG_{:}]'):
 

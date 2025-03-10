@@ -1,0 +1,88 @@
+{
+  "__comment__" : "configuration file for the datasets information",
+  "settings": {
+    "priority": {
+      "reference": "environment",
+      "other": "user"
+    },
+    "flags": {
+      "update_namelist": true,
+      "update_execution": true
+    },
+    "variables": {
+      "lut": {
+        "user": {
+          "path_geo": "/home/fabio/Desktop/shybox/dset/data_static/gridded/",
+          "time_source": null, "time_destination": null,
+          "time_rounding": "D", "time_frequency": "D",
+          "file_log": "{execution_name}_{domain_name}.log",
+          "execution_name": "dataset_base", "execution_mode": "history"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "time_start": "TIME_START", "time_end": "TIME_END",
+          "path_source": "PATH_SRC", "path_destination": "PATH_DST",
+          "path_app": "PATH_APP", "path_log": "PATH_LOG"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_source": "string", "path_destination": "string",
+        "time_source": "string", "time_destination": "string",
+        "time_start": "string", "time_end": "string",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_app": "string",
+        "path_log": "string", "file_log": "string",
+        "execution_name": "string", "execution_mode": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_source": "string", "path_destination": "string",
+        "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M",
+        "time_start": "%Y%m%d", "time_end": "%Y%m%d",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_app": "string",
+        "path_log": "string", "file_log": "string",
+        "execution_name": "string", "execution_mode": "string"
+      }
+    },
+    "application": {
+      "info": {
+        "domain_name": "{domain_name}"
+      },
+      "time": {
+        "start": "1981-01-01",
+        "end": "1981-01-03",
+        "frequency": "D",
+        "format": "%Y%m%d"
+      },
+      "geo": {
+        "terrain": {
+          "path": "{path_geo}",
+          "file_name": "{domain_name}.dem.txt"
+        }
+      },
+      "data_source": {
+        "air_t": {
+          "path": "{path_source}",
+          "file_name": "T_{time_source}.nc"
+        },
+        "rh": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater",
+          "file_name": "U_{time_source}.nc"
+        }
+      },
+      "data_destination": {
+        "path": "{path_destination}",
+        "file_name": "s3m.forcing.{time_destination}.nc",
+        "format": "netcdf", "type": "s3m", "mode": "grid"
+      },
+      "log": {
+        "path": "{path_log}",
+        "file_name": "example.txt"
+      }
+    }
+  }
+}

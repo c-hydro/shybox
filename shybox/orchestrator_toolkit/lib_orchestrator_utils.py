@@ -85,10 +85,16 @@ def with_list_input(func):
     return wrapper
 # ----------------------------------------------------------------------------------------------------------------------
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to remove file
 @with_list_input
 def remove(filename: str):
     os.remove(filename)
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to dump data to file
 @with_list_input
 def xarray_to_file(data_array: xr.DataArray) -> str:
     # Create a temporary file
@@ -100,15 +106,10 @@ def xarray_to_file(data_array: xr.DataArray) -> str:
 
     # Move the temporary file to the desired filename
     return temp_file.name
+# ----------------------------------------------------------------------------------------------------------------------
 
-
-'''
-@with_list_input
-def file_to_xarray(filename: str) -> xr.DataArray:
-    # Open the file with xarray
-    return rxr.open_rasterio(filename)
-'''
-
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read data from file (xarray)
 @with_list_input
 def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:
     temp_file = xarray_to_file(data_array)
@@ -119,8 +120,10 @@ def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:
     os.remove(temp_file)
 
     return gdal_dataset
+# ----------------------------------------------------------------------------------------------------------------------
 
-
+# ----------------------------------------------------------------------------------------------------------------------
+# method to convert data to file (xarray)
 @with_list_input
 def gdal_to_xarray(dataset: gdal.Dataset) -> xr.DataArray:
     # Create a temporary file
@@ -138,3 +141,4 @@ def gdal_to_xarray(dataset: gdal.Dataset) -> xr.DataArray:
     os.remove(temp_file.name)
 
     return data_array
+# ----------------------------------------------------------------------------------------------------------------------

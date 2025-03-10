@@ -1,16 +1,3 @@
-#from processor import DAMProcessor
-#from register_process import DAM_PROCESSES
-
-#from ..tools.data import Dataset
-#from ..tools.data.memory_dataset import MemoryDataset
-#from ..tools.data.local_dataset import LocalDataset
-
-#from ..tools.timestepping import TimeRange,estimate_timestep
-#from ..tools.timestepping.time_utils import get_date_from_str
-
-#from ..tools.config.options import Options
-
-Options = dict()
 
 from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
@@ -19,7 +6,6 @@ from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContai
 from shybox.dataset_toolkit.dataset_handler_mem import DataMem
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 
-from copy import deepcopy
 
 import datetime as dt
 from typing import Optional
@@ -102,13 +88,10 @@ class OrchestratorHandler:
                 process_fx_out = None
             #process_fx_out = process_fx_obj.pop('output', None)
             '''
-            process_fx_args = {**process_fx_args, **{'variable': var_tag}}
+            process_fx_args = {**process_fx_args, **{'variable': 'tiles'}}
             workflow_common.add_process(process_fx_obj, ref=data_ref, **process_fx_args)
 
         return workflow_common
-
-
-        print()
 
     @classmethod
     def multi_variable(cls, data_package: (dict, list), data_out: DataLocal = None, data_ref: DataLocal = None,

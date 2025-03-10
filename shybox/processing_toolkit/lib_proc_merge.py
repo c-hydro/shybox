@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 # method to merge data
 @as_process(input_type='xarray', output_type='xarray')
-def merge_data_by_ref(
+def merge_data(
         data: xr.DataArray,
         ref: xr.DataArray, ref_value: (float, int) = -9999.0,
         mask_format: str = 'integer', mask_no_data: (float, int) = -9999.0, **kwargs):
@@ -49,19 +49,3 @@ def merge_data_by_ref(
 
     return data
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-@as_DAM_process(input_type = 'file', output_type = 'gdal', input_tiles = True)
-def combine_tiles(inputs: list[str|gdal.Dataset],
-                  num_cpus: Optional[int] = None
-                  )-> gdal.Dataset:
-    """
-    Mosaic a set of input rasters.
-    """
-
-    if num_cpus is None:
-        num_cpus = 'ALL_CPUS'
-
-    out_ds = gdal.Warp('', inputs, format = 'MEM', options=[f'NUM_THREADS={num_cpus}'], multithread=True)
-
-    return out_ds

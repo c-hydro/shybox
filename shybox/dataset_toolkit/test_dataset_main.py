@@ -34,6 +34,7 @@ from shybox.generic_toolkit.lib_utils_args import get_logger_name
 from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from shybox.generic_toolkit.lib_default_args import collector_data
 
+from shybox.processing_toolkit.lib_proc_merge import merge_data
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 
@@ -71,14 +72,14 @@ def main(alg_collectors_settings: dict = None):
 
     # ------------------------------------------------------------------------------------------------------------------
     # Example of how to use the Orchestrator class for multi layers
-    configuration = {
+    configuration_tile = {
         "WORKFLOW": {
             "options": {
                 "intermediate_output": "Tmp",
                 "tmp_dir": "tmp"
             },
             "process_list": [
-                {"function": "merge", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                {"function": "merge_data", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
                 {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}]
         }
     }
@@ -134,7 +135,7 @@ def main(alg_collectors_settings: dict = None):
     orc_process = Orchestrator.multi_tile(
         data_package=[s3m_data_domain_1, s3m_data_domain_2], data_out=output_data,
         data_ref=geo_data,
-        configuration=configuration['WORKFLOW']
+        configuration=configuration_tile['WORKFLOW']
     )
 
     orc_process.run(time=pd.date_range('2025-01-24 05:00', '2025-01-24 05:00', freq='H'))
@@ -215,7 +216,7 @@ def main(alg_collectors_settings: dict = None):
         configuration=configuration['WORKFLOW']
     )
 
-    orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))
+    orc_process.run(time=pd.date_range('1981-01-01 00:00', '1981-01-01 23:00', freq='H'))
 
     # single variable
     orc_process = Orchestrator(

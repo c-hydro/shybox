@@ -144,6 +144,10 @@ class DrvTime(object):
         # info algorithm (start)
         logger_stream.info(logger_arrow.info(tag='info_method') + 'Configure "time_variables" ... ')
 
+        if self.time_period is None:
+            logger_stream.warning(logger_arrow.warning + 'Time period is not defined. Time period will be set to 0')
+            self.time_period = 0
+
         # define time handler class
         if time_run_cmd is not None or self.time_run_file is not None:
             self.time_handler = handler_time.TimeHandler.from_time_run(
