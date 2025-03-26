@@ -6,6 +6,7 @@ from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContai
 from shybox.dataset_toolkit.dataset_handler_mem import DataMem
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 
+from copy import deepcopy
 
 import datetime as dt
 from typing import Optional
@@ -120,11 +121,11 @@ class OrchestratorHandler:
 
         for var_tag in list(data_collections.keys()):
 
-            process_fx_var = workflow_fx[var_tag]
+            process_fx_var = deepcopy(workflow_fx[var_tag])
 
-            for process_fx_args in process_fx_var:
+            for process_fx_tmp in process_fx_var:
 
-                process_fx_name = process_fx_args.pop('function')
+                process_fx_name = process_fx_tmp.pop('function')
                 process_fx_obj = PROCESSES[process_fx_name]
 
                 '''
@@ -134,7 +135,7 @@ class OrchestratorHandler:
                     process_fx_out = None
                 #process_fx_out = process_fx_obj.pop('output', None)
                 '''
-                process_fx_args = {**process_fx_args, **{'variable': var_tag}}
+                process_fx_args = {**process_fx_tmp, **{'variable': var_tag}}
                 workflow_common.add_process(process_fx_obj, ref=data_ref, **process_fx_args)
 
         return workflow_common
