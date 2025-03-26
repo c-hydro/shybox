@@ -53,6 +53,7 @@ from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
+logger_stream.setLevel(logging.ERROR)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -109,21 +110,6 @@ def main(alg_collectors_settings: dict = None):
 
     # time algorithm
     start_time = time.time()
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # class to initialize the hmc time
-    driver_time = DrvTime(time_obj=alg_variables_settings, time_collectors=alg_variables_collector)
-    # method to configure time variables
-    alg_variables_time = driver_time.configure_variable_time(time_run_cmd=alg_time_settings)
-    # method to organize time variables
-    alg_variables_time = driver_time.organize_variable_time(
-        time_obj=alg_variables_time, collector_obj=alg_variables_collector)
-    # method to view time variables
-    driver_time.view_variable_time(data=alg_variables_time, mode=True)
-
-    # collector data
-    collector_data.view(table_print=True)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

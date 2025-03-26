@@ -182,6 +182,7 @@ else
 	
 	echo " ======> PIP INSTALLATION ... "
 	pip install tabulate
+	pip install rioxarray
 	pip install pyresample
 	pip install repurpose
 	echo " ======> PIP INSTALLATION ... DONE"

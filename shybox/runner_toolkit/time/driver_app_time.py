@@ -72,6 +72,9 @@ class DrvTime(object):
         self.time_period = self.time_obj['time_period']
         self.time_frequency = self.time_obj['time_frequency']
         self.time_rounding = self.time_obj['time_rounding']
+        self.time_direction = 'forward'
+        if 'time_direction' in list(self.time_obj.keys()):
+            self.time_direction = self.time_obj['time_direction']
 
         self.time_start = self.time_obj['time_start']
         if self.time_start is not None:
@@ -149,14 +152,35 @@ class DrvTime(object):
             self.time_period = 0
 
         # define time handler class
-        if time_run_cmd is not None or self.time_run_file is not None:
+        if (time_run_cmd is not None) or (self.time_run_file is not None):
             self.time_handler = handler_time.TimeHandler.from_time_run(
                 time_run_cmd=time_run_cmd, time_run_file=self.time_run_file,
                 time_period=self.time_period, time_frequency=self.time_frequency, time_rounding=self.time_rounding)
-        elif (self.time_start is not None) or (self.time_end is not None):
-            self.time_handler = handler_time.TimeHandler.from_time_period(
-                time_start=time_run_cmd, time_end=self.time_run_file,
-                time_frequency=self.time_frequency, time_rounding=self.time_rounding)
+
+        #elif (self.time_start is not None) or (self.time_end is not None):
+        #    self.time_handler = handler_time.TimeHandler.from_time_period(
+        #        time_start=time_run_cmd, time_end=self.time_run_file,
+        #        time_frequency=self.time_frequency, time_rounding=self.time_rounding)
+
+        elif (time_run_cmd is None) and (self.time_run_file is None):
+
+            if self.time_direction == 'forward' and self.time_end is not None:
+
+                self.time_handler = handler_time.TimeHandler.from_time_run(
+                    time_run_cmd=self.time_end, time_run_file=self.time_end,
+                    time_period=self.time_period, time_frequency=self.time_frequency, time_rounding=self.time_rounding)
+
+            elif self.time_direction == 'backward' and self.time_start is not None:
+
+                self.time_handler = handler_time.TimeHandler.from_time_run(
+                    time_run_cmd=self.time_start, time_run_file=self.time_start,
+                    time_period=self.time_period, time_frequency=self.time_frequency, time_rounding=self.time_rounding)
+
+            else:
+                logger_stream.error(logger_arrow.error +
+                                    'Time run is defined and it is not possible to define from time_start or time_end')
+                raise RuntimeError('Time run must be defined')
+
         else:
             logger_stream.error(logger_arrow.error + 'Time run is not correctly defined')
             raise RuntimeError('Time run must be defined')

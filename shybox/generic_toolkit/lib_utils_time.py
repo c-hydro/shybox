@@ -184,12 +184,16 @@ def select_time_restart(time_run: pd.Timestamp, time_shift: int = 1, time_freque
 # method to select time range
 def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd.Timestamp) = None,
                       time_period: int = 1,
-                      time_frequency: str = 'H', time_rounding: str = 'H') -> (pd.date_range, None):
+                      time_frequency: str = 'h', time_rounding: str = 'h') -> (pd.date_range, None):
 
     if isinstance(time_start, str):
+        time_start = time_start.strip("\"")
         time_start = pd.Timestamp(time_start)
     if isinstance(time_end, str):
+        time_end = time_end.strip("\"")
         time_end = pd.Timestamp(time_end)
+
+    time_rounding, time_frequency = time_rounding.lower(), time_frequency.lower()
 
     if (time_start is not None) and (time_end is not None):
 

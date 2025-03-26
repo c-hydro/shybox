@@ -1,7 +1,7 @@
 
+import logging
 import warnings
 
-#import rioxarray as rxr
 import xarray as xr
 import numpy as np
 import os
@@ -22,7 +22,6 @@ from typing import Optional
 from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m
 from shybox.generic_toolkit.lib_utils_time import is_date, convert_time_format
 
-import matplotlib.pyplot as plt
 
 def check_data_format(data, file_format: str) -> None:
     """"
@@ -100,6 +99,12 @@ def read_from_file(
         path, file_format: Optional[str] = None, file_mode: Optional[str] = None) \
         -> (xr.DataArray, xr.Dataset, pd.DataFrame):
 
+    # add suppress warnings
+    rxr_logger = logging.getLogger('rioxarray')
+    rxr_logger.setLevel(logging.ERROR)
+    rio_logger = logging.getLogger('rasterio')
+    rio_logger.setLevel(logging.ERROR)
+
     if file_format is None:
         file_format = get_format_from_path(path)
 
@@ -118,6 +123,7 @@ def read_from_file(
     # read the data from a txt file
     elif file_format == 'txt':
         if file_mode == 'grid':
+
             data = rxr.open_rasterio(path)
 
             squeeze_dims = [dim for dim in data.dims if data[dim].size == 1]
@@ -290,22 +296,9 @@ def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray
 
 # method to map vars
 @withxrds
-def map_vars(data: xr.DataArray, vars_data: dict = None, vars_force: bool = False,  **kwargs) -> xr.DataArray:
+def map_vars(data: xr.DataArray, vars_data: dict = None,  **kwargs) -> xr.DataArray:
     if vars_data is not None:
         for var_in, var_out in vars_data.items():
-
-            if vars_force:
-                if var_in == 'air_temperature':
-                    var_in = 'air_t'
-                elif var_in == 'relative_humidity':
-                    var_in = 'rh'
-                elif var_in == 'rain':
-                    var_in = 'r'
-                elif var_in == 'wind':
-                    var_in = 'w'
-                elif var_in == 'incoming_radiation':
-                    var_in = 'ir'
-
             if var_in == data.name:
                 data.name = var_out
             elif var_out == data.name:

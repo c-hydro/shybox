@@ -331,6 +331,7 @@ class OrchestratorHandler:
         proc_group = {}
         for proc_obj in processes:
             proc_var = proc_obj.variable
+
             if proc_var not in proc_group:
                 proc_group[proc_var] = [proc_obj]
             else:
@@ -339,17 +340,24 @@ class OrchestratorHandler:
                 proc_group[proc_var] = tmp_obj
 
         proc_link, proc_ws = {}, {}
-        for proc_var, proc_list in proc_group.items():
+        for proc_var_key, proc_list in proc_group.items():
 
-            proc_return = []
+            proc_result, proc_return, proc_var_name = None, [], None
             for proc_name in proc_list:
 
+                tmp_var_name = None
+                if proc_result is not None:
+                    tmp_var_name = proc_result.name
+
+                kwargs['variable'] = tmp_var_name
                 kwargs['collections'] = proc_ws
 
-                proc_obj = proc_name.run(time, **kwargs)
-                proc_return.append(proc_obj)
+                proc_result = proc_name.run(time, **kwargs)
+                proc_var_name = proc_result.name
 
-            proc_ws[proc_var] = proc_return[-1]
+                proc_return.append(proc_result)
+
+            proc_ws[proc_var_name] = proc_return[-1]
 
 
 

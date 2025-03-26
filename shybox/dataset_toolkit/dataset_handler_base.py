@@ -228,7 +228,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def available_keys(self):
         return self.get_available_keys()
     
-    def get_available_keys(self, time: (dt.datetime,xr.date_range) = None, **kwargs):
+    def get_available_keys(self, time: (dt.datetime, pd.date_range) = None, **kwargs):
         
         prefix = self.get_prefix(time, **kwargs)
         if not self._check_data(prefix):
@@ -538,13 +538,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         out_obj = self.set_data_to_template(data, default_template)
         out_obj = set_type(out_obj, self.nan_value)
 
-        if '.nc' in out_file:
-            print()
-
         # adjust the data orientation
         out_obj = straighten_data(out_obj)
         # map the data variables
-        out_obj = map_vars(out_obj, vars_force=True, **self.file_template)
+        out_obj = map_vars(out_obj, **self.file_template)
         # map the data dimensions
         out_obj = map_dims(out_obj, **self.file_template)
 
@@ -651,18 +648,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def get_template_dict(self, make_it:bool = True, **kwargs):
 
         template_key = kwargs.pop('template_key', None)
-
-        '''
-        tile = kwargs.pop('tile', None)
-        if tile is None:
-            if self.has_tiles:
-                template_dict = {}
-                for tile in self.tile_names:
-                    template_dict[tile] = self.get_template_dict(make_it = make_it, tile = tile, **kwargs)
-                return template_dict
-            else:
-                tile = '__tile__'
-        '''
 
         template_dict = self._template.get(template_key, None)
         if template_dict is None and make_it:

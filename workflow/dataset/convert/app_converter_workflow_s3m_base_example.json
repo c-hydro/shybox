@@ -14,7 +14,7 @@
         "user": {
           "path_geo": "/home/fabio/Desktop/shybox/dset/data_static/gridded/",
           "time_source": null, "time_destination": null,
-          "time_rounding": "D", "time_frequency": "D",
+          "time_rounding": "D", "time_frequency": "D", "time_direction": "forward",
           "file_log": "{execution_name}_{domain_name}.log",
           "execution_name": "dataset_base", "execution_mode": "history"
         },
@@ -29,7 +29,7 @@
         "domain_name": "string",
         "path_geo": "string",
         "path_source": "string", "path_destination": "string",
-        "time_source": "string", "time_destination": "string",
+        "time_source": "string", "time_destination": "string", "time_direction": "string",
         "time_start": "string", "time_end": "string",
         "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
@@ -40,7 +40,7 @@
         "domain_name": "string",
         "path_geo": "string",
         "path_source": "string", "path_destination": "string",
-        "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M",
+        "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M", "time_direction": "string",
         "time_start": "%Y%m%d", "time_end": "%Y%m%d",
         "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
@@ -54,7 +54,7 @@
       },
       "time": {
         "start": "1981-01-01",
-        "end": "1981-01-03",
+        "end": "{time_end}",
         "frequency": "D",
         "format": "%Y%m%d"
       },
@@ -75,7 +75,7 @@
         }
       },
       "data_destination": {
-        "path": "{path_destination}",
+        "path": "{path_destination}/%Y/%m/%d/",
         "file_name": "s3m.forcing.{time_destination}.nc",
         "format": "netcdf", "type": "s3m", "mode": "grid"
       },
