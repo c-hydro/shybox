@@ -339,21 +339,34 @@ class OrchestratorHandler:
                 tmp_obj.append(proc_obj)
                 proc_group[proc_var] = tmp_obj
 
-        proc_link, proc_ws = {}, {}
+        proc_memory, proc_ws = None, {}
         for proc_var_key, proc_list in proc_group.items():
 
             proc_result, proc_return, proc_var_name = None, [], None
-            for proc_name in proc_list:
+            for proc_id, proc_name in enumerate(proc_list):
 
                 tmp_var_name = None
                 if proc_result is not None:
                     tmp_var_name = proc_result.name
 
+                kwargs['id'] = proc_id
                 kwargs['variable'] = tmp_var_name
                 kwargs['collections'] = proc_ws
 
-                proc_result = proc_name.run(time, **kwargs)
-                proc_var_name = proc_result.name
+                if proc_memory is not None:
+                    kwargs['memory'] = {}
+                    if tmp_var_name not in kwargs['memory']:
+                        kwargs['memory'][tmp_var_name] = proc_memory
+
+                if tmp_var_name is None:
+                    print()
+
+                proc_result, proc_memory = proc_name.run(time, **kwargs)
+
+                if isinstance(proc_result, xr.DataArray):
+                    proc_var_name = proc_result.name
+                else:
+                    raise ValueError('Process output must be a DataArray.')
 
                 proc_return.append(proc_result)
 

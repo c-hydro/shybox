@@ -415,6 +415,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 # get data from memory
                 data = select_by_time(deepcopy(self.memory_data), time=time, method='nearest')
 
+
                 # if there is no template for the dataset, create it from the data
                 template_dict = self.get_template_dict(make_it=False, **kwargs)
                 if template_dict is None:
@@ -427,6 +428,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     data.attrs.update(attrs)
 
                 data.attrs.update({'source_location': full_location})
+                data.name = self.memory_data.name
 
                 return data
 
@@ -447,6 +449,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     data = flat_dims(data)
 
                 return data
+
+            else:
+                raise ValueError(f'Could not resolve data from {full_location}.')
             
         if self.check_data(time, **kwargs):
 
@@ -480,7 +485,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             data = select_by_time(data, time=time, method='nearest')
 
         else:
-            raise ValueError(f'Could not resolve data from {full_key}.')
+            raise ValueError(f'Could not resolve data from {full_location}.')
 
         # if there is no template for the dataset, create it from the data
         template_dict = self.get_template_dict(make_it=False, **kwargs)

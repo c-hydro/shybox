@@ -53,15 +53,21 @@ class ProcessorContainer:
     def __repr__(self):
         return f'ProcessorContainer({self.fx_name, self.variable})'
 
-    def run(self, time: (dt.datetime, str, pd.Timestamp), **kwargs) -> None:
+    def run(self, time: (dt.datetime, str, pd.Timestamp), **kwargs) -> (None, None):
 
         if isinstance(time, str):
             time = convert_time_format(time, 'str_to_stamp')
 
-        if 'data' not in kwargs:
-            data_raw = self.in_obj
+        fx_id = kwargs['id'] if 'id' in kwargs else None
+        fx_variable = kwargs['variable'] if 'variable' in kwargs else None
+
+        if fx_id == 0 and 'memory' in kwargs:
+            if (fx_variable is not None) and (fx_variable in kwargs['memory']):
+                data_raw = kwargs['memory'][fx_variable]
+            else:
+                data_raw = self.in_obj
         else:
-            data_raw = kwargs['data']
+            data_raw = self.in_obj
 
         if isinstance(data_raw, dict):
             for data_key, data_tmp in data_raw.items():
@@ -71,9 +77,13 @@ class ProcessorContainer:
             fx_data = data_raw.get_data(time=time, **kwargs)
             metadata = {}
 
+        fx_memory = None
+        if fx_id == 0:
+            fx_memory = data_raw.memory_data
+
         #fx_args = {arg_name: arg_value.get_data(time, **kwargs) for arg_name, arg_value in self.fx_args.items()}
         fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
-        fx_out = self.fx_obj(data=fx_data, **fx_args)
+        fx_save = self.fx_obj(data=fx_data, **fx_args)
 
         out_opts = self.out_opts
         print(f'{self.fx_name} - {time} - {self.variable}')
@@ -82,17 +92,28 @@ class ProcessorContainer:
         if 'variable' in kwargs:
             fx_var = kwargs.pop('variable', None)
         if fx_var is not None:
-            fx_out.name = fx_var
+            fx_save.name = fx_var
 
         if self.dump_state:
             if 'collections' in kwargs:
                 fx_collections = kwargs.pop('collections', None)
-                fx_out = fx_out.to_dataset(name = fx_var)
+                try:
+                    fx_save = fx_save.to_dataset(name = fx_var)
+                except BaseException:
+                    print('ciao')
                 for tmp_key, tmp_data in fx_collections.items():
-                    fx_out[tmp_key] = tmp_data
+                    fx_save[tmp_key] = tmp_data
 
         kwargs['time_format'] = self.out_obj.get_attribute('time_format')
 
-        self.out_obj.write_data(fx_out, time, metadata=metadata, **kwargs)
+        self.out_obj.write_data(fx_save, time, metadata=metadata, **kwargs)
 
-        return fx_out
+        if isinstance(fx_save, xr.DataArray):
+            fx_out = fx_save
+        elif isinstance(fx_save, xr.Dataset):
+            fx_out = fx_save[fx_var]
+            fx_out.name = fx_var
+        else:
+            raise ValueError('Unknown fx output type')
+
+        return fx_out, fx_memory
