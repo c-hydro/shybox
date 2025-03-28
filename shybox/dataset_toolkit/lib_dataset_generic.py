@@ -9,7 +9,6 @@ import json
 import datetime as dt
 
 import pandas as pd
-import rasterio as rio
 import rioxarray as rxr
 
 try:
@@ -17,6 +16,7 @@ try:
 except ImportError:
     pass
 
+from decimal import Decimal
 from typing import Optional
 
 from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m
@@ -124,7 +124,33 @@ def read_from_file(
     elif file_format == 'txt':
         if file_mode == 'grid':
 
+            # get header
+            geo_attrs = {}
+            with open(path, 'r') as file:
+                # Read the first six lines
+                geo_lines = [next(file) for _ in range(6)]
+
+            # Parse the header lines
+            for line in geo_lines:
+                if line.startswith('xllcorner'):
+                    geo_attrs['xllcorner'] = Decimal(line.split()[1])
+                elif line.startswith('yllcorner'):
+                    geo_attrs['yllcorner'] = Decimal(line.split()[1])
+                elif line.startswith('cellsize'):
+                    geo_attrs['cellsize'] = Decimal(line.split()[1])
+                elif line.startswith('NODATA_value'):
+                    geo_attrs['NODATA_value'] = float(line.split()[1])
+                elif line.startswith('ncols'):
+                    geo_attrs['ncols']  = int(line.split()[1])
+                elif line.startswith('nrows'):
+                    geo_attrs['nrows']  = int(line.split()[1])
+
+            # get data
             data = rxr.open_rasterio(path)
+            generic_attrs = data.attrs
+
+            # store attributes
+            data.attrs = {**generic_attrs, **geo_attrs}
 
             squeeze_dims = [dim for dim in data.dims if data[dim].size == 1]
             if len(squeeze_dims) > 0:

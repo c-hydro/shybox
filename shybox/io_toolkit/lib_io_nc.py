@@ -9,6 +9,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import os.path
 import time as tm
 import rasterio
 import xarray as xr
@@ -23,6 +24,7 @@ from copy import deepcopy
 from shybox.generic_toolkit.lib_default_args import file_conventions, file_title, file_institution, file_source, \
     file_history, file_references, file_comment, file_email, file_web_site, file_project_info, file_algorithm
 from shybox.generic_toolkit.lib_default_args import time_units, time_calendar
+from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
 
 #from shybox.dataset_toolkit.merge.app_data_grid_main import logger_name, logger_arrow
 from shybox.default.lib_default_geo import crs_epsg, crs_wkt
@@ -37,17 +39,31 @@ def write_file_nc_s3m(
         path, data, time: (pd.DatetimeIndex, pd.Timestamp) = None,
         attrs_data: dict = None, attrs_system: dict = None, attrs_x: dict = None, attrs_y: dict = None,
         file_format: str = 'NETCDF4', time_format: str ='%Y%m%d%H%M',
+        file_compression: bool =True, file_update: bool = True,
         compression_flag: bool =True, compression_level: int =5,
         var_system: str ='crs',
         var_time: str = 'time', var_x: str = 'X', var_y: str = 'Y',
         dim_time: str = 'time', dim_x: str = 'X', dim_y: str = 'Y',
-        type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64', **kwargs):
+        type_time: str = 'float64',
+        type_terrain: str = 'float64', type_x: str = 'float64', type_y: str = 'float64', **kwargs):
+
+    # manage file path
+    path_unzip = path
+    path_zip = define_compress_filename(path, remove_ext=False, uncompress_ext='.nc', compress_ext='.gz')
+    if file_update:
+        if os.path.exists(path_zip):
+            os.remove(path_zip)
+        if os.path.exists(path_unzip):
+            os.remove(path_unzip)
 
     # managing attributes objects
     if attrs_data is None: attrs_data = {}
     if attrs_system is None: attrs_system = {}
     if attrs_x is None: attrs_x = {}
     if attrs_y is None: attrs_y = {}
+    # managing reference object
+    ref = None
+    if 'ref' in kwargs: ref = kwargs['ref']
 
     # get dimensions
     dset_dims = data.dims
@@ -96,7 +112,7 @@ def write_file_nc_s3m(
         date_list = []
 
     # open file
-    handle = Dataset(path, 'w', format=file_format)
+    handle = Dataset(path_unzip, 'w', format=file_format)
 
     # create dimensions
     handle.createDimension('X', n_cols)
@@ -120,6 +136,30 @@ def write_file_nc_s3m(
     handle.project_info = file_project_info
     handle.algorithm = file_algorithm
 
+    terrain = None
+    if ref is not None:
+
+        terrain = ref.values
+
+        key_to_search = 'xllcorner'
+        if hasattr(ref, key_to_search):
+            handle.xllcorner = float(ref.xllcorner)
+        key_to_search = 'yllcorner'
+        if hasattr(ref, key_to_search):
+            handle.yllcorner = float(ref.yllcorner)
+        key_to_search = 'cellsize'
+        if hasattr(ref, key_to_search):
+            handle.cellsize = float(ref.cellsize)
+        key_to_search = 'ncols'
+        if hasattr(ref, key_to_search):
+            handle.ncols = int(ref.ncols)
+        key_to_search = 'nrows'
+        if hasattr(ref, key_to_search):
+            handle.nrows = int(ref.nrows)
+        key_to_search = 'NODATA_value'
+        if hasattr(ref, key_to_search):
+            handle.nodata_value = float(ref.NODATA_value)
+
     # variable time
     variable_time = handle.createVariable(
         varname=var_time, dimensions=(dim_time,), datatype=type_time)
@@ -138,16 +178,15 @@ def write_file_nc_s3m(
 
     # variable geo x
     variable_x = handle.createVariable(
-        varname='X', dimensions=(dim_y, dim_x), datatype=type_x,
-        zlib=compression_flag, complevel=compression_level)
+        varname='longitude', dimensions=(dim_y, dim_x), datatype=type_x,
+        zlib=compression_flag, complevel=compression_level, fill_value=-9999.0)
+
+    set_scale_factor = False, False
     if attrs_x is not None:
         for attr_key, attr_value in attrs_x.items():
-            if attr_key == 'fill_value':
-                fill_value = attr_value
-                variable_x.setncattr(attr_key.lower(), float(attr_value))
-            elif attr_key == 'scale_factor':
-                scale_factor = attr_value
-                variable_x.setncattr(attr_key.lower(), float(attr_value))
+            if attr_key == 'scale_factor':
+                variable_x.setncattr('scale_factor', float(attr_value))
+                set_scale_factor = True
             elif attr_key == 'units':
                 variable_x.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
@@ -156,18 +195,20 @@ def write_file_nc_s3m(
                 variable_x.setncattr(attr_key.lower(), str(attr_value).lower())
     variable_x[:, :] = np.transpose(np.rot90(x, -1))
 
+    if not set_scale_factor:
+        variable_x.setncattr('scale_factor', 1)
+
     # variable geo y
     variable_y = handle.createVariable(
-        varname='Y', dimensions=(dim_y, dim_x), datatype=type_y,
+        varname='latitude', dimensions=(dim_y, dim_x), datatype=type_y,
         zlib=compression_flag, complevel=compression_level)
+
+    set_scale_factor = False
     if attrs_y is not None:
         for attr_key, attr_value in attrs_y.items():
-            if attr_key == 'fill_value':
-                fill_value = attr_value
-                variable_y.setncattr(attr_key.lower(), float(attr_value))
-            elif attr_key == 'scale_factor':
-                scale_factor = attr_value
-                variable_y.setncattr(attr_key.lower(), float(attr_value))
+            if attr_key == 'scale_factor':
+                variable_y.setncattr('scale_factor', float(attr_value))
+                set_scale_factor = True
             elif attr_key == 'units':
                 variable_y.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
@@ -176,17 +217,38 @@ def write_file_nc_s3m(
                 variable_y.setncattr(attr_key.lower(), str(attr_value).lower())
     variable_y[:, :] = np.transpose(np.rot90(y, -1))
 
+    if not set_scale_factor:
+        variable_y.setncattr('scale_factor', 1)
+
+    # variable terrain
+    if terrain is not None:
+        variable_terrain = handle.createVariable(
+            varname='terrain', dimensions=(dim_y, dim_x), datatype=type_terrain,
+            zlib=compression_flag, complevel=compression_level, fill_value=-9999.0)
+
+        set_scale_factor = False
+        if attrs_x is not None:
+            for attr_key, attr_value in attrs_x.items():
+                if attr_key == 'scale_factor':
+                    variable_terrain.setncattr('scale_factor', float(attr_value))
+                    set_scale_factor = True
+                elif attr_key == 'units':
+                    variable_terrain.setncattr(attr_key.lower(), str(attr_value))
+                elif attr_key == 'format':
+                    variable_terrain.setncattr(attr_key.lower(), str(attr_value))
+                else:
+                    variable_terrain.setncattr(attr_key.lower(), str(attr_value).lower())
+        variable_terrain[:, :] = np.transpose(np.rot90(terrain, -1))
+
+        if not set_scale_factor:
+            variable_terrain.setncattr('scale_factor', 1)
+
     # variable geo system
     variable_system = handle.createVariable(var_system, 'i')
+
     if attrs_system is not None:
         for attr_key, attr_value in attrs_system.items():
-            if attr_key == 'fill_value':
-                fill_value = attr_value
-                variable_system.setncattr(attr_key.lower(), float(attr_value))
-            elif attr_key == 'scale_factor':
-                scale_factor = attr_value
-                variable_system.setncattr(attr_key.lower(), float(attr_value))
-            elif attr_key == 'units':
+            if attr_key == 'units':
                 variable_system.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
                 variable_system.setncattr(attr_key.lower(), str(attr_value))
@@ -239,21 +301,22 @@ def write_file_nc_s3m(
         else:
             raise NotImplementedError('Case not implemented yet')
 
-        fill_value, scale_factor = -9999.0, 1
+        set_scale_factor = False
         for attr_key, attr_value in attrs_variable.items():
             if attr_key not in ['add_offset']:
-                if attr_key == 'fill_value':
-                    fill_value = attr_value
-                    var_handle.setncattr(attr_key.lower(), float(attr_value))
-                elif attr_key == 'scale_factor':
-                    scale_factor = attr_value
-                    var_handle.setncattr(attr_key.lower(), float(attr_value))
+                if attr_key == 'scale_factor':
+                    var_handle.setncattr('scale_factor', float(attr_value))
+                    set_scale_factor = True
                 elif attr_key == 'units':
                     var_handle.setncattr(attr_key.lower(), str(attr_value))
                 elif attr_key == 'format':
                     var_handle.setncattr(attr_key.lower(), str(attr_value))
                 else:
                     var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
+
+        if not set_scale_factor:
+            if scale_factor is not None:
+                var_handle.setncattr('scale_factor', scale_factor)
 
         if variable_dims == 3:
 
@@ -293,6 +356,11 @@ def write_file_nc_s3m(
 
     # close file
     handle.close()
+
+    # if needed compress the file
+    if file_compression:
+        compress_and_remove(path_unzip, path_zip, remove_original=True)
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -301,17 +369,30 @@ def write_file_nc_hmc(
         path, data, time: (pd.DatetimeIndex, pd.Timestamp) = None,
         attrs_data: dict = None, attrs_system: dict = None, attrs_x: dict = None, attrs_y: dict = None,
         file_format: str = 'NETCDF4', time_format: str ='%Y%m%d%H%M',
-        compression_flag: bool =True, compression_level: int =5,
+        compression_flag: bool =True, compression_level: int = 5,
+        file_compression: bool =True, file_update: bool = True,
         var_system: str ='crs',
         var_time: str = 'time', var_x: str = 'longitude', var_y: str = 'latitude',
         dim_time: str = 'time', dim_x: str = 'west_east', dim_y: str = 'south_north',
         type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64', **kwargs):
+
+    # manage file path
+    path_unzip = path
+    path_zip = define_compress_filename(path, remove_ext=False, uncompress_ext='.nc', compress_ext='.gz')
+    if file_update:
+        if os.path.exists(path_zip):
+            os.remove(path_zip)
+        if os.path.exists(path_unzip):
+            os.remove(path_unzip)
 
     # managing attributes objects
     if attrs_data is None: attrs_data = {}
     if attrs_system is None: attrs_system = {}
     if attrs_x is None: attrs_x = {}
     if attrs_y is None: attrs_y = {}
+    # managing reference object
+    ref = None
+    if 'ref' in kwargs: ref = kwargs['ref']
 
     # get dimensions
     dset_dims = data.dims
@@ -360,7 +441,7 @@ def write_file_nc_hmc(
         date_list = []
 
     # open file
-    handle = Dataset(path, 'w', format=file_format)
+    handle = Dataset(path_unzip, 'w', format=file_format)
 
     # create dimensions
     handle.createDimension('west_east', n_cols)
@@ -383,6 +464,26 @@ def write_file_nc_hmc(
     handle.web_site = file_web_site
     handle.project_info = file_project_info
     handle.algorithm = file_algorithm
+
+    if ref is not None:
+        key_to_search = 'xllcorner'
+        if hasattr(ref, key_to_search):
+            handle.xllcorner = float(ref.xllcorner)
+        key_to_search = 'yllcorner'
+        if hasattr(ref, key_to_search):
+            handle.yllcorner = float(ref.yllcorner)
+        key_to_search = 'cellsize'
+        if hasattr(ref, key_to_search):
+            handle.cellsize = float(ref.cellsize)
+        key_to_search = 'ncols'
+        if hasattr(ref, key_to_search):
+            handle.ncols = int(ref.ncols)
+        key_to_search = 'nrows'
+        if hasattr(ref, key_to_search):
+            handle.nrows = int(ref.nrows)
+        key_to_search = 'NODATA_value'
+        if hasattr(ref, key_to_search):
+            handle.nodata_value = float(ref.NODATA_value)
 
     # variable time
     variable_time = handle.createVariable(
@@ -407,11 +508,10 @@ def write_file_nc_hmc(
     if attrs_x is not None:
         for attr_key, attr_value in attrs_x.items():
             if attr_key == 'fill_value':
-                fill_value = attr_value
-                variable_x.setncattr(attr_key.lower(), float(attr_value))
+                variable_x.setncattr('_FillValue', float(attr_value))
             elif attr_key == 'scale_factor':
                 scale_factor = attr_value
-                variable_x.setncattr(attr_key.lower(), float(attr_value))
+                variable_x.setncattr('scale_factor', float(attr_value))
             elif attr_key == 'units':
                 variable_x.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
@@ -427,11 +527,9 @@ def write_file_nc_hmc(
     if attrs_y is not None:
         for attr_key, attr_value in attrs_y.items():
             if attr_key == 'fill_value':
-                fill_value = attr_value
-                variable_y.setncattr(attr_key.lower(), float(attr_value))
+                variable_y.setncattr('_FillValue', float(attr_value))
             elif attr_key == 'scale_factor':
-                scale_factor = attr_value
-                variable_y.setncattr(attr_key.lower(), float(attr_value))
+                variable_y.setncattr('scale_factor', float(attr_value))
             elif attr_key == 'units':
                 variable_y.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
@@ -445,11 +543,9 @@ def write_file_nc_hmc(
     if attrs_system is not None:
         for attr_key, attr_value in attrs_system.items():
             if attr_key == 'fill_value':
-                fill_value = attr_value
-                variable_system.setncattr(attr_key.lower(), float(attr_value))
+                variable_system.setncattr('_FillValue', float(attr_value))
             elif attr_key == 'scale_factor':
-                scale_factor = attr_value
-                variable_system.setncattr(attr_key.lower(), float(attr_value))
+                variable_system.setncattr('scale_factor', float(attr_value))
             elif attr_key == 'units':
                 variable_system.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
@@ -503,21 +599,28 @@ def write_file_nc_hmc(
         else:
             raise NotImplementedError('Case not implemented yet')
 
-        fill_value, scale_factor = -9999.0, 1
+        set_fill_data, set_scale_factor = False, False
         for attr_key, attr_value in attrs_variable.items():
             if attr_key not in ['add_offset']:
                 if attr_key == 'fill_value':
-                    fill_value = attr_value
-                    var_handle.setncattr(attr_key.lower(), float(attr_value))
+                    var_handle.setncattr('_FillValue', float(attr_value))
+                    set_fill_data = True
                 elif attr_key == 'scale_factor':
-                    scale_factor = attr_value
-                    var_handle.setncattr(attr_key.lower(), float(attr_value))
+                    var_handle.setncattr('scale_factor', float(attr_value))
+                    set_scale_factor = True
                 elif attr_key == 'units':
                     var_handle.setncattr(attr_key.lower(), str(attr_value))
                 elif attr_key == 'format':
                     var_handle.setncattr(attr_key.lower(), str(attr_value))
                 else:
                     var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
+
+        if not set_fill_data:
+            if fill_value is not None:
+                variable_data.setncattr('_FillValue', fill_value)
+        if not set_scale_factor:
+            if scale_factor is not None:
+                variable_data.setncattr('scale_factor', scale_factor)
 
         if variable_dims == 3:
 
@@ -557,6 +660,11 @@ def write_file_nc_hmc(
 
     # close file
     handle.close()
+
+    # if needed compress the file
+    if file_compression:
+        compress_and_remove(path_unzip, path_zip, remove_original=True)
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 

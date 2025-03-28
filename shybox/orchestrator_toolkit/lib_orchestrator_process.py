@@ -97,17 +97,17 @@ class ProcessorContainer:
         if self.dump_state:
             if 'collections' in kwargs:
                 fx_collections = kwargs.pop('collections', None)
-                try:
-                    fx_save = fx_save.to_dataset(name = fx_var)
-                except BaseException:
-                    print('ciao')
+                fx_save = fx_save.to_dataset(name = fx_var)
                 for tmp_key, tmp_data in fx_collections.items():
                     fx_save[tmp_key] = tmp_data
 
+        # organize metadata
         kwargs['time_format'] = self.out_obj.get_attribute('time_format')
-
+        kwargs['ref'] = self.fx_static['ref']
+        # save the data
         self.out_obj.write_data(fx_save, time, metadata=metadata, **kwargs)
 
+        # arrange data to keep the data array format
         if isinstance(fx_save, xr.DataArray):
             fx_out = fx_save
         elif isinstance(fx_save, xr.Dataset):

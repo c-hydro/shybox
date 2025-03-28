@@ -565,6 +565,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # write the data
         out_opt = {'time' : time}
+        out_opt = {'ref': kwargs['ref']} if 'ref' in kwargs else out_opt
         self._write_data(out_obj, out_file, **out_opt)
         
 

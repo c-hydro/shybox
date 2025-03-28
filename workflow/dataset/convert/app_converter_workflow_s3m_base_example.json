@@ -65,6 +65,10 @@
         }
       },
       "data_source": {
+        "rain": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater",
+          "file_name": "P_{time_source}.nc"
+        },
         "air_t": {
           "path": "{path_source}",
           "file_name": "T_{time_source}.nc"
@@ -72,11 +76,15 @@
         "rh": {
           "path": "/home/fabio/Desktop/shybox/dset/itwater",
           "file_name": "U_{time_source}.nc"
+        },
+        "inc_rad": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater",
+          "file_name": "R_{time_source}.nc"
         }
       },
       "data_destination": {
         "path": "{path_destination}/%Y/%m/%d/",
-        "file_name": "s3m.forcing.{time_destination}.nc",
+        "file_name": "MeteoData_{time_destination}.nc",
         "format": "netcdf", "type": "s3m", "mode": "grid"
       },
       "log": {

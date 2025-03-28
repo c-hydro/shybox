@@ -121,12 +121,24 @@ def main(alg_collectors_settings: dict = None):
                 "tmp_dir": "tmp"
             },
             "process_list": {
+                "rain": [
+                    {"function": "interpolate_data", "method": 'nn', "max_distance": 25000, "neighbours": 7,
+                     "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ],
                 "air_t": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7,
+                     "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ],
                 "rh": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 22000, "neighbours": 7, "fill_value": np.nan},
+                    {"function": "interpolate_data", "method":'nn', "max_distance": 22000, "neighbours": 7,
+                     "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ],
+                "inc_rad": [
+                    {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
+                     "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
             }
@@ -172,6 +184,23 @@ def main(alg_collectors_settings: dict = None):
         start_data_time = select_time_format(start_data_time, time_format='%Y-%m-%d %H:%M')
         end_data_time = select_time_format(end_data_time, time_format='%Y-%m-%d %H:%M')
 
+        # precipitation source data
+        file_name = fill_string(
+            alg_variables_application['data_source']['rain']['file_name'],
+            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
+
+        rain_data = DataLocal(
+            path=alg_variables_application['data_source']['rain']['path'],
+            file_name=file_name,
+            file_format=None, file_mode=None, file_variable='rain',
+            file_template={
+                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                "vars_data": {"Rain": "rain"}
+            },
+            time_signature='period',
+            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
+        )
+
         # air temperature source data
         file_name = fill_string(
             alg_variables_application['data_source']['air_t']['file_name'],
@@ -205,6 +234,23 @@ def main(alg_collectors_settings: dict = None):
             time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
         )
 
+        # relative humidity source data
+        file_name = fill_string(
+            alg_variables_application['data_source']['inc_rad']['file_name'],
+            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
+        inc_rad_data = DataLocal(
+            path=alg_variables_application['data_source']['inc_rad']['path'],
+            file_name=file_name,
+            file_format=None, file_mode=None, file_variable='inc_rad',
+            file_template={
+                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                "vars_data": {"Rad": "incoming_radiation"}
+            },
+            time_signature='period',
+            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
+        )
+
+
         # destination data
         file_name = fill_string(
             alg_variables_application['data_destination']['file_name'],
@@ -219,14 +265,17 @@ def main(alg_collectors_settings: dict = None):
             file_template={
                 "dims_geo": {"longitude": "X", "latitude": "Y", "time": "time"},
                 "vars_geo": {"longitude": "X", "latitude": "Y"},
-                "vars_data": {"air_temperature": "AIR_TEMPERATURE",
-                              "relative_humidity": "RELATIVE_HUMIDITY"}
+                "vars_data": {
+                    "rain": "Rain",
+                    "air_temperature": "AirTemperature",
+                    "relative_humidity": "RelHumidity",
+                    "incoming_radiation": "IncRadiation"}
             },
             time_period=1, time_format='%Y%m%d%H%M')
 
         # orchestrator settings
         orc_process = Orchestrator.multi_variable(
-            data_package=[airt_data, rh_data], data_out=output_data,
+            data_package=[rain_data, airt_data, rh_data, inc_rad_data], data_out=output_data,
             data_ref=geo_data,
             configuration=configuration['WORKFLOW']
         )
