@@ -11,6 +11,7 @@ Version:       '4.0.0'
 # libraries
 import logging
 import re
+import os
 import numpy as np
 
 from datetime import datetime
@@ -19,6 +20,26 @@ from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow
 
 # logging
 logger_stream = logging.getLogger(logger_name)
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get filename components
+def get_filename_components(filename):
+    base, ext1 = os.path.splitext(filename)
+    base, ext2 = os.path.splitext(base)
+
+    if ext2:
+        return {
+            "base_name": base,
+            "ext_name": ext2,
+            "compression_name": ext1
+        }
+    else:
+        return {
+            "base_name": base,
+            "ext_name": ext1
+        }
 # ----------------------------------------------------------------------------------------------------------------------
 
 

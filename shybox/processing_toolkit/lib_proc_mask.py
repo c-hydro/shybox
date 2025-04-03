@@ -44,6 +44,13 @@ def mask_data_by_ref(
 
     data = xr.where(ref.values == ref_value, mask_no_data, data)
 
+    """ debug plot
+    plt.figure()
+    plt.imshow(data.values, cmap='viridis')
+    plt.colorbar(label='Masked Data')
+    plt.show(block=True)
+    """
+
     return data
 # ----------------------------------------------------------------------------------------------------------------------
 

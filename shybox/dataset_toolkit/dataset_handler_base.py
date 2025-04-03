@@ -14,9 +14,9 @@ from shybox.generic_toolkit.lib_utils_time import convert_time_format
 
 from shybox.dataset_toolkit.lib_dataset_parse import substitute_string, extract_date_and_tags
 from shybox.dataset_toolkit.lib_dataset_generic import (
-    get_format_from_path, map_dims, map_vars, flat_dims,
-    straighten_data, straighten_time, select_by_time,
-    set_type, check_data_format)
+    get_format_from_path, map_dims, map_coords, map_vars, flat_dims,
+    straighten_data, straighten_time, straighten_dims, select_by_time, select_by_vars,
+    set_type, check_data_format, get_variable)
 
 import matplotlib.pyplot as plt
 
@@ -409,17 +409,23 @@ class Dataset(ABC, metaclass=DatasetMeta):
         full_location = self.get_key(time, **kwargs)
         variable = kwargs.pop('variable', self.file_variable)
 
+        mapping = None
+        if 'map_in' in kwargs:
+            mapping = kwargs.pop('map_in')
+
         if self.memory_active:
             if self.memory_data is not None:
 
                 # get data from memory
-                data = select_by_time(deepcopy(self.memory_data), time=time, method='nearest')
+                data = deepcopy(self.memory_data)
 
+                # get variables
+                variable = get_variable(data, **self.file_template)
 
                 # if there is no template for the dataset, create it from the data
                 template_dict = self.get_template_dict(make_it=False, **kwargs)
                 if template_dict is None:
-                    self.set_template(data, **kwargs)
+                    self.set_template(data, template_key=variable, **kwargs)
                 else:
                     # otherwise, update the data in the template
                     # (this will make sure there is no errors in the coordinates due to minor rounding)
@@ -428,7 +434,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     data.attrs.update(attrs)
 
                 data.attrs.update({'source_location': full_location})
-                data.name = self.memory_data.name
+
+                if isinstance(data, xr.DataArray):
+                    data.name = self.memory_data.name
+                elif isinstance(data, xr.Dataset):
+                    pass
+                else:
+                    raise ValueError(f"Invalid data type: {type(data)}")
+
+                # select by time
+                data = select_by_time(data, time=time, method='nearest')
+                # select by variables
+                data = select_by_vars(data, vars=mapping)
 
                 return data
 
@@ -460,13 +477,20 @@ class Dataset(ABC, metaclass=DatasetMeta):
             if as_is:
                 return data
 
+            # ensure that the data dimensions are not empty
+            data = straighten_dims(data)
+
             # map the data dimensions
             data = map_dims(data, **self.file_template)
+            # map the data coords
+            data = map_coords(data, **self.file_template)
+
             # map the data variables
-            data = map_vars(data, **self.file_template)
+            data = map_vars(data, vars_filter=mapping, **self.file_template)
 
             # ensure that the data has descending latitudes
             data = straighten_data(data)
+
             # ensure that the data dimensions are flat
             data = flat_dims(data)
             # ensure that the time info is correctly defined (if needed)
@@ -478,11 +502,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
             # make sure the nodata value is set to np.nan for floats and to the max int for integers
             data = set_type(data, self.nan_value)
+            # get variables
+            variable = get_variable(data, **self.file_template)
 
             if self.memory_active:
                 self.memory_data = deepcopy(data)
-
-            data = select_by_time(data, time=time, method='nearest')
 
         else:
             raise ValueError(f'Could not resolve data from {full_location}.')
@@ -490,15 +514,22 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # if there is no template for the dataset, create it from the data
         template_dict = self.get_template_dict(make_it=False, **kwargs)
         if template_dict is None:
-            self.set_template(template_array=data, template_key=variable, **kwargs)
+            self.set_template(template_array=self.memory_data, template_key=variable, **kwargs)
         else:
             # otherwise, update the data in the template
             # (this will make sure there is no errors in the coordinates due to minor rounding)
             attrs = data.attrs
-            data = self.set_data_to_template(data, template_dict)
+            data = self.set_data_to_template(self.memory_data, template_dict)
             data.attrs.update(attrs)
-        
+
+        # set attributes
         data.attrs.update({'source_location': full_location})
+
+        # select by time
+        data = select_by_time(data, time=time, method='nearest')
+        # select by variables
+        data = select_by_vars(data, vars=mapping)
+
         return data
     
     @abstractmethod
@@ -508,7 +539,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def write_data(self, data,
                    time: Union[dt.datetime, pd.Timestamp] = None,
                    time_format: str = '%Y-%m-%d',
-                   metadata = {},
+                   metadata: dict = {}, variable: str = 'variable',
                    **kwargs):
 
         # check data (format and type)
@@ -535,7 +566,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         if default_template is None:
             if isinstance(data, xr.DataArray) or isinstance(data, xr.Dataset):
-                self.set_template(data, **kwargs)
+                self.set_template(data, template_key=variable, **kwargs)
                 default_template = self.get_template_dict(**kwargs, make_it=False)
             else:
                 raise ValueError('Cannot write numpy array without a template.')
@@ -694,25 +725,51 @@ class Dataset(ABC, metaclass=DatasetMeta):
         else:
             crs_wkt = default_crs_wkt
 
-        self._template[template_key] = {'crs': crs_wkt,
-                                '_FillValue' : template_array.attrs.get('_FillValue'),
-                                'dims_names' : template_array.dims,
-                                'spatial_dims' : (template_array.longitude.name, template_array.latitude.name),
-                                'dims_starts': {},
-                                'dims_ends': {},
-                                'dims_lengths': {}}
+        if not isinstance(template_key, list):
+            template_key = [template_key]
+
+        for step_key in template_key:
+            if isinstance(template_array, xr.Dataset):
+                self._template[step_key] = {'crs': crs_wkt,
+                                        '_FillValue' : template_array[step_key].attrs.get('_FillValue'),
+                                        'dims_names' : template_array[step_key].dims,
+                                        'spatial_dims' : (template_array[step_key].longitude.name, template_array[step_key].latitude.name),
+                                        'dims_starts': {},
+                                        'dims_ends': {},
+                                        'dims_lengths': {}}
+            elif isinstance(template_array, xr.DataArray):
+                self._template[step_key] = {'crs': crs_wkt,
+                                            '_FillValue': template_array.attrs.get('_FillValue'),
+                                            'dims_names': template_array.dims,
+                                            'spatial_dims': (template_array.longitude.name,
+                                                             template_array.latitude.name),
+                                            'dims_starts': {},
+                                            'dims_ends': {},
+                                            'dims_lengths': {}}
+            else:
+                raise ValueError('Invalid template array type.')
 
         if isinstance(template_array, xr.Dataset):
-            self._template[template_key]['variables'] = list(template_array.data_vars)
+            for step_key in template_key:
+                self._template[step_key]['variables'] = list(template_array.data_vars)
+            #self._template[template_key]['variables'] = list(template_array.data_vars)
 
-        for dim in template_array.dims:
-            this_dim_values = template_array[dim].data
-            start = this_dim_values[0]
-            end = this_dim_values[-1]
-            length = len(this_dim_values)
-            self._template[template_key]['dims_starts'][dim] = float(start)
-            self._template[template_key]['dims_ends'][dim] = float(end)
-            self._template[template_key]['dims_lengths'][dim] = length
+        for step_key in template_key:
+            for dim in template_array.dims:
+
+                if isinstance(template_array, xr.DataArray):
+                    this_dim_values = template_array[dim].data
+                elif isinstance(template_array, xr.Dataset):
+                    this_dim_values = template_array[step_key][dim].data
+                else:
+                    raise ValueError('Invalid template array type.')
+
+                start = this_dim_values[0]
+                end = this_dim_values[-1]
+                length = len(this_dim_values)
+                self._template[step_key]['dims_starts'][dim] = float(start)
+                self._template[step_key]['dims_ends'][dim] = float(end)
+                self._template[step_key]['dims_lengths'][dim] = length
 
     @staticmethod
     def build_template_array(template_dict: dict, data = None) -> (xr.DataArray,xr.Dataset):

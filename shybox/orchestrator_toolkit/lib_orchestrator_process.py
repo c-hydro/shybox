@@ -61,6 +61,9 @@ class ProcessorContainer:
         fx_id = kwargs['id'] if 'id' in kwargs else None
         fx_variable = kwargs['variable'] if 'variable' in kwargs else None
 
+        fx_map_in = kwargs['map_in'] if 'map_in' in kwargs else None
+        fx_map_out = kwargs['map_out'] if 'map_out' in kwargs else None
+
         if fx_id == 0 and 'memory' in kwargs:
             if (fx_variable is not None) and (fx_variable in kwargs['memory']):
                 data_raw = kwargs['memory'][fx_variable]
@@ -69,43 +72,58 @@ class ProcessorContainer:
         else:
             data_raw = self.in_obj
 
-        if isinstance(data_raw, dict):
-            for data_key, data_tmp in data_raw.items():
-                self.run(time, data = data_tmp, **kwargs)
-            return
+        if isinstance(data_raw, list):
+            fx_data = []
+            for data_id, data_tmp in enumerate(data_raw):
+                fx_tmp = data_tmp.get_data(time=time, **kwargs)
+                fx_data.append(fx_tmp)
+            fx_metadata = {}
         else:
             fx_data = data_raw.get_data(time=time, **kwargs)
-            metadata = {}
+            fx_metadata = {}
 
         fx_memory = None
         if fx_id == 0:
-            fx_memory = data_raw.memory_data
+            if isinstance(data_raw, list):
+                fx_memory = [data_tmp.memory_data for data_tmp in data_raw]
+            else:
+                fx_memory = data_raw.memory_data
 
         #fx_args = {arg_name: arg_value.get_data(time, **kwargs) for arg_name, arg_value in self.fx_args.items()}
         fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
         fx_save = self.fx_obj(data=fx_data, **fx_args)
 
+        fx_var = None
+        if isinstance(fx_save, xr.DataArray):
+            if hasattr(fx_save, 'name'):
+                fx_var = fx_save.name
+            if fx_var is None and fx_variable is not None:
+                fx_var = fx_variable
+        # remove variable from args (directly pass to args)
+        kwargs.pop('variable', None)
+
         out_opts = self.out_opts
         print(f'{self.fx_name} - {time} - {self.variable}')
 
-        fx_var = None
-        if 'variable' in kwargs:
-            fx_var = kwargs.pop('variable', None)
+        #if 'variable' in kwargs:
+        #    if kwargs.pop('variable', None) is not None:
+        #        fx_var = kwargs.pop('variable', None)
         if fx_var is not None:
             fx_save.name = fx_var
 
         if self.dump_state:
             if 'collections' in kwargs:
                 fx_collections = kwargs.pop('collections', None)
-                fx_save = fx_save.to_dataset(name = fx_var)
-                for tmp_key, tmp_data in fx_collections.items():
-                    fx_save[tmp_key] = tmp_data
+                if fx_collections:
+                    fx_save = fx_save.to_dataset(name = fx_var)
+                    for tmp_key, tmp_data in fx_collections.items():
+                        fx_save[tmp_key] = tmp_data
 
         # organize metadata
         kwargs['time_format'] = self.out_obj.get_attribute('time_format')
         kwargs['ref'] = self.fx_static['ref']
         # save the data
-        self.out_obj.write_data(fx_save, time, metadata=metadata, **kwargs)
+        self.out_obj.write_data(fx_save, time, metadata=fx_metadata, variable=fx_var, **kwargs)
 
         # arrange data to keep the data array format
         if isinstance(fx_save, xr.DataArray):

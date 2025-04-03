@@ -1,4 +1,5 @@
 
+from shybox.generic_toolkit.lib_utils_string import get_filename_components
 from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
@@ -10,11 +11,13 @@ from copy import deepcopy
 
 import datetime as dt
 from typing import Optional
+from typing import Iterable
 import tempfile
 import os
 import shutil
 import pandas as pd
 import xarray as xr
+
 
 class OrchestratorHandler:
 
@@ -26,11 +29,13 @@ class OrchestratorHandler:
 
     def __init__(self,
                  data_in: (DataLocal, dict),
-                 data_out: DataLocal = None,
-                 options: dict = None) -> None:
+                 data_out: (DataLocal, dict) = None,
+                 options: dict = None, data_map: dict = None) -> None:
         
         self.data_in = data_in
         self.data_out = data_out
+        self.data_map = data_map
+
         self.processes = []
         self.break_points = []
 
@@ -51,46 +56,86 @@ class OrchestratorHandler:
         self.save_base = None
 
     @classmethod
-    def from_options(cls, options: dict) -> 'Orchestrator':
-
-        options = options.get('options', None, ignore_case=True)
-        data_in = options['in']
-        data_out = options['out']
-
-        workflow = cls(data_in=data_in, data_out=data_out, options=options)
-        processes = options.get(['processes','process_list'], [], ignore_case=True)
-        for process in processes:
-            function_str = process.pop('function')
-            function = PROCESSES[function_str]
-            output = process.pop('output', None)
-            workflow.add_process(function, output, **process)
-
-        return workflow
-
-    @classmethod
-    def multi_tile(self, data_package: (dict, list), data_out: DataLocal = None, data_ref: DataLocal = None,
+    def multi_tile(cls, data_package_in: (dict, list),
+                   data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
                    configuration: dict = None) -> 'Orchestrator':
 
         workflow_fx = configuration.get('process_list', [])
         workflow_options = configuration.get('options', [])
 
-        workflow_common = OrchestratorHandler(data_in=data_package, data_out=data_out,
-                                              options=workflow_options)
+        if isinstance(data_package_in, list):
+            data_collections_in = {}
 
-        for process_fx_args in workflow_fx:
+            for data_id, data_obj in enumerate(data_package_in):
+                var_package = data_obj.file_variable
+                for var_id, var_name in enumerate(var_package):
+                    if var_name not in data_collections_in:
+                        data_collections_in[var_name] = {}
+                        data_collections_in[var_name] = [data_obj]
+                    else:
+                        data_collections_in[var_name].append(data_obj)
+        else:
+            data_collections_in = data_package_in
 
-            process_fx_name = process_fx_args.pop('function')
-            process_fx_obj = PROCESSES[process_fx_name]
+        assert data_collections_in.keys() == workflow_fx.keys(), \
+            'Data collections and workflow functions must have the same keys.'
 
-            '''
-            if hasattr(process_fx_obj, 'output_ext'):
-                process_fx_out = process_fx_obj.output_ext
-            else:
-                process_fx_out = None
-            #process_fx_out = process_fx_obj.pop('output', None)
-            '''
-            process_fx_args = {**process_fx_args, **{'variable': 'tiles'}}
-            workflow_common.add_process(process_fx_obj, ref=data_ref, **process_fx_args)
+        if isinstance(data_package_out, list):
+            data_collections_out = {}
+
+            for data_id, data_obj in enumerate(data_package_out):
+                var_package = data_obj.file_variable
+                for var_id, var_name in enumerate(var_package):
+                    if var_name not in data_collections_out:
+                        data_collections_out[var_name] = {}
+                        data_collections_out[var_name] = [data_obj]
+                    else:
+                        data_collections_out[var_name].append(data_obj)
+        else:
+            data_collections_out = data_package_out
+
+        assert data_collections_out.keys() == workflow_fx.keys(), \
+            'Data collections and workflow functions must have the same keys.'
+
+        workflow_map = {}
+        for (key_in, obj_in), (key_out, obj_out) in zip(
+                data_collections_in.items(), data_collections_out.items()):
+            if key_in == key_out:
+                workflow_map[key_in] = {}
+
+                for partial_in in obj_in:
+                    file_vars = partial_in.file_variable
+                    tmpl_vars = partial_in.file_template['vars_data']
+
+                    for var_map, (var_in, var_out) in zip(file_vars, tmpl_vars.items()):
+                        if var_map in list(workflow_map.keys()):
+                            workflow_map[key_in].update({'in': {var_in: var_out}})
+
+                    for partial_out in obj_out:
+                        file_vars = partial_out.file_variable
+                        tmpl_vars = partial_out.file_template['vars_data']
+
+                        for var_map, (var_start, var_end) in zip(file_vars, tmpl_vars.items()):
+                            if var_map in list(workflow_map.keys()):
+                                workflow_map[key_in].update({'out': {var_start: var_end}})
+
+
+        workflow_common = OrchestratorHandler(data_in=data_collections_in,
+                                              data_out=data_collections_out,
+                                              options=workflow_options,
+                                              data_map=workflow_map)
+
+        for var_tag in list(data_collections_in.keys()):
+
+            process_fx_var = deepcopy(workflow_fx[var_tag])
+            process_fx_map = deepcopy(workflow_map[var_tag])
+            for process_fx_tmp in process_fx_var:
+
+                process_fx_name = process_fx_tmp.pop('function')
+                process_fx_obj = PROCESSES[process_fx_name]
+
+                process_fx_args = {**process_fx_tmp, **{'variable': var_tag, 'map': process_fx_map}}
+                workflow_common.add_process(process_fx_obj, ref=data_ref, **process_fx_args)
 
         return workflow_common
 
@@ -122,19 +167,11 @@ class OrchestratorHandler:
         for var_tag in list(data_collections.keys()):
 
             process_fx_var = deepcopy(workflow_fx[var_tag])
-
             for process_fx_tmp in process_fx_var:
 
                 process_fx_name = process_fx_tmp.pop('function')
                 process_fx_obj = PROCESSES[process_fx_name]
 
-                '''
-                if hasattr(process_fx_obj, 'output_ext'):
-                    process_fx_out = process_fx_obj.output_ext
-                else:
-                    process_fx_out = None
-                #process_fx_out = process_fx_obj.pop('output', None)
-                '''
                 process_fx_args = {**process_fx_tmp, **{'variable': var_tag}}
                 workflow_common.add_process(process_fx_obj, ref=data_ref, **process_fx_args)
 
@@ -177,11 +214,12 @@ class OrchestratorHandler:
             ext_in = os.path.splitext(path_in)[1][1:]
             ext_out = function.__getattribute__('output_ext') or ext_in
 
+            path_obj = get_filename_components(path_in)
+            name_base, ext_base = path_obj['base_name'], path_obj['ext_name']
+
             if self.has_variables:
 
                 variable = kwargs['variable']
-
-                name_base, ext_base = os.path.basename(path_in).split('.')
                 save_base = f'{name_base}_{variable}'
 
                 if has_times:
@@ -193,7 +231,6 @@ class OrchestratorHandler:
 
             else:
 
-                name_base, ext_base = os.path.basename(path_in).split('.')
                 save_base = f'{name_base}'
 
                 if has_times:
@@ -244,12 +281,17 @@ class OrchestratorHandler:
             elif isinstance(self.data_in, DataLocal):
                 this_input = self.data_in
             else:
-                raise RuntimeError('Input data must be DataObj or dictionary of DataObj instance.')
+                raise RuntimeError('Input data must be DataLocal or dictionary of DataLocal instance.')
         else:
             process_previous = self.processes[-1]
             this_input = process_previous.out_obj
 
-        this_output = self.make_output(this_input, process_output, function, **kwargs)
+        if isinstance(this_input, list):
+            tmp_input = this_input[-1]
+        else:
+            tmp_input = this_input
+
+        this_output = self.make_output(tmp_input, process_output, function, **kwargs)
         this_process = ProcessorContainer(
             function = function,
             in_obj = this_input, in_opts=self.options,
@@ -263,6 +305,9 @@ class OrchestratorHandler:
 
     def run(self, time: (pd.Timestamp, str, pd.date_range), **kwargs) -> None:
 
+        # group process by variable
+        proc_group = group_process(self.processes)
+
         # manage process execution and process output
         if len(self.processes) == 0:
             raise ValueError('No processes have been added to the workflow.')
@@ -270,8 +315,24 @@ class OrchestratorHandler:
             (isinstance(self.processes[-1].out_obj, DataLocal) and hasattr(self, 'tmp_dir') and
              self.tmp_dir in self.processes[-1].out_obj.dir_name):
             if self.data_out is not None:
-                self.processes[-1].out_obj = self.data_out.copy()
-                self.processes[-1].dump_state = True
+
+                if isinstance(self.data_out, DataLocal):
+
+                    self.processes[-1].out_obj = self.data_out.copy()
+                    self.processes[-1].dump_state = True
+
+                elif isinstance(self.data_out, dict):
+
+                    for proc_key, proc_obj in proc_group.items():
+
+                        proc_out = self.data_out[proc_key].copy()[0]
+
+                        proc_last = proc_obj[-1]
+                        proc_idx = self.processes.index(proc_last)
+
+                        self.processes[proc_idx].out_obj = proc_out
+                        self.processes[proc_idx].dump_state = True
+
             else:
                 raise ValueError('No output dataset has been set.')
 
@@ -329,19 +390,16 @@ class OrchestratorHandler:
         if len(processes) == 0:
             return
 
-        proc_group = {}
-        for proc_obj in processes:
-            proc_var = proc_obj.variable
+        # get the data map
+        data_map = self.data_map
 
-            if proc_var not in proc_group:
-                proc_group[proc_var] = [proc_obj]
-            else:
-                tmp_obj = proc_group[proc_var]
-                tmp_obj.append(proc_obj)
-                proc_group[proc_var] = tmp_obj
-
+        # group process by variable
+        proc_group = group_process(processes)
+        # execute process
         proc_memory, proc_ws = None, {}
         for proc_var_key, proc_list in proc_group.items():
+
+            proc_map = data_map.get(proc_var_key, {})
 
             proc_result, proc_return, proc_var_name = None, [], None
             for proc_id, proc_name in enumerate(proc_list):
@@ -353,14 +411,14 @@ class OrchestratorHandler:
                 kwargs['id'] = proc_id
                 kwargs['variable'] = tmp_var_name
                 kwargs['collections'] = proc_ws
+                kwargs['map_in'] = proc_map['in']
+                kwargs['map_out'] = proc_map['out']
+                kwargs['key'] = proc_var_key
 
                 if proc_memory is not None:
                     kwargs['memory'] = {}
                     if tmp_var_name not in kwargs['memory']:
                         kwargs['memory'][tmp_var_name] = proc_memory
-
-                if tmp_var_name is None:
-                    print()
 
                 proc_result, proc_memory = proc_name.run(time, **kwargs)
 
@@ -374,7 +432,21 @@ class OrchestratorHandler:
             proc_ws[proc_var_name] = proc_return[-1]
 
 
-
 def remove_none(lst):
     # Remove NoneType values from the list
     return [x for x in lst if x is not None]
+
+def group_process(proc_list):
+
+    proc_group = {}
+    for proc_obj in proc_list:
+        proc_var = proc_obj.variable
+
+        if proc_var not in proc_group:
+            proc_group[proc_var] = [proc_obj]
+        else:
+            tmp_obj = proc_group[proc_var]
+            tmp_obj.append(proc_obj)
+            proc_group[proc_var] = tmp_obj
+
+    return proc_group

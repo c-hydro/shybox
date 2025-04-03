@@ -24,6 +24,15 @@ ERROR_INVALID_NAME = 123
 logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+# check if file has a compression extension
+def has_compression_extension(filename):
+    compression_extensions = ['.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar']
+    _, ext = os.path.splitext(filename)
+    return ext in compression_extensions
+# ----------------------------------------------------------------------------------------------------------------------
+
 # ----------------------------------------------------------------------------------------------------------------------
 # method to expand file path
 def expand_file_path(file_path: str, home_string: str = '$HOME') -> str:
