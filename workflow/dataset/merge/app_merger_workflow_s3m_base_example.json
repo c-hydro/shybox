@@ -77,15 +77,21 @@
         }
       },
       "data_destination": {
-        "dset_age": {
+        "dset_01": {
           "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
-          "file_name": "age.{time_destination}.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "age"
+          "file_name": "age.%Y%m%d%H%M.tiff",
+          "format": "geotiff", "type": null, "mode": "grid", "variable": "age",
+          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+          "vars_data": {"snow_age": "SNOW_AGE"}
         },
-        "dset_albedo": {
+        "dset_02": {
           "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
-          "file_name": "albedo.{time_destination}.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "albedo"
+          "file_name": "albedo.%Y%m%d%H%M.tiff",
+          "format": "geotiff", "type": null, "mode": "grid", "variable": "albedo",
+          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+          "vars_data": {"snow_albedo": "SNOW_ALBEDO"}
         }
       },
       "log": {
