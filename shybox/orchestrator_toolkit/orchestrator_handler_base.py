@@ -122,34 +122,34 @@ class OrchestratorHandler:
         return workflow_common
 
     @classmethod
-    def multi_variable(cls, data_package: (dict, list), data_out: DataLocal = None, data_ref: DataLocal = None,
+    def multi_variable(cls, data_package_in: (dict, list), data_package_out: DataLocal = None, data_ref: DataLocal = None,
                        configuration: dict = None) -> 'Orchestrator':
 
         workflow_fx = configuration.get('process_list', [])
         workflow_options = configuration.get('options', []) # derivare il dizionario come fatto per options per usare ignore_case=True
 
-        if not isinstance(data_out, list):
-            data_out = [data_out]
+        if not isinstance(data_package_out, list):
+            data_package_out = [data_package_out]
 
-        if isinstance(data_package, list):
-            data_collections = {}
-            for data_id, data_obj in enumerate(data_package):
+        if isinstance(data_package_in, list):
+            data_collections_in = {}
+            for data_id, data_obj in enumerate(data_package_in):
                 data_name = None
                 if hasattr(data_obj, 'file_variable'):
                     data_name = data_obj.file_variable
                 if data_name is None:
                     data_name = 'default_{:}'.format(int(data_id))
-                data_collections[data_name] = data_obj
+                data_collections_in[data_name] = data_obj
         else:
-            data_collections = data_package
+            data_collections_in = data_package_in
 
-        assert data_collections.keys() == workflow_fx.keys(), \
+        assert data_collections_in.keys() == workflow_fx.keys(), \
             'Data collections and workflow functions must have the same keys.'
 
-        if isinstance(data_out, list):
+        if isinstance(data_package_out, list):
             data_collections_out = {}
 
-            for data_id, data_obj in enumerate(data_out):
+            for data_id, data_obj in enumerate(data_package_out):
                 var_package = data_obj.file_variable
 
                 if not isinstance(var_package, list):
@@ -162,16 +162,15 @@ class OrchestratorHandler:
                     else:
                         data_collections_out[var_name].append(data_obj)
         else:
-            data_collections_out = data_out
+            data_collections_out = data_package_out
 
         #assert data_collections_out.keys() == workflow_fx.keys(), \
         #    'Data collections and workflow functions must have the same keys.'
 
-
         # method to remap variable tags, in and out
         workflow_map = mapper(data_collections, data_collections_out)
 
-        workflow_common = OrchestratorHandler(data_in=data_collections, data_out=data_collections_out,
+        workflow_common = OrchestratorHandler(data_in=data_collections_in, data_out=data_collections_out,
                                               options=workflow_options,
                                               data_map=workflow_map)
 

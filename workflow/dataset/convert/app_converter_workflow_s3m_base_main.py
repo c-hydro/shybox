@@ -275,7 +275,7 @@ def main(alg_collectors_settings: dict = None):
 
         # orchestrator settings
         orc_process = Orchestrator.multi_variable(
-            data_package=[rain_data, airt_data, rh_data, inc_rad_data], data_out=output_data,
+            data_package_in=[rain_data, airt_data, rh_data, inc_rad_data], data_package_out=output_data,
             data_ref=geo_data,
             configuration=configuration['WORKFLOW']
         )
