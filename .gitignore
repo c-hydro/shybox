@@ -19,18 +19,25 @@ conda/
 old/
 dset/
 example/
+tmp/
+*/tmp/
 miniconda.sh
 *.log
 *.LOG
 old
 OLD
 Log
+tmp
+TMP
+Tmp
 *log*.txt
 *Log*.txt
 *old*.txt
 *OLD*.txt
 *old*.py
 *OLD*.py
+*tmp*.py
+*TMP*.py
 
 
 # Distribution / packaging

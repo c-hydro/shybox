@@ -25,8 +25,8 @@ from lib_utils_generic import create_filename_tmp, make_folder
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to warp grid data
-def warp_grid_data(file_name_src, file_name_dst,
+# method to warp data
+def warp_data(file_name_src, file_name_dst,
                    grid_warp_method='near', grid_warp_resolution=None,
                    grid_warp_format='GTiff', grid_warp_active=True, grid_warp_copy=True):
 

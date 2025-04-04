@@ -1,7 +1,7 @@
 """
 Library Features:
 
-Name:          lib_orch_utils
+Name:          lib_orchestrator_utils
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20250127'
 Version:       '1.0.0'
@@ -9,15 +9,12 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import xarray as xr
-#import rioxarray as rxr
-from osgeo import gdal
+import rioxarray as rxr
 import tempfile
 import os
 
+from osgeo import gdal
 from typing import Iterable
-
-from shybox.type_toolkit.lib_type_grid import DataGrid
-
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -55,6 +52,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **kwargs
                 result = file_to_xarray(result)
             return result
 
+        # define the output extension based on the output type (attribute of the output object)
         if output_type in ['tif', 'tiff', 'gdal', 'xarray', 'file']:
             setattr(wrapper, 'output_ext', 'tif')
         elif output_type in ['table', 'csv', 'pandas']:
@@ -67,6 +65,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **kwargs
         wrapper.__name__ = func.__name__
         for key, value in kwargs.items():
             setattr(wrapper, key, value)
+
         # Add the wrapped function to the global list of processes
         PROCESSES[func.__name__] = wrapper
 
@@ -86,16 +85,16 @@ def with_list_input(func):
     return wrapper
 # ----------------------------------------------------------------------------------------------------------------------
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to remove file
 @with_list_input
 def remove(filename: str):
     os.remove(filename)
+# ----------------------------------------------------------------------------------------------------------------------
 
-@with_list_input
-def grid_to_xarray(data: DataGrid) -> (xr.DataArray, xr.Dataset):
-    data = data.data
-    return data
-
-
+# ----------------------------------------------------------------------------------------------------------------------
+# method to dump data to file
 @with_list_input
 def xarray_to_file(data_array: xr.DataArray) -> str:
     # Create a temporary file
@@ -107,15 +106,10 @@ def xarray_to_file(data_array: xr.DataArray) -> str:
 
     # Move the temporary file to the desired filename
     return temp_file.name
+# ----------------------------------------------------------------------------------------------------------------------
 
-
-'''
-@with_list_input
-def file_to_xarray(filename: str) -> xr.DataArray:
-    # Open the file with xarray
-    return rxr.open_rasterio(filename)
-'''
-
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read data from file (xarray)
 @with_list_input
 def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:
     temp_file = xarray_to_file(data_array)
@@ -126,8 +120,10 @@ def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:
     os.remove(temp_file)
 
     return gdal_dataset
+# ----------------------------------------------------------------------------------------------------------------------
 
-
+# ----------------------------------------------------------------------------------------------------------------------
+# method to convert data to file (xarray)
 @with_list_input
 def gdal_to_xarray(dataset: gdal.Dataset) -> xr.DataArray:
     # Create a temporary file
@@ -145,3 +141,4 @@ def gdal_to_xarray(dataset: gdal.Dataset) -> xr.DataArray:
     os.remove(temp_file.name)
 
     return data_array
+# ----------------------------------------------------------------------------------------------------------------------
