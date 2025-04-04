@@ -129,7 +129,7 @@ def main(alg_collectors_settings: dict = None):
     output_data = DataLocal(
         path='/home/fabio/Desktop/shybox/dset/itwater',
         file_name='hmc.forcing.%Y%m%d%H%M.nc', time_signature='step',
-        file_format='netcdf', file_type='hmc', file_mode='grid', file_variable=None,
+        file_format='netcdf', file_type='hmc', file_mode='grid', file_variable=['air_t', 'rh'],
         file_template={
             "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
             "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
@@ -154,6 +154,8 @@ def main(alg_collectors_settings: dict = None):
             "intermediate_output": "Tmp",
             "tmp_dir": "/home/fabio/Desktop/shybox/dset/itwater/tmp/"
         })
+
+
 
     orc_process.add_process(
         interpolate_data, ref=geo_data,

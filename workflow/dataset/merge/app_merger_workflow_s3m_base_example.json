@@ -33,7 +33,8 @@
         "time_start": "string", "time_end": "string",
         "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
-        "path_log": "string", "file_log": "string", "path_tmp": "string",
+        "path_log": "string", "file_log": "string",
+        "path_tmp": "string",
         "execution_name": "string", "execution_mode": "string"
       },
       "template": {
@@ -44,19 +45,20 @@
         "time_start": "%Y%m%d", "time_end": "%Y%m%d",
         "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
-        "path_log": "string", "file_log": "string", "path_tmp": "string",
+        "path_log": "string", "file_log": "string",
+        "path_tmp": "string",
         "execution_name": "string", "execution_mode": "string"
       }
     },
     "application": {
       "info": {
-        "domain_name": "{domain_name}"
+        "domain_name": ["marche", "emilia_romagna"]
       },
       "time": {
-        "start": "1981-01-01",
+        "start": "2025-01-24 00:00",
         "end": "{time_end}",
-        "frequency": "D",
-        "format": "%Y%m%d"
+        "frequency": "h",
+        "format": "%Y-%m-%d %H:00"
       },
       "geo": {
         "terrain": {
@@ -65,27 +67,26 @@
         }
       },
       "data_source": {
-        "rain": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater",
-          "file_name": "P_{time_source}.nc"
+        "dset_01": {
+          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/%Y/%m/%d/",
+          "file_name": "S3M_%Y%m%d%H00.nc.gz"
         },
-        "air_t": {
-          "path": "{path_source}",
-          "file_name": "T_{time_source}.nc"
-        },
-        "rh": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater",
-          "file_name": "U_{time_source}.nc"
-        },
-        "inc_rad": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater",
-          "file_name": "R_{time_source}.nc"
+        "dset_02": {
+          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/emilia_romagna/%Y/%m/%d",
+          "file_name": "S3M_%Y%m%d%H00.nc.gz"
         }
       },
       "data_destination": {
-        "path": "{path_destination}/%Y/%m/%d/",
-        "file_name": "MeteoData_{time_destination}.nc",
-        "format": "netcdf", "type": "s3m", "mode": "grid"
+        "dset_age": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
+          "file_name": "age.{time_destination}.tiff",
+          "format": "geotiff", "type": null, "mode": "grid", "variable": "age"
+        },
+        "dset_albedo": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
+          "file_name": "albedo.{time_destination}.tiff",
+          "format": "geotiff", "type": null, "mode": "grid", "variable": "albedo"
+        }
       },
       "log": {
         "path": "{path_log}",

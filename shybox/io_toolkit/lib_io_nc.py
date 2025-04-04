@@ -303,16 +303,15 @@ def write_file_nc_s3m(
 
         set_scale_factor = False
         for attr_key, attr_value in attrs_variable.items():
-            if attr_key not in ['add_offset']:
-                if attr_key == 'scale_factor':
-                    var_handle.setncattr('scale_factor', float(attr_value))
-                    set_scale_factor = True
-                elif attr_key == 'units':
-                    var_handle.setncattr(attr_key.lower(), str(attr_value))
-                elif attr_key == 'format':
-                    var_handle.setncattr(attr_key.lower(), str(attr_value))
-                else:
-                    var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
+            if attr_key == 'scale_factor':
+                var_handle.setncattr('scale_factor', float(attr_value))
+                set_scale_factor = True
+            elif attr_key == 'units':
+                var_handle.setncattr(attr_key.lower(), str(attr_value))
+            elif attr_key == 'format':
+                var_handle.setncattr(attr_key.lower(), str(attr_value))
+            else:
+                var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
 
         if not set_scale_factor:
             if scale_factor is not None:
@@ -502,49 +501,54 @@ def write_file_nc_hmc(
     # print(date_check)
 
     # variable geo x
+    set_scale_factor = False
     variable_x = handle.createVariable(
         varname='longitude', dimensions=(dim_y, dim_x), datatype=type_x,
         zlib=compression_flag, complevel=compression_level)
     if attrs_x is not None:
         for attr_key, attr_value in attrs_x.items():
-            if attr_key == 'fill_value':
-                variable_x.setncattr('_FillValue', float(attr_value))
-            elif attr_key == 'scale_factor':
-                scale_factor = attr_value
+            if attr_key == 'scale_factor':
                 variable_x.setncattr('scale_factor', float(attr_value))
+                set_scale_factor = True
             elif attr_key == 'units':
                 variable_x.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
                 variable_x.setncattr(attr_key.lower(), str(attr_value))
             else:
                 variable_x.setncattr(attr_key.lower(), str(attr_value).lower())
+
     variable_x[:, :] = np.transpose(np.rot90(x, -1))
 
+    if not set_scale_factor:
+        variable_x.setncattr('scale_factor', 1)
+
     # variable geo y
+    set_scale_factor = False
     variable_y = handle.createVariable(
         varname='latitude', dimensions=(dim_y, dim_x), datatype=type_y,
         zlib=compression_flag, complevel=compression_level)
     if attrs_y is not None:
         for attr_key, attr_value in attrs_y.items():
-            if attr_key == 'fill_value':
-                variable_y.setncattr('_FillValue', float(attr_value))
-            elif attr_key == 'scale_factor':
+            if attr_key == 'scale_factor':
                 variable_y.setncattr('scale_factor', float(attr_value))
+                set_scale_factor = True
             elif attr_key == 'units':
                 variable_y.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
                 variable_y.setncattr(attr_key.lower(), str(attr_value))
             else:
                 variable_y.setncattr(attr_key.lower(), str(attr_value).lower())
+
     variable_y[:, :] = np.transpose(np.rot90(y, -1))
+
+    if not set_scale_factor:
+        variable_y.setncattr('scale_factor', 1)
 
     # variable geo system
     variable_system = handle.createVariable(var_system, 'i')
     if attrs_system is not None:
         for attr_key, attr_value in attrs_system.items():
-            if attr_key == 'fill_value':
-                variable_system.setncattr('_FillValue', float(attr_value))
-            elif attr_key == 'scale_factor':
+            if attr_key == 'scale_factor':
                 variable_system.setncattr('scale_factor', float(attr_value))
             elif attr_key == 'units':
                 variable_system.setncattr(attr_key.lower(), str(attr_value))
@@ -599,28 +603,21 @@ def write_file_nc_hmc(
         else:
             raise NotImplementedError('Case not implemented yet')
 
-        set_fill_data, set_scale_factor = False, False
+        set_scale_factor = False
         for attr_key, attr_value in attrs_variable.items():
-            if attr_key not in ['add_offset']:
-                if attr_key == 'fill_value':
-                    var_handle.setncattr('_FillValue', float(attr_value))
-                    set_fill_data = True
-                elif attr_key == 'scale_factor':
-                    var_handle.setncattr('scale_factor', float(attr_value))
-                    set_scale_factor = True
-                elif attr_key == 'units':
-                    var_handle.setncattr(attr_key.lower(), str(attr_value))
-                elif attr_key == 'format':
-                    var_handle.setncattr(attr_key.lower(), str(attr_value))
-                else:
-                    var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
+            if attr_key == 'scale_factor':
+                var_handle.setncattr('scale_factor', float(attr_value))
+                set_scale_factor = True
+            elif attr_key == 'units':
+                var_handle.setncattr(attr_key.lower(), str(attr_value))
+            elif attr_key == 'format':
+                var_handle.setncattr(attr_key.lower(), str(attr_value))
+            else:
+                var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
 
-        if not set_fill_data:
-            if fill_value is not None:
-                variable_data.setncattr('_FillValue', fill_value)
         if not set_scale_factor:
             if scale_factor is not None:
-                variable_data.setncattr('scale_factor', scale_factor)
+                var_handle.setncattr('scale_factor', scale_factor)
 
         if variable_dims == 3:
 

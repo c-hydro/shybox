@@ -1,5 +1,5 @@
 
-
+# ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import datetime as dt
 from typing import Callable
@@ -10,13 +10,16 @@ import xarray as xr
 
 from shybox.generic_toolkit.lib_utils_time import convert_time_format
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# class to handle the process
 class ProcessorContainer:
     def __init__(self,
                  function: Callable,
                  in_obj: DataLocal,
                  args: dict = {},
-                 out_obj: DataLocal = None,
+                 out_obj: (DataLocal, dict) = None,
                  in_opts: dict = {}, out_opts: dict = {}) -> None:
 
         self.break_point = False
@@ -135,3 +138,4 @@ class ProcessorContainer:
             raise ValueError('Unknown fx output type')
 
         return fx_out, fx_memory
+# ----------------------------------------------------------------------------------------------------------------------

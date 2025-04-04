@@ -387,7 +387,9 @@ def map_coords(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.Data
 
                     data['var_tmp'] = xr.DataArray(crds, dims=coords_out)
 
-                data = data.rename({'var_tmp': coords_out})
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    data = data.rename({'var_tmp': coords_out})
 
     return data
 

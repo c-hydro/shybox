@@ -97,34 +97,16 @@ class OrchestratorHandler:
         assert data_collections_out.keys() == workflow_fx.keys(), \
             'Data collections and workflow functions must have the same keys.'
 
-        workflow_map = {}
-        for (key_in, obj_in), (key_out, obj_out) in zip(
-                data_collections_in.items(), data_collections_out.items()):
-            if key_in == key_out:
-                workflow_map[key_in] = {}
+        # method to remap variable tags, in and out
+        workflow_map = mapper(data_collections_in, data_collections_out)
 
-                for partial_in in obj_in:
-                    file_vars = partial_in.file_variable
-                    tmpl_vars = partial_in.file_template['vars_data']
-
-                    for var_map, (var_in, var_out) in zip(file_vars, tmpl_vars.items()):
-                        if var_map in list(workflow_map.keys()):
-                            workflow_map[key_in].update({'in': {var_in: var_out}})
-
-                    for partial_out in obj_out:
-                        file_vars = partial_out.file_variable
-                        tmpl_vars = partial_out.file_template['vars_data']
-
-                        for var_map, (var_start, var_end) in zip(file_vars, tmpl_vars.items()):
-                            if var_map in list(workflow_map.keys()):
-                                workflow_map[key_in].update({'out': {var_start: var_end}})
-
-
+        # class to create workflow based using the orchastrator
         workflow_common = OrchestratorHandler(data_in=data_collections_in,
                                               data_out=data_collections_out,
                                               options=workflow_options,
                                               data_map=workflow_map)
 
+        # iterate over the defined process(es)
         for var_tag in list(data_collections_in.keys()):
 
             process_fx_var = deepcopy(workflow_fx[var_tag])
@@ -146,6 +128,9 @@ class OrchestratorHandler:
         workflow_fx = configuration.get('process_list', [])
         workflow_options = configuration.get('options', []) # derivare il dizionario come fatto per options per usare ignore_case=True
 
+        if not isinstance(data_out, list):
+            data_out = [data_out]
+
         if isinstance(data_package, list):
             data_collections = {}
             for data_id, data_obj in enumerate(data_package):
@@ -161,8 +146,34 @@ class OrchestratorHandler:
         assert data_collections.keys() == workflow_fx.keys(), \
             'Data collections and workflow functions must have the same keys.'
 
-        workflow_common = OrchestratorHandler(data_in=data_collections, data_out=data_out,
-                                              options=workflow_options)
+        if isinstance(data_out, list):
+            data_collections_out = {}
+
+            for data_id, data_obj in enumerate(data_out):
+                var_package = data_obj.file_variable
+
+                if not isinstance(var_package, list):
+                    var_package = [var_package]
+
+                for var_id, var_name in enumerate(var_package):
+                    if var_name not in data_collections_out:
+                        data_collections_out[var_name] = {}
+                        data_collections_out[var_name] = [data_obj]
+                    else:
+                        data_collections_out[var_name].append(data_obj)
+        else:
+            data_collections_out = data_out
+
+        #assert data_collections_out.keys() == workflow_fx.keys(), \
+        #    'Data collections and workflow functions must have the same keys.'
+
+
+        # method to remap variable tags, in and out
+        workflow_map = mapper(data_collections, data_collections_out)
+
+        workflow_common = OrchestratorHandler(data_in=data_collections, data_out=data_collections_out,
+                                              options=workflow_options,
+                                              data_map=workflow_map)
 
         for var_tag in list(data_collections.keys()):
 
@@ -316,12 +327,22 @@ class OrchestratorHandler:
              self.tmp_dir in self.processes[-1].out_obj.dir_name):
             if self.data_out is not None:
 
-                if isinstance(self.data_out, DataLocal):
+                # get the output element(s)
+                proc_elements = list(self.data_out.values())
+                # check the output element(s)
+                proc_bucket = []
+                for proc_obj in proc_elements:
+                    if isinstance(proc_obj, list):
+                        proc_obj = proc_obj[0]
+                    if proc_obj not in proc_bucket:
+                        proc_bucket.append(proc_obj)
 
-                    self.processes[-1].out_obj = self.data_out.copy()
+                if len(proc_bucket) == 1:
+
+                    self.processes[-1].out_obj = proc_bucket[0].copy()
                     self.processes[-1].dump_state = True
 
-                elif isinstance(self.data_out, dict):
+                elif len(proc_bucket) > 1:
 
                     for proc_key, proc_obj in proc_group.items():
 
@@ -431,6 +452,41 @@ class OrchestratorHandler:
 
             proc_ws[proc_var_name] = proc_return[-1]
 
+
+def mapper(data_collections_in: dict, data_collections_out: dict) -> dict:
+    var_mapper = {}
+    for (key_in, obj_in), (key_out, obj_out) in zip(
+            data_collections_in.items(), data_collections_out.items()):
+        if key_in == key_out:
+            var_mapper[key_in] = {}
+
+            if not isinstance(obj_in, list):
+                obj_in = [obj_in]
+            if not isinstance(obj_out, list):
+                obj_out = [obj_out]
+
+            for partial_in in obj_in:
+                file_vars = partial_in.file_variable
+                tmpl_vars = partial_in.file_template['vars_data']
+
+                if not isinstance(file_vars, list):
+                    file_vars = [file_vars]
+
+                for var_map, (var_in, var_out) in zip(file_vars, tmpl_vars.items()):
+                    if var_map in list(var_mapper.keys()):
+                        var_mapper[key_in].update({'in': {var_in: var_out}})
+
+                for partial_out in obj_out:
+                    file_vars = partial_out.file_variable
+                    tmpl_vars = partial_out.file_template['vars_data']
+
+                    if not isinstance(file_vars, list):
+                        file_vars = [file_vars]
+
+                    for var_map, (var_start, var_end) in zip(file_vars, tmpl_vars.items()):
+                        if var_map in list(var_mapper.keys()):
+                            var_mapper[key_in].update({'out': {var_start: var_end}})
+    return var_mapper
 
 def remove_none(lst):
     # Remove NoneType values from the list
