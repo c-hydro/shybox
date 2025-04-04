@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 def mask_data_by_ref(
         data: xr.DataArray,
         ref: xr.DataArray, ref_value: (float, int) = -9999.0,
-        mask_format: str = 'integer', mask_no_data: (float, int) = -9999.0, **kwargs):
+        mask_format: str = 'float', mask_no_data: (float, int) = -9999.0, **kwargs):
 
     if mask_format is not None:
         if mask_format == 'integer':
@@ -43,6 +43,13 @@ def mask_data_by_ref(
             raise NotImplemented('Mask type "' + mask_format + '"not implemented yet')
 
     data = xr.where(ref.values == ref_value, mask_no_data, data)
+
+    """ debug plot
+    plt.figure()
+    plt.imshow(data.values, cmap='viridis')
+    plt.colorbar(label='Masked Data')
+    plt.show(block=True)
+    """
 
     return data
 # ----------------------------------------------------------------------------------------------------------------------

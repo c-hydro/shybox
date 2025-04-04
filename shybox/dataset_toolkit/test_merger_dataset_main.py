@@ -34,6 +34,7 @@ from shybox.generic_toolkit.lib_utils_args import get_logger_name
 from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from shybox.generic_toolkit.lib_default_args import collector_data
 
+from shybox.processing_toolkit.lib_proc_merge import merge_data
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 
@@ -70,49 +71,53 @@ def main(alg_collectors_settings: dict = None):
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    # Example of how to use the Orchestrator class
-    configuration = {
+    # Example of how to use the Orchestrator class for multi layers
+    configuration_tile = {
         "WORKFLOW": {
             "options": {
                 "intermediate_output": "Tmp",
                 "tmp_dir": "tmp"
             },
             "process_list": {
-                "air_t": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                "age": [
+                    {"function": "merge_data", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ],
-                "rh": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 22000, "neighbours": 7, "fill_value": np.nan},
+                "albedo": [
+                    {"function": "merge_data", "method": 'nn', "max_distance": 25000, "neighbours": 7,
+                     "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
             }
         }
     }
 
-    airt_data = DataLocal(
-        path='/home/fabio/Desktop/shybox/dset/itwater',
-        file_name='T_19810101.nc',
-        file_format=None, file_mode=None, file_variable='air_t',
+    s3m_data_domain_1 = DataLocal(
+        path='/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/%Y/%m/%d',
+        file_name='S3M_%Y%m%d%H00.nc.gz',
+        file_format="netcdf", file_mode=None, file_variable=['age', 'albedo'],
         file_template={
-            "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-            "vars_data": {"Tair": "air_temperature"}
+            "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
+            'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
+            "vars_data": {"AgeS": "snow_age", "AlbedoS": "snow_albedo"}
         },
-        time_signature='period',
-        time_reference='1981-01-01 00:00', time_period=24, time_freq='h', time_direction='forward',
+        time_signature='current',
+        time_reference='2025-01-24 05:00', time_period=1, time_freq='h', time_direction='forward',
     )
 
-    rh_data = DataLocal(
-        path='/home/fabio/Desktop/shybox/dset/itwater',
-        file_name='U_19810101.nc',
-        file_format=None, file_mode=None, file_variable='rh',
+    s3m_data_domain_2 = DataLocal(
+        path='/home/fabio/Desktop/shybox/dset/data_source/s3m/emilia_romagna/%Y/%m/%d',
+        file_name='S3M_%Y%m%d%H00.nc.gz',
+        file_format='netcdf', file_mode=None, file_variable=['age', 'albedo'],
         file_template={
-            "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-            "vars_data": {"RH": "relative_humidity"}
+            "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
+            'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
+            "vars_data": {"AgeS": "snow_age", "AlbedoS": "snow_albedo"}
         },
-        time_signature='period',
-        time_reference='1981-01-01 00:00', time_period=24, time_freq='h', time_direction='forward',
+        time_signature='current',
+        time_reference='2025-01-24 05:00', time_period=1, time_freq='h', time_direction='forward',
     )
+
 
     geo_data = DataLocal(
         path='/home/fabio/Desktop/shybox/dset/data_static/gridded/',
@@ -125,43 +130,37 @@ def main(alg_collectors_settings: dict = None):
         time_signature=None
     )
 
-    output_data = DataLocal(
-        path='/home/fabio/Desktop/shybox/dset/itwater',
-        file_name='hmc.forcing.%Y%m%d%H%M.nc', time_signature='step',
-        file_format='netcdf', file_type='hmc', file_mode='grid', file_variable=None,
+    output_data_1 = DataLocal(
+        path='/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/',
+        file_name='age.%Y%m%d%H%M.tiff', time_signature='step',
+        file_format='geotiff', file_type=None, file_mode='grid', file_variable=['age'],
         file_template={
-            "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
             "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-            "vars_data": {"air_temperature": "AIR_TEMPERATURE",
-                          "relative_humidity": "RELATIVE_HUMIDITY"}
+            "vars_data": {"snow_age": "SNOW_AGE"}
+        },
+        time_period=1, time_format='%Y%m%d%H%M')
+
+    output_data_2 = DataLocal(
+        path='/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/',
+        file_name='albedo.%Y%m%d%H%M.tiff', time_signature='step',
+        file_format='geotiff', file_type=None, file_mode='grid', file_variable=['albedo'],
+        file_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+            "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+            "vars_data": {"snow_albedo": "SNOW_ALBEDO"}
         },
         time_period=1, time_format='%Y%m%d%H%M')
 
     # multi variable
-    orc_process = Orchestrator.multi_variable(
-        data_package=[airt_data, rh_data], data_out=output_data,
+    orc_process = Orchestrator.multi_tile(
+        data_package_in=[s3m_data_domain_1, s3m_data_domain_2],
+        data_package_out=[output_data_1, output_data_2],
         data_ref=geo_data,
-        configuration=configuration['WORKFLOW']
+        configuration=configuration_tile['WORKFLOW']
     )
 
-    orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))
-
-    # single variable
-    orc_process = Orchestrator(
-        data_in=airt_data, data_out=output_data,
-        options={
-            "intermediate_output": "Tmp",
-            "tmp_dir": "/home/fabio/Desktop/shybox/dset/itwater/tmp/"
-        })
-
-    orc_process.add_process(
-        interpolate_data, ref=geo_data,
-        method='nn', max_distance=25000, neighbours=7, fill_value=np.nan)
-    #orc_process.add_process(mask_data_by_limits, mask_min=0, mask_max=10, mask_no_data=np.nan)
-    orc_process.add_process(mask_data_by_ref, ref=geo_data, ref_value=-9999, mask_no_data=np.nan)
-    orc_process.run(time=pd.date_range('1981-01-01 05:00', '1981-01-01 07:00', freq='H'))
-
-    print()
+    orc_process.run(time=pd.date_range('2025-01-24 03:00', '2025-01-24 03:00', freq='H'))
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

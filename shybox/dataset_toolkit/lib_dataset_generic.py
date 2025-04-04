@@ -1,7 +1,7 @@
 
+import logging
 import warnings
 
-#import rioxarray as rxr
 import xarray as xr
 import numpy as np
 import os
@@ -9,7 +9,6 @@ import json
 import datetime as dt
 
 import pandas as pd
-import rasterio as rio
 import rioxarray as rxr
 
 try:
@@ -17,12 +16,14 @@ try:
 except ImportError:
     pass
 
+from decimal import Decimal
 from typing import Optional
 
-from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc
+from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
+from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m
+from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.generic_toolkit.lib_utils_time import is_date, convert_time_format
 
-import matplotlib.pyplot as plt
 
 def check_data_format(data, file_format: str) -> None:
     """"
@@ -34,7 +35,7 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write matrix data to a {file_format} file.')
 
     elif isinstance(data, xr.Dataset):
-        if file_format not in ['netcdf']:
+        if file_format not in ['netcdf', 'geotiff']:
             raise ValueError(f'Cannot write a dataset to a {file_format} file.')
         
     elif isinstance(data, str):
@@ -100,6 +101,12 @@ def read_from_file(
         path, file_format: Optional[str] = None, file_mode: Optional[str] = None) \
         -> (xr.DataArray, xr.Dataset, pd.DataFrame):
 
+    # add suppress warnings
+    rxr_logger = logging.getLogger('rioxarray')
+    rxr_logger.setLevel(logging.ERROR)
+    rio_logger = logging.getLogger('rasterio')
+    rio_logger.setLevel(logging.ERROR)
+
     if file_format is None:
         file_format = get_format_from_path(path)
 
@@ -118,7 +125,34 @@ def read_from_file(
     # read the data from a txt file
     elif file_format == 'txt':
         if file_mode == 'grid':
+
+            # get header
+            geo_attrs = {}
+            with open(path, 'r') as file:
+                # Read the first six lines
+                geo_lines = [next(file) for _ in range(6)]
+
+            # Parse the header lines
+            for line in geo_lines:
+                if line.startswith('xllcorner'):
+                    geo_attrs['xllcorner'] = Decimal(line.split()[1])
+                elif line.startswith('yllcorner'):
+                    geo_attrs['yllcorner'] = Decimal(line.split()[1])
+                elif line.startswith('cellsize'):
+                    geo_attrs['cellsize'] = Decimal(line.split()[1])
+                elif line.startswith('NODATA_value'):
+                    geo_attrs['NODATA_value'] = float(line.split()[1])
+                elif line.startswith('ncols'):
+                    geo_attrs['ncols']  = int(line.split()[1])
+                elif line.startswith('nrows'):
+                    geo_attrs['nrows']  = int(line.split()[1])
+
+            # get data
             data = rxr.open_rasterio(path)
+            generic_attrs = data.attrs
+
+            # store attributes
+            data.attrs = {**generic_attrs, **geo_attrs}
 
             squeeze_dims = [dim for dim in data.dims if data[dim].size == 1]
             if len(squeeze_dims) > 0:
@@ -145,10 +179,22 @@ def read_from_file(
 
     # read the data from a netcdf
     elif file_format == 'netcdf':
-        data = xr.open_dataset(path)
+
+        has_compression = has_compression_extension(path)
+
+        if has_compression:
+            file = uncompress_and_remove(path)
+        else:
+            file = path
+
+        data = xr.open_dataset(file)
         # check if there is a single variable in the dataset
         if len(data.data_vars) == 1:
             data = data[list(data.data_vars)[0]]
+
+        if has_compression:
+            if os.path.exists(file):
+                os.remove(file)
 
     # read the data from a png or pdf
     elif file_format == 'file':
@@ -226,7 +272,8 @@ def write_to_file(data, path, file_format: Optional[str] = None,
         if file_type == 'hmc':
             write_file_nc_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type == 's3m':
-            data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
+            write_file_nc_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
+            #data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
         else:
             data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
 
@@ -241,12 +288,33 @@ def rm_file(path) -> None:
 def withxrds(func):
     def wrapper(*args, **kwargs):
         if isinstance(args[0], xr.Dataset):
-            obj_fx = xr.Dataset()
+            obj_fx = None
             for var in args[0]:
                 tmp_fx = func(args[0][var], **kwargs)
-                if hasattr(tmp_fx, 'name'):
-                    var = tmp_fx.name
-                obj_fx[var] = tmp_fx
+
+                if isinstance(tmp_fx, xr.DataArray):
+                    if obj_fx is None:
+                        obj_fx = xr.Dataset()
+                    if hasattr(tmp_fx, 'name'):
+                        var = tmp_fx.name
+                elif isinstance(tmp_fx, str):
+                    if obj_fx is None:
+                        obj_fx = []
+                elif tmp_fx is None:
+                    pass
+                else:
+                    raise ValueError(f'Expected tmp_fx is not a xr.DataArray or a str. Got {type(tmp_fx)} instead.')
+
+                if isinstance(obj_fx, xr.Dataset):
+                    if tmp_fx is not None:
+                        obj_fx[var] = tmp_fx
+                elif isinstance(obj_fx, list):
+                    if tmp_fx is not None:
+                        obj_fx.append(tmp_fx)
+                elif obj_fx is None:
+                    pass
+                else:
+                    raise ValueError(f'Expected obj_fx is not a xr.Dataset or a str. Got {type(obj_fx)} instead.')
             return obj_fx
         else:
             return func(*args, **kwargs)
@@ -260,7 +328,15 @@ def with_dict(func):
             return func(*args, **kwargs)
     return wrapper
 
+
 ## FUNCTIONS TO CLEAN DATA
+@withxrds
+def straighten_dims(data: xr.DataArray) -> (xr.DataArray, None):
+    if data.dims == ():
+        return None
+    else:
+        return data
+
 # flat dims
 @withxrds
 def flat_dims(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = 'latitude'):
@@ -287,16 +363,72 @@ def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray
                 data = data.rename({'var_tmp': dim_out})
     return data
 
+# method to map coords
+@withxrds
+def map_coords(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.DataArray:
+
+    if coords_geo is not None:
+        for coords_in, coords_out in coords_geo.items():
+            if coords_in in list(data.coords):
+                data = data.rename({coords_in: 'var_tmp'})
+                crds = data['var_tmp'].values
+
+                if crds.ndim == 2:
+
+                    crds_ax1, crds_ax2 = crds[0, :], crds[:, 0]
+                    check_ax1, check_ax2 = np.unique(crds_ax1).size == 1, np.unique(crds_ax2).size == 1
+
+                    if not check_ax1 and check_ax2:
+                        crds = crds_ax1
+                    elif check_ax1 and not check_ax2:
+                        crds = crds_ax2
+                    else:
+                        raise ValueError(f'Cannot map coordinates {coords_in} to {coords_out}.')
+
+                    data['var_tmp'] = xr.DataArray(crds, dims=coords_out)
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    data = data.rename({'var_tmp': coords_out})
+
+    return data
+
 # method to map vars
 @withxrds
-def map_vars(data: xr.DataArray, vars_data: dict = None,  **kwargs) -> xr.DataArray:
+def map_vars(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (xr.DataArray, None):
     if vars_data is not None:
+        var_check = False
         for var_in, var_out in vars_data.items():
+
             if var_in == data.name:
                 data.name = var_out
+                var_check = True
+                break
             elif var_out == data.name:
                 data.name = var_in
+                var_check = True
+                break
+        if var_check:
+            return data
+        else:
+            return None
+    elif vars_data is None:
+        return data
+
+@withxrds
+def select_by_vars(data: xr.DataArray, vars: dict = None, **kwargs) -> (xr.DataArray, None):
+    if vars is not None:
+        for var_in, var_out in vars.items():
+            var_file = data.name
+            if var_file is not None:
+                if var_in == var_file or var_out == var_file:
+                    return data
+                else:
+                    return None
+            else:
+                return data
     return data
+
 
 @withxrds
 def select_by_time(data: xr.DataArray, time: (str, pd.Timestamp, None) = None,
@@ -350,6 +482,17 @@ def straighten_data(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = '
     else:
         tmp_y = dim_y
 
+    x_data, y_data = data[tmp_x], data[tmp_y]
+
+    if x_data.ndim == 2:
+        x_data = x_data[0, :]
+        data = data.drop_vars([tmp_x])
+        data[tmp_x] = xr.DataArray(x_data, dims=tmp_x)
+    if y_data.ndim == 2:
+        y_data = y_data[:, 0]
+        data = data.drop_vars([tmp_y])
+        data[tmp_y] = xr.DataArray(y_data, dims=tmp_y)
+
     x_idx, y_idx = data_dims.index(tmp_x), data_dims.index(tmp_y)
     if x_idx < y_idx:
         if len(data_dims) == 3:
@@ -396,6 +539,22 @@ def reset_nan(data: xr.DataArray, nan_value = None) -> xr.DataArray:
         data.attrs['_FillValue'] = new_fill_value
 
     return data
+
+@withxrds
+def get_variable(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (str, None):
+
+    if vars_data is not None:
+        var_select = None
+        for var_in, var_out in vars_data.items():
+            var_data = data.name
+            if var_data == var_in or var_data == var_out:
+                var_select = var_data
+                break
+    else:
+        var_select = data.name
+
+    return var_select
+
 
 @withxrds
 def set_type(data: xr.DataArray, nan_value = None) -> xr.DataArray:

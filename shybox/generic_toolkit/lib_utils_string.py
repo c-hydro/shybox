@@ -11,6 +11,7 @@ Version:       '4.0.0'
 # libraries
 import logging
 import re
+import os
 import numpy as np
 
 from datetime import datetime
@@ -19,6 +20,26 @@ from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow
 
 # logging
 logger_stream = logging.getLogger(logger_name)
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get filename components
+def get_filename_components(filename):
+    base, ext1 = os.path.splitext(filename)
+    base, ext2 = os.path.splitext(base)
+
+    if ext2:
+        return {
+            "base_name": base,
+            "ext_name": ext2,
+            "compression_name": ext1
+        }
+    else:
+        return {
+            "base_name": base,
+            "ext_name": ext1
+        }
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -95,6 +116,19 @@ def replace_string(string_text: str, string_replace: dict) -> str:
     string_text = obj_pattern.sub(lambda m: obj_replace[re.escape(m.group(0))], string_text)
 
     return string_text
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to fill string with keyword arguments
+def fill_string(string_raw, **kwargs):
+    """
+    Fill string with keyword arguments
+    :param string_raw: string to fill
+    :param kwargs: dictionary with key-value pairs
+    :return: string filled
+    """
+    return string_raw.format(**kwargs)
 # ----------------------------------------------------------------------------------------------------------------------
 
 
