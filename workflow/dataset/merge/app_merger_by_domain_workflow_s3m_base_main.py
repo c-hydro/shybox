@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BASE
+SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BY DOMAIN BASE
 
 __date__ = '20250403'
 __version__ = '1.0.0'
@@ -51,7 +51,7 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
-from shybox.processing_toolkit.lib_proc_merge import merge_data
+from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -61,7 +61,7 @@ logger_stream.setLevel(logging.ERROR)
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Workflow for datasets merger base configuration'
+alg_name = 'Workflow for datasets merger by domain base configuration'
 alg_type = 'Package'
 alg_version = '1.0.0'
 alg_release = '2025-04-03'
@@ -124,11 +124,11 @@ def main(alg_collectors_settings: dict = None):
             },
             "process_list": {
                 "age": [
-                    {"function": "merge_data", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ],
                 "albedo": [
-                    {"function": "merge_data", "method": 'nn', "max_distance": 25000, "neighbours": 7,
+                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
                      "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]

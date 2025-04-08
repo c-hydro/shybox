@@ -1,4 +1,13 @@
+"""
+Library Features:
 
+Name:          lib_dataset_generic
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20250127'
+Version:       '1.0.0'
+"""
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
 import logging
 import warnings
 
@@ -20,11 +29,13 @@ from decimal import Decimal
 from typing import Optional
 
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
-from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m
+from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m, write_file_nc_itwater
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.generic_toolkit.lib_utils_time import is_date, convert_time_format
+# ----------------------------------------------------------------------------------------------------------------------
 
-
+# ----------------------------------------------------------------------------------------------------------------------
+# method to check data format
 def check_data_format(data, file_format: str) -> None:
     """"
     Ensures that the data is compatible with the format of the dataset.
@@ -56,7 +67,10 @@ def check_data_format(data, file_format: str) -> None:
     
     elif format not in 'file':
         raise ValueError(f'Cannot write a {type(data)} to a {file_format} file.')
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get zip from path
 def get_zip_from_path(path: str) -> (str, None):
     # get the zip extension
     extension = path.split('.')[-1]
@@ -66,6 +80,8 @@ def get_zip_from_path(path: str) -> (str, None):
         return 'gzip'
     else:
         return None
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def get_format_from_path(path: str) -> str:
     # get the file extension
@@ -98,7 +114,8 @@ def get_format_from_path(path: str) -> str:
     raise ValueError(f'File format not supported: {extension}')
 
 def read_from_file(
-        path, file_format: Optional[str] = None, file_mode: Optional[str] = None) \
+        path, file_format: Optional[str] = None,
+        file_mode: Optional[str] = None, file_variable: (str, list) = None) \
         -> (xr.DataArray, xr.Dataset, pd.DataFrame):
 
     # add suppress warnings
@@ -176,6 +193,12 @@ def read_from_file(
         if 'band' in list(data.dims):
             if data.band.size == 1:
                 data = data.squeeze('band', drop = True)
+
+        if isinstance(data, xr.DataArray):
+            if file_variable is not None:
+                if isinstance(file_variable, list):
+                    file_variable = file_variable[0]
+                data.name = file_variable
 
     # read the data from a netcdf
     elif file_format == 'netcdf':
@@ -273,7 +296,8 @@ def write_to_file(data, path, file_format: Optional[str] = None,
             write_file_nc_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type == 's3m':
             write_file_nc_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
-            #data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
+        elif file_type == 'itwater':
+            write_file_nc_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         else:
             data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
 

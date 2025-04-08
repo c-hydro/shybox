@@ -55,6 +55,17 @@ class OrchestratorHandler:
         self.save_var = None
         self.save_base = None
 
+        self.memory_active = True
+
+    @classmethod
+    def multi_time(cls, data_package_in: (dict, list),
+                   data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
+                   configuration: dict = None) -> 'Orchestrator':
+
+        return cls.multi_tile(
+            data_package_in=data_package_in, data_package_out=data_package_out,
+            data_ref=data_ref, configuration=configuration)
+
     @classmethod
     def multi_tile(cls, data_package_in: (dict, list),
                    data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
@@ -68,6 +79,10 @@ class OrchestratorHandler:
 
             for data_id, data_obj in enumerate(data_package_in):
                 var_package = data_obj.file_variable
+
+                if not isinstance(var_package, list):
+                    var_package = [var_package]
+
                 for var_id, var_name in enumerate(var_package):
                     if var_name not in data_collections_in:
                         data_collections_in[var_name] = {}
@@ -85,6 +100,10 @@ class OrchestratorHandler:
 
             for data_id, data_obj in enumerate(data_package_out):
                 var_package = data_obj.file_variable
+
+                if not isinstance(var_package, list):
+                    var_package = [var_package]
+
                 for var_id, var_name in enumerate(var_package):
                     if var_name not in data_collections_out:
                         data_collections_out[var_name] = {}
@@ -168,13 +187,13 @@ class OrchestratorHandler:
         #    'Data collections and workflow functions must have the same keys.'
 
         # method to remap variable tags, in and out
-        workflow_map = mapper(data_collections, data_collections_out)
+        workflow_map = mapper(data_collections_in, data_collections_out)
 
         workflow_common = OrchestratorHandler(data_in=data_collections_in, data_out=data_collections_out,
                                               options=workflow_options,
                                               data_map=workflow_map)
 
-        for var_tag in list(data_collections.keys()):
+        for var_tag in list(data_collections_in.keys()):
 
             process_fx_var = deepcopy(workflow_fx[var_tag])
             for process_fx_tmp in process_fx_var:
@@ -371,6 +390,13 @@ class OrchestratorHandler:
         if len(time_steps) == 0:
             return None
 
+        group_type = None
+        if 'group' in kwargs:
+            group_type = kwargs['group']
+            if group_type == 'by_time':
+                time_steps = [time_steps]
+                self.memory_active = False
+
         for ts in time_steps:
             self.run_single_ts(time=ts, **kwargs)
         return None
@@ -379,6 +405,11 @@ class OrchestratorHandler:
         
         if isinstance(time, str):
             time = convert_time_format(time, 'str_to_stamp')
+        elif isinstance(time, pd.DatetimeIndex):
+            tmp = [convert_time_format(ts, 'str_to_stamp') for ts in time]
+            time = deepcopy(tmp)
+        else:
+            raise ValueError('Time must be a string or a DatetimeIndex.')
 
         if len(self.break_points) == 0:
             self._run_processes(self.processes, time, **kwargs)
@@ -407,6 +438,8 @@ class OrchestratorHandler:
         self.clean_up()
 
     def _run_processes(self, processes, time: dt.datetime, **kwargs) -> None:
+
+        # return if no processes
         if len(processes) == 0:
             return
 
@@ -434,6 +467,7 @@ class OrchestratorHandler:
                 kwargs['map_in'] = proc_map['in']
                 kwargs['map_out'] = proc_map['out']
                 kwargs['key'] = proc_var_key
+                kwargs['memory_active'] = self.memory_active
 
                 if proc_memory is not None:
                     kwargs['memory'] = {}

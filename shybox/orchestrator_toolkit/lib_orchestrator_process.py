@@ -58,8 +58,15 @@ class ProcessorContainer:
 
     def run(self, time: (dt.datetime, str, pd.Timestamp), **kwargs) -> (None, None):
 
-        if isinstance(time, str):
-            time = convert_time_format(time, 'str_to_stamp')
+        if isinstance(time, pd.Timestamp):
+            time = [time]
+        elif isinstance(time, list):
+            if isinstance(time[0], pd.Timestamp):
+                pass
+            else:
+                raise ValueError('Time format is not pd.Timestamp in the time list')
+        else:
+            raise ValueError('Time format is not pd.Timestamp in the time step')
 
         fx_id = kwargs['id'] if 'id' in kwargs else None
         fx_variable = kwargs['variable'] if 'variable' in kwargs else None
@@ -75,14 +82,20 @@ class ProcessorContainer:
         else:
             data_raw = self.in_obj
 
+        if isinstance(time, list):
+            if isinstance(data_raw, list):
+                data_raw = data_raw * len(time)
+            elif isinstance(data_raw, DataLocal):
+                data_raw = [data_raw] * len(time)
+
         if isinstance(data_raw, list):
             fx_data = []
-            for data_id, data_tmp in enumerate(data_raw):
-                fx_tmp = data_tmp.get_data(time=time, **kwargs)
+            for data_id, (data_tmp, time_tmp) in enumerate(zip(data_raw, time)):
+                fx_tmp = data_tmp.get_data(time=time_tmp, **kwargs)
                 fx_data.append(fx_tmp)
             fx_metadata = {}
         else:
-            fx_data = data_raw.get_data(time=time, **kwargs)
+            fx_data = data_raw.get_data(time=time[0], **kwargs)
             fx_metadata = {}
 
         fx_memory = None
@@ -92,8 +105,9 @@ class ProcessorContainer:
             else:
                 fx_memory = data_raw.memory_data
 
-        #fx_args = {arg_name: arg_value.get_data(time, **kwargs) for arg_name, arg_value in self.fx_args.items()}
         fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
+        fx_args['time'] = time
+        fx_args['ref'] = self.fx_static['ref']
         fx_save = self.fx_obj(data=fx_data, **fx_args)
 
         fx_var = None
@@ -102,17 +116,26 @@ class ProcessorContainer:
                 fx_var = fx_save.name
             if fx_var is None and fx_variable is not None:
                 fx_var = fx_variable
+        elif isinstance(fx_save, xr.Dataset):
+            fx_var = list(fx_save.data_vars)
         # remove variable from args (directly pass to args)
         kwargs.pop('variable', None)
 
         out_opts = self.out_opts
-        print(f'{self.fx_name} - {time} - {self.variable}')
+
+        if isinstance(time, list):
+            print(f'{self.fx_name} - from {time[0]} to {time[-1]} - {self.variable}')
+        else:
+            print(f'{self.fx_name} - {time} - {self.variable}')
 
         #if 'variable' in kwargs:
         #    if kwargs.pop('variable', None) is not None:
         #        fx_var = kwargs.pop('variable', None)
         if fx_var is not None:
-            fx_save.name = fx_var
+            if isinstance(fx_var, xr.DataArray):
+                fx_save.name = fx_var
+            elif isinstance(fx_var, xr.Dataset):
+                fx_save.name = fx_var
 
         if self.dump_state:
             if 'collections' in kwargs:
@@ -132,8 +155,12 @@ class ProcessorContainer:
         if isinstance(fx_save, xr.DataArray):
             fx_out = fx_save
         elif isinstance(fx_save, xr.Dataset):
-            fx_out = fx_save[fx_var]
-            fx_out.name = fx_var
+            if len(fx_var) == 1:
+                fx_out = fx_save[fx_var[0]]
+                fx_out.name = fx_var[0]
+            else:
+                fx_out = fx_save[fx_var]
+                fx_out.name = fx_var
         else:
             raise ValueError('Unknown fx output type')
 
