@@ -10,10 +10,12 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import os.path
 
 from osgeo import gdal
 import xarray as xr
 import numpy as np
+import pandas as pd
 from collections import defaultdict
 from typing import Optional, Generator
 
@@ -29,10 +31,89 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to merge data by time
+@as_process(input_type='xarray', output_type='xarray')
+def merge_data_by_time(
+        data: (xr.DataArray, list), ref: xr.DataArray,
+        time: pd.DatetimeIndex = None,
+        ref_add_data: bool = False, ref_no_data: (float, int) = -9999.0, ref_name: str = 'terrain',
+        var_no_data: (float, int) = -9999.0,
+        var_geo_x='longitude', var_geo_y='latitude', var_time='time',
+        coord_name_x: str = 'longitude', coord_name_y: str = 'latitude', coord_name_time: str = 'time',
+        dim_name_x: str = 'longitude', dim_name_y: str = 'latitude', dim_name_time: str = 'time',
+        **kwargs):
+
+    geo_data = ref.values
+    geo_x, geo_y = ref[var_geo_x].values, ref[var_geo_y].values
+
+    if geo_x.ndim == 2 and geo_y.ndim == 2:
+        geo_x = geo_x[0, :]
+        geo_y = geo_y[:, 0]
+
+    step_n = len(data)
+    var_name = None
+    var_obj = np.zeros((step_n, geo_data.shape[0], geo_data.shape[1]), dtype=geo_data.dtype)
+    for step_id, step_obj in enumerate(data):
+        var_data = step_obj.values
+
+        ''' debug plot
+        plt.figure()
+        plt.imshow(var_data)
+        plt.colorbar()
+        plt.show(block=True)
+        '''
+        var_data[np.isnan(var_data)] = var_no_data
+
+        if var_name is None: var_name = step_obj.name
+        var_obj[step_id, :, :] = var_data
+
+
+    dset_obj = xr.Dataset(coords={coord_name_time: ([dim_name_time], time)})
+    dset_obj.coords[coord_name_time] = dset_obj.coords[coord_name_time].astype('datetime64[ns]')
+
+    if ref_add_data:
+        geo_data[np.isnan(geo_data)] = ref_no_data
+        var_da_terrain = xr.DataArray(geo_data,  name=ref_name,
+                                      dims=[dim_name_y, dim_name_x],
+                                      coords={coord_name_x: ([dim_name_x], geo_x),
+                                              coord_name_y: ([dim_name_y], geo_y)})
+        dset_obj[ref_name] = var_da_terrain
+
+
+    if var_obj.ndim == 2:
+        da_obj = xr.DataArray(var_obj, name=var_name,
+                                   dims=[dim_name_y, dim_name_x],
+                                   coords={coord_name_x: ([dim_name_x], geo_x),
+                                           coord_name_y: ([dim_name_y], geo_y)})
+    elif var_obj.ndim == 3:
+        da_obj = xr.DataArray(var_obj, name=var_name,
+                                   dims=[dim_name_time, dim_name_y, dim_name_x],
+                                   coords={coord_name_time: ([dim_name_time], time),
+                                           coord_name_x: ([dim_name_x], geo_x),
+                                           coord_name_y: ([dim_name_y], geo_y)})
+    else:
+        raise NotImplemented
+
+    dset_obj[var_name] = da_obj
+
+    ''' debug test
+    file_test = 'test.nc'
+    if os.path.exists(file_test):
+        os.remove(file_test)
+    dset_obj.to_netcdf('test.nc',
+                       mode='w', format='NETCDF4', engine='netcdf4',
+                       encoding={var_name: {'zlib': True, 'complevel': 5}})
+    '''
+    return dset_obj
+
+# ----------------------------------------------------------------------------------------------------------------------
+
 # ----------------------------------------------------------------------------------------------------------------------
 # method to merge data
 @as_process(input_type='xarray', output_type='xarray')
-def merge_data(
+def merge_data_by_ref(
         data: (xr.DataArray, list),
         ref: xr.DataArray, ref_no_data: (float, int) = -9999.0, var_no_data: (float, int) = -9999.0,
         var_geo_x='longitude', var_geo_y='latitude',

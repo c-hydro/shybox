@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BASE
+SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BY DOMAIN BASE
 
 __date__ = '20250403'
 __version__ = '1.0.0'
@@ -51,7 +51,7 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
-from shybox.processing_toolkit.lib_proc_merge import merge_data
+from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -61,7 +61,7 @@ logger_stream.setLevel(logging.ERROR)
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Workflow for datasets merger base configuration'
+alg_name = 'Workflow for datasets merger by domain base configuration'
 alg_type = 'Package'
 alg_version = '1.0.0'
 alg_release = '2025-04-03'
@@ -124,11 +124,11 @@ def main(alg_collectors_settings: dict = None):
             },
             "process_list": {
                 "age": [
-                    {"function": "merge_data", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ],
                 "albedo": [
-                    {"function": "merge_data", "method": 'nn', "max_distance": 25000, "neighbours": 7,
+                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
                      "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
@@ -164,83 +164,36 @@ def main(alg_collectors_settings: dict = None):
     # time iteration(s)
     for sim_time in alg_sim_time:
 
-        # source data 01
-        file_name = fill_string(
-            alg_variables_application['data_source']['dset_01']['file_name'],
-            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
+        # iterate over src datasets
+        data_src_list = []
+        for data_src_key, data_src_settings in alg_variables_application['data_source'].items():
 
-        data_src_01 = DataLocal(
-            path=alg_variables_application['data_source']['dset_01']['path'],
-            file_name=file_name,
-            file_format="netcdf", file_mode=None, file_variable=['age', 'albedo'],
-            file_template={
-                "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
-                'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
-                "vars_data": {"AgeS": "snow_age", "AlbedoS": "snow_albedo"}
-            },
-            time_signature='current',
-            time_reference=sim_time, time_period=1, time_freq='h', time_direction='forward',
-        )
+            data_src_obj = create_src_dataset(
+                file_name=data_src_settings['file_name'], file_path=data_src_settings['path'],
+                file_time=sim_time)
 
-        # source data 02
-        file_name = fill_string(
-            alg_variables_application['data_source']['dset_02']['file_name'],
-            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
+            data_src_list.append(data_src_obj)
 
-        data_src_02 = DataLocal(
-            path=alg_variables_application['data_source']['dset_02']['path'],
-            file_name=file_name,
-            file_format='netcdf', file_mode=None, file_variable=['age', 'albedo'],
-            file_template={
-                "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
-                'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
-                "vars_data": {"AgeS": "snow_age", "AlbedoS": "snow_albedo"}
-            },
-            time_signature='current',
-            time_reference=sim_time, time_period=1, time_freq='h', time_direction='forward',
-        )
+        # iterate over dst datasets
+        data_dst_list = []
+        for data_dst_key, data_dst_settings in alg_variables_application['data_destination'].items():
 
-        # destination data age
-        file_name = fill_string(
-            alg_variables_application['data_destination']['dset_age']['file_name'],
-            time_destination="%Y%m%d%H%M", domain_name=alg_variables_application['info']['domain_name'])
+            data_dst_obj = create_dst_dataset(
+                file_name=data_dst_settings['file_name'], file_path=data_dst_settings['path'],
+                file_time=sim_time, file_variable=data_dst_settings['variable'],
+                vars_data=data_dst_settings['vars_data'],
+                vars_geo=data_dst_settings['vars_geo'], dims_geo=data_dst_settings['dims_geo'])
 
-        data_dst_age = DataLocal(
-            path=alg_variables_application['data_destination']['dset_age']['path'],
-            file_name=file_name, time_signature='step',
-            file_format='geotiff', file_type=None, file_mode='grid', file_variable=['age'],
-            file_template={
-                "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-                "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-                "vars_data": {"snow_age": "SNOW_AGE"}
-            },
-            time_period=1, time_format='%Y%m%d%H%M')
+            data_dst_list.append(data_dst_obj)
 
-        # destination data albedo
-        file_name = fill_string(
-            alg_variables_application['data_destination']['dset_albedo']['file_name'],
-            time_destination="%Y%m%d%H%M", domain_name=alg_variables_application['info']['domain_name'])
-
-        data_dst_albedo = DataLocal(
-            path=alg_variables_application['data_destination']['dset_albedo']['path'],
-            file_name=file_name, time_signature='step',
-            file_format='geotiff', file_type=None, file_mode='grid', file_variable=['albedo'],
-            file_template={
-                "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-                "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-                "vars_data": {"snow_albedo": "SNOW_ALBEDO"}
-            },
-            time_period=1, time_format='%Y%m%d%H%M')
-
-        # multi variable
+        # orchestrator multi variable settings
         orc_process = Orchestrator.multi_tile(
-            data_package_in=[data_src_01, data_src_02],
-            data_package_out=[data_dst_age, data_dst_albedo],
+            data_package_in=data_src_list, data_package_out=data_dst_list,
             data_ref=geo_data,
             configuration=configuration['WORKFLOW']
         )
 
-        # orchestrator exec
+        # orchestrator multi variable execution
         orc_process.run(time=sim_time)
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -263,8 +216,58 @@ def main(alg_collectors_settings: dict = None):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to define source dataset
+def create_dst_dataset(file_name: str, file_path: str, file_time: pd.Timestamp,
+                       file_variable: str,
+                       vars_data: dict, vars_geo: dict, dims_geo: dict) -> DataLocal:
+
+    # define file name
+    file_name = fill_string(file_name, time_source=file_time, domain_name=None)
+
+    data_obj = DataLocal(
+        path=file_path,
+        file_name=file_name, time_signature='step',
+        file_format='geotiff', file_type=None, file_mode='grid', file_variable=[file_variable],
+        file_template={
+            "dims_geo": dims_geo, "vars_geo": vars_geo, "vars_data": vars_data
+        },
+        time_period=1, time_format='%Y%m%d%H%M')
+
+    return data_obj
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to define source dataset
+def create_src_dataset(file_name: str, file_path: str, file_time: pd.Timestamp) -> DataLocal:
+
+    # define file name
+    file_name = fill_string(file_name, time_source=file_time, domain_name=None)
+
+    # define file obj
+    data_obj = DataLocal(
+        path=file_path,
+        file_name=file_name,
+        file_format="netcdf", file_mode=None, file_variable=['age', 'albedo'],
+        file_template={
+            "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
+            'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
+            "vars_data": {"AgeS": "snow_age", "AlbedoS": "snow_albedo"}
+        },
+        time_signature='current',
+        time_reference=file_time, time_period=1, time_freq='h', time_direction='forward',
+    )
+
+    return data_obj
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 # call script from external library
 if __name__ == "__main__":
     # run script
     main()
 # ----------------------------------------------------------------------------------------------------------------------
+
+
+

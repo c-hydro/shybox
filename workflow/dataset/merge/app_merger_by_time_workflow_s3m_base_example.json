@@ -52,40 +52,35 @@
     },
     "application": {
       "info": {
-        "domain_name": ["marche", "emilia_romagna"]
+        "domain_name": ["italy"]
       },
       "time": {
         "start": "2025-01-24 00:00",
-        "end": "{time_end}",
-        "frequency": "h",
+        "end": "2025-01-28 00:00",
+        "period": 5,
+        "frequency": "d",
         "format": "%Y-%m-%d %H:00"
       },
       "geo": {
         "terrain": {
           "path": "{path_geo}",
-          "file_name": "{domain_name}.dem.txt"
+          "file_name": "marche.dem.txt"
         }
       },
       "data_source": {
-        "dset_01": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/%Y/%m/%d/",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
-        },
-        "dset_02": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/emilia_romagna/%Y/%m/%d",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
+        "dset": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
+          "file_name": "age.%Y%m%d%H%M.tiff"
         }
       },
       "data_destination": {
-        "dset_age": {
+        "dset": {
           "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
-          "file_name": "age.{time_destination}.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "age"
-        },
-        "dset_albedo": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
-          "file_name": "albedo.{time_destination}.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "albedo"
+          "file_name": "AGE_%Y%m%d.nc",
+          "format": "netcdf", "type": "itwater", "mode": "grid", "variable": "age",
+          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+          "vars_data": {"snow_age": "SNOW_AGE"}
         }
       },
       "log": {

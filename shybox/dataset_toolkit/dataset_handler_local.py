@@ -50,9 +50,14 @@ class DataLocal(Dataset):
         return self.get_key(time, **kwargs)
 
     ## INPUT/OUTPUT METHODS
-    def _read_data(self, input_path) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+    def _read_data(self, input_path, input_mapping: dict = None) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+
+        input_variable = None
+        if input_mapping is not None:
+            input_variable = list(input_mapping.keys())
+
         return read_from_file(
-            input_path, file_format=self.file_format, file_mode=self.file_mode)
+            input_path, file_format=self.file_format, file_mode=self.file_mode, file_variable=input_variable)
     
     def _write_data(self, output: (xr.DataArray, pd.DataFrame), output_path: str, **kwargs) -> None:
         write_to_file(output,
