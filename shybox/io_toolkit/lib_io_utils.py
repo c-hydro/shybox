@@ -103,3 +103,91 @@ def create_darray(data, geo_x, geo_y, time=None, name=None,
 
     return data_da
 # ----------------------------------------------------------------------------------------------------------------------
+
+
+# -------------------------------------------------------------------------------------
+# method to create dataset
+def create_dset(var_data_values,
+                var_geo_values, var_geo_x, var_geo_y,
+                var_data_time=None,
+                var_data_name='variable', var_geo_name='terrain', var_data_attrs=None, var_geo_attrs=None,
+                var_geo_1d=False,
+                file_attributes=None,
+                coord_name_x='longitude', coord_name_y='latitude', coord_name_time='time',
+                dim_name_x='west_east', dim_name_y='south_north', dim_name_time='time',
+                dims_order_2d=None, dims_order_3d=None):
+
+    var_geo_x_tmp = var_geo_x
+    var_geo_y_tmp = var_geo_y
+    if var_geo_1d:
+        if (var_geo_x.shape.__len__() == 2) and (var_geo_y.shape.__len__() == 2):
+            var_geo_x_tmp = var_geo_x[0, :]
+            var_geo_y_tmp = var_geo_y[:, 0]
+    else:
+        if (var_geo_x.shape.__len__() == 1) and (var_geo_y.shape.__len__() == 1):
+            var_geo_x_tmp, var_geo_y_tmp = np.meshgrid(var_geo_x, var_geo_y)
+
+    if dims_order_2d is None:
+        dims_order_2d = [dim_name_y, dim_name_x]
+    if dims_order_3d is None:
+        dims_order_3d = [dim_name_y, dim_name_x, dim_name_time]
+
+    if isinstance(var_data_time, pd.Timestamp):
+        var_data_time = pd.DatetimeIndex([var_data_time])
+    elif isinstance(var_data_time, pd.DatetimeIndex):
+        pass
+    else:
+        raise NotImplemented('Case not implemented yet')
+
+    var_dset = xr.Dataset(coords={coord_name_time: ([dim_name_time], var_data_time)})
+    var_dset.coords[coord_name_time] = var_dset.coords[coord_name_time].astype('datetime64[ns]')
+
+    if file_attributes:
+        if isinstance(file_attributes, dict):
+            var_dset.attrs = file_attributes
+
+    var_da_terrain = xr.DataArray(np.flipud(var_geo_values),  name=var_geo_name,
+                                  dims=dims_order_2d,
+                                  coords={coord_name_x: ([dim_name_y, dim_name_x], var_geo_x_tmp),
+                                          coord_name_y: ([dim_name_y, dim_name_x], np.flipud(var_geo_y_tmp))})
+    var_dset[var_geo_name] = var_da_terrain
+    var_geo_attrs_select = select_attrs(var_geo_attrs)
+
+    if var_geo_attrs_select is not None:
+        var_dset[var_geo_name].attrs = var_geo_attrs_select
+
+    if var_data_values.shape.__len__() == 2:
+        var_da_data = xr.DataArray(np.flipud(var_data_values), name=var_data_name,
+                                   dims=dims_order_2d,
+                                   coords={coord_name_x: ([dim_name_y, dim_name_x], var_geo_x_tmp),
+                                           coord_name_y: ([dim_name_y, dim_name_x], np.flipud(var_geo_y_tmp))})
+    elif var_data_values.shape.__len__() == 3:
+        var_da_data = xr.DataArray(np.flipud(var_data_values), name=var_data_name,
+                                   dims=dims_order_3d,
+                                   coords={coord_name_time: ([dim_name_time], var_data_time),
+                                           coord_name_x: ([dim_name_y, dim_name_x], var_geo_x_tmp),
+                                           coord_name_y: ([dim_name_y, dim_name_x], np.flipud(var_geo_y_tmp))})
+    else:
+        raise NotImplemented
+
+    if var_data_attrs is not None:
+        if attr_valid_range in list(var_data_attrs.keys()):
+            valid_range = var_data_attrs[attr_valid_range]
+            var_da_data = clip_map(var_da_data, valid_range)
+
+        if attr_missing_value in list(var_data_attrs.keys()):
+            missing_value = var_data_attrs[attr_missing_value]
+            var_da_data = var_da_data.where(var_da_terrain > 0, other=missing_value)
+
+    var_dset[var_data_name] = var_da_data
+    if var_data_attrs is not None:
+        var_data_attrs_select = select_attrs(var_data_attrs)
+    else:
+        var_data_attrs_select = None
+
+    if var_data_attrs_select is not None:
+        var_dset[var_data_name].attrs = var_data_attrs_select
+
+    return var_dset
+
+# -------------------------------------------------------------------------------------

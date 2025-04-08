@@ -368,7 +368,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
             else:
                 length = None
             self.previous_requested_time = time
+        elif isinstance(timestep, list):
+
+            time_signature = self.time_signature
+            if time_signature == 'start':
+                time = timestep[0]
+            elif time_signature == 'end':
+                time = timestep[-1]
+            length = 1
+            self.previous_requested_time = time
+
         else:
+
             time_signature = self.time_signature
             if time_signature == 'start':
                 time = timestep.start
@@ -407,7 +418,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def get_data(self, time: (dt.datetime, pd.Timestamp) = None, as_is = False, **kwargs):
 
         full_location = self.get_key(time, **kwargs)
-        variable = kwargs.pop('variable', self.file_variable)
+
+        # check memory active (if defined true or false)
+        if 'memory_active' in kwargs:
+            self.memory_active = kwargs.pop('memory_active')
 
         mapping = None
         if 'map_in' in kwargs:
@@ -472,7 +486,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             
         if self.check_data(time, **kwargs):
 
-            data = self._read_data(full_location)
+            data = self._read_data(full_location, input_mapping=mapping)
 
             if as_is:
                 return data
@@ -486,7 +500,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             data = map_coords(data, **self.file_template)
 
             # map the data variables
-            data = map_vars(data, vars_filter=mapping, **self.file_template)
+            data = map_vars(data, **self.file_template)
 
             # ensure that the data has descending latitudes
             data = straighten_data(data)
@@ -514,12 +528,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # if there is no template for the dataset, create it from the data
         template_dict = self.get_template_dict(make_it=False, **kwargs)
         if template_dict is None:
-            self.set_template(template_array=self.memory_data, template_key=variable, **kwargs)
+            if self.memory_data is not None:
+                self.set_template(template_array=self.memory_data, template_key=variable, **kwargs)
+            else:
+                self.set_template(template_array=data, template_key=variable, **kwargs)
         else:
             # otherwise, update the data in the template
             # (this will make sure there is no errors in the coordinates due to minor rounding)
             attrs = data.attrs
-            data = self.set_data_to_template(self.memory_data, template_dict)
+            if self.memory_data is not None:
+                data = self.set_data_to_template(self.memory_data, template_dict)
+            else:
+                data = self.set_data_to_template(data, template_dict)
             data.attrs.update(attrs)
 
         # set attributes
