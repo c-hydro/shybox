@@ -68,6 +68,10 @@ class ProcessorContainer:
         else:
             raise ValueError('Time format is not pd.Timestamp in the time step')
 
+        if isinstance(time, list):
+            if len(time) == 1:
+                time = time[0]
+
         fx_id = kwargs['id'] if 'id' in kwargs else None
         fx_variable = kwargs['variable'] if 'variable' in kwargs else None
 
@@ -88,6 +92,10 @@ class ProcessorContainer:
             elif isinstance(data_raw, DataLocal):
                 data_raw = [data_raw] * len(time)
 
+        # memory is active only for start process
+        if fx_id != 0:
+            kwargs['memory_active'] = False
+
         if isinstance(data_raw, list):
             fx_data = []
             for data_id, (data_tmp, time_tmp) in enumerate(zip(data_raw, time)):
@@ -95,7 +103,7 @@ class ProcessorContainer:
                 fx_data.append(fx_tmp)
             fx_metadata = {}
         else:
-            fx_data = data_raw.get_data(time=time[0], **kwargs)
+            fx_data = data_raw.get_data(time=time, **kwargs)
             fx_metadata = {}
 
         fx_memory = None
@@ -104,6 +112,10 @@ class ProcessorContainer:
                 fx_memory = [data_tmp.memory_data for data_tmp in data_raw]
             else:
                 fx_memory = data_raw.memory_data
+
+        if isinstance(fx_data, list):
+            if len(fx_data) == 1:
+                fx_data = fx_data[0]
 
         fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
         fx_args['time'] = time
@@ -132,9 +144,9 @@ class ProcessorContainer:
         #    if kwargs.pop('variable', None) is not None:
         #        fx_var = kwargs.pop('variable', None)
         if fx_var is not None:
-            if isinstance(fx_var, xr.DataArray):
+            if isinstance(fx_save, xr.DataArray):
                 fx_save.name = fx_var
-            elif isinstance(fx_var, xr.Dataset):
+            elif isinstance(fx_save, xr.Dataset):
                 fx_save.name = fx_var
 
         if self.dump_state:

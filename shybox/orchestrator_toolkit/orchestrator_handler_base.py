@@ -408,6 +408,8 @@ class OrchestratorHandler:
         elif isinstance(time, pd.DatetimeIndex):
             tmp = [convert_time_format(ts, 'str_to_stamp') for ts in time]
             time = deepcopy(tmp)
+        elif isinstance(time, pd.Timestamp):
+            pass
         else:
             raise ValueError('Time must be a string or a DatetimeIndex.')
 

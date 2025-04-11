@@ -502,6 +502,14 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # map the data variables
             data = map_vars(data, **self.file_template)
 
+            if not self.file_template:
+                var_name = data.name
+                if var_name is not None:
+                    if var_name in list(mapping.keys()):
+                        var_id = list(mapping.keys()).index(var_name)
+                        var_upd = list(mapping.values())[var_id]
+                        data.name = var_upd
+
             # ensure that the data has descending latitudes
             data = straighten_data(data)
 
@@ -590,7 +598,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 default_template = self.get_template_dict(**kwargs, make_it=False)
             else:
                 raise ValueError('Cannot write numpy array without a template.')
-        
+
+        if isinstance(data, xr.Dataset):
+            pass
+
         out_obj = self.set_data_to_template(data, default_template)
         out_obj = set_type(out_obj, self.nan_value)
 
