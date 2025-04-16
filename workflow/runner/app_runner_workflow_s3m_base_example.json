@@ -16,7 +16,7 @@
           "domain_name": "DOMAIN_NAME",
           "path_source" : "PATH_SRC", "path_destination" : "PATH_DST",
           "time_run" : "TIME_RUN", "time_restart": "TIME_RESTART", "time_period" : "TIME_PERIOD",
-          "path_app": "PATH_APP",
+          "path_app": "PATH_APP", "path_static": "PATH_STATIC",
           "path_log": "PATH_LOG", "path_namelist": "PATH_NAMELIST"
         }
       },
@@ -26,9 +26,9 @@
         "time_run": "timestamp", "time_restart": "timestamp", "time_period": "int",
         "time_start": "string", "time_end": "string",
         "time_rounding": "string", "time_frequency": "string",
-        "path_app": "string",
-        "path_log": "string", "file_log": "string",
-        "path_namelist": "string", "file_namelist": "string",
+        "path_app": "path", "path_static": "path",
+        "path_log": "path", "file_log": "string",
+        "path_namelist": "path", "file_namelist": "string",
         "execution_name": "string", "execution_mode": "string"
       },
       "template": {
@@ -37,7 +37,7 @@
         "time_run": "%Y%m%d%H00", "time_restart": "%Y%m%d%H00", "time_period": "int",
         "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
         "time_rounding": "string", "time_frequency": "string",
-        "path_app": "string",
+        "path_app": "string", "path_static": "string",
         "path_log": "string", "file_log": "string",
         "path_namelist": "string", "file_namelist": "string",
         "execution_name": "string", "execution_mode": "string"
@@ -55,7 +55,7 @@
     "fields": {
       "by_value": {
         "sDomainName": "{domain_name}",
-        "sPathData_Static_Gridded": "{path_source}/static/",
+        "sPathData_Static_Gridded": "{path_static}",
         "sPathData_Forcing_Gridded": "{path_source}/input/$yyyy/$mm/$dd/",
         "sPathData_Updating_Gridded": "{path_source}/updating/$yyyy/$mm/$dd/",
         "sPathData_Output_Gridded": "{path_source}/output/$yyyy/$mm/$dd/",
@@ -101,6 +101,7 @@
     "time_rounding": "{time_rounding}",
     "domain_name": "{domain_name}",
     "path_app": "{path_app}",
+    "path_static": "{path_static}",
     "path_source": "{path_source}", "path_destination": "{path_destination}",
     "file_namelist": "{file_namelist}", "path_namelist": "{path_app}",
     "file_log": "{file_log}", "path_log": "{path_app}",

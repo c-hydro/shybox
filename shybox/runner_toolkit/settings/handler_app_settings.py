@@ -374,6 +374,7 @@ class SettingsHandler:
             if var_value is not None:
                 if isinstance(var_value, str):
 
+                    # expand $HOME if defined in the string
                     variable_self[var_key] = expand_file_path(var_value)
 
                     if any(re.findall(r'{|}', var_value, re.IGNORECASE)):
@@ -575,7 +576,7 @@ class SettingsHandler:
 # ----------------------------------------------------------------------------------------------------------------------
 # method to format variable
 def format_variable(var_value: (int, float, str, bool, pd.Timestamp) = None,
-                    var_format: str = 'string', var_template: str = None,
+                    var_format: str = 'string', var_template: str = None, trailing_format: str = '/',
                     default_value: (int, float, str, bool, pd.Timestamp) = None) -> (int, float, str, bool, pd.Timestamp):
 
     if var_value is not None:
@@ -598,6 +599,14 @@ def format_variable(var_value: (int, float, str, bool, pd.Timestamp) = None,
                     logger_stream.error(logger_arrow.error + 'Template "' + str(var_template) +
                                      '" not defined for format "' + str(var_format) + '".')
                     raise KeyError('Template must be defined.')
+            elif var_format == 'path':
+                var_value = str(var_value)
+                if "$HOME" in var_value:
+                    var_value = var_value.replace("$HOME", os.path.expanduser("~"))
+
+                if not var_value.endswith(trailing_format):
+                    var_value = var_value + trailing_format
+
             else:
                 logger_stream.error(logger_arrow.error + 'Format "' + str(var_format) +
                                     '" not expected.')
