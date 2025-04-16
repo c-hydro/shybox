@@ -86,7 +86,7 @@ def main(alg_collectors_settings: dict = None):
     alg_variables_flags = driver_settings.get_variable_by_tag('flags')
 
     # collector data
-    collector_data.view(table_print=False)
+    collector_data.view(table_print=True)
 
     # set logging stream
     set_logging_stream(
