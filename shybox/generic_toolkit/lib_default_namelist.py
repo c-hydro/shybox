@@ -10,8 +10,7 @@ Version:       '4.0.0'
 # s3m namelist type
 type_namelist_s3m_533 = dict(
 
-    S3M_Parameters={
-        'sDomainName': 'mandatory',
+    S3M_Snow={
         'a1dArctUp': 'default',
         'a1dAltRange': 'default',
         'iGlacierValue': 'default',
@@ -31,6 +30,7 @@ type_namelist_s3m_533 = dict(
     },
 
     S3M_Namelist={
+        'sDomainName': 'mandatory',
 
         'iFlagDebugSet': 'default',
         'iFlagDebugLevel': 'default',
@@ -99,8 +99,7 @@ type_namelist_s3m_533 = dict(
 # s3m namelist constants
 structure_namelist_s3m_533 = dict(
 
-    S3M_Parameters={
-        'sDomainName': None,
+    S3M_Snow={
         'a1dArctUp': [1.1, 1.1, 1.1, 1.1],
         'a1dAltRange': [1500, 2000, 2500],
         'iGlacierValue': 1,
@@ -121,6 +120,8 @@ structure_namelist_s3m_533 = dict(
         },
 
     S3M_Namelist = {
+
+        'sDomainName': None,
 
         'iFlagDebugSet': 0,
         'iFlagDebugLevel': 3,
