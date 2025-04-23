@@ -102,7 +102,8 @@ class NamelistHandler:
         View the namelist data.
         """
 
-        table_dict = flat_dict_key(data=table_data, separator=":", obj_dict={})
+        table_dict = flat_dict_key(
+            data=table_data, separator_key=":", separator_value=',', obj_dict={})
         table_dframe = pd.DataFrame.from_dict(table_dict, orient='index', columns=['value'])
 
         table_obj = tabulate(

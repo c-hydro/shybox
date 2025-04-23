@@ -50,14 +50,20 @@ def add_dict_key(dictionary: dict, keys: list, value: (str, int, float)):
 # ----------------------------------------------------------------------------------------------------------------------
 # method to flat dictionary keys
 def flat_dict_key(data: dict, parent_key: str = '',
-                  separator: str = ":", obj_dict: dict = {}):
+                  separator_key: str = ":", obj_dict: dict = {}, separator_value: str = ',') -> dict:
+
+    assert separator_key != separator_value, 'Separator key and separator value must be not the same'
+
     for k, v in data.items():
-        key = parent_key + separator + k if parent_key else k
+        key = parent_key + separator_key + k if parent_key else k
         if isinstance(v, dict):
             if v:
                 flat_dict_key(v, key, obj_dict=obj_dict)
             else:
                 obj_dict[key] = v
+        elif isinstance(v, list):
+            tmp = [str(i) for i in v]
+            obj_dict[key] = separator_value.join(tmp)
         else:
             obj_dict[key] = v
     return obj_dict
