@@ -92,9 +92,21 @@ class ProcessorContainer:
             elif isinstance(data_raw, DataLocal):
                 data_raw = [data_raw] * len(time)
 
+        if isinstance(data_raw, list):
+            if not isinstance(time, list):
+                time = [time] * len(data_raw)
+            elif isinstance(time, list):
+                if len(data_raw) != len(time):
+                    time = time[0] * len(data_raw)
+                else:
+                    pass
+            else:
+                raise ValueError('Time object is not compatible with data_raw')
+
         # memory is active only for start process
         if fx_id != 0:
             kwargs['memory_active'] = False
+
 
         if isinstance(data_raw, list):
             fx_data = []
@@ -134,6 +146,9 @@ class ProcessorContainer:
         kwargs.pop('variable', None)
 
         out_opts = self.out_opts
+
+        # check if time is a list of timestamps and reduce it if they are the same
+        time = reduce_if_same_timestamps(time)
 
         if isinstance(time, list):
             print(f'{self.fx_name} - from {time[0]} to {time[-1]} - {self.variable}')
@@ -178,3 +193,19 @@ class ProcessorContainer:
 
         return fx_out, fx_memory
 # ----------------------------------------------------------------------------------------------------------------------
+
+def reduce_if_same_timestamps(timestamps):
+    if not timestamps:
+        return []
+
+    if not isinstance(timestamps, list):
+        timestamps = [timestamps]
+
+    # Ensure input is a list of pd.Timestamp
+    timestamps = [pd.Timestamp(ts) for ts in timestamps]
+    first = timestamps[0]
+
+    if all(ts == first for ts in timestamps):
+        return first  # All elements are the same
+    else:
+        return timestamps  # Elements differ, return as-is
