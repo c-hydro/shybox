@@ -16,7 +16,8 @@ Examples of environment variables declarations:
 DOMAIN_NAME='marche';
 TIME_START='1981-01-01';
 TIME_END='1981-01-03';
-PATH_SRC='/home/fabio/Desktop/shybox/dset/itwater';
+PATH_SRC_BY_S3M='/home/fabio/Desktop/shybox/dset/itwater';
+PATH_SRC_BY_BIAS_CORRECTION='/home/fabio/Desktop/shybox/dset/itwater';
 PATH_DST='/home/fabio/Desktop/shybox/dset/itwater'
 PATH_LOG=$HOME/dataset_base/log/;
 
