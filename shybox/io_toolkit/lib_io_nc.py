@@ -67,8 +67,9 @@ def write_file_nc_itwater(path: str, data: xr.Dataset, time: pd.DatetimeIndex, a
     if dim_time in list(data.coords):
         encoding[dim_time] = {'calendar': 'gregorian'}
 
-    data.to_netcdf(path=path, format=dset_format, mode=dset_mode,
-                   engine=dset_engine, encoding=encoding)
+    data = data.transpose(dim_time, dim_x, dim_y)
+
+    data.to_netcdf(path=path, format=dset_format, mode=dset_mode, engine=dset_engine, encoding=encoding)
 
 # ----------------------------------------------------------------------------------------------------------------------
 

@@ -10,6 +10,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import warnings
 import os.path
 
 from osgeo import gdal
@@ -129,6 +130,19 @@ def merge_data_by_ref(
             break
 
     ref_data = ref.values
+
+    dset_no_data = var_no_data
+    if hasattr(ref, "NODATA_value"):
+        dset_no_data = ref.NODATA_value
+
+    if dset_no_data != ref_no_data:
+        warnings.warn(
+            f"Reference DataArray NODATA value ({dset_no_data}) does not match the provided ref_no_data ({ref_no_data}). "
+            "This may lead to unexpected results. Proceed with caution. Algorithm will use the provided dset_no_data value."
+        )
+        ref_no_data = dset_no_data
+
+    ref_data = ref_data.astype(np.float64)
     ref_data[ref_data == ref_no_data] = np.nan
     ref_x_1d, ref_y_1d = ref[var_geo_x].values, ref[var_geo_y].values
     ref_x_2d, ref_y_2d = np.meshgrid(ref_x_1d, ref_y_1d)
@@ -187,6 +201,7 @@ def merge_data_by_ref(
         var_obj.append(var_da)
 
         ''' debug plot
+        import matplotlib.pyplot as plt
         plt.figure()
         plt.imshow(var_data)
         plt.colorbar()

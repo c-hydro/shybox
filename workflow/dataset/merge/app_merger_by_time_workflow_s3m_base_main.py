@@ -49,9 +49,7 @@ from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHa
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
-from shybox.processing_toolkit.lib_proc_interp import interpolate_data
-from shybox.processing_toolkit.lib_proc_merge import merge_data
+from shybox.processing_toolkit.lib_proc_merge import merge_data_by_time
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -117,17 +115,29 @@ def main(alg_collectors_settings: dict = None):
     # ------------------------------------------------------------------------------------------------------------------
     # configuration workflow
     configuration= {
-        "WORKFLOW": {
+        "WORKFLOW_DSET_01": {
             "options": {
                 "intermediate_output": "Tmp",
                 "tmp_dir": "tmp"
             },
             "process_list": {
-                "age": [
+                "rain_eff": [
+                    {"function": "merge_data_by_time"}
+                ]
+            }
+        },
+        "WORKFLOW_DSET_02": {
+            "options": {
+                "intermediate_output": "Tmp",
+                "tmp_dir": "tmp"
+            },
+            "process_list": {
+                "snow_mask": [
                     {"function": "merge_data_by_time"}
                 ]
             }
         }
+
     }
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -161,7 +171,7 @@ def main(alg_collectors_settings: dict = None):
         # time source data
         alg_data_time = select_time_range(
             time_start=sim_time,
-            time_period=5,
+            time_period=24,
             time_frequency='h')
         start_data_time, end_data_time = alg_data_time[0], alg_data_time[-1]
 
@@ -169,45 +179,87 @@ def main(alg_collectors_settings: dict = None):
         end_data_time = select_time_format(end_data_time, time_format='%Y-%m-%d %H:%M')
 
         # get data source settings
-        data_src_settings = alg_variables_application['data_source']['dset']
+        data_src_settings_01 = alg_variables_application['data_source']['dset_01']
         # organize data source obj
-        data_src_obj = DataLocal(
-            path=data_src_settings['path'],
-            file_name=data_src_settings['file_name'],
-            file_format="geotiff", file_mode=None, file_variable=['age'],
+        data_src_obj_01 = DataLocal(
+            path=data_src_settings_01['path'],
+            file_name=data_src_settings_01['file_name'],
+            file_format="geotiff", file_mode=None, file_variable=['rain_eff'],
             file_template={
                 "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
                 'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
-                "vars_data": {"snow_age": "snow_age"}
+                "vars_data": {"rain_eff": "rain_eff"}
             },
             time_signature='current',
             time_reference=start_data_time, time_period=1, time_freq='h', time_direction='forward',
         )
 
         # get data destination settings
-        data_dst_settings = alg_variables_application['data_destination']['dset']
+        data_dst_settings_01 = alg_variables_application['data_destination']['dset_01']
         # organize data destination obj
-        data_dst_obj = DataLocal(
-            path=data_dst_settings['path'],
-            file_name=data_dst_settings['file_name'], time_signature='start',
+        data_dst_obj_01 = DataLocal(
+            path=data_dst_settings_01['path'],
+            file_name=data_dst_settings_01['file_name'], time_signature='start',
             file_format='netcdf', file_type='itwater', file_mode='grid',
-            file_variable=data_dst_settings['variable'],
+            file_variable=data_dst_settings_01['variable'],
             file_template={
                 "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
                 "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-                "vars_data": data_dst_settings['vars_data']
+                "vars_data": data_dst_settings_01['vars_data']
             },
-            time_period=5, time_format='%Y%m%d%H%M')
+            time_period=24, time_format='%Y%m%d%H%M')
+
+        # get data source settings
+        data_src_settings_02 = alg_variables_application['data_source']['dset_02']
+        # organize data source obj
+        data_src_obj_02 = DataLocal(
+            path=data_src_settings_02['path'],
+            file_name=data_src_settings_02['file_name'],
+            file_format="geotiff", file_mode=None, file_variable=['snow_mask'],
+            file_template={
+                "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
+                'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
+                "vars_data": {"snow_mask": "snow_mask"}
+            },
+            time_signature='current',
+            time_reference=start_data_time, time_period=1, time_freq='h', time_direction='forward',
+        )
+
+        # get data destination settings
+        data_dst_settings_02 = alg_variables_application['data_destination']['dset_02']
+        # organize data destination obj
+        data_dst_obj_02 = DataLocal(
+            path=data_dst_settings_02['path'],
+            file_name=data_dst_settings_02['file_name'], time_signature='start',
+            file_format='netcdf', file_type='itwater', file_mode='grid',
+            file_variable=data_dst_settings_02['variable'],
+            file_template={
+                "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+                "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+                "vars_data": data_dst_settings_02['vars_data']
+            },
+            time_period=24, time_format='%Y%m%d%H%M')
 
         # orchestrator multi time(s) settings
-        orc_process = Orchestrator.multi_time(
-            data_package_in=[data_src_obj], data_package_out=[data_dst_obj],
+        orc_process_01 = Orchestrator.multi_time(
+            data_package_in=[data_src_obj_01], data_package_out=[data_dst_obj_01],
             data_ref=geo_data,
-            configuration=configuration['WORKFLOW']
+            configuration=configuration['WORKFLOW_DSET_01']
         )
 
         # orchestrator multi time(s) execution
-        orc_process.run(time=pd.date_range(start_data_time, end_data_time, freq='h'),
+        orc_process_01.run(time=pd.date_range(start_data_time, end_data_time, freq='h'),
+                        group='by_time')
+
+        # orchestrator multi time(s) settings
+        orc_process_02 = Orchestrator.multi_time(
+            data_package_in=[data_src_obj_02], data_package_out=[data_dst_obj_02],
+            data_ref=geo_data,
+            configuration=configuration['WORKFLOW_DSET_02']
+        )
+
+        # orchestrator multi time(s) execution
+        orc_process_02.run(time=pd.date_range(start_data_time, end_data_time, freq='h'),
                         group='by_time')
 
     # ------------------------------------------------------------------------------------------------------------------

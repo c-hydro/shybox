@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BY DOMAIN BASE
+SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER BASE
 
-__date__ = '20250403'
+__date__ = '20250310'
 __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
@@ -13,16 +13,15 @@ General command line:
 python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Examples of environment variables declarations:
-DOMAIN_NAME='italy';
-TIME_START="'2025-01-24 00:00'";
-TIME_END="'2025-01-24 05:00'";
+DOMAIN_NAME='marche';
+TIME_START='1981-01-01';
+TIME_END='1981-01-03';
 PATH_SRC='/home/fabio/Desktop/shybox/dset/itwater';
-PATH_DST='/home/fabio/Desktop/shybox/dset/itwater';
+PATH_DST='/home/fabio/Desktop/shybox/dset/itwater'
 PATH_LOG=$HOME/dataset_base/log/;
-PATH_TMP=$HOME/dataset_base/tmp/
 
 Version(s):
-20250403 (1.0.0) --> Beta release for shybox package
+20250310 (1.0.0) --> Beta release for shybox package
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -51,7 +50,6 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
-from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -61,10 +59,10 @@ logger_stream.setLevel(logging.ERROR)
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Workflow for datasets merger by domain base configuration'
+alg_name = 'Workflow for datasets converter base configuration'
 alg_type = 'Package'
 alg_version = '1.0.0'
-alg_release = '2025-04-03'
+alg_release = '2025-03-10'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -123,19 +121,29 @@ def main(alg_collectors_settings: dict = None):
                 "tmp_dir": alg_variables_settings['path_tmp']
             },
             "process_list": {
+                "rain": [
+                    {"function": "interpolate_data", "method": 'nn', "max_distance": 25000, "neighbours": 7,
+                     "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ],
+                "air_t": [
+                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7,
+                     "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ],
+                "rh": [
+                    {"function": "interpolate_data", "method":'nn', "max_distance": 22000, "neighbours": 7,
+                     "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ],
+                "inc_rad": [
+                    {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
+                     "fill_value": np.nan},
+                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                ],
                 "snow_mask": [
-                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan, "var_no_data": 0},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "rain_eff": [
-                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan, "var_no_data": -9999},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "albedo": [
-                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan, "var_no_data": -9999},
+                    {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
+                     "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
             }
@@ -170,37 +178,114 @@ def main(alg_collectors_settings: dict = None):
     # time iteration(s)
     for sim_time in alg_sim_time:
 
-        # iterate over src datasets
-        data_src_list = []
-        for data_src_key, data_src_settings in alg_variables_application['data_source'].items():
+        # time source data
+        alg_data_time = select_time_range(
+            time_start=sim_time,
+            time_period=24,
+            time_frequency='h')
+        start_data_time, end_data_time = alg_data_time[0], alg_data_time[-1]
+        period_data_time = len(alg_data_time)
 
-            data_src_obj = create_src_dataset(
-                file_name=data_src_settings['file_name'], file_path=data_src_settings['path'],
-                file_time=sim_time)
+        start_data_time = select_time_format(start_data_time, time_format='%Y-%m-%d %H:%M')
+        end_data_time = select_time_format(end_data_time, time_format='%Y-%m-%d %H:%M')
 
-            data_src_list.append(data_src_obj)
+        # precipitation source data
+        file_name = fill_string(
+            alg_variables_application['data_source']['rain']['file_name'],
+            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
 
-        # iterate over dst datasets
-        data_dst_list = []
-        for data_dst_key, data_dst_settings in alg_variables_application['data_destination'].items():
+        rain_data = DataLocal(
+            path=alg_variables_application['data_source']['rain']['path'],
+            file_name=file_name,
+            file_format=None, file_mode=None, file_variable='rain',
+            file_template={
+                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                "vars_data": {"Rain": "rain"}
+            },
+            time_signature='period',
+            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
+        )
 
-            data_dst_obj = create_dst_dataset(
-                file_name=data_dst_settings['file_name'], file_path=data_dst_settings['path'],
-                file_time=sim_time, file_variable=data_dst_settings['variable'],
-                vars_data=data_dst_settings['vars_data'],
-                vars_geo=data_dst_settings['vars_geo'], dims_geo=data_dst_settings['dims_geo'])
+        # air temperature source data
+        file_name = fill_string(
+            alg_variables_application['data_source']['air_t']['file_name'],
+            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
 
-            data_dst_list.append(data_dst_obj)
+        airt_data = DataLocal(
+            path=alg_variables_application['data_source']['air_t']['path'],
+            file_name=file_name,
+            file_format=None, file_mode=None, file_variable='air_t',
+            file_template={
+                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                "vars_data": {"Tair": "air_temperature"}
+            },
+            time_signature='period',
+            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
+        )
 
-        # orchestrator multi variable settings
-        orc_process = Orchestrator.multi_tile(
-            data_package_in=data_src_list, data_package_out=data_dst_list,
+        # relative humidity source data
+        file_name = fill_string(
+            alg_variables_application['data_source']['rh']['file_name'],
+            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
+        rh_data = DataLocal(
+            path=alg_variables_application['data_source']['rh']['path'],
+            file_name=file_name,
+            file_format=None, file_mode=None, file_variable='rh',
+            file_template={
+                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                "vars_data": {"RH": "relative_humidity"}
+            },
+            time_signature='period',
+            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
+        )
+
+        # relative humidity source data
+        file_name = fill_string(
+            alg_variables_application['data_source']['inc_rad']['file_name'],
+            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
+        inc_rad_data = DataLocal(
+            path=alg_variables_application['data_source']['inc_rad']['path'],
+            file_name=file_name,
+            file_format=None, file_mode=None, file_variable='inc_rad',
+            file_template={
+                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                "vars_data": {"Rad": "incoming_radiation"}
+            },
+            time_signature='period',
+            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
+        )
+
+
+        # destination data
+        file_name = fill_string(
+            alg_variables_application['data_destination']['file_name'],
+            time_destination="%Y%m%d%H%M", domain_name=alg_variables_application['info']['domain_name'])
+
+        output_data = DataLocal(
+            path=alg_variables_application['data_destination']['path'],
+            file_name=file_name,
+            time_signature='step',
+            file_format='netcdf', file_mode='grid', file_variable=['rain', 'air_t', 'rh', 'inc_rad'],
+            file_type=alg_variables_application['data_destination']['type'],
+            file_template={
+                "dims_geo": {"longitude": "X", "latitude": "Y", "time": "time"},
+                "vars_geo": {"longitude": "X", "latitude": "Y"},
+                "vars_data": {
+                    "rain": "Rain",
+                    "air_temperature": "AirTemperature",
+                    "relative_humidity": "RelHumidity",
+                    "incoming_radiation": "IncRadiation"}
+            },
+            time_period=1, time_format='%Y%m%d%H%M')
+
+        # orchestrator settings
+        orc_process = Orchestrator.multi_variable(
+            data_package_in=[rain_data, airt_data, rh_data, inc_rad_data], data_package_out=output_data,
             data_ref=geo_data,
             configuration=configuration['WORKFLOW']
         )
-
-        # orchestrator multi variable execution
-        orc_process.run(time=sim_time)
+        # orchestrator exec
+        orc_process.run(time=pd.date_range(start=start_data_time, end=end_data_time, freq='h'))
 
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -222,58 +307,8 @@ def main(alg_collectors_settings: dict = None):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to define source dataset
-def create_dst_dataset(file_name: str, file_path: str, file_time: pd.Timestamp,
-                       file_variable: str,
-                       vars_data: dict, vars_geo: dict, dims_geo: dict) -> DataLocal:
-
-    # define file name
-    file_name = fill_string(file_name, time_source=file_time, domain_name=None)
-
-    data_obj = DataLocal(
-        path=file_path,
-        file_name=file_name, time_signature='step',
-        file_format='geotiff', file_type=None, file_mode='grid', file_variable=[file_variable],
-        file_template={
-            "dims_geo": dims_geo, "vars_geo": vars_geo, "vars_data": vars_data
-        },
-        time_period=1, time_format='%Y%m%d%H%M')
-
-    return data_obj
-# ----------------------------------------------------------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# method to define source dataset
-def create_src_dataset(file_name: str, file_path: str, file_time: pd.Timestamp) -> DataLocal:
-
-    # define file name
-    file_name = fill_string(file_name, time_source=file_time, domain_name=None)
-
-    # define file obj
-    data_obj = DataLocal(
-        path=file_path,
-        file_name=file_name,
-        file_format="netcdf", file_mode=None, file_variable=['snow_mask', 'rain_eff', 'albedo'],
-        file_template={
-            "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
-            'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
-            "vars_data": {"SnowMask": "snow_mask", "REff": "rain_eff", "AlbedoS": "snow_albedo"}
-        },
-        time_signature='current',
-        time_reference=file_time, time_period=1, time_freq='h', time_direction='forward',
-    )
-
-    return data_obj
-# ----------------------------------------------------------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------------------------------------------------------
 # call script from external library
 if __name__ == "__main__":
     # run script
     main()
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-
