@@ -155,14 +155,33 @@ class ProcessorContainer:
         else:
             print(f'{self.fx_name} - {time} - {self.variable}')
 
-        #if 'variable' in kwargs:
-        #    if kwargs.pop('variable', None) is not None:
-        #        fx_var = kwargs.pop('variable', None)
+        # manage variable names and check if fx_save is a DataArray or Dataset
         if fx_var is not None:
             if isinstance(fx_save, xr.DataArray):
-                fx_save.name = fx_var
+                if isinstance(fx_var, str):
+                    fx_save.name = fx_var
+                elif isinstance(fx_var, list):
+                    if len(fx_var) == 1:
+                        fx_save.name = fx_var[0]
+                    else:
+                        raise ValueError("fx_var must be a single string when fx_save is a DataArray with multiple variables.")
+                else:
+                    raise TypeError("fx_var must be a string or list with length=1 when fx_save is a DataArray.")
             elif isinstance(fx_save, xr.Dataset):
-                fx_save.name = fx_var
+                if isinstance(fx_var, str):
+                    list_vars = list(fx_save.data_vars)
+                    if fx_var in list_vars:
+                        fx_save[fx_var].name = fx_var
+                    else:
+                        raise ValueError(f"Variable '{fx_var}' not found in Dataset data_vars.")
+                elif isinstance(fx_var, list):
+                    for var in fx_var:
+                        if var in fx_save.data_vars:
+                            fx_save[var].name = var
+                        else:
+                            raise ValueError(f"Variable '{var}' not found in Dataset data_vars.")
+                else:
+                    raise TypeError("fx_var must be a string or list when fx_save is a Dataset.")
 
         if self.dump_state:
             if 'collections' in kwargs:

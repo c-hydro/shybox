@@ -66,7 +66,7 @@
         "dFrac": 0.7,
         "dWS": 3.6780000000000003e-09,
         "dWDL": 3.6780000000000003e-09,
-        "iFlagCType": 1,
+        "iFlagCType" : 1,
         "a1dIntStep" : [1, 5, 25, 600],
         "sDomainName": "{domain_name}",
         "sPathData_Static_Point": "{path_source}/data_geo/point/",

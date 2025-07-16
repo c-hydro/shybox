@@ -33,8 +33,7 @@
         "time_start": "string", "time_end": "string",
         "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
-        "path_log": "string", "file_log": "string",
-        "path_tmp": "string",
+        "path_log": "string", "file_log": "string", "path_tmp": "string",
         "execution_name": "string", "execution_mode": "string"
       },
       "template": {
@@ -45,70 +44,56 @@
         "time_start": "%Y%m%d", "time_end": "%Y%m%d",
         "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
-        "path_log": "string", "file_log": "string",
-        "path_tmp": "string",
+        "path_log": "string", "file_log": "string", "path_tmp": "string",
         "execution_name": "string", "execution_mode": "string"
       }
     },
     "application": {
       "info": {
-        "domain_name": ["marche", "emilia_romagna", "toscana"]
+        "domain_name": "{domain_name}"
       },
       "time": {
-        "start": "2025-01-24 00:00",
+        "start": "{time_start}",
         "end": "{time_end}",
-        "frequency": "h",
-        "format": "%Y-%m-%d %H:00"
+        "frequency": "D",
+        "format": "%Y%m%d"
       },
       "geo": {
         "terrain": {
           "path": "{path_geo}",
-          "file_name": "mask_italy_500m_epsg4326.txt"
+          "file_name": "{domain_name}.dem.txt"
         }
       },
       "data_source": {
-        "dset_01": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/%Y/%m/%d/",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
+        "rain": {
+          "path": "{path_source}",
+          "file_name": "REFF_{time_source}.nc"
         },
-        "dset_02": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/emilia_romagna/%Y/%m/%d",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
+        "air_t": {
+          "path": "{path_source}",
+          "file_name": "T_{time_source}.nc"
         },
-        "dset_03": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/toscana/%Y/%m/%d",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
+        "rh": {
+          "path": "{path_source}",
+          "file_name": "U_{time_source}.nc"
+        },
+        "inc_rad": {
+          "path": "{path_source}",
+          "file_name": "R_{time_source}.nc"
+        },
+        "snow_mask": {
+          "path": "{path_source}",
+          "file_name": "SNOWMASK_{time_source}.nc"
         }
       },
       "data_destination": {
-        "dset_01": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-          "file_name": "snow_mask.%Y%m%d%H%M.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "snow_mask",
-          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-          "vars_data": {"snow_mask": "SNOW_MASK"}
-        },
-        "dset_02": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-          "file_name": "rain_eff.%Y%m%d%H%M.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "rain_eff",
-          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-          "vars_data": {"rain_eff": "RAIN_EFF"}
-        },
-        "dset_03": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-          "file_name": "albedo.%Y%m%d%H%M.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "albedo",
-          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-          "vars_data": {"snow_albedo": "SNOW_ALBEDO"}
-        }
+        "path": "{path_destination}/%Y/%m/%d/",
+        "file_name": "hmc.forcing-grid.{time_destination}.nc",
+        "format": "netcdf", "type": "hmc", "mode": "grid"
       },
       "log": {
         "path": "{path_log}",
-        "file_name": "example_merger_spatial.txt"
+        "file_name": "example.txt"
       },
       "tmp": {
         "path": "{path_tmp}",
