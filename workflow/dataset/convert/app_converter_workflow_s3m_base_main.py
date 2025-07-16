@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER BASE
+SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER BASE [S3M]
 
 __date__ = '20250310'
 __version__ = '1.0.0'
@@ -21,7 +21,7 @@ PATH_DST='/home/fabio/Desktop/shybox/dset/itwater'
 PATH_LOG=$HOME/dataset_base/log/;
 
 Version(s):
-20250310 (1.0.0) --> Beta release for shybox package
+20250310 (1.0.0) --> Beta release for shybox package (s3m datasets converter base configuration)
 """
 
 # ----------------------------------------------------------------------------------------------------------------------

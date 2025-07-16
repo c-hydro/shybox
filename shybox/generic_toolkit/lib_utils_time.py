@@ -231,5 +231,6 @@ def select_time_format(time_range: (pd.Timestamp, pd.DatetimeIndex), time_format
 
     if len(time_range_formatted) == 1:
         time_range_formatted = time_range_formatted[0]
+
     return time_range_formatted
 # ----------------------------------------------------------------------------------------------------------------------

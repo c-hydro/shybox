@@ -210,9 +210,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def expected_time_steps(self, value):
         self._expected_time_steps = self.get_expected_times(value[0], value[1], value[2], value[3], value[4])
 
-    def get_expected_times(self, time_reference: (pd.Timestamp, None),
+    def get_expected_times(self, time_reference: (pd.Timestamp, pd.DatetimeIndex, None),
                            time_period: int = None, time_freq: str = 'h', time_direction: str = 'forward',
                            time_normalize: bool = False) -> pd.date_range:
+
+        if isinstance(time_reference, pd.DatetimeIndex):
+            if len(time_reference) == 0:
+                return None
+            elif len(time_reference) == 1:
+                time_reference = time_reference[0]
+            else:
+                raise ValueError('Time reference must be a single timestamp or a single date range.')
+
         if time_reference is None or time_period is None:
             return None
 
