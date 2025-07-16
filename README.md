@@ -1,142 +1,107 @@
-HYdrological Models Suite
-=========================
+# 🌨️ shybox: Snow and Hydrologic Modeling Toolbox
 
-Welcome to the **Hydrological Model Suite** GitHub repository (hyms). This is a Modelling System supported by the Italian Civil Department (DPC) and is used for preventing and reducing hydrogeological risk.
+[![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![Release](https://img.shields.io/github/v/release/c-hydro/shybox)](https://github.com/c-hydro/shybox/releases)
 
-Background
-**********
+**shybox** (Snow and HYdrologic toolBOX) is a Python- and Fortran-based toolkit designed to support operational and research-level hydrological modeling. It is developed and maintained by the [CIMA Research Foundation](https://www.cimafoundation.org/), with active use in Italy’s regional civil protection forecasting systems.
 
-**Flood-PROOFS** (Flood PRObabilistic Operative Forecasting System) is a system designed by CIMA Research Foundation to support decision makers during the operational phases of flood forecasting and monitoring. The goal is to protect the population and infrastructure from damage caused by intense precipitation events.
+---
 
-The Flood-PROOFS system manages the data flow deriving from various modelling tools developed by the CIMA Research Foundation to return a quantitative assessment of the effects that precipitation can have on the territory in terms of flow and probability to overcome the critical thresholds in the different basins. 
+## 📦 Features
 
-The system has been operating since 2008 at various Functional Centers (Autonomous Region of Valle d'Aosta, Marche and Liguria) where it is used for the issue of hydro-meteorological warnings for civil protection purposes. At the technical offices of the Valle d'Aosta Water Company (CVA) it is instead useful to study and implement strategies to mitigate flood events or to secure facilities in the event of flooding.
+- Modular design for snow and hydrological modeling
+- Integration with Flood-PROOFS system
+- Support for Python and Fortran-based modeling engines (e.g., S3M, HMC)
+- Tools for:
+  - Data ingestion and transformation
+  - Multi-source time-series analysis
+  - 2D/3D visualization of hydrometeorological fields
+  - Laboratory simulation environments for research & education
 
-Components
-**********
+---
 
-The Flood-PROOFS forecasting chain consists in the following different parts, which are summarized as follows:
+## 🚀 Getting Started
 
-    • **Datasets**: tools to organize input and output datasets written in python3 language usually named **Hydrological Data Engines [hyde]** package;
-    • **Execution**: tools to set and run models developed by CIMA Reasearch Foundation (Continuum and S3M) written both in python3.x and fortran programming language usually named **S3M** package and **Hydrological Model Continuum [hmc]** package;
-    • **Publishing and Visualization**: tools to control, view and analyze results written both in python3 and R programming language usually named as **Hydrological Analysis tools** package;
-    • **Labs**: laboratories for running components of the modelling system, for trainings and educational use;
-    • **Utilities**: common functionality required by the previous components.
+### Prerequisites
 
-All codes and datasets are freely available and users can be get them from our github repository [1_].
+- Linux (Debian/Ubuntu preferred)
+- Python ≥ 3.8
+- Fortran compiler (e.g., `gfortran`)
+- Git, Conda (recommended)
 
-Prerequisites
-*************
+### Installation
 
-In order to use the **hyms** package, users are strongly raccomanted to control if the following characteristics, libraries and packages are available and correctly installed on their machine.
+```bash
+# Clone the repository
+git clone https://github.com/c-hydro/shybox.git
+cd shybox
 
-Usually, Flood-PROOFS libraries are installed on **Linux Debian/Ubuntu 64bit** environment and all libraries, packages and applications must be compilled and/or installed in according with this operative system.
+# Set up the environment (Conda recommended)
+bash setup/setup_conda_shybox_base.sh
+```
 
-All codes, subroutines and scripts are developed using both **Python** (version 3 and greater) [2_] and **Fortran** (version 2003 and greater) [3_]. QGIS geographic information system (version 2.18 and greater) [4_] is used to develop tools to organize, create and control static and dynamic datasets. R (version 3.4.4 and greater) [5_] is used to perform statistical analysis.
+---
 
-The libraries and the packages are mainly divided in four categories:
+## 📂 Repository Structure
 
-    • python3 packages and applications;
-    • other software and applications (Jupyter Notebook, QGIS, Panoply, cdo, ncview ...).
+```text
+├── bin/                # Compiled model executables
+├── configuration/      # JSON settings for workflows
+├── datasets/           # Sample or default input data
+├── script/             # Python driver scripts
+├── setup/              # Environment and dependency setup scripts
+├── lib/                # Python modules for hydrology (hyde)
+├── docs/               # Documentation and usage examples
+└── README.md
+```
 
-The section for installing all needed libraries and environments is usually named **fp-envs** and the users can find it in Flood-PROOFS
-modelling system repository hosted by GitHub [1_].
+---
 
-Python libraries
------------------
+## 📊 Models Supported
 
-The python3 standard library is not sufficient to correctly install all Flood-PROOFS applications; for this reason some extra libraries are needed to guarantee all functionalities. 
-To install all python3 libraries a bash script named **setup_fp_env_python.sh** is provided [6_]; basically, the script calls a **miniconda** [7_] installation that allow to get all needed libraries and install them into “$HOME/user/fp_libs_python/” folder. During the installation, a virtual environment named “fp_env_python” is created too.
-Once all libraries are correctly installed and configurated, to activate “fp_env_python” by command-line is necessary to execute the following:
+- **S3M** – Distributed Snow Simulation System
+- **HMC** – Hydrological Modeling Chain
 
-.. code-block:: bash
-    
-   >> export PATH="$HOME/fp_libs_python/bin:$PATH"
-   >> source activate fp_env_python
+> Each model may require its own build process and configuration.
 
-By default, the **fp_env_python** environment is shown in parentheses () or brackets [] at the beginning of your command prompt:
+---
 
-.. code-block:: bash
+## 🧪 Use Cases
 
-   (fp_env_python) >> 
+- Regional flood forecasting
+- Snowpack modeling
+- Civil protection alert systems
+- Research and education on hydro-meteorological processes
 
-Activating the virtual enviroment permits to use a correct configuration andall applications and scripts of Flood-PROOFS forecasting chain will work properly.
+---
 
+## 📝 License
 
-HMC libraries
--------------
-...
+This project is licensed under the **EUPL-1.2** – see the [LICENSE](LICENSE) file for details.
 
+---
 
-Potential Users
-***************
-The Flood-PROOFS Modelling System has been released to enable different applications (for example local/regional scenario assessment) and further development by external users.
+## 🤝 Contributing
 
-Potential users are anticipated to predominately be interested in the ability to run the system with local data (including scenario modelling) and to modify the system with new capabilities. The potential collaborators have expressed a range of potential goals for their use of the modelling system, including performing comparisons with existing models, tailoring the hydrological performance to specific land uses and cropping types.
+Contributions, bug reports, and suggestions are welcome! To contribute:
 
-Broadly speaking, there are four potential user categories of the FloodPROOFS modelling system:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature-name`)
+3. Commit your changes (`git commit -am 'Add new feature'`)
+4. Push to the branch (`git push origin feature-name`)
+5. Create a pull request
 
-    • **Data user**: who accessing the model outputs for using them in their analysis.
-    • **Case study user**: who work to evaluate his/her case using data over a selected time period.
-    • **Applying users**: who would primarily be interested in applying the current model to a region of interest using localised and/or scenario data where available.
-    • **Contributor users**: who will extend the capabilities of the model with new research and coding (modify the system with new capabilities)
+---
 
-It is expected that the majority of early adopters of the FloodPROOFS modelling system will be Applying users looking to apply the system with local data/scenarios, with more Contributor users adopting the system as it becomes well known and established.
+## 📬 Contact
 
-Contribute and Guidelines
-*************************
+For questions, collaborations or support, reach out via [CIMA Foundation](https://www.cimafoundation.org/) or open an issue on [GitHub](https://github.com/c-hydro/shybox/issues).
 
-We are happy if you want to contribute. Please raise an issue explaining what is missing or if you find a bug. We will also gladly accept pull requests against our master branch for new features or bug fixes.
+---
 
-If you want to contribute please follow these steps:
+## 🌐 Acknowledgements
 
-    • fork the one of the Flood-PROOFS repositories to your account;
-    • clone the repository, make sure you use "git clone --recursive" to also get the test data repository;
-    • make a new feature branch from the repository master branch;
-    • add your feature;
-    • please include tests for your contributions in one of the test directories;
-    • submit a pull request to our master branch.
-
-Authors
-*******
-
-All authors involved in the library development for the Flood-PROOFS modelling system are reported in this authors_ file.
-
-License
-*******
-
-By accessing or using the Flood-PROOFS modelling system, code, data or documentation, you agree to be bound by the FloodPROOFS license available. See the license_ for details. 
-
-Changelog
-*********
-
-All notable changes and bugs fixing to this project will be documented in this changelog_ file.
-
-References
-**********
-| [1_] CIMA Hydrology and Hydraulics GitHub Repository
-| [2_] Python programming language
-| [3_] Fortran programming language
-| [4_] QGIS project
-| [5_] R programming language
-| [6_] FloodPROOFS virtual environment tools
-| [7_] Conda environment manager
-| [8_] ZLIB compression library
-| [9_] HDF5 data software library 
-| [10_] NetCDF4 data software library 
-| [11_] Hydrological Model Continuum codes
-
-.. _1: https://github.com/c-hydro
-.. _2: https://www.python.org/
-.. _3: https://en.wikipedia.org/wiki/Fortran
-.. _4: https://qgis.org/en/site/
-.. _5: https://www.r-project.org/
-.. _6: https://github.com/c-hydro/fp-env
-.. _7: https://conda.io/miniconda.html
-.. _8: https://zlib.net/
-.. _9: https://www.hdfgroup.org/solutions/hdf5/
-.. _10: https://www.unidata.ucar.edu/
-.. _11: https://github.com/c-hydro/hmc-dev
-.. _license: LICENSE.rst
-.. _changelog: CHANGELOG.rst
-.. _authors: AUTHORS.rst
+- CIMA Research Foundation
+- Italian Civil Protection Department
+- Contributors to Flood-PROOFS and the hydrological modeling community

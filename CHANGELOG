@@ -2,6 +2,18 @@
 Changelog
 =========
 
+Version 1.0.2 [2025-07-16]
+**************************
+APPS:
+	- converter and merger for hmc model;
+	- runner for hmc model
+
+Version 1.0.1 [2025-03-15]
+**************************
+APPS:
+	- converter and merger for s3m model;
+	- runner for s3m model
+
 Version 1.0.0 [2024-12-02]
 **************************
 PACKAGE: beta release (first development and codes refactoring)
