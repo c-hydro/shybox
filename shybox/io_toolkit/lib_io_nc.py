@@ -437,15 +437,24 @@ def write_file_nc_hmc(
 
     # get dimensions
     dset_dims = data.dims
+
+    tmp_x = dim_x
+    if 'X' in list(dset_dims.keys()):
+        tmp_x = 'X'
+    tmp_y = dim_y
+    if 'Y' in list(dset_dims.keys()):
+        tmp_y = 'Y'
+
     if dim_time in list(dset_dims.keys()):
-        n_cols, n_rows, n_time = dset_dims[dim_x], dset_dims[dim_y], dset_dims[dim_time]
+        n_cols, n_rows, n_time = dset_dims[tmp_x], dset_dims[tmp_y], dset_dims[dim_time]
     else:
-        n_cols, n_rows, n_time = dset_dims[dim_x], dset_dims[dim_y], 1
+        n_cols, n_rows, n_time = dset_dims[tmp_x], dset_dims[tmp_y], 1
+
     # get geographical coordinates
     try:
         x, y = data[var_x].values, data[var_y].values
     except KeyError:
-        x, y = data[dim_x].values, data[dim_y].values
+        x, y = data[tmp_x].values, data[tmp_y].values
 
     if len(x.shape) == 1 and len(y.shape) == 1:
         x, y = np.meshgrid(x, y)

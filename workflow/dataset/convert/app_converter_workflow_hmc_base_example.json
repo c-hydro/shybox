@@ -21,14 +21,16 @@
         "environment": {
           "domain_name": "DOMAIN_NAME",
           "time_start": "TIME_START", "time_end": "TIME_END",
-          "path_source": "PATH_SRC", "path_destination": "PATH_DST",
+          "path_source_by_s3m": "PATH_SRC_BY_S3M", "path_source_by_bc": "PATH_SRC_BY_BIAS_CORRECTION",
+          "path_destination": "PATH_DST",
           "path_app": "PATH_APP", "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
         }
       },
       "format": {
         "domain_name": "string",
         "path_geo": "string",
-        "path_source": "string", "path_destination": "string",
+        "path_source_by_s3m": "string", "path_source_by_bc": "string",
+        "path_destination": "string",
         "time_source": "string", "time_destination": "string", "time_direction": "string",
         "time_start": "string", "time_end": "string",
         "time_rounding": "string", "time_frequency": "string",
@@ -39,7 +41,8 @@
       "template": {
         "domain_name": "string",
         "path_geo": "string",
-        "path_source": "string", "path_destination": "string",
+        "path_source_by_s3m": "string", "path_source_by_bc": "string",
+        "path_destination": "string",
         "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M", "time_direction": "string",
         "time_start": "%Y%m%d", "time_end": "%Y%m%d",
         "time_rounding": "string", "time_frequency": "string",
@@ -66,23 +69,27 @@
       },
       "data_source": {
         "rain": {
-          "path": "{path_source}",
+          "path": "{path_source_by_s3m}/%Y/",
           "file_name": "REFF_{time_source}.nc"
         },
         "air_t": {
-          "path": "{path_source}",
+          "path": "{path_source_by_bc}/%Y/",
           "file_name": "T_{time_source}.nc"
         },
         "rh": {
-          "path": "{path_source}",
+          "path": "{path_source_by_bc}/%Y/",
           "file_name": "U_{time_source}.nc"
         },
         "inc_rad": {
-          "path": "{path_source}",
+          "path": "{path_source_by_bc}/%Y/",
           "file_name": "R_{time_source}.nc"
         },
+        "wind": {
+          "path": "{path_source_by_bc}/%Y/",
+          "file_name": "V_{time_source}.nc"
+        },
         "snow_mask": {
-          "path": "{path_source}",
+          "path": "{path_source_by_s3m}/%Y/",
           "file_name": "SNOWMASK_{time_source}.nc"
         }
       },
@@ -93,7 +100,7 @@
       },
       "log": {
         "path": "{path_log}",
-        "file_name": "example.txt"
+        "file_name": "example_converter_hmc.txt"
       },
       "tmp": {
         "path": "{path_tmp}",

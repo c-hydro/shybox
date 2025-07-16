@@ -89,7 +89,7 @@
       },
       "log": {
         "path": "{path_log}",
-        "file_name": "example.txt"
+        "file_name": "example_converter_s3m.txt"
       },
       "tmp": {
         "path": "{path_tmp}",
