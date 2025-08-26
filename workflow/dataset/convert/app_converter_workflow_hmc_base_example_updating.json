@@ -68,28 +68,8 @@
         }
       },
       "data_source": {
-        "rain": {
-          "path": "{path_source_by_s3m}/%Y/",
-          "file_name": "REFF_{time_source}.nc"
-        },
-        "air_t": {
-          "path": "{path_source_by_bc}/%Y/",
-          "file_name": "T_{time_source}.nc"
-        },
-        "rh": {
-          "path": "{path_source_by_bc}/%Y/",
-          "file_name": "U_{time_source}.nc"
-        },
-        "inc_rad": {
-          "path": "{path_source_by_bc}/%Y/",
-          "file_name": "R_{time_source}.nc"
-        },
-        "wind": {
-          "path": "{path_source_by_bc}/%Y/",
-          "file_name": "V_{time_source}.nc"
-        },
         "snow_mask": {
-          "path": "{path_source_by_s3m}/%Y/",
+          "path": "{path_source_by_s3m}/SnowMask/%Y/",
           "file_name": "SNOWMASK_{time_source}.nc"
         }
       },
@@ -100,7 +80,7 @@
       },
       "log": {
         "path": "{path_log}",
-        "file_name": "example_converter_hmc.txt"
+        "file_name": "example_converter_hmc_updating.txt"
       },
       "tmp": {
         "path": "{path_tmp}",

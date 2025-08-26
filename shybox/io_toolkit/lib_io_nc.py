@@ -435,9 +435,18 @@ def write_file_nc_hmc(
     ref = None
     if 'ref' in kwargs: ref = kwargs['ref']
 
-    # get dimensions
-    dset_dims = data.dims
+    # adapt data object
+    if isinstance(data, xr.DataArray):
+        data = da_to_dset(data)
+    elif isinstance(data, xr.Dataset):
+        pass
+    else:
+        raise NotImplementedError('Case not implemented yet')
 
+    # get dimensions (from xr.Dataset and xr.DataArray objects)
+    dset_dims = get_dims_by_object(data)
+
+    # select temporary dimension names
     tmp_x = dim_x
     if 'X' in list(dset_dims.keys()):
         tmp_x = 'X'
@@ -786,4 +795,26 @@ def get_file_grid(file_name: str,
     return file_obj
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to adjust dimensions naming
+def get_dims_by_object(obj):
+    if isinstance(obj, xr.Dataset):
+        # Already a dict
+        return dict(obj.dims)
+    elif isinstance(obj, xr.DataArray):
+        # Need to zip names with sizes
+        return dict(zip(obj.dims, obj.shape))
+    else:
+        raise TypeError("Input must be an xarray.Dataset or xarray.DataArray")
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to convert dataarray to dataset
+def da_to_dset(da: xr.DataArray) -> xr.Dataset:
+    """
+    Convert a DataArray to a Dataset, preserving its name.
+    If the DataArray has no name, assign a default one.
+    """
+    var_name = da.name if da.name is not None else "variable"
+    return da.to_dataset(name=var_name)
+# ----------------------------------------------------------------------------------------------------------------------

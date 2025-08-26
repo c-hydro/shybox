@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER BASE [HMC
+SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER BASE FORCING [HMC]
 
 __date__ = '20250716'
 __version__ = '1.0.0'
