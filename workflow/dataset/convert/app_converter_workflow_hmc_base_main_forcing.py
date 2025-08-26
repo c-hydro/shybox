@@ -146,11 +146,6 @@ def main(alg_collectors_settings: dict = None):
                     {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
                      "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "snow_mask": [
-                    {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
             }
         }
@@ -276,22 +271,6 @@ def main(alg_collectors_settings: dict = None):
             time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
         )
 
-        # wind source data
-        file_name = fill_string(
-            alg_variables_application['data_source']['snow_mask']['file_name'],
-            time_source=sim_time, domain_name=alg_variables_application['info']['domain_name'])
-        snow_mask_data = DataLocal(
-            path=alg_variables_application['data_source']['snow_mask']['path'],
-            file_name=file_name,
-            file_format=None, file_mode=None, file_variable='snow_mask',
-            file_template={
-                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-                "vars_data": {"SNOW_MASK": "snow_mask"}
-            },
-            time_signature='period',
-            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
-        )
-
         # destination data
         file_name = fill_string(
             alg_variables_application['data_destination']['file_name'],
@@ -302,7 +281,7 @@ def main(alg_collectors_settings: dict = None):
             file_name=file_name,
             time_signature='step',
             file_format='netcdf', file_mode='grid',
-            file_variable=['rain', 'air_t', 'rh', 'inc_rad', 'wind', 'snow_mask'],
+            file_variable=['rain', 'air_t', 'rh', 'inc_rad', 'wind'],
             file_type=alg_variables_application['data_destination']['type'],
             file_template={
                 "dims_geo": {"longitude": "X", "latitude": "Y", "time": "time"},
@@ -312,14 +291,13 @@ def main(alg_collectors_settings: dict = None):
                     "air_temperature": "AirTemperature",
                     "relative_humidity": "RelHumidity",
                     "incoming_radiation": "IncRadiation",
-                    "wind": "Wind",
-                    "snow_mask": "SnowMask"}
+                    "wind": "Wind"}
             },
             time_period=1, time_format='%Y%m%d%H%M')
 
         # orchestrator settings
         orc_process = Orchestrator.multi_variable(
-            data_package_in=[rain_data, airt_data, rh_data, inc_rad_data, wind_data, snow_mask_data],
+            data_package_in=[rain_data, airt_data, rh_data, inc_rad_data, wind_data],
             data_package_out=output_data,
             data_ref=geo_data,
             configuration=configuration['WORKFLOW']
