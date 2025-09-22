@@ -179,7 +179,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # repository and branch
 ARG SHYBOX_REPO=https://github.com/c-hydro/shybox.git
-ARG SHYBOX_REF=itwater
+ARG SHYBOX_REF=destine
 
 # UID of the non-root user 'app'
 ENV APP_UID=1456
