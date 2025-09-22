@@ -1,4 +1,11 @@
-# docker build 
+
+# docker build libs
+DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache -f Dockerfile --target app-builder-libs -t libs-builder:dev
+
+# docker build shybox
+DOCKER_BUILDKIT=1 docker build --progress=plain -f Dockerfile --target app-builder-shybox -t shybox-builder:dev .
+
+# docker build runner
 DOCKER_BUILDKIT=1 docker build --progress=plain -f Dockerfile --target app-runner -t runner:dev .
 
 # docker volume(s)
