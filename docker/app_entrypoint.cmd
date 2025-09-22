@@ -1,0 +1,45 @@
+# docker build 
+DOCKER_BUILDKIT=1 docker build --progress=plain -f Dockerfile --target app-runner -t runner:dev .
+
+# docker volume(s)
+chmod 777 /home/fabio/Desktop/shybox/dset/case_study/case_study_data/
+mkdir -p /home/fabio/Desktop/shybox/dset/case_study/case_study_results/
+chmod 777 /home/fabio/Desktop/shybox/dset/case_study/case_study_results/
+
+docker volume create --name case_study_in \
+  --opt type=none \
+  --opt device=/home/fabio/Desktop/shybox/dset/case_study/case_study_data/ \
+  --opt o=bind
+  
+docker volume create --name case_study_out \
+  --opt type=none \
+  --opt device=/home/fabio/Desktop/shybox/dset/case_study/case_study_results/ \
+  --opt o=bind
+  
+# docker run using bash (for debugging)
+docker run -it \
+  --entrypoint /bin/bash \
+  -e TIME_RUN='2021-11-26 00:00' \
+  -e TIME_RESTART='2021-11-25 23:00' \
+  -e TIME_PERIOD=5 \
+  -e DOMAIN_NAME='marche' \
+  -e APP_CONFIG='/app/execution/app_runner_workflow_hmc_marche.json' \
+  --env-file app_entrypoint.env \
+  -v /home/fabio/Desktop/shybox/docker/app_runner_workflow_hmc_marche.json:/app/execution/app_runner_workflow_hmc_marche.json \
+  -v case_study_in:/app/mnt_in/:rw \
+  -v case_study_out:/app/mnt_out/:rw \
+  runner:dev
+
+# docker run using entrypoint
+docker run -it \
+  -e TIME_RUN='2021-11-26 00:00' \
+  -e TIME_RESTART='2021-11-25 23:00' \
+  -e TIME_PERIOD=5 \
+  -e DOMAIN_NAME='marche' \
+  -e APP_CONFIG='/app/execution/app_runner_workflow_hmc_marche.json' \
+  --env-file app_entrypoint.env \
+  -v /home/fabio/Desktop/shybox/docker/app_runner_workflow_hmc_marche.json:/app/execution/app_runner_workflow_hmc_marche.json \
+  -v case_study_in:/app/mnt_in/:rw \
+  -v case_study_out:/app/mnt_out/:rw \
+  runner:dev
+
