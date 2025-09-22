@@ -1,0 +1,17 @@
+## APPTAINER - INSTALLATION STEPS
+
+## note
+# SingularityCE was rebranded by the community as Apptainer. 
+# Commands are the same (apptainer is the binary, sometimes singularity on older systems). 
+# I’ll use apptainer below; if your system only has singularity, just swap the command name.
+
+# dependencies
+sudo apt-get update
+sudo apt-get install -y build-essential libseccomp-dev pkg-config uidmap squashfs-tools \
+    cryptsetup-bin golang-go git wget
+
+# install from Apptainer deb (replace version to latest if needed)
+VER=1.3.5
+wget https://github.com/apptainer/apptainer/releases/download/v${VER}/apptainer_${VER}_amd64.deb
+sudo dpkg -i apptainer_${VER}_amd64.deb
+
