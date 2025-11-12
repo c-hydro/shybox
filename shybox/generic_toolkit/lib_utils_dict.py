@@ -15,7 +15,7 @@ import functools
 import numpy as np
 
 from functools import reduce
-from collections import MutableMapping
+from collections.abc import MutableMapping ##patch
 from operator import getitem
 
 from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow

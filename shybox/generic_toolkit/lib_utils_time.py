@@ -10,13 +10,17 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import numpy as np
 import pandas as pd
+from typing import Union, Optional
 
-from datetime import date
+from datetime import date, datetime
 
 from shybox.generic_toolkit.lib_default_args import (logger_name, logger_arrow,
                                                      time_format_datasets as format_dset,
                                                      time_format_algorithm as format_alg)
+
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -25,40 +29,96 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # convert time format (from string to timestamp and vice versa)
-def convert_time_format(time_in: (str, pd.Timestamp), time_conversion: str = 'str_to_stamp') -> (pd.Timestamp, str):
+@with_logger(var_name="logger_stream")
+def convert_time_format(
+        time_in: Union[str, pd.Timestamp, None],
+        time_conversion: str = 'str_to_stamp') -> Optional[Union[pd.Timestamp, str]]:
 
-    if time_in is not None:
-        if time_conversion == 'str_to_stamp':
-            if isinstance(time_in, str):
-                time_out = pd.Timestamp(time_in)
-            elif isinstance(time_in, pd.Timestamp):
-                time_out = time_in
-            else:
-                raise ValueError('Time input type is not recognized')
-        elif time_conversion == 'stamp_to_str':
-            if isinstance(time_in, pd.Timestamp):
-                time_out = time_in.strftime(format_dset)
-            elif isinstance(time_in, str):
-                time_tmp = time_in
-                time_tmp = pd.Timestamp(time_tmp)
-                time_out = time_tmp.strftime(format_dset)
-            else:
-                raise ValueError('Time input type is not recognized')
-        elif time_conversion == 'str_to_str':
-            if isinstance(time_in, str):
-                time_tmp = time_in
-                time_tmp = pd.Timestamp(time_tmp)
-                time_out = time_tmp.strftime(format_dset)
-            elif isinstance(time_in, pd.Timestamp):
-                time_out = time_in.strftime(format_dset)
-            else:
-                raise ValueError('Time input type is not recognized')
-        else:
-            raise ValueError('Time conversion not recognized')
+    if time_in is None:
+        return None
+
+    if time_conversion == 'str_to_stamp':
+        return pd.Timestamp(time_in) if isinstance(time_in, str) else time_in
+
+    elif time_conversion in ('stamp_to_str', 'str_to_str'):
+        ts = pd.Timestamp(time_in)
+        return ts.strftime(format_dset)
+
     else:
-        time_out = None
+        logger_stream.error(f'Incorrect time conversion: {time_conversion}')
+        raise ValueError(f"Unrecognized time_conversion: {time_conversion}")
+# ----------------------------------------------------------------------------------------------------------------------
 
-    return time_out
+# ----------------------------------------------------------------------------------------------------------------------
+# method to normalize various time inputs to pandas.DatetimeIndex
+@with_logger(var_name="logger_stream")
+def normalize_to_datetime_index(
+    obj,
+    *,
+    unit=None,               # epoch unit for numeric inputs: 's','ms','us','ns'
+    tz=None,                 # e.g. 'Europe/Rome'
+    assume_utc=False,        # treat naive times as UTC before converting to tz
+    drop_duplicates=False,
+    sort=True,
+    allow_empty=False,
+):
+    """
+    Convert many possible 'time' inputs into a pandas.DatetimeIndex.
+
+    Supported inputs:
+      - DatetimeIndex (returned as-is, optionally tz-adjusted)
+      - Timestamp / datetime (wrapped into length-1 index)
+      - str (parsed with pd.to_datetime)
+      - number-like (epoch; uses `unit` if given, default 's')
+      - sequence/array/Series/Index (vectorized parse)
+    Returns DatetimeIndex or None (when empty and allow_empty=False).
+    """
+
+    if obj is None:
+        return None
+
+    if isinstance(obj, pd.DatetimeIndex):
+        idx = obj
+    elif isinstance(obj, (pd.Timestamp, datetime)):
+        idx = pd.DatetimeIndex([pd.Timestamp(obj)])
+    elif isinstance(obj, str):
+        idx = pd.to_datetime([obj], errors="coerce", utc=False)
+    elif isinstance(obj, (int, float, np.integer, np.floating)):
+        idx = pd.to_datetime([obj], unit=unit or "s", errors="coerce", utc=False)
+    elif isinstance(obj, (list, tuple, np.ndarray, pd.Series, pd.Index)):
+        arr = np.array(obj, dtype=object)
+        # If all are numeric/None -> treat as epoch
+        if np.all([isinstance(x, (int, float, np.integer, np.floating)) or x is None for x in arr]):
+            idx = pd.to_datetime(arr, unit=unit or "s", errors="coerce", utc=False)
+        else:
+            idx = pd.to_datetime(arr, errors="coerce", utc=False)
+    else:
+        # Generic parse attempt
+        try:
+            idx = pd.to_datetime(obj, errors="coerce", utc=False)
+            if not isinstance(idx, pd.DatetimeIndex):
+                idx = pd.DatetimeIndex([idx])
+        except Exception as e:
+            logger_stream.error(f"Failed to normalize datetime from object of type {type(obj)}: {e}")
+            raise TypeError(f"Unsupported type for datetime normalization: {type(obj)}") from e
+
+    # Timezone handling
+    if tz is not None:
+        if idx.tz is None:
+            idx = (idx.tz_localize("UTC").tz_convert(tz)) if assume_utc else idx.tz_localize(tz)
+        else:
+            idx = idx.tz_convert(tz)
+
+    # Clean up
+    idx = idx[~idx.isna()]
+    if drop_duplicates:
+        idx = idx.drop_duplicates()
+    if sort:
+        idx = idx.sort_values()
+
+    if len(idx) == 0:
+        return idx if allow_empty else None
+    return idx
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -193,7 +253,27 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
         time_end = time_end.strip("\"")
         time_end = pd.Timestamp(time_end)
 
+    # check time start and time end if are both defined
+    if (time_start is not None) and (time_end is not None):
+        if time_start > time_end:
+            logger_stream.error(logger_arrow.error + 'Time start is after time end')
+            raise ValueError('Time start is after time end')
+
     time_rounding, time_frequency = time_rounding.lower(), time_frequency.lower()
+
+    if (time_start is not None) and (time_end is not None):
+
+        # If only a unit like 'D' is given, prepend '1'
+        if len(time_frequency) == 1 or time_frequency.isalpha():
+            ref_frequency = f"1{time_frequency}"
+        else:
+            ref_frequency = time_frequency
+
+        ref_delta = pd.Timedelta(ref_frequency)
+        time_delta = pd.Timedelta(time_end - time_start)
+
+        if time_delta < ref_delta:
+            time_start = time_end
 
     if (time_start is not None) and (time_end is not None):
 
@@ -207,6 +287,7 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
 
         time_end = time_end.floor(time_rounding.lower())
         time_range = pd.date_range(end=time_end, periods=time_period, freq=time_frequency.lower())
+
     elif (time_start is not None) and (time_end is None):
 
         if time_period is None:
@@ -229,8 +310,8 @@ def select_time_format(time_range: (pd.Timestamp, pd.DatetimeIndex), time_format
         time_range = pd.DatetimeIndex([time_range])
     time_range_formatted = time_range.strftime(date_format=time_format)
 
-    if len(time_range_formatted) == 1:
-        time_range_formatted = time_range_formatted[0]
+    #if len(time_range_formatted) == 1:
+    #    time_range_formatted = time_range_formatted[0]
 
     return time_range_formatted
 # ----------------------------------------------------------------------------------------------------------------------
