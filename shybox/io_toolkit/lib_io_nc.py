@@ -800,7 +800,7 @@ def get_file_grid(file_name: str,
 def get_dims_by_object(obj):
     if isinstance(obj, xr.Dataset):
         # Already a dict
-        return dict(obj.dims)
+        return dict(obj.sizes)
     elif isinstance(obj, xr.DataArray):
         # Need to zip names with sizes
         return dict(zip(obj.dims, obj.shape))

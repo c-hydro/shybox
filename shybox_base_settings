@@ -1,3 +1,0 @@
-PATH=/home/fabio/Desktop/shybox/conda/bin:$PATH
-export PATH
-source activate shybox_base_libraries
