@@ -129,7 +129,7 @@ class ArrowPrinter(object):
         self.comment = arrow_comment
 
         self.main = self.__format_arrow(arrow_main)
-        self.arrow_main_break = ' ============================================================================ '
+        self.arrow_main_break = '=============================================================================='
         self.arrow_main_blank = ' '
 
         self.arrow_prefix = arrow_prefix

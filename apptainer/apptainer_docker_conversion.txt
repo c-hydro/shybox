@@ -1,5 +1,5 @@
 
-
+## LOCAL MACHINE
 # 1) save your Docker image to a tar
 docker save runner:dev -o runner_hmc.tar
 
@@ -55,3 +55,51 @@ apptainer exec \
   
 # 3d) run aptainer interactive shell
 apptainer shell runner_hmc.sif
+
+## HPC LEONARDO
+
+# (0a) Allocate Node to build sif
+salloc -A DE374_lot1 -p dcgp_usr_prod  --nodes 1 --exclusive --time 01:00:00
+
+# (ob1) Build from a Docker archive (gzip is OK) 
+singularity build $WORK/runner_hmc.sif docker-archive://$WORK/runner_hmc.tar
+# (ob2) or copy sif from local to remote
+scp /home/fabio/Desktop/shybox/docker/runner_hmc.sif   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+
+#(0c) folder permissions 
+chmod -R g+rwx $WORK/fdelogu0
+
+# (1) copy all data needed by the container
+scp /home/fabio/Desktop/shybox/dset/case_study_destine   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+scp /home/fabio/Desktop/shybox/docker/app_runner_workflow_hmc_base_marche.json   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+scp /home/fabio/Desktop/shybox/docker/app_entrypoint.env   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+scp /home/fabio/Desktop/shybox/docker/app_entrypoint.py   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+
+2a) run singularity using configuration and volume(s) ---> $HOME
+singularity run \
+  --writable-tmpfs \
+  --env TIME_RUN="2021-11-26 00:00" \
+  --env TIME_RESTART="2021-11-25 23:00" \
+  --env TIME_PERIOD=5 \
+  --env DOMAIN_NAME="marche" \
+  --env APP_CONFIG="/app/execution/app_runner_workflow_hmc_marche.json" \
+  --env-file /leonardo/home/userexternal/fdelogu0/app_entrypoint.env \
+  --bind /leonardo/home/userexternal/fdelogu0/app_runner_workflow_hmc_marche.json:/app/execution/app_runner_workflow_hmc_marche.json \
+  --bind /leonardo/home/userexternal/fdelogu0/case_study/data/:/app/mnt_in \
+  --bind /leonardo/home/userexternal/fdelogu0/case_study/results/:/app/mnt_out \
+  runner_hmc.sif
+
+2b) run singularity using configuration and volume(s) ---> $WORK 
+singularity run \
+  --writable-tmpfs \
+  --env TIME_RUN="2021-11-26 00:00" \
+  --env TIME_RESTART="2021-11-25 23:00" \
+  --env TIME_PERIOD=5 \
+  --env DOMAIN_NAME="marche" \
+  --env APP_CONFIG="/app/execution/app_runner_workflow_hmc_marche.json" \
+  --env-file /leonardo_work/DE374_lot1/fdelogu0/container/app_entrypoint.env \
+  --bind /leonardo_work/DE374_lot1/fdelogu0/config/app_runner_workflow_hmc_marche.json:/app/execution/app_runner_workflow_hmc_marche.json \
+  --bind /leonardo_work/DE374_lot1/fdelogu0/data/:/app/mnt_in \
+  --bind /leonardo_work/DE374_lot1/fdelogu0/results/:/app/mnt_out \
+ /leonardo_work/DE374_lot1/container/runner_hmc.sif
+  

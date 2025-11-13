@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-HYMS PACKAGE - DATA GRID APP
+SHYBOX PACKAGE - DATA GRID APP
 
 __date__ = '20250123'
 __version__ = '3.0.0'
@@ -34,7 +34,7 @@ from shybox.generic_toolkit.lib_utils_args import get_logger_name
 from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from shybox.generic_toolkit.lib_default_args import collector_data
 
-from shybox.processing_toolkit.lib_proc_merge import merge_data
+from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 

@@ -152,7 +152,7 @@
       "arguments": "{path_app}/{file_namelist}"
     },
     "info": {
-      "location": "/$HOME/run_base/exec/HMC_Model_V3_{execution_name}_{execution_mode}.info"
+      "location": "/$HOME/HMC_Model_V3_{execution_name}_{execution_mode}.info"
     },
     "library": {
       "location": "/app/library/package_hmc/hmc/HMC_Model_V3_$RUN.x",
