@@ -136,11 +136,29 @@ class ProcessorContainer:
 
         # adjust data (if deps are available)
         if (self.in_deps is not None) and (len(self.in_deps) > 0):
-            data_raw = [data_raw] + self.in_deps
-            vars_raw = None
+
+            if isinstance(data_raw, list):
+                data_raw.extend(self.in_deps)
+            elif isinstance(data_raw, DataLocal):
+                data_raw = [data_raw] + self.in_deps
+            else:
+                self.logger.error('Data object is not compatible with input dependencies')
+                raise TypeError('Data object is not compatible with input dependencies')
+
+            str_vars_raw, str_deps_raw = [], []
+            for data_tmp in data_raw:
+                if isinstance(data_tmp, DataLocal):
+                    str_part1_tmp = data_tmp.file_namespace.get('variable')
+                    str_part2_tmp = data_tmp.file_namespace.get('workflow')
+                    var_tmp = ':'.join([str_part1_tmp, str_part2_tmp])
+                    str_vars_raw.append(var_tmp)
+                    str_deps_raw.append(str_part1_tmp)
+                else:
+                    self.logger.error('Data object in the list is not a DataLocal instance')
+                    raise TypeError('Data object in the list is not a DataLocal instance')
         else:
-            vars_raw = ':'.join([fx_variable_tag, fx_variable_wf])
-        kwargs['variable'] = vars_raw
+            str_vars_raw = [':'.join([fx_variable_tag, fx_variable_wf])]
+            str_deps_raw = [fx_variable_tag]
 
         if isinstance(time, list):
             if isinstance(data_raw, list):
@@ -182,8 +200,16 @@ class ProcessorContainer:
         if isinstance(data_raw, list):
 
             # iterate over the list of data objects
-            fx_data, fx_metadata = [], {}
-            for data_id, (data_tmp, time_tmp) in enumerate(zip(data_raw, time)):
+            fx_data, fx_metadata, fx_deps = [], {}, []
+            for data_id, (data_tmp, str_var_tmp, time_tmp) in enumerate(zip(data_raw, str_vars_raw, time)):
+
+                # check nested list
+                if isinstance(data_tmp, list):
+                    if len(data_tmp) == 1:
+                        data_tmp = data_tmp[0]
+                    else:
+                        self.logger.error('Nested lists of data objects are not supported')
+                        raise ValueError('Nested lists of data objects are not supported')
 
                 # check data object type
                 if not isinstance(data_tmp, DataLocal):
@@ -201,10 +227,14 @@ class ProcessorContainer:
                 if not data_tmp.is_readable():
                     continue  # skip unreadable data
 
+                # manage variable mapping
+                kwargs['variable'] = str_var_tmp
+
                 # update logger (for messages consistency)
                 data_tmp.logger = self.logger.compare(data_tmp.logger)
                 # read data
-                fx_tmp = data_tmp.get_data(time=time_tmp, **kwargs)
+                fx_tmp = data_tmp.get_data(time=time_tmp, name=str_var_tmp, **kwargs)
+                fx_deps.append(str_var_tmp)
 
                 # convert to DataArray if single variable
                 fx_tmp = _to_dataarray_if_single_var(fx_tmp)
@@ -230,10 +260,14 @@ class ProcessorContainer:
                 if time_ref != time:
                     return None, None
 
+            # manage variable mapping
+            kwargs['variable'] = str_vars_raw[0]
+
             # update logger (for messages consistency)
             data_raw.logger = self.logger.compare(data_raw.logger)
             # get data
-            fx_data = data_raw.get_data(time=time, **kwargs)
+            fx_data = data_raw.get_data(time=time, name=str_vars_raw[0], **kwargs)
+            fx_deps = [str_vars_raw[0]]
 
             # convert to DataArray if single variable
             fx_data = _to_dataarray_if_single_var(fx_data)
@@ -276,10 +310,11 @@ class ProcessorContainer:
             if deps_vars:
                 tmp_data = deepcopy(fx_data)
                 fx_data = {}
-                for tmp_var, tmp_values in zip(fx_metadata['fx_variable'], tmp_data):
-                    if tmp_var in deps_vars.values():
+                for fx_dep, tmp_values in zip(fx_deps, tmp_data):
+                    fx_var, fx_wf = fx_dep.split(':')
+                    if fx_var in deps_vars.values():
                         # find the key corresponding to this value
-                        dep_key = next(k for k, v in deps_vars.items() if v == tmp_var)
+                        dep_key = next(k for k, v in deps_vars.items() if v == fx_var)
                         fx_data[dep_key] = tmp_values
 
         # run function to process data

@@ -12,6 +12,7 @@ Version:       '1.0.0'
 from __future__ import annotations
 import warnings
 
+from contextlib import contextmanager
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 from copy import deepcopy
 from collections import defaultdict
@@ -302,6 +303,11 @@ class OrchestratorHandler:
 
         # check if data collections in and workflow have the same keys
         check_variables_in = ensure_variables(data_collections_in, fx_collections, mode='strict')
+        if not check_variables_in:
+            logger.error(
+                'Input data collections do not cover the workflow variables as defined by the check rule.')
+            raise RuntimeError(
+                'Input data collections do not cover the workflow variables as defined by the check rule.')
 
         # ensure data collections out
         if isinstance(data_package_out, list):
@@ -349,6 +355,11 @@ class OrchestratorHandler:
 
         # check if data collections and workflow have the same keys
         check_variables_out = ensure_variables(data_collections_out, fx_collections, mode='lazy')
+        if not check_variables_out:
+            logger.error(
+                'Output data collections do not cover the workflow variables as defined by the check rule.')
+            raise RuntimeError(
+                'Output data collections do not cover the workflow variables as defined by the check rule.')
 
         # method to remap variable tags, in and out
         workflow_mapper = MapperHandler(data_collections_in, data_collections_out)
@@ -356,27 +367,51 @@ class OrchestratorHandler:
         # organize deps collections in
         deps_collections_in, args_collections_in = {}, {}
         for data_key, data_config in data_collections_in.items():
-            if hasattr(data_config, 'file_deps'):
-                data_deps = data_config.file_deps
+
+            # normalize: always iterate a list, remember if originally a seq
+            configs, is_sequence = as_list(data_config)
+
+            deps_list, args_list = [], []
+            for idx, cfg in enumerate(configs):
+                # your original logic, but on `cfg`
+                data_deps = getattr(cfg, 'file_deps', [])
+                args_deps = getattr(cfg, 'args_deps', [])
+
+                deps_list.append(remove_none(data_deps))
+                args_list.append(args_deps)
+
+            # if original was a single object → store single element
+            if is_sequence:
+                deps_collections_in[data_key] = deps_list[0]
+                args_collections_in[data_key] = args_list[0]
             else:
-                data_deps = []
-            if hasattr(data_config, 'args_deps'):
-                args_deps = data_config.args_deps
-            else:
-                args_deps = []
-            deps_collections_in[data_key], args_collections_in[data_key] = remove_none(data_deps), args_deps
+                deps_collections_in[data_key] = deps_list
+                args_collections_in[data_key] = args_list
+
         # organize deps collections out
+        # organize deps collections in
         deps_collections_out, args_collections_out = {}, {}
         for data_key, data_config in data_collections_out.items():
-            if hasattr(data_config, 'file_deps'):
-                data_deps = data_config.file_deps
+
+            # normalize: always iterate a list, remember if originally a seq
+            configs, is_sequence = as_list(data_config)
+
+            deps_list, args_list = [], []
+            for idx, cfg in enumerate(configs):
+                # your original logic, but on `cfg`
+                data_deps = getattr(cfg, 'file_deps', [])
+                args_deps = getattr(cfg, 'args_deps', [])
+
+                deps_list.append(remove_none(data_deps))
+                args_list.append(args_deps)
+
+            # if original was a single object → store single element
+            if is_sequence:
+                deps_collections_out[data_key] = deps_list[0]
+                args_collections_out[data_key] = args_list[0]
             else:
-                data_deps = []
-            if hasattr(data_config, 'args_deps'):
-                args_deps = data_config.args_deps
-            else:
-                args_deps = []
-            deps_collections_out[data_key], args_collections_out[data_key] = remove_none(data_deps), args_deps
+                deps_collections_out[data_key] = deps_list
+                args_collections_out[data_key] = args_list
 
         # class to create workflow based using the orchestrator
         workflow_common = OrchestratorHandler(
@@ -925,18 +960,17 @@ class MapperHandler:
     functions 'mapper_generator' and 'compact'.
     """
 
-    def __init__(
-        self,
-        data_collections_in: Mapping[str, Union[Any, List[Any]]],
-        data_collections_out: Mapping[str, Union[Any, List[Any]]],
-    ) -> None:
+    def __init__(self,
+                 data_collections_in: Mapping[str, Union[Any, List[Any]]],
+                 data_collections_out: Mapping[str, Union[Any, List[Any]]],
+                 logger: LoggingManager = None) -> None:
+
+        self.logger = logger or LoggingManager(name="Mapper")
         self._data_in = data_collections_in
         self._data_out = data_collections_out
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
 
-    # -----------------------------
     # Build mapping
-    # -----------------------------
     def build_mapping(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
         """Compute and return the flat mapping. Cached after first build."""
         if self._mapping is not None:
@@ -951,9 +985,9 @@ class MapperHandler:
         missing_in = sorted(keys_out - keys_in)
         missing_out = sorted(keys_in - keys_out)
         if missing_out:
-            warnings.warn(f"Keys present only in input: {missing_out}")
+            self.logger.warning(f"Keys present only in input: {missing_out}")
         if missing_in:
-            warnings.warn(f"Keys present only in output: {missing_in}")
+            self.logger.warning(f"Keys present only in output: {missing_in}")
 
         shared_keys = keys_in & keys_out
 
@@ -967,7 +1001,7 @@ class MapperHandler:
 
                     # Warn if counts differ
                     if len(labels_sorted) != len(items_sorted):
-                        warnings.warn(
+                        self.logger.warning(
                             f"[{key}] {side.upper()} side mismatch: "
                             f"{len(labels_sorted)} labels vs {len(items_sorted)} template items; "
                             f"extra entries will be ignored."
@@ -981,7 +1015,7 @@ class MapperHandler:
                             result[label] = {'in': {}, 'out': {}}
 
                         if tpl_key in result[label][side] and result[label][side][tpl_key] != tpl_val:
-                            warnings.warn(
+                            self.logger.warning(
                                 f"[{label}] {side.upper()} template key '{tpl_key}' is being overwritten."
                             )
                         result[label][side][tpl_key] = tpl_val
@@ -989,9 +1023,7 @@ class MapperHandler:
         self._mapping = result
         return result
 
-    # -----------------------------
     # Public helpers
-    # -----------------------------
     def compact_rows(self, start_id: int = 1) -> List[Dict[str, Any]]:
         """
         Turn the build_mapping() result into compact rows with keys:
@@ -1008,7 +1040,7 @@ class MapperHandler:
             for in_key, workflow in sorted(in_map.items(), key=lambda kv: str(kv[0])):
                 out_val: Optional[Any] = out_map.get(workflow)
                 if out_val is None:
-                    warnings.warn(
+                    self.logger.warning(
                         f"[{tag}] No matching OUT for workflow '{workflow}'. "
                         f"Available OUT keys: {list(out_map.keys())}"
                     )
@@ -1061,6 +1093,7 @@ class MapperHandler:
         """Return the raw mapping for a single tag: {'in': {...}, 'out': {...}}."""
         mapping = self.build_mapping()
         if tag not in mapping:
+            self.logger.error(f"Tag '{tag}' not found. Available: {sorted(mapping.keys(), key=str)}")
             raise KeyError(f"Tag '{tag}' not found. Available: {sorted(mapping.keys(), key=str)}")
         return {
             'in': dict(mapping[tag].get('in', {}) or {}),
@@ -1078,6 +1111,7 @@ class MapperHandler:
         Returns a single dict if only one row, else a list of dicts.
         """
         if type not in ("tag", "workflow", "reference"):
+            self.logger.error(f"Invalid type '{type}'. Must be 'tag', 'workflow' or 'reference'.")
             raise ValueError(f"Invalid type '{type}'. Must be 'tag', 'workflow' or 'reference'.")
 
         mapping = self.build_mapping()
@@ -1094,7 +1128,7 @@ class MapperHandler:
             for in_key, wf_name in sorted(in_map.items(), key=lambda kv: str(kv[0])):
                 out_val = out_map.get(wf_name)
                 if out_val is None:
-                    warnings.warn(
+                    self.logger.warning(
                         f"[{tag}] No matching OUT for workflow '{wf_name}'. "
                         f"Available OUT keys: {list(out_map.keys())}"
                     )
@@ -1110,12 +1144,14 @@ class MapperHandler:
 
             # Expect reference in format "tag:workflow"
             if ":" not in name:
+                self.logger.error(f"Invalid reference '{name}'. Expected format 'tag:workflow'.")
                 raise ValueError(f"Invalid reference '{name}'. Expected format 'tag:workflow'.")
 
             tag, wf_name = name.split(":", 1)
             mapping = self.build_mapping()
 
             if tag not in mapping:
+                self.logger.error(f"Tag '{tag}' not found. Available: {sorted(mapping.keys(), key=str)}")
                 raise ValueError(f"Tag '{tag}' not found. Available: {sorted(mapping.keys(), key=str)}")
 
             in_map = mapping[tag].get('in', {}) or {}
@@ -1123,13 +1159,14 @@ class MapperHandler:
 
             matched_in_keys = [k for k, v in in_map.items() if v == wf_name]
             if not matched_in_keys:
+                self.logger.error(f"No IN entries found for workflow '{wf_name}' under tag '{tag}'.")
                 raise ValueError(f"No IN entries found for workflow '{wf_name}' under tag '{tag}'.")
 
             rows = []
             for in_key in sorted(matched_in_keys, key=str):
                 out_val = out_map.get(wf_name)
                 if out_val is None:
-                    warnings.warn(
+                    self.logger.warning(
                         f"[{tag}] No matching OUT for workflow '{wf_name}'. "
                         f"Available OUT keys: {list(out_map.keys())}"
                     )
@@ -1153,7 +1190,7 @@ class MapperHandler:
                         continue
                     out_val = out_map.get(wf_name)
                     if out_val is None:
-                        warnings.warn(
+                        self.logger.warning(
                             f"[{tag}] No matching OUT for workflow '{wf_name}'. "
                             f"Available OUT keys: {list(out_map.keys())}"
                         )
@@ -1166,6 +1203,7 @@ class MapperHandler:
                     })
 
             if not rows:
+                self.logger.error(f"No mapping rows found for workflow '{name}'.")
                 raise ValueError(f"No mapping rows found for workflow '{name}'.")
 
         return rows[0] if len(rows) == 1 else rows
@@ -1184,6 +1222,7 @@ class MapperHandler:
             if workflow in in_map.values() or workflow in out_map:
                 tags.append(str(tag))
         if not tags:
+            self.logger.error(f"No tags found for workflow '{workflow}'.")
             raise ValueError(f"Workflow '{workflow}' not found in any tag.")
         return sorted(set(tags), key=str)
 
@@ -1205,6 +1244,7 @@ class MapperHandler:
         workflows.update(str(k) for k in out_map.keys())
 
         if not workflows:
+            self.logger.error(f"No workflows found for tag '{tag}'.")
             raise ValueError(f"No workflows found under tag '{tag}'.")
         return sorted(workflows, key=str)
 
@@ -1215,6 +1255,7 @@ class MapperHandler:
           - type='tag'      -> returns workflows for that tag
         """
         if type not in ("workflow", "tag"):
+            self.logger.error("type must be 'workflow' or 'tag'")
             raise ValueError("type must be 'workflow' or 'tag'")
         return (
             self.get_tags_for_workflow(name)
@@ -1262,7 +1303,7 @@ class MapperHandler:
         """
         # Validate partial
         if not isinstance(partial, (dict, AbcMapping)) and not hasattr(partial, "__dict__"):
-            warnings.warn(
+            self.logger.warning(
                 f"[{tag}] {side.upper()} partial #{index_in_tag} is not a mapping/obj "
                 f"(got {type(partial).__name__}); skipping."
             )
@@ -1271,7 +1312,7 @@ class MapperHandler:
         # file_variable -> list[str]
         file_vars = self._getattr_or_key(partial, "file_variable", None)
         if file_vars is None:
-            warnings.warn(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_variable'; skipping.")
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_variable'; skipping.")
             return [], []
         if isinstance(file_vars, (list, tuple, set)):
             labels = [str(x) for x in file_vars]
@@ -1403,12 +1444,16 @@ def build_pairs_and_process(process_list, file_variable, dataset_namespace, str_
     }
 
     return pairs_list_str, pairs_list_tuple, process_found, info
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to return list
+def as_list(maybe_seq):
+    if isinstance(maybe_seq, (list, tuple)):
+        return list(maybe_seq), True   # is_sequence = True
+    return [maybe_seq], False
+
 # method to remove NoneType values from a list
 def remove_none(lst):
     # Remove NoneType values from the list

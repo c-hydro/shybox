@@ -166,7 +166,7 @@ def main():
     rh_data = DataLocal(
         path=None,
         file_name=None,
-        file_type=None, file_format='tmp', file_mode='local', file_variable='rh', file_io=None,
+        file_type=None, file_format='tmp', file_mode='local', file_variable='rh', file_io='derived',
         file_deps=[airt_data, qv_data, td_data],
         variable_template={
             "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},

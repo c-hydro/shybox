@@ -107,6 +107,8 @@ class DataLocal(Dataset):
             file_workflow = list(vars_data.values())
         elif self.file_io == 'output':
             file_workflow = list(vars_data.keys())
+        elif self.file_io == 'derived':
+            file_workflow = list(vars_data.values())
         else:
             file_workflow = variable_template.get("vars_wf") or self._default_variable_template["vars_wf"]
 
@@ -156,8 +158,8 @@ class DataLocal(Dataset):
     @file_io.setter
     def file_io(self, value):
         """Set the file_io value, ensuring it is valid."""
-        if value not in {'input', 'output', 'tmp'}:
-            raise ValueError(f"Invalid file_io '{value}'. Must be one of {'input', 'output', 'tmp'}.")
+        if value not in {'input', 'output', 'derived','tmp'}:
+            raise ValueError(f"Invalid file_io '{value}'. Must be one of {'input', 'output', 'derived', 'tmp'}.")
         self._file_io = value
 
     def path(self, time: Optional[pd.Timestamp] = None, **kwargs):

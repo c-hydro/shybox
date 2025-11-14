@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 logging.getLogger("findlibs").setLevel(logging.WARNING)
 logging.getLogger("gribapi.bindings").setLevel(logging.WARNING)
+logging.getLogger("cfgrib").setLevel(logging.ERROR)
 
 import warnings
 import os

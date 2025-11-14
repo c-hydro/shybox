@@ -756,11 +756,14 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
                     return None
 
-                # select data using a 'variable:workflow' mapping string
-                reference = None
-                if 'reference' in kwargs:
-                    reference = kwargs.pop('reference')
-                data = select_da_by_mapping(data, mapping_str=reference) if reference is not None else data
+                # select data using a 'variable:workflow' mapping string (from reference or variable)
+                reference, variable = kwargs.pop('reference', None), kwargs.pop('variable', None)
+                if reference is not None or variable is not None:
+                    for key in (reference, variable):
+                        tmp = select_da_by_mapping(data, mapping_str=key)
+                        if tmp is not None:
+                            data = tmp
+                            break
 
                 # select by variables
                 #data = select_by_vars(data, vars=self.variable_template)
@@ -886,11 +889,14 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
             return None
 
-        # select data using a 'variable:workflow' mapping string
-        reference = None
-        if 'reference' in kwargs:
-            reference = kwargs.pop('reference')
-        data = select_da_by_mapping(data, mapping_str=reference) if reference is not None else data
+        # select data using a 'variable:workflow' mapping string (from reference or variable)
+        reference, variable = kwargs.pop('reference', None), kwargs.pop('variable', None)
+        if reference is not None or variable is not None:
+            for key in (reference, variable):
+                tmp = select_da_by_mapping(data, mapping_str=key)
+                if tmp is not None:
+                    data = tmp
+                    break
 
         #data = select_by_vars(data, **self.variable_template)
         # check data after selecting by variables
