@@ -304,14 +304,15 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time format
-def select_time_format(time_range: (pd.Timestamp, pd.DatetimeIndex), time_format: str ='%Y-%m-%d %H:%M'):
+def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M'):
 
+    # Normalize input to DatetimeIndex
     if isinstance(time_range, pd.Timestamp):
-        time_range = pd.DatetimeIndex([time_range])
-    time_range_formatted = time_range.strftime(date_format=time_format)
+        formatted = time_range.strftime(time_format)
+        return formatted  # return a single string
 
-    #if len(time_range_formatted) == 1:
-    #    time_range_formatted = time_range_formatted[0]
+    # Assume it's a DatetimeIndex or similar iterable of timestamps
+    time_range_formatted = time_range.strftime(time_format).tolist()
 
     return time_range_formatted
 # ----------------------------------------------------------------------------------------------------------------------
