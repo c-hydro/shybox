@@ -12,6 +12,8 @@ import logging
 logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 logging.getLogger('matplotlib.colorbar').setLevel(logging.WARNING)
 
+import shelve
+import pickle
 import os
 import numpy as np
 import xarray as xr
@@ -19,7 +21,58 @@ import matplotlib.pyplot as plt
 
 from typing import Optional, Dict, Any, Union
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+# manage logger
+try:
+    from shybox.logging_toolkit.lib_logging_utils import with_logger
+except Exception as e:
+    from shybox.default.lib_default_log import logger_default
+    logger_stream = logger_default(__name__)
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read workspace obj
+def read_workspace_obj(file_name):
+    if os.path.exists(file_name):
+        file_data = pickle.load(open(file_name, "rb"))
+    else:
+        file_data = None
+    return file_data
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to write workspace obj
+def write_workspace_obj(file_name, file_data):
+    if os.path.exists(file_name):
+        os.remove(file_name)
+    with open(file_name, 'wb') as file_handle:
+        pickle.dump(file_data, file_handle, protocol=pickle.HIGHEST_PROTOCOL)
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to write workspace variable(s)
+def write_workspace_vars(file_name, **kwargs):
+    # Remove old workspace
+    if os.path.exists(file_name):
+        os.remove(file_name)
+    # Save new workspace
+    file_handle = shelve.open(file_name, 'n')
+    for key, value in iter(kwargs.items()):
+        file_handle[key] = value
+    file_handle.close()
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to restore variable(s) workspace
+def read_workspace_vars(file_name):
+    file_handle = shelve.open(file_name)
+    file_dict = {}
+    for key in file_handle:
+        file_dict[key] = file_handle[key]
+    file_handle.close()
+    return file_dict
 # ----------------------------------------------------------------------------------------------------------------------
 
 
