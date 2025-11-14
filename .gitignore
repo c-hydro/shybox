@@ -27,9 +27,9 @@ miniconda.sh
 old
 OLD
 Log
-tmp
 TMP
 Tmp
+tmp
 *log*.txt
 *Log*.txt
 *old*.txt
@@ -72,3 +72,6 @@ venv.bak/
 # IDEs and editors
 .vscode
 .idea
+
+# exceptions
+!lib_utils_tmp.py
