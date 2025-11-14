@@ -1,0 +1,33 @@
+name: shybox_libraries_base
+channels:
+  - conda-forge
+channel_priority: strict
+
+dependencies:
+  - python=3.12
+
+  # Core scientific
+  - numpy
+  - scipy
+  - pandas
+  - xarray
+  - dask
+  - bottleneck
+  - cython
+  - matplotlib
+
+  # Geo/GIS stack (conda-forge preferred)
+  - gdal
+  - rasterio
+  - netCDF4
+  - rioxarray
+  - cfgrib
+  - pyresample
+
+  # Tools
+  - pip
+
+  - pip:
+      - tabulate
+      - repurpose
+
