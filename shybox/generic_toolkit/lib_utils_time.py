@@ -24,8 +24,7 @@ from shybox.generic_toolkit.lib_default_args import (logger_name, logger_arrow,
 try:
     from shybox.logging_toolkit.lib_logging_utils import with_logger
 except Exception as e:
-    from shybox.default.lib_default_log import logger_default
-    logger_stream = logger_default(__name__)
+    logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
 
 
