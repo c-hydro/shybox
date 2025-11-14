@@ -15,7 +15,9 @@ import pandas as pd
 from typing import Tuple, List
 
 from shybox.generic_toolkit.lib_default_namelist import (
-    type_namelist_hmc_316, structure_namelist_hmc_316, type_namelist_hmc_320, structure_namelist_hmc_320,
+    type_namelist_hmc_316, structure_namelist_hmc_316,
+    type_namelist_hmc_320, structure_namelist_hmc_320,
+    type_namelist_hmc_330, structure_namelist_hmc_330,
     type_namelist_s3m_533, structure_namelist_s3m_533)
 from shybox.generic_toolkit.lib_default_args import time_format_datasets
 
@@ -39,6 +41,9 @@ def select_namelist_type_hmc(namelist_type: str = 'hmc', namelist_version: str =
     elif namelist_type == 'hmc' and namelist_version == '3.2.0':
         type_namelist = type_namelist_hmc_320
         structure_namelist = structure_namelist_hmc_320
+    elif namelist_type == 'hmc' and namelist_version == '3.3.0':
+        type_namelist = type_namelist_hmc_330
+        structure_namelist = structure_namelist_hmc_330
     else:
         logger_stream.error(logger_arrow.error + 'Namelist type "' + namelist_type + '" is not allowed')
         raise NotImplementedError('Namelist type not implemented yet')

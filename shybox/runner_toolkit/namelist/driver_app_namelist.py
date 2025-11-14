@@ -43,6 +43,7 @@ class DrvNamelist:
         'hmc:generic': select_namelist_type_hmc,
         'hmc:3.1.6': select_namelist_type_hmc,
         'hmc:3.2.0': select_namelist_type_hmc,
+        'hmc:3.3.0': select_namelist_type_hmc,
         's3m:generic': select_namelist_type_s3m,
         's3m:5.3.3': select_namelist_type_s3m
     }
