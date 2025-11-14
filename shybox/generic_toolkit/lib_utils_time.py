@@ -23,6 +23,7 @@ from shybox.generic_toolkit.lib_default_args import (logger_name, logger_arrow,
 # manage logger
 try:
     from shybox.logging_toolkit.lib_logging_utils import with_logger
+    logger_stream = logging.getLogger(logger_name) # double import for logging (to manage old loggers)
 except Exception as e:
     logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
