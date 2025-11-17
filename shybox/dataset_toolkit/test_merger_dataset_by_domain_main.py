@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 """
-SHYBOX PACKAGE - APP PROCESSING DATASET MAIN
+SHYBOX PACKAGE - TEST DATA GRID - MERGER BY DOMAIN
 
-__date__ = '20251105'
-__version__ = '3.1.0'
+__date__ = '20251116'
+__version__ = '1.1.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -13,14 +13,8 @@ General command line:
 python test_dataset_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
-20251105 (3.1.0) --> Refactoring and improving shybox package structure and codebase
-20250123 (3.0.0) --> Beta release for shybox package
-20221013 (2.1.0) --> Add codes to manage tiff format and fix bug in output variable(s)
-20220412 (2.0.3) --> Add codes to manage interpolating (nearest, linear, sample) and masking (watermark) method(s)
-20220322 (2.0.2) --> Add codes and functions to merge hmc and s3m subdomains datasets
-20211222 (2.0.1) --> Add no data filter
-20211201 (2.0.0) --> Upgrade codes and routines
-20211029 (1.0.0) --> First release
+20251116 (1.1.0) --> Refactoring and improving shybox package structure and codebase
+20250123 (1.0.0) --> Beta release for shybox package
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -48,10 +42,10 @@ from shybox.logging_toolkit.logging_handler import LoggingManager
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Application for data grid'
+alg_name = 'Test for data grid - merger dy domain'
 alg_type = 'Package'
-alg_version = '3.1.0'
-alg_release = '2025-11-05'
+alg_version = '1.1.0'
+alg_release = '2025-11-16'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
