@@ -10,6 +10,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import re
 import numpy as np
 import pandas as pd
 from typing import Union, Optional
@@ -246,8 +247,10 @@ def select_time_restart(time_run: pd.Timestamp, time_shift: int = 1, time_freque
 # method to select time range
 def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd.Timestamp) = None,
                       time_period: int = 1,
-                      time_frequency: str = 'h', time_rounding: str = 'h') -> (pd.date_range, None):
+                      time_frequency: str = 'h', time_rounding: str = 'h',
+                      ensure_range: bool = False) -> (pd.date_range, None):
 
+    # strip quotes and convert to pd.Timestamp
     if isinstance(time_start, str):
         time_start = time_start.strip("\"")
         time_start = pd.Timestamp(time_start)
@@ -262,6 +265,7 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
             raise ValueError('Time start is after time end')
 
     time_rounding, time_frequency = time_rounding.lower(), time_frequency.lower()
+    time_frequency = normalize_frequency(time_frequency)
 
     if (time_start is not None) and (time_end is not None):
 
@@ -275,7 +279,11 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
         time_delta = pd.Timedelta(time_end - time_start)
 
         if time_delta < ref_delta:
-            time_start = time_end
+            if not ensure_range:
+                time_start = time_end
+            else:
+                time_start, time_end = ensure_time_range(
+                    time_start, time_end, ref_delta, when_short="forward")
 
     if (time_start is not None) and (time_end is not None):
 
@@ -304,6 +312,77 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
     return time_range
 # ----------------------------------------------------------------------------------------------------------------------
 
+def ensure_time_range(
+    time_start,
+    time_end,
+    ref_frequency,
+    when_short="forward",      # how to extend if too short
+    when_long="keep",           # how to shrink if too long
+):
+    """
+    Ensure the [time_start, time_end] range is consistent with ref_frequency.
+
+    Parameters
+    ----------
+    time_start, time_end : Timestamp
+        Current time range.
+    ref_frequency : str or Timedelta-like
+        Minimum / target window, e.g. "1d", "6h", "30min".
+    when_short : {"backward", "forward", "both", "keep"}
+        What to do if the window is SHORTER than ref_delta:
+        - "backward": extend backwards (move start earlier)
+        - "forward" : extend forwards (move end later)
+        - "both"    : extend symmetrically around the current center
+        - "keep"    : do nothing
+    when_long : {"keep", "shrink-backward", "shrink-forward", "shrink-both"}
+        What to do if the window is LONGER than ref_delta:
+        - "keep"           : leave as is
+        - "shrink-backward": shrink by moving start forward
+        - "shrink-forward" : shrink by moving end backward
+        - "shrink-both"    : shrink symmetrically around the center
+    """
+    ref_delta = pd.Timedelta(ref_frequency)
+    time_delta = time_end - time_start
+
+    # --- Case 1: window is shorter than ref_delta → maybe extend it
+    if time_delta < ref_delta:
+        if when_short == "backward":
+            time_start = time_end - ref_delta
+        elif when_short == "forward":
+            time_end = time_start + ref_delta
+        elif when_short == "both":
+            center = time_start + time_delta / 2
+            half = ref_delta / 2
+            time_start = center - half
+            time_end = center + half
+        elif when_short == "keep":
+            pass
+        else:
+            raise ValueError("when_short must be 'backward', 'forward', 'both', or 'keep'")
+
+    # --- Case 2: window is longer than ref_delta → maybe shrink it
+    elif time_delta > ref_delta:
+        if when_long == "shrink-backward":
+            # keep end fixed, move start forward
+            time_start = time_end - ref_delta
+        elif when_long == "shrink-forward":
+            # keep start fixed, move end backward
+            time_end = time_start + ref_delta
+        elif when_long == "shrink-both":
+            center = time_start + time_delta / 2
+            half = ref_delta / 2
+            time_start = center - half
+            time_end = center + half
+        elif when_long == "keep":
+            pass
+        else:
+            raise ValueError("when_long must be 'keep', 'shrink-backward', 'shrink-forward', or 'shrink-both'")
+
+    # if time_delta == ref_delta → nothing to do
+
+    return time_start, time_end
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time format
 def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M'):
@@ -317,4 +396,157 @@ def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M'):
     time_range_formatted = time_range.strftime(time_format).tolist()
 
     return time_range_formatted
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to normalize pandas frequency aliases
+@with_logger(var_name="logger_stream")
+def normalize_frequency(freq: str) -> str:
+    """
+    Normalize pandas frequency aliases.
+    Supports multipliers (e.g. '2h', '3d') and raises an error for unsupported values.
+    """
+    # remove blanks from frequency string
+    freq = freq.strip()
+
+    # Split optional multiplier and base code
+    match = re.fullmatch(r"(\d*)\s*([A-Za-z]+)", freq)
+    if not match:
+        logger_stream.error(f"Invalid frequency format: '{freq}'")
+        raise ValueError(f"Invalid frequency format: '{freq}'")
+
+    multiplier, base = match.groups()
+    base_low = base.lower()
+
+    # Uppercase codes (Pandas prefers uppercase for months/years)
+    uppercase_mapping = {
+        "m": "M",
+        "me": "ME",
+        "ms": "MS",
+        "y": "A",
+        "a": "A",
+        "ys": "AS",
+        "as": "AS",
+    }
+
+    # Lowercase codes (Pandas prefers lowercase to avoid warnings)
+    lowercase_mapping = {
+        "h": "h",
+        "hour": "h",
+        "s": "s",
+        "sec": "s",
+        "t": "min",     # 'T' deprecated → use 'min'
+        "min": "min",
+        "d": "d",
+        "w": "w",
+    }
+
+    if base_low in uppercase_mapping:
+        norm = uppercase_mapping[base_low]
+    elif base_low in lowercase_mapping:
+        norm = lowercase_mapping[base_low]
+    else:
+        logger_stream.error(f"Unsupported frequency code: '{base}'")
+        raise ValueError(f"Unsupported frequency code: '{base}'")
+
+    # Add multiplier if present
+    return (multiplier + norm) if multiplier else norm
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get period bounds
+@with_logger(var_name="logger_stream")
+def get_time_bounds(ts, freq: str, time_format: str = None):
+    """
+    Return (period_start, period_end) for the given date and freq.
+
+    ts : pd.Timestamp | datetime | str
+        If str, it will be converted automatically.
+    freq : str
+        Normalized frequency (D, M, MS, ME, A, AS)
+    time_format : str | None
+        Optional explicit string format (e.g. '%Y%m%d').
+    """
+
+    # 1️⃣ --- Convert ts to Timestamp ---
+    if not isinstance(ts, pd.Timestamp):
+        try:
+            if isinstance(ts, str):
+                if time_format is None:
+                    ts = pd.to_datetime(ts)
+                else:
+                    ts = pd.to_datetime(ts, format=time_format)
+            else:
+                ts = pd.to_datetime(ts)
+        except Exception as e:
+            if logger_stream:
+                logger_stream.error(f"Invalid date '{ts}': {e}")
+            raise ValueError(f"Invalid date '{ts}': {e}")
+
+    # 2️⃣ --- Compute bounds based on freq ---
+    if freq.lower() == "d":
+        start = ts.normalize()
+        end = start + pd.Timedelta(days=1)
+
+    elif freq in ("M", "MS", "ME"):
+        start = ts.replace(day=1)
+        end = start + pd.offsets.MonthBegin(1)
+
+    elif freq in ("A", "AS"):
+        start = datetime(ts.year, 1, 1)
+        end = datetime(ts.year + 1, 1, 1)
+
+    else:
+        msg = f"Unsupported period frequency: '{freq}'"
+        if logger_stream:
+            logger_stream.error(msg)
+        raise ValueError(msg)
+
+    return start, end
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to compute period length in chosen resolution
+@with_logger(var_name="logger_stream")
+def get_time_length(start_date, period_freq: str, resolution: str, type: (int, float) = None) -> float:
+    """
+    Compute the length of a period (month/year/day) using a chosen resolution,
+    even if `start_date` is NOT the first day of the period.
+    """
+
+    period_freq = normalize_frequency(period_freq)
+    resolution = normalize_frequency(resolution)
+
+    # Make start_date always a Timestamp
+    ts = pd.to_datetime(start_date)
+
+    # Find actual period boundaries
+    period_start, period_end = get_time_bounds(ts, period_freq)
+    delta = pd.Timedelta(period_end - period_start)
+
+    # resolution conversion
+    conv = {
+        "s": delta.total_seconds(),
+        "min": delta.total_seconds() / 60,
+        "h": delta.total_seconds() / 3600,
+        "d": delta.total_seconds() / 86400,
+    }
+
+    if resolution not in conv:
+        logger_stream.error(f"Unsupported resolution: '{resolution}'")
+        raise ValueError(f"Unsupported resolution: '{resolution}'")
+
+    period = conv[resolution]
+
+    if type is not None:
+        if type == float:
+            period = float(period)
+        elif type == int:
+            period = int(period)
+        else:
+            period = float(period)
+    else:
+        period = float(period)
+
+    return period
 # ----------------------------------------------------------------------------------------------------------------------

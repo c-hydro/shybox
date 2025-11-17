@@ -1,0 +1,137 @@
+{
+    "__comment__": "configuration file for the datasets information",
+    "settings": {
+        "priority": {
+            "reference": "environment",
+            "other": "user"
+        },
+        "flags": {
+            "update_namelist": true,
+            "update_execution": true
+        },
+        "variables": {
+            "lut": {
+                "user": {
+                    "time_source": null,
+                    "time_destination": null,
+                    "time_lai": null,
+                    "path_lai": null,
+                    "time_rounding": "D",
+                    "time_frequency": "D",
+                    "time_direction": "forward",
+                    "file_log": "{execution_name}_{domain_name}.log",
+                    "execution_name": "dataset_base",
+                    "execution_mode": "history"
+                },
+                "environment": {
+                    "domain_name": "DOMAIN_NAME",
+                    "time_start": "TIME_START",
+                    "time_end": "TIME_END",
+                    "path_source": "PATH_SRC",                    
+                    "path_destination": "PATH_DST",
+                    "path_log": "PATH_LOG",
+                    "path_tmp": "PATH_TMP",
+                    "path_geo": "PATH_GEO"
+                }
+            },
+            "format": {
+                "domain_name": "string",
+                "path_geo": "string",
+                "path_source": "string",
+                "path_destination": "string",
+                "time_source": "string",
+                "time_lai": "string",
+                "path_lai": "string",
+                "time_destination": "string",
+                "time_direction": "string",
+                "time_start": "string",
+                "time_end": "string",
+                "time_rounding": "string",
+                "time_frequency": "string",
+                "path_log": "string",
+                "file_log": "string",
+                "path_tmp": "string",
+                "execution_name": "string",
+                "execution_mode": "string"
+            },
+            "template": {
+                "domain_name": "string",
+                "path_geo": "string",
+                "path_source": "string",
+                "path_destination": "string",
+                "time_source": "%m%Y",
+                "time_lai": "%m%d",
+                "path_lai": "%m/%d",
+                "time_destination": "%Y%m%d%H%M",
+                "time_direction": "string",
+                "time_start": "%Y%m%d",
+                "time_end": "%Y%m%d",
+                "time_rounding": "string",
+                "time_frequency": "string",
+                "path_log": "string",
+                "file_log": "string",
+                "path_tmp": "string",
+                "execution_name": "string",
+                "execution_mode": "string"
+            }
+        },
+        "application": {
+            "info": {
+                "domain_name": "{domain_name}"
+            },
+            "time": {
+                "start": "{time_start}",
+                "end": "{time_end}",
+                "frequency": "D",
+                "format": "%Y%m%d"
+            },
+            "geo": {
+                "terrain": {
+                    "path": "{path_geo}",
+                    "file_name": "{domain_name}.dem.txt"
+                }
+            },
+            "data_source": {
+                "lai": {
+                    "path": "{path_source}/daily/LAI/{path_lai}/",
+                    "file_name": "CLIM_{time_lai}_LAI_clip_bbox_ETH.tif"
+                },    
+                "air_t": {
+                    "path": "{path_source}/monthly/",
+                    "file_name": "temperature_{time_source}.nc"
+                },                         
+                "rh": {
+                    "path": "{path_source}/monthly/",
+                    "file_name": "relative_humidity_{time_source}.nc"
+                },
+                "inc_rad": {
+                    "path": "{path_source}/monthly/",
+                    "file_name": "solar_radiation_{time_source}.nc"
+                },
+                 "rain": {
+                    "path": "{path_source}/monthly/",
+                    "file_name": "total_precipitation_{time_source}.nc"
+                },                 
+                "wind": {
+                    "path": "{path_source}/monthly/",
+                    "file_name": "wind_{time_source}.nc"
+                }
+            },
+            "data_destination": {
+                "path": "{path_destination}/%Y/%m/%d/",
+                "file_name": "hmc.forcing-grid.{time_destination}.nc",
+                "format": "netcdf",
+                "type": "hmc",
+                "mode": "grid"
+            },
+            "log": {
+                "path": "{path_log}",
+                "file_name": "converter_hmc_forcing_iwrn.txt"
+            },
+            "tmp": {
+                "path": "{path_tmp}",
+                "file_name": null
+            }
+        }
+    }
+}
