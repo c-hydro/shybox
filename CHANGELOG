@@ -2,6 +2,13 @@
 Changelog
 =========
 
+Version 1.0.3 [2025-11-16]
+**************************
+APPS:
+	- converter and merger for hmc model (new datasets);
+	- runner for hmc model
+	- upgrade the logging system, improve workflows and fix bugs in applications and methods
+
 Version 1.0.2 [2025-07-16]
 **************************
 APPS:
