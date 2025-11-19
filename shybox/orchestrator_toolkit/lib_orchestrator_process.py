@@ -96,7 +96,8 @@ class ProcessorContainer:
         # set dump state
         self.dump_state = False
         # set debug state
-        self.debug_state = False
+        self.debug_state_in = False
+        self.debug_state_out = False
 
     # method to represent the object
     def __repr__(self):
@@ -125,6 +126,7 @@ class ProcessorContainer:
         # get information about id and variable(s)
         fx_id = kwargs['id']
         fx_variable_wf, fx_variable_tag = kwargs['workflow'], kwargs['tag']
+        fx_variable_trace = ':'.join([fx_variable_tag, fx_variable_wf])
 
         if fx_id == 0 and 'memory' in kwargs:
             if (fx_variable_wf is not None) and (fx_variable_wf in kwargs['memory']):
@@ -190,7 +192,7 @@ class ProcessorContainer:
 
         # info process start
         self.logger.info_up(
-            f"Run :: {self.fx_name} - {time_str} - {fx_variable_tag} - {fx_variable_wf} ... ")
+            f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... ")
 
         # memory is active only for start process
         if fx_id != 0:
@@ -241,8 +243,8 @@ class ProcessorContainer:
                 # get variable name(s) from data
                 fx_vars = _get_variable_name(fx_tmp)
 
-                # debug data
-                if self.debug_state: plot_data(fx_tmp, show=True)
+                # debug data in
+                if self.debug_state_in: plot_data(fx_tmp)
 
                 # append data (in list format)
                 fx_data.append(fx_tmp)
@@ -274,14 +276,16 @@ class ProcessorContainer:
             # get variable name(s) from data
             fx_vars = _get_variable_name(fx_data)
 
+            # debug data in
+            if self.debug_state_in: plot_data(fx_data)
+
             # create metadata
             fx_metadata = {'fx_variable': fx_vars}
 
         # check if data is available
         if _is_empty_fx_data(fx_data):
             self.logger.info_down(
-                f"Run :: {self.fx_name} - {time_str} - "
-                f"{fx_variable_tag} - {fx_variable_wf} ... SKIPPED. DATA NOT AVAILABLE")
+                f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... SKIPPED. DATA NOT AVAILABLE")
             return None, None
 
         # manage memory data
@@ -395,6 +399,41 @@ class ProcessorContainer:
             self.logger.error("fx_save must be an xarray DataArray or Dataset.")
             raise TypeError("fx_save must be an xarray DataArray or Dataset.")
 
+        # organize metadata
+        kwargs['time_format'] = self.out_obj.get_attribute('time_format')
+        kwargs['ref'] = self.fx_static['ref']
+        kwargs['out_opts'] = self.out_opts
+
+        # save the data
+        self.out_obj.write_data(fx_save, time, metadata=fx_metadata, **kwargs)
+
+        # arrange data to keep the data array format
+        if isinstance(fx_save, xr.DataArray):
+            fx_out = deepcopy(fx_save)
+            fx_names = [fx_save.name] if fx_save.name else ["unnamed_var"]
+
+        elif isinstance(fx_save, xr.Dataset):
+
+            fx_var_list = list(fx_save.data_vars)
+            if len(fx_var_list) == 1:
+                var_name = fx_variable_data[0]
+                fx_out = fx_save[var_name]
+                fx_out.name = var_name
+                fx_names = [var_name]
+            else:
+                fx_out = fx_save[fx_var_list]
+                fx_names = fx_var_list
+        else:
+            self.logger.error("Unknown fx output type")
+            raise ValueError("Unknown fx output type")
+
+        # save variable names
+        fx_out.attrs["variable_names"] = fx_names
+
+        # info process end
+        self.logger.info_down(
+            f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... DONE")
+
         # dump state if required from the process (if collections are available)
         if self.dump_state:
 
@@ -411,10 +450,20 @@ class ProcessorContainer:
                 collections_dset = xr.Dataset()
                 if isinstance(fx_collections, dict):
 
+                    # update last variable processed result to dump collections (including last updating)
+                    fx_collections[fx_variable_trace] = fx_out
+
+                    # iterate over collections variables
                     for key, data in fx_collections.items():
                         self.logger.info_up(f'Variable {key} ... ')
                         if data is not None:
+
+                            # organize data to keep the data array format
                             collections_dset[key] = data
+
+                            # debug data out
+                            if self.debug_state_out: plot_data(data)
+
                             self.logger.info_down(f'Variable {key} ... ADDED')
                         else:
                             self.logger.warning('Variable is defined by NoneType')
@@ -460,41 +509,6 @@ class ProcessorContainer:
             else:
                 # info dump end
                 self.logger.info_up(f'Dump collections at time {time_str} ... SKIPPED. NO COLLECTIONS FOUND')
-
-        # organize metadata
-        kwargs['time_format'] = self.out_obj.get_attribute('time_format')
-        kwargs['ref'] = self.fx_static['ref']
-        kwargs['out_opts'] = self.out_opts
-
-        # save the data
-        self.out_obj.write_data(fx_save, time, metadata=fx_metadata, **kwargs)
-
-        # info process end
-        self.logger.info_down(
-            f"Run :: {self.fx_name} - {time_str} - {fx_variable_tag} - {fx_variable_wf} ... DONE")
-
-        # arrange data to keep the data array format
-        if isinstance(fx_save, xr.DataArray):
-            fx_out = deepcopy(fx_save)
-            fx_names = [fx_save.name] if fx_save.name else ["unnamed_var"]
-
-        elif isinstance(fx_save, xr.Dataset):
-
-            fx_var_list = list(fx_save.data_vars)
-            if len(fx_var_list) == 1:
-                var_name = fx_variable_data[0]
-                fx_out = fx_save[var_name]
-                fx_out.name = var_name
-                fx_names = [var_name]
-            else:
-                fx_out = fx_save[fx_var_list]
-                fx_names = fx_var_list
-        else:
-            self.logger.error("Unknown fx output type")
-            raise ValueError("Unknown fx output type")
-
-        # save variable names
-        fx_out.attrs["variable_names"] = fx_names
 
         return fx_out, fx_memory
 # ----------------------------------------------------------------------------------------------------------------------
