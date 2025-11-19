@@ -22,6 +22,7 @@ import xarray as xr
 
 from shybox.generic_toolkit.lib_utils_time import convert_time_format
 
+from shybox.generic_toolkit.lib_utils_geo import match_coords_to_reference
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -447,22 +448,26 @@ class ProcessorContainer:
                 fx_collections = kwargs.pop('collections', None)
 
                 # create collections dataset
-                collections_dset = xr.Dataset()
                 if isinstance(fx_collections, dict):
 
                     # update last variable processed result to dump collections (including last updating)
                     fx_collections[fx_variable_trace] = fx_out
 
                     # iterate over collections variables
-                    for key, data in fx_collections.items():
+                    collections_dset = xr.Dataset()
+                    for key, da_raw in fx_collections.items():
                         self.logger.info_up(f'Variable {key} ... ')
-                        if data is not None:
+                        if da_raw is not None:
+
+                            # method to match coordinates to reference (no interpolation)
+                            da_match = match_coords_to_reference(da_raw, self.fx_static['ref'])
 
                             # organize data to keep the data array format
-                            collections_dset[key] = data
+                            collections_dset[key] = da_match
 
                             # debug data out
-                            if self.debug_state_out: plot_data(data)
+                            if self.debug_state_out: plot_data(da_match)
+                            if self.debug_state_out: plot_data(collections_dset[key])
 
                             self.logger.info_down(f'Variable {key} ... ADDED')
                         else:
@@ -486,6 +491,9 @@ class ProcessorContainer:
 
                 # save the data
                 if not len(collections_dset.data_vars) == 0:
+
+                    for key, data in collections_dset.items():
+                        plot_data(data)
 
                     # write collections
                     self.out_obj.write_data(

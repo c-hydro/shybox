@@ -26,13 +26,14 @@ from shybox.generic_toolkit.lib_default_args import file_conventions, file_title
 from shybox.generic_toolkit.lib_default_args import time_units, time_calendar
 from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
 
+from shybox.generic_toolkit.lib_utils_debug import plot_data
+
 #from shybox.dataset_toolkit.merge.app_data_grid_main import logger_name, logger_arrow
 from shybox.default.lib_default_geo import crs_epsg, crs_wkt
 
 # logging
 #logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (xarray library for itwater dataset)
@@ -72,8 +73,6 @@ def write_file_nc_itwater(path: str, data: xr.Dataset, time: pd.DatetimeIndex, a
     data.to_netcdf(path=path, format=dset_format, mode=dset_mode, engine=dset_engine, encoding=encoding)
 
 # ----------------------------------------------------------------------------------------------------------------------
-
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (netcdf library for s3m dataset)
@@ -415,7 +414,8 @@ def write_file_nc_hmc(
         var_system: str ='crs',
         var_time: str = 'time', var_x: str = 'longitude', var_y: str = 'latitude',
         dim_time: str = 'time', dim_x: str = 'west_east', dim_y: str = 'south_north',
-        type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64', **kwargs):
+        type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64',
+        debug_geo: bool = False, debug_data: bool = True, **kwargs):
 
     # manage file path
     path_unzip = path
@@ -471,6 +471,9 @@ def write_file_nc_hmc(
         pass
     else:
         raise NotImplementedError('Case not implemented yet')
+
+    # debug geo information
+    if debug_geo: plot_data(x, var_name='longitude/west_east'); plot_data(y, name='latitude/south_north')
 
     # Define time dimension
     if time is not None:
@@ -622,6 +625,9 @@ def write_file_nc_hmc(
 
         variable_data = data[variable_name].values
         variable_dims = variable_data.ndim
+
+        # debug data
+        if debug_data: plot_data(variable_data, var_name=variable_name)
 
         attrs_variable = {}
         if variable_name in list(attrs_data.keys()):

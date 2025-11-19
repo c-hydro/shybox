@@ -28,39 +28,15 @@ KELVIN_OFFSET = 273.15
 def convert_temperature_units(da: xr.DataArray,
                               to_celsius: bool = True, units_attr: str = "units",
                               **kwargs) -> xr.DataArray:
-    """
-    Convert an xr.DataArray temperature between Kelvin and Celsius.
-
-    Parameters
-    ----------
-    da : xr.DataArray
-        Input data array with temperature values.
-    to_celsius : bool, default True
-        - True  -> convert from K to °C
-        - False -> convert from °C to K
-    units_attr : str, default "units"
-        Name of the attribute storing units (e.g. "K", "C").
-
-    Returns
-    -------
-    xr.DataArray
-        New DataArray with converted values and updated units.
-    """
     da = da.copy()
-
-    # Try to read current units (if present)
     units = (da.attrs.get(units_attr, "") or "").lower()
 
-    if to_celsius:
-        # Only convert if it looks like Kelvin (or units unknown)
-        if units in ("k", "kelvin", ""):
-            da = da - KELVIN_OFFSET
-            da.attrs[units_attr] = "C"
-    else:
-        # Only convert if it looks like Celsius (or units unknown)
-        if units in ("c", "degc", "celsius", ""):
-            da = da + KELVIN_OFFSET
-            da.attrs[units_attr] = "K"
+    if to_celsius and units in ("k", "kelvin", ""):
+        da.values = da.values - KELVIN_OFFSET
+        da.attrs[units_attr] = "C"
+    elif not to_celsius and units in ("c", "degc", "celsius", ""):
+        da.values = da.values + KELVIN_OFFSET
+        da.attrs[units_attr] = "K"
 
     """ debug plot
     plt.figure()
