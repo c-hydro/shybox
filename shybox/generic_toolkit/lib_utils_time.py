@@ -385,7 +385,7 @@ def ensure_time_range(
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time format
-def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M'):
+def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M', flat_if_single: bool = False) -> Union[str, list]:
 
     # Normalize input to DatetimeIndex
     if isinstance(time_range, pd.Timestamp):
@@ -394,6 +394,10 @@ def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M'):
 
     # Assume it's a DatetimeIndex or similar iterable of timestamps
     time_range_formatted = time_range.strftime(time_format).tolist()
+
+    # flat time range (if list of 1-element)
+    if flat_if_single and len(time_range_formatted) == 1:
+        time_range_formatted = time_range_formatted[0]
 
     return time_range_formatted
 # ----------------------------------------------------------------------------------------------------------------------

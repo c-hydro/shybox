@@ -31,7 +31,7 @@ from shybox.generic_toolkit.lib_default_args import collector_data
 from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
-from shybox.processing_toolkit.lib_proc_compute import compute_data_rh
+from shybox.processing_toolkit.lib_proc_compute_humidity import compute_data_rh
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
 

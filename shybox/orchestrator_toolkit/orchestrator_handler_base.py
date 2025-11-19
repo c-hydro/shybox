@@ -422,7 +422,8 @@ class OrchestratorHandler:
             mapper=workflow_mapper, logger=logger)
 
         # iterate over the defined input variables and their process(es)
-        for workflow_row in workflow_mapper.get_rows_by_priority(priority_vars=priority):
+        workflow_configuration = workflow_mapper.get_rows_by_priority(priority_vars=priority, field='tag')
+        for workflow_row in workflow_configuration:
 
             # get workflow information by tag
             workflow_tag = workflow_row['tag']
@@ -1057,14 +1058,18 @@ class MapperHandler:
         return rows
 
     def get_rows_by_priority(
-        self,
-        priority_vars: Optional[List[str]] = None,
-        rows: Optional[List[Dict[str, Any]]] = None,
-        *,
-        sort_others: bool = True,
-        start_id: int = 1
+            self,
+            priority_vars: Optional[List[str]] = None,
+            rows: Optional[List[Dict[str, Any]]] = None,
+            *,
+            sort_others: bool = True,
+            start_id: int = 1,
+            field: str = "in"  # <-- default field name
     ) -> List[Dict[str, Any]]:
-        """Reorder rows so priority variables appear first in the given order."""
+
+        """Reorder rows so priority variables appear first in the given order,
+        using a configurable field name (default='in')."""
+
         if rows is None:
             rows = self.compact_rows(start_id=start_id)
 
@@ -1072,20 +1077,23 @@ class MapperHandler:
             return rows
 
         priority_vars_str = [str(v) for v in priority_vars]
+
         priority_part: List[Dict[str, Any]] = []
         others_part: List[Dict[str, Any]] = []
 
         for row in rows:
-            var_name = str(row.get('in', ''))
+            var_name = str(row.get(field, ""))
             (priority_part if var_name in priority_vars_str else others_part).append(row)
 
+        # sort priority rows in the order given
         priority_part.sort(
-            key=lambda r: priority_vars_str.index(str(r.get('in', '')))
-            if str(r.get('in', '')) in priority_vars_str else len(priority_vars_str)
+            key=lambda r: priority_vars_str.index(str(r.get(field, "")))
+            if str(r.get(field, "")) in priority_vars_str else len(priority_vars_str)
         )
 
+        # optionally sort remaining rows alphabetically
         if sort_others:
-            others_part.sort(key=lambda r: str(r.get('in', '')))
+            others_part.sort(key=lambda r: str(r.get(field, "")))
 
         return priority_part + others_part
 

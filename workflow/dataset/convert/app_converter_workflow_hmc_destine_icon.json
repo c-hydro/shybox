@@ -1,0 +1,137 @@
+{
+    "__comment__": "configuration file for the datasets information",
+    "settings": {
+        "priority": {
+            "reference": "environment",
+            "other": "user"
+        },
+        "flags": {
+            "update_namelist": true,
+            "update_execution": true
+        },
+        "variables": {
+            "lut": {
+                "user": {
+                    "path_time_source": null,
+                    "path_time_destination": null,
+                    "time_source": null,
+                    "time_destination": null,
+                    "time_rounding": "H",
+                    "time_frequency": "H",
+                    "time_direction": "forward",
+                    "file_log": "{execution_name}_{domain_name}.log",
+                    "execution_name": "hmc_dataset",
+                    "execution_mode": "nwp_destine_icon"
+                },
+                "environment": {
+                    "domain_name": "DOMAIN_NAME",
+                    "time_start": "TIME_START",
+                    "time_end": "TIME_END",
+                    "path_source": "PATH_SRC",                    
+                    "path_destination": "PATH_DST",
+                    "path_log": "PATH_LOG",
+                    "path_tmp": "PATH_TMP",
+                    "path_geo": "PATH_GEO"
+                }
+            },
+            "format": {
+                "domain_name": "string",
+                "path_geo": "string",
+                "path_source": "string",
+                "path_time_source": "string",
+                "path_destination": "string",
+                "path_time_destination": "string",
+                "time_source": "string",
+                "time_destination": "string",
+                "time_direction": "string",
+                "time_start": "string",
+                "time_end": "string",
+                "time_rounding": "string",
+                "time_frequency": "string",
+                "path_log": "string",
+                "file_log": "string",
+                "path_tmp": "string",
+                "execution_name": "string",
+                "execution_mode": "string"
+            },
+            "template": {
+                "domain_name": "string",
+                "path_geo": "string",
+                "path_source": "string",
+                "path_time_source": "%Y%m%d_%H00",
+                "path_destination": "string",
+                "path_time_destination": "%Y/%m/%d/",
+                "time_source": "%Y%m%d_%H00",
+                "time_destination": "%Y%m%d%H%M",
+                "time_direction": "string",
+                "time_start": "%Y%m%d",
+                "time_end": "%Y%m%d",
+                "time_rounding": "string",
+                "time_frequency": "string",
+                "path_log": "string",
+                "file_log": "string",
+                "path_tmp": "string",
+                "execution_name": "string",
+                "execution_mode": "string"
+            }
+        },
+        "application": {
+            "info": {
+                "domain_name": "{domain_name}"
+            },
+            "time": {
+                "start": "{time_start}",
+                "end": "{time_end}",
+                "frequency": "H",
+                "format": "%Y-%m-%d %H:%M"
+            },
+            "geo": {
+                "terrain": {
+                    "path": "{path_geo}",
+                    "file_name": "{domain_name}.dem.txt"
+                }
+            },
+            "data_source": {
+                "air_t": {
+                    "path": "{path_source}/{path_time_source}/",
+                    "file_name": "t2m_{time_source}.grib"
+                },                         
+                "dew_point_temperature": {
+                    "path": "{path_source}/{path_time_source}/",
+                    "file_name": "td2m_{time_source}.grib"
+                },
+                "specific_humidity": {
+                    "path": "{path_source}/{path_time_source}/",
+                    "file_name": "qv_{time_source}.grib"
+                },
+                 "rain": {
+                    "path": "{path_source}/{path_time_source}/",
+                    "file_name": "tp_{time_source}.grib"
+                },                 
+                "wind_u": {
+                    "path": "{path_source}/{path_time_source}/",
+                    "file_name": "u10m_{time_source}.grib"
+                },
+                "wind_v": {
+                    "path": "{path_source}/{path_time_source}/",
+                    "file_name": "v10m_{time_source}.grib"
+                }
+            },
+            "data_destination": {
+                "path": "{path_destination}/{path_time_destination}/",
+                "file_name": "hmc.forcing-grid.{time_destination}.nc",
+                "format": "netcdf",
+                "type": "hmc",
+                "mode": "grid"
+            },
+            "log": {
+                "path": "{path_log}",
+                "file_name": "converter_hmc_forcing_destine_icon.txt"
+            },
+            "tmp": {
+                "path": "{path_tmp}",
+                "file_name": null
+            }
+        }
+    }
+}

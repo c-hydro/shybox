@@ -1,10 +1,10 @@
 """
 Library Features:
 
-Name:          lib_proc_compute
+Name:          lib_proc_compute_humidity
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251029'
-Version:       '1.0.0'
+Date:          '20251118'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to mask data
+# method to compute Relative Humidity from specific humidity, dew point and air temperature
 @as_process(input_type='xarray', output_type='xarray')
 def compute_data_rh(
         q: xr.DataArray,

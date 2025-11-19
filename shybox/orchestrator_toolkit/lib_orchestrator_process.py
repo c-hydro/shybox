@@ -309,6 +309,10 @@ class ProcessorContainer:
             deps_vars = self.fx_obj.keywords['deps_vars']
             if deps_vars:
                 tmp_data = deepcopy(fx_data)
+
+                if not isinstance(tmp_data, list):
+                    tmp_data = [tmp_data]
+
                 fx_data = {}
                 for fx_dep, tmp_values in zip(fx_deps, tmp_data):
                     fx_var, fx_wf = fx_dep.split(':')
@@ -468,7 +472,6 @@ class ProcessorContainer:
         # info process end
         self.logger.info_down(
             f"Run :: {self.fx_name} - {time_str} - {fx_variable_tag} - {fx_variable_wf} ... DONE")
-
 
         # arrange data to keep the data array format
         if isinstance(fx_save, xr.DataArray):
