@@ -415,7 +415,7 @@ def write_file_nc_hmc(
         var_time: str = 'time', var_x: str = 'longitude', var_y: str = 'latitude',
         dim_time: str = 'time', dim_x: str = 'west_east', dim_y: str = 'south_north',
         type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64',
-        debug_geo: bool = False, debug_data: bool = True, **kwargs):
+        debug_geo: bool = False, debug_data: bool = False, **kwargs):
 
     # manage file path
     path_unzip = path

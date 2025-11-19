@@ -951,12 +951,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
                    metadata: dict = {}, variable: str = 'variable', separator: str = ';',
                    **kwargs):
 
-        if isinstance(data, xr.Dataset):
-            if 'AIR_T:air_temperature' in data.data_vars:
-                print()
-                var = data['AIR_T:air_temperature']
-                plot_data(var)
-
         # check data (format and type)
         check_data_format(data, self.file_format)
 

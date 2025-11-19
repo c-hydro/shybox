@@ -405,41 +405,54 @@ class ProcessorContainer:
         kwargs['ref'] = self.fx_static['ref']
         kwargs['out_opts'] = self.out_opts
 
-        # save the data
-        self.out_obj.write_data(fx_save, time, metadata=fx_metadata, **kwargs)
-
-        # arrange data to keep the data array format
-        if isinstance(fx_save, xr.DataArray):
-            fx_out = deepcopy(fx_save)
-            fx_names = [fx_save.name] if fx_save.name else ["unnamed_var"]
-
-        elif isinstance(fx_save, xr.Dataset):
-
-            fx_var_list = list(fx_save.data_vars)
-            if len(fx_var_list) == 1:
-                var_name = fx_variable_data[0]
-                fx_out = fx_save[var_name]
-                fx_out.name = var_name
-                fx_names = [var_name]
-            else:
-                fx_out = fx_save[fx_var_list]
-                fx_names = fx_var_list
-        else:
-            self.logger.error("Unknown fx output type")
-            raise ValueError("Unknown fx output type")
-
-        # save variable names
-        fx_out.attrs["variable_names"] = fx_names
-
         # info process end
-        self.logger.info_down(
-            f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... DONE")
+        self.logger.info_down(f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... DONE")
+
+        if fx_variable_tag == 'WIND_SPEED':
+            print()
+
+        # check the dump state (if active dump the collections instead of the variable)
+        if not self.dump_state:
+
+            # info dump variable start
+            self.logger.info_up(f"Dump :: {self.fx_name} - {time_str} - {fx_variable_trace} ... ")
+
+            # save the data
+            self.out_obj.write_data(fx_save, time, metadata=fx_metadata, **kwargs)
+
+            # arrange data to keep the data array format
+            if isinstance(fx_save, xr.DataArray):
+                fx_out = deepcopy(fx_save)
+                fx_names = [fx_save.name] if fx_save.name else ["unnamed_var"]
+
+            elif isinstance(fx_save, xr.Dataset):
+
+                fx_var_list = list(fx_save.data_vars)
+                if len(fx_var_list) == 1:
+                    var_name = fx_variable_data[0]
+                    fx_out = fx_save[var_name]
+                    fx_out.name = var_name
+                    fx_names = [var_name]
+                else:
+                    fx_out = fx_save[fx_var_list]
+                    fx_names = fx_var_list
+            else:
+                self.logger.error("Unknown fx output type")
+                raise ValueError("Unknown fx output type")
+
+            # save variable names
+            fx_out.attrs["variable_names"] = fx_names
+
+            # info dump variable end
+            self.logger.info_down(f"Dump :: {self.fx_name} - {time_str} - {fx_variable_trace} ... DONE")
+
+            return fx_out, fx_memory
 
         # dump state if required from the process (if collections are available)
-        if self.dump_state:
+        elif self.dump_state:
 
             # info dump start
-            self.logger.info_up(f'Dump collections at time {time_str} ... ')
+            self.logger.info_up(f"Dump :: write_data - {time_str} - collections ... ")
 
             # check if collections are available
             if 'collections' in kwargs:
@@ -451,7 +464,7 @@ class ProcessorContainer:
                 if isinstance(fx_collections, dict):
 
                     # update last variable processed result to dump collections (including last updating)
-                    fx_collections[fx_variable_trace] = fx_out
+                    fx_collections[fx_variable_trace] = fx_save
 
                     # iterate over collections variables
                     collections_dset = xr.Dataset()
@@ -492,33 +505,30 @@ class ProcessorContainer:
                 # save the data
                 if not len(collections_dset.data_vars) == 0:
 
-                    for key, data in collections_dset.items():
-                        plot_data(data)
-
                     # write collections
                     self.out_obj.write_data(
                         collections_dset, time,
                         metadata=collections_metadata, **kwargs)
 
                     # info dump end
-                    self.logger.info_down(f'Dump collections at time {time_str} ... DONE')
+                    self.logger.info_down(f"Dump :: write_data - {time_str} - collections ... DONE")
 
                 else:
                     # skip (collections empty)
                     self.logger.warning('No collections data to dump')
-                    self.logger.info_down(f'Dump collections at time {time_str} ... SKIPPED. NO VARIABLES FOUND')
-
-                # info process end
-                self.logger.info_down(
-                    f"Run :: {self.fx_name} - {time_str} - {fx_variable_tag} - {fx_variable_wf} ... DONE")
+                    self.logger.info_down(f"Dump :: write_data - {time_str} - collections ... DONE")
 
                 return None, False
 
             else:
                 # info dump end
-                self.logger.info_up(f'Dump collections at time {time_str} ... SKIPPED. NO COLLECTIONS FOUND')
+                self.logger.info_down(f'Dump collections at time {time_str} ... SKIPPED. NO COLLECTIONS FOUND')
 
-        return fx_out, fx_memory
+        else:
+            # exit for errors
+            self.logger.error('Process unknown dump state')
+            raise ValueError('Process unknown dump state')
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

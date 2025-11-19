@@ -399,7 +399,7 @@ def main(alg_collectors_settings: dict = None):
         time_destination="%Y%m%d%H%M")
     folder_name = fill_string(
         alg_variables_application['data_destination']['path'],
-        path_time_destination="%Y/%m/%d/%H%M")
+        path_time_destination="%Y/%m/%d/")
 
     # Output data handler
     output_data = DataLocal(
