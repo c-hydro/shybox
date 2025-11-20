@@ -143,20 +143,26 @@ class SettingsHandler:
         return cls(settings_obj=file_settings, settings_key=None, settings_time=file_time,
                    collector_obj=collector_vars)
 
-
     def select_variable_priority(self, priority_obj: dict = None) -> (str, str):
 
-        if priority_obj is not None:
-            if 'reference' in list(priority_obj.keys()):
-                self.variables_reference = priority_obj['reference']
-            else:
-                logger_stream.warning(logger_arrow.warning + 'Reference tag is not defined. Use the default priority.')
-            if 'other' in list(priority_obj.keys()):
-                self.variables_other = priority_obj['other']
-            else:
-                logger_stream.warning(logger_arrow.warning + 'Other tag is not defined. Use the default priority.')
-        else:
-            logger_stream.error(logger_arrow.error + 'Priority object not defined.')
+        # Priority object is mandatory
+        if priority_obj is None:
+            msg = "Priority object not defined."
+            logger_stream.error(logger_arrow.error + msg)
+            raise ValueError(msg)
+
+        # Mandatory keys
+        required_keys = ("reference", "other")
+        missing = [key for key in required_keys if key not in priority_obj]
+
+        if missing:
+            msg = f"Mandatory priority keys missing: {', '.join(missing)}."
+            logger_stream.error(logger_arrow.error + msg)
+            raise KeyError(msg)
+
+        # Save values
+        self.variables_reference = priority_obj["reference"]
+        self.variables_other = priority_obj["other"]
 
         return self.variables_reference, self.variables_other
 

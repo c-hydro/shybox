@@ -248,7 +248,7 @@ def select_time_restart(time_run: pd.Timestamp, time_shift: int = 1, time_freque
 def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd.Timestamp) = None,
                       time_period: int = 1,
                       time_frequency: str = 'h', time_rounding: str = 'h',
-                      ensure_range: bool = False) -> (pd.date_range, None):
+                      ensure_range: bool = False, flat_if_single: bool = False) -> (pd.date_range, None):
 
     # strip quotes and convert to pd.Timestamp
     if isinstance(time_start, str):
@@ -308,6 +308,10 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
 
     else:
         raise ValueError('Time range is not correctly defined')
+
+    # flat time range (if list of 1-element)
+    if flat_if_single and len(time_range) == 1:
+        time_range = time_range[0]
 
     return time_range
 # ----------------------------------------------------------------------------------------------------------------------
@@ -385,7 +389,8 @@ def ensure_time_range(
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time format
-def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M', flat_if_single: bool = False) -> Union[str, list]:
+def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M',
+                       flat_if_single: bool = False) -> Union[str, list]:
 
     # Normalize input to DatetimeIndex
     if isinstance(time_range, pd.Timestamp):
