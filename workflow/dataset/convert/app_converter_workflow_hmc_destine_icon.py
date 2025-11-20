@@ -361,34 +361,6 @@ def main(alg_collectors_settings: dict = None):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to update time reference
-def update_time_reference(
-        time_period_start, time_period_end, time_start_anls, time_end_anls):
-
-    # Update period start
-    if time_period_start != time_start_anls:
-        new_start = max(time_period_start, time_start_anls)
-
-        if new_start >= time_end_anls:
-            raise ValueError(
-                f"Invalid update: start {new_start} is not < analysis end {time_end_anls}"
-            )
-        time_period_start = new_start
-
-    # Update period end
-    if time_period_end != time_end_anls:
-        new_end = min(time_period_end, time_end_anls)
-
-        if new_end <= time_start_anls:
-            raise ValueError(
-                f"Invalid update: end {new_end} is not > analysis start {time_start_anls}"
-            )
-        time_period_end = new_end
-
-    return time_period_start, time_period_end
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
 # call entrypoint
 if __name__ == '__main__':
     main()
