@@ -2,6 +2,14 @@
 Changelog
 =========
 
+Version 1.0.4 [2025-11-20]
+**************************
+PACKAGE:
+	- class to manage arguments;
+	- class to manage configurations;
+	- class to manage logging;
+	- extend the process suite.
+
 Version 1.0.3 [2025-11-16]
 **************************
 APPS:
@@ -9,6 +17,12 @@ APPS:
 	- runner for hmc model;
 	- upgrade the time management system;
 	- upgrade the logging system, improve workflows and fix bugs in applications and methods.
+
+Version 1.0.2 [2025-07-16]
+**************************
+APPS:
+	- converter and merger for hmc model;
+	- runner for hmc model
 
 Version 1.0.2 [2025-07-16]
 **************************

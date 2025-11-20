@@ -250,6 +250,7 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
                       time_frequency: str = 'h', time_rounding: str = 'h',
                       ensure_range: bool = False, flat_if_single: bool = False) -> (pd.date_range, None):
 
+
     # strip quotes and convert to pd.Timestamp
     if isinstance(time_start, str):
         time_start = time_start.strip("\"")
@@ -403,6 +404,9 @@ def select_time_format(time_range, time_format: str = '%Y-%m-%d %H:%M',
     # flat time range (if list of 1-element)
     if flat_if_single and len(time_range_formatted) == 1:
         time_range_formatted = time_range_formatted[0]
+
+    # Assume it's a DatetimeIndex or similar iterable of timestamps
+    time_range_formatted = time_range.strftime(time_format).tolist()
 
     return time_range_formatted
 # ----------------------------------------------------------------------------------------------------------------------

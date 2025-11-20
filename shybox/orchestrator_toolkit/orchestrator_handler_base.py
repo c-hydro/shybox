@@ -1058,6 +1058,7 @@ class MapperHandler:
         return rows
 
     def get_rows_by_priority(
+<<<<<<< HEAD
             self,
             priority_vars: Optional[List[str]] = None,
             rows: Optional[List[Dict[str, Any]]] = None,
@@ -1070,6 +1071,16 @@ class MapperHandler:
         """Reorder rows so priority variables appear first in the given order,
         using a configurable field name (default='in')."""
 
+=======
+        self,
+        priority_vars: Optional[List[str]] = None,
+        rows: Optional[List[Dict[str, Any]]] = None,
+        *,
+        sort_others: bool = True,
+        start_id: int = 1
+    ) -> List[Dict[str, Any]]:
+        """Reorder rows so priority variables appear first in the given order."""
+>>>>>>> shybox/destine
         if rows is None:
             rows = self.compact_rows(start_id=start_id)
 
@@ -1077,11 +1088,15 @@ class MapperHandler:
             return rows
 
         priority_vars_str = [str(v) for v in priority_vars]
+<<<<<<< HEAD
 
+=======
+>>>>>>> shybox/destine
         priority_part: List[Dict[str, Any]] = []
         others_part: List[Dict[str, Any]] = []
 
         for row in rows:
+<<<<<<< HEAD
             var_name = str(row.get(field, ""))
             (priority_part if var_name in priority_vars_str else others_part).append(row)
 
@@ -1094,6 +1109,18 @@ class MapperHandler:
         # optionally sort remaining rows alphabetically
         if sort_others:
             others_part.sort(key=lambda r: str(r.get(field, "")))
+=======
+            var_name = str(row.get('in', ''))
+            (priority_part if var_name in priority_vars_str else others_part).append(row)
+
+        priority_part.sort(
+            key=lambda r: priority_vars_str.index(str(r.get('in', '')))
+            if str(r.get('in', '')) in priority_vars_str else len(priority_vars_str)
+        )
+
+        if sort_others:
+            others_part.sort(key=lambda r: str(r.get('in', '')))
+>>>>>>> shybox/destine
 
         return priority_part + others_part
 

@@ -38,6 +38,8 @@ tmp
 *OLD*.py
 *tmp*.py
 *TMP*.py
+.sif
+.tar
 
 
 # Distribution / packaging

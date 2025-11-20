@@ -97,8 +97,12 @@ class ProcessorContainer:
         # set dump state
         self.dump_state = False
         # set debug state
+<<<<<<< HEAD
         self.debug_state_in = False
         self.debug_state_out = False
+=======
+        self.debug_state = False
+>>>>>>> shybox/destine
 
     # method to represent the object
     def __repr__(self):
@@ -127,7 +131,10 @@ class ProcessorContainer:
         # get information about id and variable(s)
         fx_id = kwargs['id']
         fx_variable_wf, fx_variable_tag = kwargs['workflow'], kwargs['tag']
+<<<<<<< HEAD
         fx_variable_trace = ':'.join([fx_variable_tag, fx_variable_wf])
+=======
+>>>>>>> shybox/destine
 
         if fx_id == 0 and 'memory' in kwargs:
             if (fx_variable_wf is not None) and (fx_variable_wf in kwargs['memory']):
@@ -193,7 +200,11 @@ class ProcessorContainer:
 
         # info process start
         self.logger.info_up(
+<<<<<<< HEAD
             f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... ")
+=======
+            f"Run :: {self.fx_name} - {time_str} - {fx_variable_tag} - {fx_variable_wf} ... ")
+>>>>>>> shybox/destine
 
         # memory is active only for start process
         if fx_id != 0:
@@ -244,8 +255,13 @@ class ProcessorContainer:
                 # get variable name(s) from data
                 fx_vars = _get_variable_name(fx_tmp)
 
+<<<<<<< HEAD
                 # debug data in
                 if self.debug_state_in: plot_data(fx_tmp)
+=======
+                # debug data
+                if self.debug_state: plot_data(fx_tmp, show=True)
+>>>>>>> shybox/destine
 
                 # append data (in list format)
                 fx_data.append(fx_tmp)
@@ -277,16 +293,24 @@ class ProcessorContainer:
             # get variable name(s) from data
             fx_vars = _get_variable_name(fx_data)
 
+<<<<<<< HEAD
             # debug data in
             if self.debug_state_in: plot_data(fx_data)
 
+=======
+>>>>>>> shybox/destine
             # create metadata
             fx_metadata = {'fx_variable': fx_vars}
 
         # check if data is available
         if _is_empty_fx_data(fx_data):
             self.logger.info_down(
+<<<<<<< HEAD
                 f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... SKIPPED. DATA NOT AVAILABLE")
+=======
+                f"Run :: {self.fx_name} - {time_str} - "
+                f"{fx_variable_tag} - {fx_variable_wf} ... SKIPPED. DATA NOT AVAILABLE")
+>>>>>>> shybox/destine
             return None, None
 
         # manage memory data
@@ -314,10 +338,13 @@ class ProcessorContainer:
             deps_vars = self.fx_obj.keywords['deps_vars']
             if deps_vars:
                 tmp_data = deepcopy(fx_data)
+<<<<<<< HEAD
 
                 if not isinstance(tmp_data, list):
                     tmp_data = [tmp_data]
 
+=======
+>>>>>>> shybox/destine
                 fx_data = {}
                 for fx_dep, tmp_values in zip(fx_deps, tmp_data):
                     fx_var, fx_wf = fx_dep.split(':')
@@ -399,12 +426,82 @@ class ProcessorContainer:
             # error for unknown type (dataarray or dataset only)
             self.logger.error("fx_save must be an xarray DataArray or Dataset.")
             raise TypeError("fx_save must be an xarray DataArray or Dataset.")
+<<<<<<< HEAD
+=======
+
+        # dump state if required from the process (if collections are available)
+        if self.dump_state:
+
+            # info dump start
+            self.logger.info_up(f'Dump collections at time {time_str} ... ')
+
+            # check if collections are available
+            if 'collections' in kwargs:
+
+                # get data collections
+                fx_collections = kwargs.pop('collections', None)
+
+                # create collections dataset
+                collections_dset = xr.Dataset()
+                if isinstance(fx_collections, dict):
+
+                    for key, data in fx_collections.items():
+                        self.logger.info_up(f'Variable {key} ... ')
+                        if data is not None:
+                            collections_dset[key] = data
+                            self.logger.info_down(f'Variable {key} ... ADDED')
+                        else:
+                            self.logger.warning('Variable is defined by NoneType')
+                            self.logger.info_down(f'Variable {key} ... SKIPPED')
+
+                else:
+                    self.logger.error('Collections must be defined as a dictionary')
+                    raise TypeError('Collections must be defined as a dictionary')
+
+                # define collections variables
+                collections_variables = list(collections_dset.data_vars)
+
+                # collections kwargs
+                kwargs['time_format'] = self.out_obj.get_attribute('time_format')
+                kwargs['ref'] = self.fx_static['ref']
+                kwargs['out_opts'] = self.out_opts
+
+                # collections args
+                collections_metadata = {'variables': collections_variables}
+
+                # save the data
+                if not len(collections_dset.data_vars) == 0:
+
+                    # write collections
+                    self.out_obj.write_data(
+                        collections_dset, time,
+                        metadata=collections_metadata, **kwargs)
+
+                    # info dump end
+                    self.logger.info_down(f'Dump collections at time {time_str} ... DONE')
+
+                else:
+                    # skip (collections empty)
+                    self.logger.warning('No collections data to dump')
+                    self.logger.info_down(f'Dump collections at time {time_str} ... SKIPPED. NO VARIABLES FOUND')
+
+                # info process end
+                self.logger.info_down(
+                    f"Run :: {self.fx_name} - {time_str} - {fx_variable_tag} - {fx_variable_wf} ... DONE")
+
+                return None, False
+
+            else:
+                # info dump end
+                self.logger.info_up(f'Dump collections at time {time_str} ... SKIPPED. NO COLLECTIONS FOUND')
+>>>>>>> shybox/destine
 
         # organize metadata
         kwargs['time_format'] = self.out_obj.get_attribute('time_format')
         kwargs['ref'] = self.fx_static['ref']
         kwargs['out_opts'] = self.out_opts
 
+<<<<<<< HEAD
         # info process end
         self.logger.info_down(f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... DONE")
 
@@ -529,6 +626,165 @@ class ProcessorContainer:
             self.logger.error('Process unknown dump state')
             raise ValueError('Process unknown dump state')
 
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helpers
+# method to sync variable names
+@with_logger(var_name="logger_stream")
+def _sync_variable_name(data, vars):
+
+    # adjust fx_vars to list
+    if not isinstance(vars, list):
+        vars = [vars]
+
+    # xr.DataArray
+    if isinstance(data, xr.DataArray):
+        data_vars = [data.name]
+    elif isinstance(data, xr.Dataset):  # xr.Dataset
+        data_vars = list(data.data_vars)
+    else:
+        logger_stream.error("fx_data must be an xarray DataArray or Dataset")
+        raise NotImplementedError('Case not implemented yet')
+
+    select_vars = []
+    for tmp_var in data_vars:
+        if tmp_var in vars:
+            if tmp_var not in select_vars:
+                select_vars.append(tmp_var)
+        else:
+            logger_stream.warning(f"Variable '{tmp_var}' found in data but not in fx_vars list")
+
+    return select_vars
+
+# method to get variable name(s)
+@with_logger(var_name="logger_stream")
+def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}"):
+
+    # Case 1: DataArray → single variable
+    if isinstance(obj, xr.DataArray):
+        return obj.name if obj.name is not None else default
+
+    # Case 2: Dataset → multiple variables
+    elif isinstance(obj, xr.Dataset):
+        names = []
+        for i, name in enumerate(obj.data_vars):
+            if name is None:
+                names.append(indexed_default.format(i))
+            else:
+                names.append(name)
+        return names
+
+    else:
+        logger_stream.error("Input must be an xarray DataArray or Dataset")
+        raise TypeError("Input must be an xarray DataArray or Dataset")
+
+# filter to convert dataset to dataarray if single variable
+@with_logger(var_name="logger_stream")
+def _to_dataarray_if_single_var(ds: xr.Dataset) -> xr.Dataset | xr.DataArray:
+    """
+    If `ds` has only one data variable, return it as a DataArray.
+    Otherwise, return the original Dataset.
+    """
+    if isinstance(ds, xr.Dataset) and len(ds.data_vars) == 1:
+        var_name = list(ds.data_vars)[0]
+        da = ds[var_name]
+        da.name = var_name  # ensure name is set
+        return da
+    return ds
+
+# check if data is available
+@with_logger(var_name="logger_stream")
+def _is_empty_fx_data(fx_data):
+    """Return True if fx_data is None, empty, or contains only None / empty data structures."""
+    # Case 1: None
+    if fx_data is None:
+        return True
+
+    # Case 2: Empty list, dict, or tuple
+    if isinstance(fx_data, (list, dict, tuple)) and not fx_data:
+        return True
+
+    # Case 3: List of only None or empty elements
+    if isinstance(fx_data, list):
+        if all(_is_empty_fx_data(el) for el in fx_data):
+            return True
+
+    # Case 4a: Empty Dataset
+    if isinstance(fx_data, xr.Dataset):
+        if len(fx_data.data_vars) == 0 or all(v.size == 0 for v in fx_data.data_vars.values()):
+            return True
+    # Case 4b: Empty DataArray
+    if isinstance(fx_data, xr.DataArray):
+        if fx_data.size == 0:
+            return True
+
+    # Case 5: Empty numpy array or pandas object (optional)
+    if isinstance(fx_data, np.ndarray) and fx_data.size == 0:
+        return True
+    if isinstance(fx_data, (pd.Series, pd.DataFrame)) and fx_data.empty:
+        return True
+
+    return False
+
+# method to set name and attributes
+@with_logger(var_name="logger_stream")
+def _set_name_and_attrs(obj, name, ws, tag):
+    """Set name (if missing) and attach metadata attributes."""
+    if hasattr(obj, "name") and obj.name is None:
+        obj.name = name
+    obj.attrs["workflow"] = ws
+    obj.attrs["tag"] = tag
+
+# method to reduce timestamps if they are the same
+@with_logger(var_name="logger_stream")
+def _reduce_if_same_timestamps(timestamps):
+    if not timestamps:
+        return []
+
+    if not isinstance(timestamps, list):
+        timestamps = [timestamps]
+
+    # Ensure input is a list of pd.Timestamp
+    timestamps = [pd.Timestamp(ts) for ts in timestamps]
+    first = timestamps[0]
+=======
+        # save the data
+        self.out_obj.write_data(fx_save, time, metadata=fx_metadata, **kwargs)
+
+        # info process end
+        self.logger.info_down(
+            f"Run :: {self.fx_name} - {time_str} - {fx_variable_tag} - {fx_variable_wf} ... DONE")
+
+
+        # arrange data to keep the data array format
+        if isinstance(fx_save, xr.DataArray):
+            fx_out = deepcopy(fx_save)
+            fx_names = [fx_save.name] if fx_save.name else ["unnamed_var"]
+
+        elif isinstance(fx_save, xr.Dataset):
+
+            fx_var_list = list(fx_save.data_vars)
+            if len(fx_var_list) == 1:
+                var_name = fx_variable_data[0]
+                fx_out = fx_save[var_name]
+                fx_out.name = var_name
+                fx_names = [var_name]
+            else:
+                fx_out = fx_save[fx_var_list]
+                fx_names = fx_var_list
+        else:
+            self.logger.error("Unknown fx output type")
+            raise ValueError("Unknown fx output type")
+
+        # save variable names
+        fx_out.attrs["variable_names"] = fx_names
+>>>>>>> shybox/destine
+
+    if all(ts == first for ts in timestamps):
+        return first  # All elements are the same
+    else:
+        return timestamps  # Elements differ, return as-is
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
