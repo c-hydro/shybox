@@ -9,7 +9,8 @@ PACKAGE:
 	- class to manage configurations;
 	- class to manage logging;
 	- extend the process suite.
-	- update conda installer method.
+	- update conda installer method
+	- adapt the code to python 3.12
 
 Version 1.0.3 [2025-11-16]
 **************************
