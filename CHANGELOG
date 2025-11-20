@@ -9,6 +9,7 @@ PACKAGE:
 	- class to manage configurations;
 	- class to manage logging;
 	- extend the process suite.
+	- update conda installer method.
 
 Version 1.0.3 [2025-11-16]
 **************************
