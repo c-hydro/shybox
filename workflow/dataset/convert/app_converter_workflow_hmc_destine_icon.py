@@ -37,9 +37,8 @@ import pandas as pd
 from shybox.generic_toolkit.lib_utils_args import get_args, get_logger_name
 from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
 from shybox.generic_toolkit.lib_default_args import collector_data
-from shybox.generic_toolkit.lib_utils_time import (select_time_range, select_time_format,
-                                                   get_time_length, get_time_bounds)
-from shybox.generic_toolkit.lib_utils_string import fill_string
+from shybox.generic_toolkit.lib_utils_time import (
+    select_time_range, select_time_format, get_time_length, get_time_bounds)
 
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
