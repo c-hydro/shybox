@@ -33,8 +33,8 @@ set -Eeuo pipefail
 #-----------------------------------------------------------------------------------------
 # Script information
 script_name='SHYBOX ENVIRONMENT - PYTHON LIBRARIES FOR BASE LIBRARY - CONDA'
-script_version="1.7.3"
-script_date='2025/10/29'
+script_version="1.7.4"
+script_date='2025/11/21'
 
 # Official Miniconda (Python 3.12)
 fp_env_file_miniconda='https://repo.anaconda.com/miniconda/Miniconda3-py312_25.7.0-2-Linux-x86_64.sh'
@@ -128,6 +128,12 @@ else
   bash "$installer" -b -p "$fp_env_folder_root"
   echo " ====> Miniconda installed."
 fi
+
+# Accept Anaconda Terms of Service for non-interactive use
+CONDA_BIN="$fp_env_folder_root/bin/conda"
+echo " ====> Accepting Anaconda Terms of Service (non-interactive) ..."
+"$CONDA_BIN" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+"$CONDA_BIN" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
 
 # Load conda
 _conda_hook
