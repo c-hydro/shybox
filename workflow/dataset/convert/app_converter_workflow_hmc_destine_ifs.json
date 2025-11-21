@@ -62,7 +62,7 @@
         "domain_name": "string",
         "path_geo": "string",
         "path_root_source": "string",
-        "path_time_source": "%Y%m%d_%H00",
+        "path_time_source": "%Y%m%d",
         "file_time_source": "%Y%m%d%H00",
         "path_root_destination": "string",
         "path_time_destination": "%Y/%m/%d/",
@@ -102,27 +102,35 @@
       "data_source": {
         "AIR_T": {
           "path": "{path_root_source}/{path_time_source}/",
-          "file_name": "t2m_{file_time_source}.grib"
+          "file_name": "2t.nc"
         },
         "DEW_POINT": {
           "path": "{path_root_source}/{path_time_source}/",
-          "file_name": "td2m_{file_time_source}.grib"
+          "file_name": "2d.nc"
         },
         "QV": {
           "path": "{path_root_source}/{path_time_source}/",
-          "file_name": "qv_{file_time_source}.grib"
+          "file_name": "q.nc"
         },
         "RAIN": {
           "path": "{path_root_source}/{path_time_source}/",
-          "file_name": "tp_{file_time_source}.grib"
+          "file_name": "tp.nc"
         },
         "WIND_U": {
           "path": "{path_root_source}/{path_time_source}/",
-          "file_name": "u10m_{file_time_source}.grib"
+          "file_name": "10u.nc"
         },
         "WIND_V": {
           "path": "{path_root_source}/{path_time_source}/",
-          "file_name": "v10m_{file_time_source}.grib"
+          "file_name": "10v.nc"
+        },
+        "SSRD": {
+          "path": "{path_root_source}/{path_time_source}/",
+          "file_name": "ssrd.nc"
+        },
+        "STRD": {
+          "path": "{path_root_source}/{path_time_source}/",
+          "file_name": "strd.nc"
         }
       },
       "data_destination": {
@@ -135,7 +143,7 @@
       },
       "log": {
         "path": "{path_log}",
-        "file_name": "converter_hmc_forcing_destine_icon.txt"
+        "file_name": "converter_hmc_forcing_destine_ifs.txt"
       },
       "tmp": {
         "path": "{path_tmp}",
@@ -150,115 +158,39 @@
     },
     "process_list": {
       "AIR_T": [
-        {
-          "function": "interpolate_data",
-          "method": "nn",
-          "max_distance": 25000,
-          "neighbours": 7,
-          "fill_value": null
-        },
-        {
-          "function": "mask_data_by_ref",
-          "ref_value": -9999,
-          "mask_no_data": null
-        },
-        {
-          "function": "convert_temperature_units",
-          "to_celsius": true
-        }
+        {"function": "interpolate_data", "method": "nn", "max_distance": 25000, "neighbours": 7, "fill_value": null},
+        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null},
+        {"function": "convert_temperature_units", "to_celsius": true}
       ],
 
       "RAIN": [
-        {
-          "function": "interpolate_data",
-          "method": "nn",
-          "max_distance": 25000,
-          "neighbours": 7,
-          "fill_value": null
-        },
-        {
-          "function": "mask_data_by_ref",
-          "ref_value": -9999,
-          "mask_no_data": null
-        }
+        {"function": "interpolate_data", "method": "nn", "max_distance": 25000, "neighbours": 7, "fill_value": null},
+        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
       ],
 
-      "WIND_U": [],
-      "WIND_V": [],
-
+      "WIND_U": [], "WIND_V": [],
       "WIND_SPEED": [
-        {
-          "function": "compute_data_wind_speed",
-          "ref_value": -9999,
-          "mask_no_data": null,
-          "deps_vars": {
-            "u": "WIND_U",
-            "v": "WIND_V"
-          }
-        },
-        {
-          "function": "interpolate_data",
-          "method": "nn",
-          "max_distance": 22000,
-          "neighbours": 7,
-          "fill_value": null
-        },
-        {
-          "function": "mask_data_by_ref",
-          "ref_value": -9999,
-          "mask_no_data": null
-        }
+        {"function": "compute_data_wind_speed", "ref_value": -9999, "mask_no_data": null,
+          "deps_vars": {"u": "WIND_U", "v": "WIND_V"}},
+        {"function": "interpolate_data", "method": "nn", "max_distance": 22000, "neighbours": 7, "fill_value": null},
+        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
       ],
 
-      "QW": [],
-      "DEW_POINT": [],
-
+      "QW": [], "DEW_POINT": [],
       "RH": [
-        {
-          "function": "compute_data_rh",
-          "ref_value": -9999,
-          "mask_no_data": null,
-          "deps_vars": {
-            "t": "AIR_T",
-            "q": "QV",
-            "td": "DEW_POINT"
-          }
-        },
-        {
-          "function": "interpolate_data",
-          "method": "nn",
-          "max_distance": 22000,
-          "neighbours": 7,
-          "fill_value": null
-        },
-        {
-          "function": "mask_data_by_ref",
-          "ref_value": -9999,
-          "mask_no_data": null
-        }
+        {"function": "compute_data_rh", "ref_value": -9999, "mask_no_data": null,
+          "deps_vars": {"t": "AIR_T", "q": "QV", "td": "DEW_POINT"}},
+        {"function": "interpolate_data", "method": "nn", "max_distance": 22000, "neighbours": 7, "fill_value": null},
+        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
       ],
 
+      "SSRD": [], "STRD": [],
       "INC_RAD": [
-        {
-          "function": "compute_data_astronomic_radiation",
-          "ref_value": -9999,
-          "mask_no_data": null,
-          "deps_vars": {
-            "rain": "RAIN"
-          }
+        {"function": "compute_data_incoming_radiation", "ref_value": -9999, "mask_no_data": null,
+          "deps_vars": {"ssrd": "SSRD", "strd": "STRD"}
         },
-        {
-          "function": "interpolate_data",
-          "method": "nn",
-          "max_distance": 22000,
-          "neighbours": 7,
-          "fill_value": null
-        },
-        {
-          "function": "mask_data_by_ref",
-          "ref_value": -9999,
-          "mask_no_data": null
-        }
+        {"function": "interpolate_data", "method": "nn", "max_distance": 22000, "neighbours": 7, "fill_value": null},
+        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
       ]
     }
   }

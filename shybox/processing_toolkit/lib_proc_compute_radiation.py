@@ -35,28 +35,46 @@ lookup_table_cf_default = {
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to compute incoming radiation (from accumulated ssrd/strd)
+@as_process(input_type='xarray', output_type='xarray')
 def compute_data_incoming_radiation(
     ssrd: xr.DataArray | None = None,
     strd: xr.DataArray | None = None,
+    time: pd.Timestamp | str | None = None,
+    time_delta: str = "1h",
     time_dim: str = "time",
-    kind: str = "all",
+    kind: str = "k",
     midpoint: bool = True,
     clip_sw_min: float = 0.0,
-    *kwargs,
+    var_name_k: str = "incoming_radiation",
+    var_name_l: str = "incoming_longwave_radiation",
+    var_name_r: str = "incoming_total_radiation",
+    **kwargs,
 ):
     """
-    Convert accumulated IFS/ERA5 ssrd/strd (J m-2) to incoming radiation (W m-2).
+    Convert a single accumulated IFS/ERA5 ssrd/strd field (J m-2) to incoming
+    radiation fluxes (W m-2) for a *single interval* (2D case).
+
+    This version only supports 2D inputs WITHOUT a time dimension:
+      - input: lat x lon (or similar)
+      - output: same dims, with a scalar time coordinate (not a dimension)
 
     Parameters
     ----------
     ssrd : xr.DataArray or None
         Accumulated surface solar radiation downwards [J m-2].
         Required for kind in {"k", "r", "w", "all"}.
+        Must NOT have dimension `time_dim`.
     strd : xr.DataArray or None
         Accumulated surface thermal radiation downwards [J m-2].
         Required for kind in {"l", "r", "w", "all"}.
+        Must NOT have dimension `time_dim`.
+    time : pd.Timestamp or str
+        Time of the *end* of the accumulation interval.
+        Required (no default from data, since there is no time dimension).
+    time_delta : str
+        Length of the accumulation interval, e.g. "1h".
     time_dim : str
-        Name of time dimension.
+        Name of the time coordinate in the output (scalar coordinate).
     kind : {"k", "l", "r", "w", "all"}
         Which flux to return:
         - "k": shortwave incoming (K_in_sw)
@@ -64,82 +82,94 @@ def compute_data_incoming_radiation(
         - "r" or "w": total incoming (R_in = K + L)
         - "all": dict with all three DataArrays
     midpoint : bool
-        If True, place output time at the center of the interval.
-        If False, use the end of the interval (time[1:], typical for “previous hour”).
+        If True: output time = time - 0.5 * time_delta (center of interval)
+        If False: output time = time (end of interval)
     clip_sw_min : float
         Minimum value for shortwave (to remove tiny negatives at night).
+        If None, no clipping is applied.
+    var_name_k, var_name_l, var_name_r : str
+        Output variable names.
 
     Returns
     -------
     xr.DataArray or dict[str, xr.DataArray]
-        Depending on `kind`.
+        Depending on `kind`. All outputs have:
+        - same dimensions as input (lat, lon, ...)
+        - a scalar coordinate with name `time_dim`.
     """
     if kind not in {"k", "l", "r", "w", "all"}:
         raise ValueError("kind must be one of {'k', 'l', 'r', 'w', 'all'}")
 
-    # pick a reference series for dt
+    # choose reference array to inspect shape/dims
     ref_da = ssrd if ssrd is not None else strd
     if ref_da is None:
         raise ValueError("At least one of ssrd or strd must be provided.")
 
-    # Time-step [s] between consecutive records
-    dt = ref_da[time_dim].diff(time_dim) / np.timedelta64(1, "s")  # (time-1)
+    # This function is ONLY for 2D-like data: must NOT have time_dim as a dimension
+    if time_dim in ref_da.dims:
+        raise ValueError(
+            f"This 2D version does not support a '{time_dim}' dimension. "
+            "Provide a single accumulated field without time dimension."
+        )
 
-    # Target time coordinate
-    if midpoint:
-        time_new = ref_da[time_dim][1:] - 0.5 * ref_da[time_dim].diff(time_dim)
-    else:
-        # end-of-interval (e.g. average from t-1h to t, stamped at t)
-        time_new = ref_da[time_dim][1:]
+    if time is None:
+        raise ValueError(
+            "For 2D inputs (no time dimension), 'time' must be provided "
+            "as the end of the accumulation interval."
+        )
 
-    out = {}
+    td = pd.to_timedelta(time_delta)
+    dt_seconds = float(td.total_seconds())
 
-    # Shortwave K↓
+    t_end = pd.to_datetime(time)
+    t_out = t_end - td / 2 if midpoint else t_end
+
+    out: dict[str, xr.DataArray] = {}
+
+    # Shortwave
     if kind in {"k", "r", "w", "all"}:
         if ssrd is None:
             raise ValueError("ssrd must be provided for kind 'k', 'r', 'w', or 'all'.")
 
-        dt_expanded = dt.broadcast_like(ssrd.isel({time_dim: slice(1, None)}))
-        K_in_sw = ssrd.diff(time_dim) / dt_expanded
-        K_in_sw = K_in_sw.rename("K_in_sw")
-        K_in_sw[time_dim] = time_new
+        K_in_sw = (ssrd / dt_seconds).rename(var_name_k)
+        # Attach time as a scalar coordinate (NOT a dimension)
+        K_in_sw = K_in_sw.assign_coords({time_dim: t_out})
 
         if clip_sw_min is not None:
             K_in_sw = K_in_sw.clip(min=clip_sw_min)
 
-        out["K_in_sw"] = K_in_sw
+        out[var_name_k] = K_in_sw
 
-    # Longwave L↓
+    # Longwave
     if kind in {"l", "r", "w", "all"}:
         if strd is None:
             raise ValueError("strd must be provided for kind 'l', 'r', 'w', or 'all'.")
 
-        dt_expanded = dt.broadcast_like(strd.isel({time_dim: slice(1, None)}))
-        L_in_lw = strd.diff(time_dim) / dt_expanded
-        L_in_lw = L_in_lw.rename("L_in_lw")
-        L_in_lw[time_dim] = time_new
+        L_in_lw = (strd / dt_seconds).rename(var_name_l)
+        L_in_lw = L_in_lw.assign_coords({time_dim: t_out})
 
-        out["L_in_lw"] = L_in_lw
+        out[var_name_l] = L_in_lw
 
-    # Total R_in = K + L
+    # Total
     if kind in {"r", "w", "all"}:
-        if "K_in_sw" not in out or "L_in_lw" not in out:
+        if (var_name_k not in out) or (var_name_l not in out):
             raise ValueError(
                 "Both ssrd and strd must be provided for kind 'r', 'w', or 'all'."
             )
-        R_in = (out["K_in_sw"] + out["L_in_lw"]).rename("R_in")
-        R_in[time_dim] = time_new
-        out["R_in"] = R_in
+        R_in = (out[var_name_k] + out[var_name_l]).rename(var_name_r)
+        R_in = R_in.assign_coords({time_dim: t_out})
+        out[var_name_r] = R_in
 
-    # Decide what to return
+    # Return according to `kind`
     if kind == "k":
-        return out["K_in_sw"]
+        return out[var_name_k]
     elif kind == "l":
-        return out["L_in_lw"]
+        return out[var_name_l]
     elif kind in {"r", "w"}:
-        return out["R_in"]
-    else:  # "all"
+        return out[var_name_r]
+    else:
         return out
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 

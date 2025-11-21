@@ -825,26 +825,40 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
             # ensure that the data dimensions are not empty
             data = straighten_dims(data)
+            data = self._check_step(data, "straighten_dims")
+            if data is None: return None
 
             # map the data dimensions
             data = map_dims(data, **self.variable_template)
+            data = self._check_step(data, "map_dims")
+            if data is None: return None
+
             # map the data coords
             data = map_coords(data, **self.variable_template)
+            data = self._check_step(data, "map_coords")
+            if data is None: return None
 
             # map the data variables
             data = map_vars(data, **self.variable_template)
+            data = self._check_step(data, "map_vars")
+            if data is None: return None
 
             # ensure that the data has descending latitudes
             data = straighten_data(data)
+            data = self._check_step(data, "straighten_data")
+            if data is None: return None
 
             # debug data
             if self.debug_state: plot_data(data)
 
             # ensure that the data dimensions are flat
             data = flat_dims(data)
+
             # ensure that the time info is correctly defined (if needed)
             data = straighten_time(
                 data, time_file=self.time_reference, time_freq=self.time_freq, time_direction=self.time_direction)
+            data = self._check_step(data, "straighten_time")
+            if data is None: return None
 
             # make sure the nodata value is set to np.nan for floats and to the max int for integers
             data = set_type(data, self.nan_value)
@@ -909,6 +923,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # info get data end (source case)
         log_data('end', name=name, time=time, from_memory=False)
 
+        return data
+
+    def _check_step(self, data, step_name='n/a'):
+        if data is None:
+            self.logger.warning(f"Data became None after step: {step_name}")
+            return None
         return data
 
     @staticmethod

@@ -203,6 +203,8 @@ CMD ["/bin/bash", "-l"]
 FROM app-builder-shybox AS app-converter
 ARG DEBIAN_FRONTEND=noninteractive
 
+USER app
+
 # environmental variable(s)
 ENV	EXECUTION_DIR=/app/execution/ 
 ENV	GEO_DIR=/app/mnt_geo/ 
@@ -221,17 +223,18 @@ COPY --from=app-builder-shybox ${ENTRYPOINT_DIR} ${ENTRYPOINT_DIR}
 # Minimal OS deps you actually need at runtime
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-	 ca-certificates bash tini \
+	 ca-certificates bash tini nano \
     && rm -rf /var/lib/apt/lists/*
 # change default shell (from sh to bash)
 SHELL ["/bin/bash", "-c"]
-
 
 # Make bash shells automatically have conda and the shybox env active
 RUN echo "source \"${CONDA_SHYBOX_DIR}/etc/profile.d/conda.sh\" 2>/dev/null || true" \
       >> /etc/bash.bashrc && \
     echo "conda activate ${CONDA_SHYBOX_LIBS} 2>/dev/null || true" \
       >> /etc/bash.bashrc
+
+ENV PATH="${CONDA_SHYBOX_DIR}/envs/${CONDA_SHYBOX_LIBS}/bin:${PATH}"
 
 USER app
 
@@ -252,9 +255,9 @@ RUN chmod +x app_entrypoint.sh
 USER app
 WORKDIR /app
 # use Python script as entrypoint
-#ENTRYPOINT ["python", "app_entrypoint.py"]
+ENTRYPOINT ["python", "app_entrypoint.py"]
 
 # Nice interactive defaults (bash login reads /etc/bash.bashrc and user bashrcs)
-CMD ["/bin/bash", "-l"]
+#CMD ["/bin/bash", "-l"]
 # -----------------------------------------------------------------
 

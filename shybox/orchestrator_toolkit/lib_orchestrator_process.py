@@ -408,9 +408,6 @@ class ProcessorContainer:
         # info process end
         self.logger.info_down(f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... DONE")
 
-        if fx_variable_tag == 'WIND_SPEED':
-            print()
-
         # check the dump state (if active dump the collections instead of the variable)
         if not self.dump_state:
 
