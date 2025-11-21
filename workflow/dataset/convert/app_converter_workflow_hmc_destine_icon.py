@@ -14,6 +14,7 @@ python app_converter_workflow_main.py -settings_file configuration.json -time "Y
 
 Examples of environment variables declarations:
 DOMAIN_NAME='marche';
+TIME_PERIOD=24;
 TIME_START='2024-10-17 06:00';
 TIME_END='2024-10-17 06:00';
 PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_static/gridded/';
@@ -82,17 +83,20 @@ def main(alg_collectors_settings: dict = None):
         root_key="configuration",
         auto_validate=True, auto_fill_lut=True,
         flat_variables=True, flat_key_mode='value')
+    # view lut section
+    alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
+    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=True)
 
     # get application section
     alg_cfg_application = alg_cfg_obj.get_section(section='application')
     # fill application section
     alg_cfg_application = alg_cfg_obj.fill_obj_from_lut(
         section=alg_cfg_application,
-        resolve_time_placeholders=False, time_keys=('time_start', 'time_end'),
+        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
         template_keys=('file_time_destination',)
     )
     # view application section
-    alg_cfg_obj.view(section=alg_cfg_application, table_name='application', table_print=True)
+    alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)
 
     # get workflow section
     alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow')
@@ -160,9 +164,11 @@ def main(alg_collectors_settings: dict = None):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## TIME MANAGEMENT (STEP)
-    # time analysis info
-    time_data_length, time_anls_length = 24, 24
+    # time dataset info
+    time_data_length = int(alg_cfg_application['time']['dataset'])
     time_data_start = select_time_format(alg_reference_time, time_format='%Y-%m-%d %H:%M')
+    # time analysis info
+    time_anls_length = int(alg_cfg_application['time']['dataset'])
     time_anls_period = select_time_range(
         time_start=alg_reference_time, time_period=time_anls_length, time_frequency='h')
     time_anls_start = select_time_format(time_anls_period[0], time_format='%Y-%m-%d %H:%M')
@@ -176,6 +182,9 @@ def main(alg_collectors_settings: dict = None):
             'path_time_source': alg_reference_time, 'file_time_source': alg_reference_time,
             'path_time_destination': alg_reference_time, 'path_time_run': alg_reference_time}
     )
+
+    # view application section
+    alg_cfg_obj.view(section=alg_cfg_application, table_name='application [time info]', table_print=True)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

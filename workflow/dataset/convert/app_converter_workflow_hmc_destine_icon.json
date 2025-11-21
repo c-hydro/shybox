@@ -28,6 +28,7 @@
           "domain_name": "DOMAIN_NAME",
           "path_root_source": "PATH_SRC",
           "path_root_destination": "PATH_DST",
+          "time_period": "TIME_PERIOD",
           "time_start": "TIME_START",
           "time_end": "TIME_END",
           "path_log": "PATH_LOG",
@@ -45,6 +46,7 @@
         "path_time_destination": "time",
         "file_time_destination": "time",
         "path_time_run": "time",
+        "time_period": "int",
         "time_direction": "string",
         "time_start": "time",
         "time_end": "time",
@@ -66,6 +68,7 @@
         "path_time_destination": "%Y/%m/%d/",
         "file_time_destination": "%Y%m%d%H%M",
         "path_time_run": "%H00",
+        "time_period": "int",
         "time_direction": "string",
         "time_start": "%Y%m%d",
         "time_end": "%Y%m%d",
@@ -86,7 +89,9 @@
         "start": "{time_start}",
         "end": "{time_end}",
         "frequency": "H",
-        "format": "%Y-%m-%d %H:%M"
+        "format": "%Y-%m-%d %H:%M",
+        "analysis": "{time_period}",
+        "dataset": "{time_period}"
       },
       "geo": {
         "terrain": {
@@ -121,7 +126,8 @@
         }
       },
       "data_destination": {
-        "path": "{path_root_destination}/{path_time_destination}/{path_time_run}/",
+        "__comment_": "{path_root_destination}/{path_time_destination}/{path_time_run}/",
+        "path": "{path_root_destination}/{path_time_destination}/",
         "file_name": "hmc.forcing-grid.{file_time_destination}.nc",
         "format": "netcdf",
         "type": "hmc",

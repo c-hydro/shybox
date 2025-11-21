@@ -1111,7 +1111,7 @@ class ConfigManager:
         final_table = "\n".join(lines)
 
         # add space after the table
-        final_table = final_table + "\n"
+        final_table = "\n" + final_table + "\n"
 
         if table_print:
             print(final_table)

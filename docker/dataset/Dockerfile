@@ -23,7 +23,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # repository and branch (use your desired tag or branch)
 ARG SHYBOX_REPO=https://github.com/c-hydro/shybox.git
-ARG SHYBOX_REF=destine/1.2.1
+ARG SHYBOX_REF=destine/1.2.4
 
 # set geographical area
 ENV TZ=Europe/Rome 
@@ -127,8 +127,6 @@ USER app
 RUN mkdir -p "${PACKAGE_SHYBOX_DIR}" "${CONDA_SHYBOX_DIR}"
 WORKDIR "${PACKAGE_SHYBOX_DIR}"
 
-ARG SHYBOX_REF=destine/1.2.2
-
 # fetch shybox (shallow + submodules), supports tags
 RUN git init . && \
     git remote add origin "${SHYBOX_REPO}" && \
@@ -219,8 +217,6 @@ USER app
 
 # copy libs, variables from images
 COPY --from=app-builder-shybox ${ENTRYPOINT_DIR} ${ENTRYPOINT_DIR} 
-#COPY --from=app-builder-shybox ${INPUT_STATIC_DIR} ${INPUT_STATIC_DIR} 
-#COPY --from=app-builder-shybox ${INPUT_DYNAMIC_DIR} ${INPUT_DYNAMIC_DIR} 
 
 # Minimal OS deps you actually need at runtime
 USER root
@@ -230,8 +226,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # change default shell (from sh to bash)
 SHELL ["/bin/bash", "-c"]
 
-#RUN rm -rf ${INPUT_DYNAMIC_DIR}
-#RUN rm -rf ${INPUT_STATIC_DIR}
 
 # Make bash shells automatically have conda and the shybox env active
 RUN echo "source \"${CONDA_SHYBOX_DIR}/etc/profile.d/conda.sh\" 2>/dev/null || true" \
@@ -243,7 +237,7 @@ USER app
 
 # create folder 
 RUN mkdir -p ${EXECUTION_DIR}
-RUN mkdir -p ${GEO_DIR}
+RUN mkdir -p ${DATA_DIR}
 RUN mkdir -p ${INPUT_DIR}
 RUN mkdir -p ${OUTPUT_DIR}
 
