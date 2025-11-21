@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_proc_compute_radiation
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251118'
-Version:       '1.1.0'
+Date:          '20251121'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -22,7 +22,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
 # default lookup table for cloud factor against rain values
 lookup_table_cf_default = {
@@ -32,6 +31,115 @@ lookup_table_cf_default = {
     'CF_L4': {'Rain': [5, 10],      'CloudFactor': [0.50]},
     'CF_L5': {'Rain': [10, None],   'CloudFactor': [0.15]}
 }
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to compute incoming radiation (from accumulated ssrd/strd)
+def compute_data_incoming_radiation(
+    ssrd: xr.DataArray | None = None,
+    strd: xr.DataArray | None = None,
+    time_dim: str = "time",
+    kind: str = "all",
+    midpoint: bool = True,
+    clip_sw_min: float = 0.0,
+    *kwargs,
+):
+    """
+    Convert accumulated IFS/ERA5 ssrd/strd (J m-2) to incoming radiation (W m-2).
+
+    Parameters
+    ----------
+    ssrd : xr.DataArray or None
+        Accumulated surface solar radiation downwards [J m-2].
+        Required for kind in {"k", "r", "w", "all"}.
+    strd : xr.DataArray or None
+        Accumulated surface thermal radiation downwards [J m-2].
+        Required for kind in {"l", "r", "w", "all"}.
+    time_dim : str
+        Name of time dimension.
+    kind : {"k", "l", "r", "w", "all"}
+        Which flux to return:
+        - "k": shortwave incoming (K_in_sw)
+        - "l": longwave incoming (L_in_lw)
+        - "r" or "w": total incoming (R_in = K + L)
+        - "all": dict with all three DataArrays
+    midpoint : bool
+        If True, place output time at the center of the interval.
+        If False, use the end of the interval (time[1:], typical for “previous hour”).
+    clip_sw_min : float
+        Minimum value for shortwave (to remove tiny negatives at night).
+
+    Returns
+    -------
+    xr.DataArray or dict[str, xr.DataArray]
+        Depending on `kind`.
+    """
+    if kind not in {"k", "l", "r", "w", "all"}:
+        raise ValueError("kind must be one of {'k', 'l', 'r', 'w', 'all'}")
+
+    # pick a reference series for dt
+    ref_da = ssrd if ssrd is not None else strd
+    if ref_da is None:
+        raise ValueError("At least one of ssrd or strd must be provided.")
+
+    # Time-step [s] between consecutive records
+    dt = ref_da[time_dim].diff(time_dim) / np.timedelta64(1, "s")  # (time-1)
+
+    # Target time coordinate
+    if midpoint:
+        time_new = ref_da[time_dim][1:] - 0.5 * ref_da[time_dim].diff(time_dim)
+    else:
+        # end-of-interval (e.g. average from t-1h to t, stamped at t)
+        time_new = ref_da[time_dim][1:]
+
+    out = {}
+
+    # Shortwave K↓
+    if kind in {"k", "r", "w", "all"}:
+        if ssrd is None:
+            raise ValueError("ssrd must be provided for kind 'k', 'r', 'w', or 'all'.")
+
+        dt_expanded = dt.broadcast_like(ssrd.isel({time_dim: slice(1, None)}))
+        K_in_sw = ssrd.diff(time_dim) / dt_expanded
+        K_in_sw = K_in_sw.rename("K_in_sw")
+        K_in_sw[time_dim] = time_new
+
+        if clip_sw_min is not None:
+            K_in_sw = K_in_sw.clip(min=clip_sw_min)
+
+        out["K_in_sw"] = K_in_sw
+
+    # Longwave L↓
+    if kind in {"l", "r", "w", "all"}:
+        if strd is None:
+            raise ValueError("strd must be provided for kind 'l', 'r', 'w', or 'all'.")
+
+        dt_expanded = dt.broadcast_like(strd.isel({time_dim: slice(1, None)}))
+        L_in_lw = strd.diff(time_dim) / dt_expanded
+        L_in_lw = L_in_lw.rename("L_in_lw")
+        L_in_lw[time_dim] = time_new
+
+        out["L_in_lw"] = L_in_lw
+
+    # Total R_in = K + L
+    if kind in {"r", "w", "all"}:
+        if "K_in_sw" not in out or "L_in_lw" not in out:
+            raise ValueError(
+                "Both ssrd and strd must be provided for kind 'r', 'w', or 'all'."
+            )
+        R_in = (out["K_in_sw"] + out["L_in_lw"]).rename("R_in")
+        R_in[time_dim] = time_new
+        out["R_in"] = R_in
+
+    # Decide what to return
+    if kind == "k":
+        return out["K_in_sw"]
+    elif kind == "l":
+        return out["L_in_lw"]
+    elif kind in {"r", "w"}:
+        return out["R_in"]
+    else:  # "all"
+        return out
 # ----------------------------------------------------------------------------------------------------------------------
 
 

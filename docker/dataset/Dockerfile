@@ -113,7 +113,7 @@ ENV PATH="${CONDA_SHYBOX_DIR}/bin:${PATH}" \
 
 # use bash for consistent conda behavior
 SHELL ["/bin/bash", "-lc"]
-
+ARG SHYBOX_REF=destine/1.2.5
 # base OS deps (only what builder needs)
 USER root
 RUN --mount=type=cache,target=/var/cache/apt \
@@ -237,7 +237,7 @@ USER app
 
 # create folder 
 RUN mkdir -p ${EXECUTION_DIR}
-RUN mkdir -p ${DATA_DIR}
+RUN mkdir -p ${GEO_DIR}
 RUN mkdir -p ${INPUT_DIR}
 RUN mkdir -p ${OUTPUT_DIR}
 
