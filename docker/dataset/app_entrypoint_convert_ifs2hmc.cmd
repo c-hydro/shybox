@@ -70,28 +70,28 @@ docker volume inspect case_study_destine_ifs_out
 # docker run using bash (for debugging)
 docker run -it \
   --entrypoint /bin/bash \
-  -e TIME_START='2025-11-17 06:00' \
-  -e TIME_END='2025-11-17 06:00'\
+  -e TIME_START='2025-11-17 00:00' \
+  -e TIME_END='2025-11-17 00:00'\
   -e TIME_PERIOD=2 \
   -e DOMAIN_NAME='marche' \
   --env-file app_entrypoint_converter_ifs2hmc.env \
   -v /home/fabio/Desktop/shybox/docker/dataset/app_converter_workflow_hmc_destine_ifs.json:/app/execution/app_converter_workflow_hmc_destine_ifs.json \
-  -v case_study_destine_icon_geo:/app/mnt_geo/:rw \
-  -v case_study_destine_icon_in:/app/mnt_in/:rw \
-  -v case_study_destine_icon_out:/app/mnt_out/:rw \
+  -v case_study_destine_ifs_geo:/app/mnt_geo/:rw \
+  -v case_study_destine_ifs_in:/app/mnt_in/:rw \
+  -v case_study_destine_ifs_out:/app/mnt_out/:rw \
   converter:dev
 
 # docker run using entrypoint
 docker run -it \
-  -e TIME_START='2024-10-17 06:00' \
-  -e TIME_END='2024-10-17 06:00'\
+  -e TIME_START='2025-11-17 00:00' \
+  -e TIME_END='2025-11-17 00:00'\
   -e TIME_PERIOD=5 \
   -e DOMAIN_NAME='marche' \
   --env-file app_entrypoint_converter_ifs2hmc.env \
   -v /home/fabio/Desktop/shybox/docker/dataset/app_converter_workflow_hmc_destine_ifs.json:/app/execution/app_converter_workflow_hmc_destine_ifs.json \
-  -v case_study_destine_icon_geo:/app/mnt_geo/:rw \
-  -v case_study_destine_icon_in:/app/mnt_in/:rw \
-  -v case_study_destine_icon_out:/app/mnt_out/:rw \
+  -v case_study_destine_ifs_geo:/app/mnt_geo/:rw \
+  -v case_study_destine_ifs_in:/app/mnt_in/:rw \
+  -v case_study_destine_ifs_out:/app/mnt_out/:rw \
   converter:dev
 ## --------------------------------------------------------------------------------------------------
 

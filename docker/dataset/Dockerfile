@@ -113,7 +113,7 @@ ENV PATH="${CONDA_SHYBOX_DIR}/bin:${PATH}" \
 
 # use bash for consistent conda behavior
 SHELL ["/bin/bash", "-lc"]
-ARG SHYBOX_REF=destine/1.2.5
+ARG SHYBOX_REF=destine/1.2.6
 # base OS deps (only what builder needs)
 USER root
 RUN --mount=type=cache,target=/var/cache/apt \

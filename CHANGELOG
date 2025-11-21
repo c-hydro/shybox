@@ -2,14 +2,18 @@
 Changelog
 =========
 
-Version 1.0.4 [2025-11-20]
+Version 1.0.4 [2025-11-21]
 **************************
 PACKAGE:
 	- class to manage arguments;
 	- class to manage configurations;
 	- class to manage logging;
-	- extend the process suite.
 	- update conda installer method.
+
+WORKFLOWS:
+    - extend the process suite;
+	- extend the time management system;
+	- extend the workflow management system;
 
 Version 1.0.3 [2025-11-16]
 **************************
@@ -25,12 +29,6 @@ APPS:
 	- converter and merger for hmc model;
 	- runner for hmc model
 
-Version 1.0.2 [2025-07-16]
-**************************
-APPS:
-	- converter and merger for hmc model;
-	- runner for hmc model
-
 Version 1.0.1 [2025-03-15]
 **************************
 APPS:
@@ -39,5 +37,8 @@ APPS:
 
 Version 1.0.0 [2024-12-02]
 **************************
-PACKAGE: beta release (first development and codes refactoring)
+PACKAGE:
+    - beta release (first development and codes refactoring);
+    - set the package structure and main classes.
+    - set the environment management system.
 
