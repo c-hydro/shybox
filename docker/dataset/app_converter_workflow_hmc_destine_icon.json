@@ -96,7 +96,7 @@
       },
       "data_source": {
         "AIR_T": {
-          "path": "{path_root_source}/{path_time_source}/2",
+          "path": "{path_root_source}/{path_time_source}/",
           "file_name": "t2m_{file_time_source}.grib"
         },
         "DEW_POINT": {

@@ -19,7 +19,7 @@ TIME_END='2024-10-17 06:00';
 PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_static/gridded/';
 PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/source/icon/';
 PATH_DST='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/destination/icon/';
-PATH_LOG=/home/fabio/Desktop/shybox/dset/case_study_destine/log/;
+PATH_LOG=/home/fabio/Desktop/shybox/dset/case_study_destine/log/
 
 Version(s):
 20251116 (1.2.0) --> Release for shybox package (hmc datasets converter base configuration)

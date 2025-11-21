@@ -257,7 +257,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # 1) File existence
         if not p.exists():
             if active_warnings:
-                self.logger.warning("File not found on disk.")
+                self.logger.warning(f"File not found on disk: {p}")
             readable = False
         else:
             # 2) Size sanity
