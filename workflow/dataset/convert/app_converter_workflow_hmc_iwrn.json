@@ -114,7 +114,7 @@
                 },                 
                 "wind": {
                     "path": "{path_source}/monthly/",
-                    "file_name": "wind_{time_source}.nc"
+                    "file_name": "m10_wind_{time_source}.nc"
                 }
             },
             "data_destination": {

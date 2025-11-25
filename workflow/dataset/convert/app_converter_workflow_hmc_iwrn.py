@@ -3,7 +3,7 @@
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN
 
 __date__ = '20251116'
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -337,7 +337,7 @@ def main(alg_collectors_settings: dict = None):
             file_type='grid_3d', file_format='netcdf', file_mode='local', file_variable='WIND', file_io='input',
             variable_template={
                 "dims_geo": {"x": "longitude", "y": "latitude", "time": "time"},
-                "vars_data": {"wind": "wind"}
+                "vars_data": {"m10_wind": "wind"}
             },
             time_signature='period',
             time_reference=time_data_start, time_period=time_data_len, time_freq='h', time_direction='forward',
