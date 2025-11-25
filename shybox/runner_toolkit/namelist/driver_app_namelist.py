@@ -105,9 +105,17 @@ class DrvNamelist:
         self.namelist_update = namelist_update
         self.line_indent = 4 * ' '
 
-        namelist_structure_obj = self.select_namelist.get(
-            self.namelist_type + ':' + self.namelist_version, self.error_variable_namelist)
-        self.namelist_type_default, self.namelist_structure_default = namelist_structure_obj()
+        namelist_def = self.namelist_type + ':' + self.namelist_version
+        if namelist_def in list(self.select_namelist.keys()):
+            namelist_structure_obj = self.select_namelist.get(
+                namelist_def, self.error_variable_namelist)
+            self.namelist_type_default, self.namelist_structure_default = namelist_structure_obj(
+                namelist_type= self.namelist_type, namelist_version=self.namelist_version)
+        else:
+            namelist_structure_obj = self.select_namelist.get(
+                self.namelist_type, self.error_variable_namelist)
+
+            self.namelist_type_default, self.namelist_structure_default = namelist_structure_obj()
 
         self.driver_namelist_in, self.driver_namelist_out = None, None
 
