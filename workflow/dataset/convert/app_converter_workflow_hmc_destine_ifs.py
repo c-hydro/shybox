@@ -32,7 +32,6 @@ import logging
 import time
 import os
 
-import numpy as np
 import pandas as pd
 
 from shybox.generic_toolkit.lib_utils_args import get_args, get_logger_name
