@@ -255,6 +255,8 @@ class OrchestratorHandler:
             raise RuntimeError('Workflow functions must be provided in the configuration.')
 
         # normalize input/output data packages
+        if not isinstance(data_package_in, list):
+            data_package_in = [data_package_in]
         if not isinstance(data_package_out, list):
             data_package_out = [data_package_out]
 

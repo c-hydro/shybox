@@ -378,7 +378,7 @@ def main(alg_collectors_settings: dict = None):
             data_package_in=[lai_data, airt_data, rh_data, sr_data, tp_data, wind_data],
             data_package_out=output_data,
             data_ref=geo_data,
-            priority=['lai'],
+            priority=['leaf_area_index'],
             configuration=configuration['WORKFLOW'],
             logger=logging_handle
         )

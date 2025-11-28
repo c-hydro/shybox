@@ -1,0 +1,123 @@
+
+## LOCAL MACHINE
+# 1) save your Docker image to a tar
+docker save converter:dev -o converter_nwp2hmc.tar
+
+# 2) convert tar → SIF
+apptainer build converter_nwp2hmc.sif docker-archive://converter_nwp2hmc.tar
+
+
+# 3a) give the right permission to results fgolder
+	
+	# results folder
+	OUT="/home/fabio/Desktop/shybox/dset/case_study_destine/results"
+
+	# make sure the dir exists
+	mkdir -p "$OUT"
+
+	# take ownership and grant sane perms
+	sudo chown -R "$USER":"$USER" "$OUT"
+	chmod -R u+rwX,g+rwX,o+rX "$OUT"
+
+	# remove 'immutable' flag if it was set (rare but nasty)
+	sudo chattr -R -i "$OUT"
+
+	# verify you can write now
+	touch "$OUT/.perm_test" && echo "OK" || echo "FAIL"
+
+# 3b) run aptainer interactive shell and configuration and volume(s)
+apptainer shell \
+  --writable-tmpfs \
+  --env TIME_START='2024-10-17 06:00' \
+  --env TIME_END='2024-10-17 06:00' \
+  --env TIME_PERIOD=5 \
+  --env DOMAIN_NAME="marche" \
+  --env APP_CONFIG="/app/execution/app_converter_workflow_hmc_destine_icon.json" \
+  --env-file app_entrypoint_converter_icon2hmc.env \
+  --bind /home/fabio/Desktop/shybox/docker/dataset/app_converter_workflow_hmc_destine_icon.json:/app/execution/app_converter_workflow_hmc_destine_icon.json \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/data/data_static/gridded/:/app/mnt_geo/ \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/source/icon/:/app/mnt_in/ \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/results/icon/:/app/mnt_out/ \
+  converter_nwp2hmc.sif
+
+# 3c) run apptainer using configuration and volume(s)
+apptainer run --cleanenv \
+  --writable-tmpfs \
+  --env TIME_START='2024-10-17 06:00' \
+  --env TIME_END='2024-10-17 06:00' \
+  --env TIME_PERIOD=5 \
+  --env DOMAIN_NAME="marche" \
+  --env APP_CONFIG="/app/execution/app_converter_workflow_hmc_destine_icon.json" \
+  --env-file app_entrypoint_converter_icon2hmc.env \
+  --bind /home/fabio/Desktop/shybox/docker/dataset/app_converter_workflow_hmc_destine_icon.json:/app/execution/app_converter_workflow_hmc_destine_icon.json \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/data/data_static/gridded/:/app/mnt_geo/ \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/source/icon/:/app/mnt_in/ \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/results/icon/:/app/mnt_out/ \
+  converter_nwp2hmc.sif
+
+
+# 3d) exec apptainer command
+apptainer exec \
+  --env TIME_START='2024-10-17 06:00' \
+  --env TIME_END='2024-10-17 06:00'\
+  --env TIME_PERIOD=5 \
+  --env DOMAIN_NAME="marche" \
+  --env APP_CONFIG="/app/execution/app_converter_workflow_hmc_destine_icon.json" \
+  --env-file app_entrypoint_converter_icon2hmc.env \
+  --bind /home/fabio/Desktop/shybox/docker/dataset/app_converter_workflow_hmc_destine_icon.json:/app/execution/app_converter_workflow_hmc_destine_icon.json \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/data/data_static/gridded/:/app/mnt_geo/ \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/source/icon/:/app/mnt_in \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/results/icon/:/app/mnt_out \
+  converter_nwp2hmc.sif \
+  python app_entrypoint.py
+  
+# 3e) run aptainer interactive shell
+apptainer shell converter_nwp2hmc.sif
+
+## HPC LEONARDO
+
+# (0a) Allocate Node to build sif
+salloc -A DE374_lot1 -p dcgp_usr_prod  --nodes 1 --exclusive --time 01:00:00
+
+# (ob1) Build from a Docker archive (gzip is OK) 
+singularity build $WORK/runner_hmc.sif docker-archive://$WORK/runner_hmc.tar
+# (ob2) or copy sif from local to remote
+scp /home/fabio/Desktop/shybox/docker/runner_hmc.sif   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+
+#(0c) folder permissions 
+chmod -R g+rwx $WORK/fdelogu0
+
+# (1) copy all data needed by the container
+scp /home/fabio/Desktop/shybox/dset/case_study_destine   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+scp /home/fabio/Desktop/shybox/docker/app_runner_workflow_hmc_base_marche.json   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+scp /home/fabio/Desktop/shybox/docker/app_entrypoint.env   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+scp /home/fabio/Desktop/shybox/docker/app_entrypoint.py   fdelogu0@login.leonardo.cineca.it:/leonardo/home/userexternal/fdelogu0
+
+2) run singularity using configuration and volume(s) ---> $WORK 
+
+ singularity run --cleanenv \
+  --writable-tmpfs \
+  --env TIME_START='2024-10-17 06:00' \
+  --env TIME_END='2024-10-17 06:00' \
+  --env TIME_PERIOD=5 \
+  --env DOMAIN_NAME="marche" \
+  --env APP_CONFIG="/app/execution/app_converter_workflow_hmc_destine_icon.json" \
+  --env-file /leonardo_work/DE374_lot1/fdelogu0/container/converter/app_entrypoint_converter_icon2hmc.env \
+  --bind /leonardo_work/DE374_lot1/fdelogu0/config/app_converter_workflow_hmc_destine_icon.json:/app/execution/app_converter_workflow_hmc_destine_icon.json \
+  --bind /leonardo_work/DE374_lot1/fdelogu0/data/data_static/gridded/:/app/mnt_geo/ \
+  --bind /leonardo_work/DE374_lot1/fdelogu0/data/data_dynamic/nwp/icon/:/app/mnt_in/ \
+  --bind /leonardo_work/DE374_lot1/fdelogu0/data/data_dynamic/hmc/icon/:/app/mnt_out/ \
+  /leonardo_work/DE374_lot1/container/cconverter/converter_nwp2hmc.sif
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  

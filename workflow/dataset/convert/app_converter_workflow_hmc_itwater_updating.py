@@ -162,27 +162,7 @@ def main(alg_collectors_settings: dict = None):
                 "tmp_dir": alg_cfg_application['tmp']['path']
             },
             "process_list": {
-                "rain": [
-                    {"function": "interpolate_data", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "air_t": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "rh": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 22000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "inc_rad": [
-                    {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "wind": [
+                "snow_mask": [
                     {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
                      "fill_value": np.nan},
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
@@ -252,73 +232,19 @@ def main(alg_collectors_settings: dict = None):
 
         # ------------------------------------------------------------------------------------------------------------------
         ## DATASETS MANAGEMENT
-        # Rain handler
-        rain_handler = DataLocal(
-            path=step_cfg_application['data_source']['rain']['path'],
-            file_name=step_cfg_application['data_source']['rain']['file_name'],
+        # Snow Mask handler
+        snow_mask_handler = DataLocal(
+            path=step_cfg_application['data_source']['snow_mask']['path'],
+            file_name=step_cfg_application['data_source']['snow_mask']['file_name'],
             file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='rain', file_io='input',
+            file_variable='snow_mask', file_io='input',
             variable_template={
                 "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-                "vars_data": {"RAIN_EFF": "rain"}
+                "vars_data": {"SNOW_MASK": "snow_mask"}
             },
             time_signature='period',
             time_reference=time_data_reference, time_period=time_data_length,
             time_freq='h', time_direction='forward',
-        )
-
-        # Air Temperature handler
-        airt_handler = DataLocal(
-            path=step_cfg_application['data_source']['air_t']['path'],
-            file_name=step_cfg_application['data_source']['air_t']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='air_t', file_io='input',
-            variable_template={
-                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-                "vars_data": {"Tair": "air_temperature"}
-            },
-            time_signature='period',
-            time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
-        )
-
-        # Relative Humidity handler
-        rh_handler = DataLocal(
-            path=step_cfg_application['data_source']['rh']['path'],
-            file_name=step_cfg_application['data_source']['rh']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='rh', file_io='input',
-            variable_template={
-                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-                "vars_data": {"RH": "relative_humidity"}
-            },
-            time_signature='period',
-            time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
-        )
-
-        # Relative Humidity handler
-        inc_rad_handler = DataLocal(
-            path=step_cfg_application['data_source']['inc_rad']['path'],
-            file_name=step_cfg_application['data_source']['inc_rad']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='inc_rad', file_io='input',
-            variable_template={
-                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-                "vars_data": {"Rad": "incoming_radiation"}
-            },
-            time_signature='period',
-            time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
-        )
-        # Wind Speed handler
-        wind_speed_handler = DataLocal(
-            path=step_cfg_application['data_source']['wind']['path'],
-            file_name=step_cfg_application['data_source']['wind']['file_name'],
-            file_format=None, file_mode=None, file_variable='wind',
-            variable_template={
-                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
-                "vars_data": {"Wind": "wind"}
-            },
-            time_signature='period',
-            time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
         )
 
         # destination data
@@ -327,16 +253,13 @@ def main(alg_collectors_settings: dict = None):
             file_name=alg_cfg_application['data_destination']['file_name'],
             time_signature='step',
             file_format='netcdf', file_type='hmc', file_mode='local',
-            file_variable=['rain', 'air_t', 'rh', 'inc_rad', 'wind'], file_io='output',
+            file_variable=['snow_mask'], file_io='output',
             variable_template={
                 "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
                 "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
                 "vars_data": {
-                    "rain": "Rain",
-                    "air_temperature": "AirTemperature",
-                    "relative_humidity": "RelHumidity",
-                    "incoming_radiation": "IncRadiation",
-                    "wind": "Wind"}
+                    "snow_mask": "SnowMask"
+                }
             },
             time_period=1, time_format='%Y%m%d%H%M',
             logger=logging_handle, message=False
@@ -344,10 +267,10 @@ def main(alg_collectors_settings: dict = None):
 
         # orchestrator settings
         orc_process = Orchestrator.multi_variable(
-            data_package_in=[rain_handler, airt_handler, rh_handler, inc_rad_handler, wind_speed_handler],
+            data_package_in=snow_mask_handler,
             data_package_out=output_handler,
             data_ref=geo_data,
-            priority=['air_temperature'],
+            priority=['snow_mask'],
             configuration=configuration['WORKFLOW'],
             logger=logging_handle
         )
