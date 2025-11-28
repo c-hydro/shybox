@@ -1,6 +1,6 @@
 {
   "__comment__" : "configuration file for the hmc runner information",
-  "settings": {
+  "configuration": {
     "priority": {"reference": "environment", "other": "user"},
     "flags": {"update_namelist": true, "update_execution": true},
     "variables": {
@@ -23,8 +23,8 @@
       "format": {
         "domain_name": "string",
         "path_source": "string", "path_destination": "string",
-        "time_run": "timestamp", "time_restart": "timestamp", "time_period": "int",
-        "time_start": "string", "time_end": "string",
+        "time_run": "time", "time_restart": "time", "time_period": "int",
+        "time_start": "time", "time_end": "time",
         "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
         "path_log": "string", "file_log": "string",
@@ -44,7 +44,7 @@
       }
     }
   },
-  "namelist": {
+  "application_namelist": {
     "description": {
       "version": "3.3.0", "type": "hmc"
     },
@@ -100,7 +100,7 @@
       }
     }
   },
-  "application": {
+  "application_execution": {
     "description": {
       "execution_name": "{execution_name}", "execution_mode": "{execution_mode}"
     },
@@ -116,7 +116,7 @@
       "dependencies": ["$HOME/fp_system_libs_hmc/nc4/lib/"]
     }
   },
-  "configuration": {
+  "test": {
     "time_run": "{time_run}",
     "time_restart": "{time_restart}",
     "time_period": "{time_period}",

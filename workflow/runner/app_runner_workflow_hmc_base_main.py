@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW RUNNER BASE
+SHYBOX - Snow HYdro toolBOX - WORKFLOW RUNNER BASE - HMC
 
-__date__ = '20250117'
-__version__ = '1.0.0'
+__date__ = '20251128'
+__version__ = '1.1.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -21,6 +21,7 @@ PATH_NAMELIST=$HOME/run_base/exec/;
 PATH_EXEC=$HOME/run_base/exec/
 
 Version(s):
+20251128 (1.1.0) --> Update release for shybox package
 20250117 (1.0.0) --> Beta release for shybox package
 """
 
@@ -41,6 +42,23 @@ from shybox.runner_toolkit.time.driver_app_time import DrvTime
 from shybox.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
 from shybox.runner_toolkit.execution.driver_app_execution import DrvExec
 
+from shybox.config_toolkit.arguments_handler import ArgumentsManager
+from shybox.config_toolkit.config_handler import ConfigManager
+
+from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
+from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
+from shybox.processing_toolkit.lib_proc_interp import interpolate_data
+from shybox.processing_toolkit.lib_proc_compute_humidity import compute_data_rh
+from shybox.processing_toolkit.lib_proc_compute_wind import compute_data_wind_speed
+from shybox.processing_toolkit.lib_proc_compute_radiation import (
+    compute_data_astronomic_radiation, compute_data_incoming_radiation)
+from shybox.processing_toolkit.lib_proc_compute_temperature import convert_temperature_units
+
+from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
+from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.logging_toolkit.logging_handler import LoggingManager
+
+
 # set logger
 logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
@@ -50,7 +68,7 @@ logger_stream = logging.getLogger(logger_name)
 project_name = 'shybox'
 alg_name = 'Workflow for runner base configuration'
 alg_type = 'Package'
-alg_version = '1.0.0'
+alg_version = '1.1.0'
 alg_release = '2025-01-15'
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -58,6 +76,82 @@ alg_release = '2025-01-15'
 # ----------------------------------------------------------------------------------------------------------------------
 # script main
 def main(alg_collectors_settings: dict = None):
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## SETTINGS MANAGEMENT
+    # get file settings
+    alg_args_obj = ArgumentsManager(settings_folder=os.path.dirname(os.path.realpath(__file__)))
+    alg_args_file, alg_args_time = alg_args_obj.get()
+
+    # crete configuration object
+    alg_cfg_obj = ConfigManager.from_source(
+        src=alg_args_file,
+        root_key="configuration",
+        application_key=None
+    )
+
+    # view lut section
+    alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
+    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=True)
+
+    # get application execution
+    alg_app_exec = alg_cfg_obj.get_application("application_execution", root_key=None)
+    # fill application execution
+    alg_app_exec = alg_app_exec.resolved(
+        time_values=None,  # no fill_section_with_times
+        when=None,  # no LUT time resolution
+        strict=False,
+        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
+        expand_env=True,  # BUT expand $HOME, $RUN, ...
+        env_extra=None,  # or {"RUN": "base"} etc
+        validate_result=False,  # or True + allow_placeholders=True if needed
+        validate_allow_placeholders=True,
+        validate_allow_none=False,
+    )
+    # view application execution section
+    alg_cfg_obj.view(section=alg_app_exec, table_name='application [cfg application execution]', table_print=True)
+
+    # get application namelist
+    alg_app_nml = alg_cfg_obj.get_application("application_namelist", root_key=None)
+    # fill application namelist
+    alg_app_nml = alg_app_nml.resolved(
+        time_values=None,  # no fill_section_with_times
+        when=None,  # no LUT time resolution
+        strict=False,
+        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
+        expand_env=True,  # BUT expand $HOME, $RUN, ...
+        env_extra=None,  # or {"RUN": "base"} etc
+        validate_result=False,  # or True + allow_placeholders=True if needed
+        validate_allow_placeholders=True,
+        validate_allow_none=False,
+    )
+
+    # view application namelist section
+    alg_cfg_obj.view(section=alg_app_nml, table_name='application [cfg application namelist]', table_print=True)
+
+    # get application namelist section
+    alg_cfg_application_nml = alg_cfg_obj.get_section(section='application_namelist')
+    # fill application namelist section
+    alg_cfg_application_nml = alg_cfg_obj.fill_obj_from_lut(
+        section=alg_cfg_application_nml,
+        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
+        template_keys=('file_time_destination',)
+    )
+    # view application namelist section
+    alg_cfg_obj.view(section=alg_cfg_application_nml, table_name='application [cfg namelist]', table_print=True)
+
+    # get application execution section
+    alg_cfg_application_nml = alg_cfg_obj.get_section(section='application_execution')
+    # view application execution section
+    alg_cfg_obj.view(section=alg_cfg_application_nml, table_name='application [cfg namelist]', table_print=True)
+
+    # get workflow section
+    alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow')
+    # view workflow section
+    alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=True)
+    # ------------------------------------------------------------------------------------------------------------------
+
+
 
     # ------------------------------------------------------------------------------------------------------------------
     # get file settings

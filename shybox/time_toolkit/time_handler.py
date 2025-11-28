@@ -1,159 +1,534 @@
-import calendar
+"""
+Class Features
+
+Name:          time_handler
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20251120'
+Version:       '0.1.0'
+"""
+
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
+import warnings
+from dataclasses import dataclass, field
+from typing import Iterable, Mapping, Any
+
+import numpy as np
 import pandas as pd
-from typing import Dict, Iterable, List, Tuple, Set, Optional
+from tabulate import tabulate
+# ----------------------------------------------------------------------------------------------------------------------
 
-def _abs_join(base: str, *parts: str) -> str:
-    base = base.rstrip("/")
-    rest = "/".join(p.strip("/") for p in parts if p)
-    return f"{base}/{rest}" if rest else base
 
-def _render(pattern: str, ts: pd.Timestamp) -> str:
-    return ts.strftime(pattern)
-
-def _month_key(ts: pd.Timestamp, fmt: str = "%m%Y") -> str:
-    return ts.strftime(fmt)  # e.g. '012000'
-
-def _hours_in_month(year: int, month: int) -> int:
-    # Calendar days × 24; time axis is in UTC (no DST gaps)
-    _, ndays = calendar.monthrange(year, month)
-    return ndays * 24
-
-class TimeHandler:
+# ----------------------------------------------------------------------------------------------------------------------
+@dataclass
+class TimeConfig:
     """
-    - 'monthly' cadence: one NetCDF per calendar month with hourly time dimension.
-      For each ts, we provide (file_path, hour_index_in_month).
-    - 'daily' cadence: one file per calendar day (e.g., LAI raster at noon reused all day).
-    - Handles arbitrary start/end (cross months/years), timezone-aware indexing,
-      and an optional 'data_tz' (e.g., files in UTC while orchestration in Europe/Rome).
+    Helper for managing and deriving time information for HMC-like runs.
+
+    Core fields
+    -----------
+    time_run        : reference run time (usually "now" or forecast base time)
+    time_frequency  : pandas-like frequency string (e.g. 'H', '3H', 'D')
+    time_period     : integer number of steps (can be derived from start/end)
+    time_start      : simulation start time
+    time_end        : simulation end time
+    time_restart    : restart time (by default 1 step before start)
+
+    Construction modes
+    ------------------
+    - Direct: pass times / period / frequency to __init__.
+    - from_dict: consume raw dict with time_* keys.
+    - from_config: consume a ConfigManager, using its LUT values.
+
+    Autocomputation rules
+    ---------------------
+    If autocompute=True:
+
+      1) time_start
+         - if provided → kept as-is
+         - else:
+             * start_policy == 'from_run'
+                 -> time_start = time_run
+             * start_policy == 'from_midnight'
+                 -> time_start = midnight of (time_run - start_offset_days)
+             * start_policy == 'fixed'
+                 -> time_start = start_fixed (must be provided)
+
+      2) time_end
+         - if time_end is None and time_period is not None:
+               time_end = time_start + (time_period - 1) * frequency
+         - if time_end is provided and time_period is None:
+               time_period = (time_end - time_start) / frequency + 1
+               (must be integer; otherwise a warning is raised and rounded)
+
+      3) time_restart
+         - if 'time_restart' is in needed and time_restart is None:
+               time_restart = time_start + restart_offset_steps * frequency
+           (default restart_offset_steps = -1 → one step before start)
+
+    Optional fields
+    ---------------
+    Some fields may not be required for a given workflow. Use the `needed`
+    argument to declare which fields are relevant. Non-needed fields are:
+
+      - not stored in the internal dictionary
+      - not computed (even if a rule exists)
+      - not shown in view() or as_dict()
+
+    Examples
+    --------
+    >>> tc = TimeConfig(
+    ...     time_run=pd.Timestamp('2025-11-20 12:00'),
+    ...     time_frequency='H',
+    ...     time_period=6,
+    ...     start_policy='from_run',
+    ... )
+    >>> tc.as_dict()['time_start']
+    Timestamp('2025-11-20 12:00:00')
+    >>> tc.as_dict()['time_restart']
+    Timestamp('2025-11-20 11:00:00')
     """
 
-    def __init__(
-        self,
-        start: str | pd.Timestamp,
-        end: str | pd.Timestamp,
-        config: Dict,
-        tz: Optional[str] = None
-    ):
-        self.cfg = config
-        self.proc_tz = tz or config.get("timezone", "Europe/Rome")
-        self.data_tz = config.get("data_timezone", "UTC")  # where the file time axes live
-        self.out_prefix = config.get("out", {}).get("prefix", "hmc.forcing.")
-        self.out_suffix = config.get("out", {}).get("suffix", ".nc")
-        self.out_fmt    = config.get("out", {}).get("fmt",    "%Y%m%d%H%M")
-        self.datasets   = config["datasets"]  # dict of dataset configs
+    # ---- core values (all converted to pandas.Timestamp / int internally) ----
+    time_run: Any
+    time_frequency: Any = "H"
+    time_period: Any | None = None
+    time_start: Any | None = None
+    time_end: Any | None = None
+    time_restart: Any | None = None
 
-        # Build hourly index in processing timezone
-        idx = pd.date_range(start=start, end=end, freq="H")
-        self.index = idx.tz_localize(self.proc_tz) if idx.tz is None else idx.tz_convert(self.proc_tz)
+    # ---- control over which fields are relevant ----
+    needed: Iterable[str] | None = None
 
-    # --------------- public helpers ---------------
-    def output_name(self, ts: pd.Timestamp) -> str:
-        return f"{self.out_prefix}{ts.strftime(self.out_fmt)}{self.out_suffix}"
+    # ---- autocompute behaviour ----
+    autocompute: bool = True
 
-    def month_lengths_hours(self) -> Dict[str, int]:
+    # policy for time_start
+    start_policy: str = "from_run"     # 'from_run' | 'from_midnight' | 'fixed'
+    start_offset_days: int = 0         # used for 'from_midnight'
+    start_fixed: Any | None = None     # used for 'fixed'
+
+    # policy for time_restart (expressed in units of frequency)
+    restart_offset_steps: int = -1     # default: 1 step before time_start
+
+    # internal storage (not passed directly by user)
+    _values: dict = field(default_factory=dict, init=False, repr=False)
+
+    # class-level definitions
+    ALL_KEYS = ("time_run", "time_start", "time_end", "time_restart",
+                "time_frequency", "time_period")
+
+    # --------------------------------------------------------------
+    def __post_init__(self):
+        # normalize needed set
+        if self.needed is None:
+            self.needed = set(self.ALL_KEYS)
+        else:
+            self.needed = set(self.needed)
+
+        # store values with normalization
+        self._values = {}
+
+        self._set_time("time_run", self.time_run, required=True)
+        self._set_freq(self.time_frequency)
+        self._set_int("time_period", self.time_period)
+        self._set_time("time_start", self.time_start)
+        self._set_time("time_end", self.time_end)
+        self._set_time("time_restart", self.time_restart)
+
+        if self.autocompute:
+            self._autocompute_all()
+
+    # --------------------------------------------------------------
+    # basic setters / converters
+    def _set_time(self, name: str, value: Any, required: bool = False):
+        if name not in self.needed:
+            return
+
+        if value is None:
+            if required:
+                raise ValueError(f"{name} is required but None was provided.")
+            self._values[name] = None
+            return
+
+        try:
+            ts = pd.to_datetime(value)
+        except Exception as exc:
+            raise ValueError(f"Cannot parse {name}={value!r} as datetime.") from exc
+
+        self._values[name] = ts
+
+    def _set_int(self, name: str, value: Any | None):
+        if name not in self.needed:
+            return
+
+        if value is None:
+            self._values[name] = None
+            return
+
+        try:
+            iv = int(value)
+        except Exception as exc:
+            raise ValueError(f"Cannot parse {name}={value!r} as int.") from exc
+
+        self._values[name] = iv
+
+    def _set_freq(self, value: Any):
         """
-        Returns {'MMYYYY': hours_in_month, ...} for all months touched by self.index,
-        computed in calendar days × 24 (UTC-safe).
+        Store frequency as a pandas offset-like string (e.g. 'H', '3H').
         """
-        lengths: Dict[str, int] = {}
-        seen: Set[Tuple[int, int]] = set()
-        for ts in self.index:
-            ts_utc = ts.tz_convert(self.data_tz) if ts.tz is not None else ts  # align to data TZ
-            y, m = ts_utc.year, ts_utc.month
-            if (y, m) not in seen:
-                seen.add((y, m))
-                lengths[_month_key(ts_utc)] = _hours_in_month(y, m)
-        return lengths
+        if "time_frequency" not in self.needed:
+            return
 
-    def monthly_manifest(self) -> Dict[str, Dict[str, str]]:
+        if value is None:
+            raise ValueError("time_frequency cannot be None.")
+
+        # Keep the original string, but validate it through to_offset
+        try:
+            offset = pd.tseries.frequencies.to_offset(value)
+        except Exception as exc:
+            raise ValueError(f"Invalid time_frequency={value!r}.") from exc
+
+        # Store the normalized string representation
+        self._values["time_frequency"] = str(offset.rule_code or offset.freqstr)
+
+    # --------------------------------------------------------------
+    # frequency helpers
+    @property
+    def freq_offset(self) -> pd.offsets.BaseOffset:
         """
-        {'MMYYYY': {'air_temperature': '/.../temperature_012000.nc', ...}, ...}
-        Only for datasets with cadence='monthly'.
+        Return the pandas offset object corresponding to time_frequency.
         """
-        months: List[str] = []
-        seen: Set[str] = set()
-        for ts in self.index:
-            ts_data = ts.tz_convert(self.data_tz) if ts.tz is not None else ts
-            mk = _month_key(ts_data)
-            if mk not in seen:
-                seen.add(mk)
-                months.append(mk)
+        f = self._values.get("time_frequency", None)
+        if f is None:
+            raise ValueError("time_frequency is not available.")
+        return pd.tseries.frequencies.to_offset(f)
 
-        manifest: Dict[str, Dict[str, str]] = {}
-        for mk in months:
-            manifest[mk] = {}
-            for name, ds in self.datasets.items():
-                if ds["cadence"] == "monthly":
-                    # FIXED: use pd.to_datetime instead of Timestamp.strptime
-                    ts_rep = pd.to_datetime(mk, format="%m%Y").replace(day=1)
-                    ts_rep = ts_rep.tz_localize(self.data_tz)
-                    rel = _render(ds["file_pattern"], ts_rep)
-                    manifest[mk][name] = _abs_join(ds["base_dir"], rel)
-        return manifest
+    # --------------------------------------------------------------
+    # autocompute logic
+    def _autocompute_all(self):
+        """
+        Apply all automatic derivations:
+          - time_start (according to policy)
+          - time_end / time_period
+          - time_restart
+        """
+        self._autocompute_start()
+        self._autocompute_end_period()
+        self._autocompute_restart()
 
-    def lai_manifest(self) -> List[str]:
-        """Unique daily LAI absolute paths for the span."""
-        seen: Set[str] = set()
-        out: List[str] = []
-        lai_cfg = {k: v for k, v in self.datasets.items() if k == "lai"}
-        if not lai_cfg:
-            return out
-        cfg = lai_cfg["lai"]
-        for ts in self.index:
-            ts_data = ts.tz_convert(self.data_tz) if ts.tz is not None else ts
-            rel = _render(cfg["file_pattern"], ts_data)  # usually %m/%d/CLIM_%m%d_...
-            abspath = _abs_join(cfg["base_dir"], rel)
-            if abspath not in seen:
-                seen.add(abspath)
-                out.append(abspath)
+    def _autocompute_start(self):
+        if "time_start" not in self.needed:
+            return
+
+        if self._values.get("time_start") is not None:
+            return  # user provided
+
+        run = self._values.get("time_run")
+        if run is None:
+            raise ValueError("time_run is required to derive time_start.")
+
+        if self.start_policy == "from_run":
+            self._values["time_start"] = run
+
+        elif self.start_policy == "from_midnight":
+            base = run - pd.Timedelta(days=int(self.start_offset_days))
+            self._values["time_start"] = base.normalize()
+
+        elif self.start_policy == "fixed":
+            if self.start_fixed is None:
+                raise ValueError(
+                    "start_policy='fixed' requires start_fixed to be provided."
+                )
+            try:
+                self._values["time_start"] = pd.to_datetime(self.start_fixed)
+            except Exception as exc:
+                raise ValueError(
+                    f"Cannot parse start_fixed={self.start_fixed!r} as datetime."
+                ) from exc
+        else:
+            raise ValueError(
+                f"Unknown start_policy={self.start_policy!r}. "
+                "Use 'from_run', 'from_midnight', or 'fixed'."
+            )
+
+    def _autocompute_end_period(self):
+        """
+        Ensure coherent time_end / time_period pair when possible.
+        """
+        if "time_start" not in self.needed:
+            return
+
+        start = self._values.get("time_start")
+        if start is None:
+            # cannot derive anything without time_start
+            return
+
+        freq = self.freq_offset
+        period = self._values.get("time_period") if "time_period" in self.needed else None
+        end = self._values.get("time_end") if "time_end" in self.needed else None
+
+        # Case 1: period known, end missing -> derive end
+        if period is not None and "time_end" in self.needed and end is None:
+            self._values["time_end"] = start + (period - 1) * freq
+            return
+
+        # Case 2: end known, period missing -> derive period
+        if end is not None and "time_period" in self.needed and period is None:
+            delta = end - start
+            # how many steps inclusive? (end = start + (n-1)*freq)
+            try:
+                n_steps_float = delta / freq + 1
+            except Exception:
+                # fallback: use seconds ratio
+                seconds = delta.total_seconds()
+                freq_seconds = freq.delta.total_seconds()
+                n_steps_float = seconds / freq_seconds + 1
+
+            n_steps_int = int(round(n_steps_float))
+
+            if not np.isclose(n_steps_float, n_steps_int):
+                warnings.warn(
+                    "time_end - time_start not an exact multiple of frequency; "
+                    f"derived time_period={n_steps_float:.3f}, rounded to {n_steps_int}",
+                    UserWarning,
+                )
+
+            self._values["time_period"] = n_steps_int
+
+    def _autocompute_restart(self):
+        if "time_restart" not in self.needed:
+            return
+
+        if self._values.get("time_restart") is not None:
+            return  # user provided
+
+        start = self._values.get("time_start")
+        if start is None:
+            # cannot derive restart without a start time
+            return
+
+        freq = self.freq_offset
+        steps = int(self.restart_offset_steps)
+        self._values["time_restart"] = start + steps * freq
+
+    # --------------------------------------------------------------
+    # public helpers
+    def as_dict(self) -> dict:
+        """
+        Return a plain dictionary with only the needed keys.
+        """
+        out = {}
+        for k in self.ALL_KEYS:
+            if k in self.needed:
+                out[k] = self._values.get(k, None)
         return out
 
-    # --------------- resolvers ---------------
-    def _resolve_monthly(self, ds_cfg: Dict, ts_proc: pd.Timestamp) -> Tuple[str, int, int]:
-        """
-        For a given processing timestamp, return:
-          (absolute_file_path, hour_index_in_month, hours_in_month)
-        Index computed after converting ts to 'data_tz' to match file time axis.
-        """
-        ts_data = ts_proc.tz_convert(self.data_tz) if ts_proc.tz is not None else ts_proc
-        # hour index = 24*(day-1) + hour
-        hour_idx = (ts_data.day - 1) * 24 + ts_data.hour
-        hours_mon = _hours_in_month(ts_data.year, ts_data.month)
+    # small convenience properties
+    @property
+    def time_run_val(self):
+        return self._values.get("time_run")
 
-        # Render file path using the month (pattern like 'var_%m%Y.nc' or nested dirs)
-        # Use first-of-month at 00:00 in data TZ to render safely
-        ts_rep = pd.Timestamp(ts_data.year, ts_data.month, 1, 0, 0, 0).tz_localize(self.data_tz)
-        rel = _render(ds_cfg["file_pattern"], ts_rep)
-        fpath = _abs_join(ds_cfg["base_dir"], rel)
-        return fpath, hour_idx, hours_mon
+    @property
+    def time_start_val(self):
+        return self._values.get("time_start")
 
-    def _resolve_daily(self, ds_cfg: Dict, ts_proc: pd.Timestamp) -> str:
-        ts_data = ts_proc.tz_convert(self.data_tz) if ts_proc.tz is not None else ts_proc
-        rel = _render(ds_cfg["file_pattern"], ts_data)  # can contain %Y/%m/%d + filename
-        return _abs_join(ds_cfg["base_dir"], rel)
+    @property
+    def time_end_val(self):
+        return self._values.get("time_end")
 
-    def resolve_for_ts(self, ts: pd.Timestamp) -> Dict[str, object]:
+    @property
+    def time_restart_val(self):
+        return self._values.get("time_restart")
+
+    @property
+    def time_period_val(self):
+        return self._values.get("time_period")
+
+    @property
+    def time_frequency_val(self):
+        return self._values.get("time_frequency")
+
+    # --------------------------------------------------------------
+    # view
+    def view(
+        self,
+        table_format: str = "psql",
+        table_print: bool = True,
+        table_name: str = "time config",
+    ) -> str:
         """
-        For a single hour, returns:
-          - for each monthly dataset: {'path': str, 'hour_index': int, 'hours_in_month': int}
-          - for each daily dataset: absolute path
-          - '__output__': output filename
-          - 'ts': timestamp in processing TZ
+        Show the current time configuration as a table.
         """
-        rec: Dict[str, object] = {}
-        for name, cfg in self.datasets.items():
-            cad = cfg["cadence"]
-            if cad == "monthly":
-                path, hidx, hlen = self._resolve_monthly(cfg, ts)
-                rec[name] = {"path": path, "hour_index": hidx, "hours_in_month": hlen}
-            elif cad == "daily":
-                rec[name] = self._resolve_daily(cfg, ts)
-            else:
-                raise ValueError(f"Unsupported cadence '{cad}' for dataset '{name}'")
-        rec["__output__"] = self.output_name(ts)
-        rec["ts"] = ts
-        return rec
+        data = self.as_dict()
+        df = pd.DataFrame(
+            [{"key": k, "value": v} for k, v in data.items()],
+        ).set_index("key")
 
-    def iterate(self) -> Iterable[Dict[str, object]]:
-        for ts in self.index:
-            yield self.resolve_for_ts(ts)
+        base = tabulate(
+            df,
+            headers=["key", "value"],
+            tablefmt=table_format,
+            showindex=True,
+            missingval="N/A",
+        )
+
+        lines = base.split("\n")
+
+        # find first border line
+        border_idx = None
+        for i, line in enumerate(lines):
+            if line.startswith("+") and line.endswith("+"):
+                border_idx = i
+                border_line = line
+                break
+
+        if border_idx is None:
+            title_line = f"view :: {table_name}"
+            final = f"{title_line}\n{base}"
+            if table_print:
+                print(final)
+            return final
+
+        # full-width title row
+        table_width = len(border_line)
+        inner_width = table_width - 2
+        title_text = f" view :: {table_name}"
+        title_content = title_text.ljust(inner_width)[:inner_width]
+        title_row = "|" + title_content + "|"
+
+        insert_pos = border_idx + 1
+        lines.insert(insert_pos, title_row)
+        lines.insert(insert_pos + 1, border_line)
+
+        final_table = "\n" + "\n".join(lines) + "\n"
+
+        if table_print:
+            print(final_table)
+
+        return final_table
+
+    # --------------------------------------------------------------
+    # alternative constructors
+    @classmethod
+    def from_dict(
+        cls,
+        data: Mapping[str, Any],
+        *,
+        needed: Iterable[str] | None = None,
+        autocompute: bool = True,
+        start_policy: str = "from_run",
+        start_offset_days: int = 0,
+        start_fixed: Any | None = None,
+        restart_offset_steps: int = -1,
+    ) -> "TimeConfig":
+        """
+        Build a TimeConfig from a generic mapping (dict-like).
+
+        Expected keys (if present):
+            'time_run', 'time_start', 'time_end',
+            'time_restart', 'time_period', 'time_frequency'
+
+        Missing optional keys are left as None and may be derived according
+        to the autocompute rules.
+        """
+        return cls(
+            time_run=data.get("time_run"),
+            time_frequency=data.get("time_frequency", "H"),
+            time_period=data.get("time_period"),
+            time_start=data.get("time_start"),
+            time_end=data.get("time_end"),
+            time_restart=data.get("time_restart"),
+            needed=needed,
+            autocompute=autocompute,
+            start_policy=start_policy,
+            start_offset_days=start_offset_days,
+            start_fixed=start_fixed,
+            restart_offset_steps=restart_offset_steps,
+        )
+
+    @classmethod
+    def from_config(
+        cls,
+        cfg,
+        *,
+        lut_section: str | None = "lut",
+        needed: Iterable[str] | None = None,
+        autocompute: bool = True,
+        start_policy: str = "from_run",
+        start_offset_days: int = 0,
+        start_fixed: Any | None = None,
+        restart_offset_steps: int = -1,
+    ) -> "TimeConfig":
+        """
+        Build a TimeConfig from a ConfigManager-like object.
+
+        The object `cfg` is expected to expose:
+
+            - cfg.get_section("lut")  -> dict with time_* values
+              (or alternatively: have attribute `lut`)
+
+        If format/template dictionaries are not available in the cfg object,
+        a warning is emitted but default behaviour still applies.
+
+        This method is intentionally lightweight: it simply reads the
+        time-related keys from the LUT and delegates all logic to the
+        base constructor.
+        """
+
+        # try to get LUT dict
+        lut = None
+        if lut_section is not None:
+            try:
+                lut = cfg.get_section(lut_section)
+            except Exception:
+                lut = None
+
+        if lut is None and hasattr(cfg, "lut"):
+            lut = getattr(cfg, "lut")
+
+        if lut is None:
+            raise ValueError(
+                "TimeConfig.from_config could not find a LUT dictionary "
+                "(no get_section('lut') result and no cfg.lut attribute)."
+            )
+
+        # extract raw values (may be None)
+        data = {
+            "time_run": lut.get("time_run"),
+            "time_start": lut.get("time_start"),
+            "time_end": lut.get("time_end"),
+            "time_restart": lut.get("time_restart"),
+            "time_period": lut.get("time_period"),
+            "time_frequency": lut.get("time_frequency", "H"),
+        }
+
+        # format/template are optional; warn if not present but not critical
+        has_format = hasattr(cfg, "format") or (
+            hasattr(cfg, "variables")
+            and isinstance(cfg.variables, dict)
+            and "format" in cfg.variables
+        )
+        has_template = hasattr(cfg, "template") or (
+            hasattr(cfg, "variables")
+            and isinstance(cfg.variables, dict)
+            and "template" in cfg.variables
+        )
+
+        if not has_format or not has_template:
+            warnings.warn(
+                "TimeConfig.from_config: 'format' and/or 'template' dictionaries "
+                "are not available in the ConfigManager. Default assumptions are used.",
+                UserWarning,
+            )
+
+        return cls.from_dict(
+            data,
+            needed=needed,
+            autocompute=autocompute,
+            start_policy=start_policy,
+            start_offset_days=start_offset_days,
+            start_fixed=start_fixed,
+            restart_offset_steps=restart_offset_steps,
+        )
+# ----------------------------------------------------------------------------------------------------------------------

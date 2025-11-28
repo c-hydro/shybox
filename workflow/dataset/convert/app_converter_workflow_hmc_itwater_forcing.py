@@ -228,7 +228,7 @@ def main(alg_collectors_settings: dict = None):
         # time data
         time_data_length = int(alg_cfg_application['time'].get('dataset', 24))
         time_data_reference = select_time_format(time_step, time_format=alg_cfg_application['time']['format'])
-        time_data_path = select_time_format(time_step, time_format='%Y')
+
         # time analysis
         time_anls_length = int(alg_cfg_application['time'].get('dataset', 24))
         time_anls_period = select_time_range(time_start=time_step, time_period=time_anls_length, time_frequency='h')
@@ -242,7 +242,7 @@ def main(alg_collectors_settings: dict = None):
         step_cfg_application = alg_cfg_obj.fill_obj_from_lut(
             resolve_time_placeholders=True, when=time_step, time_keys=('time_source', 'path_source_time'),
             extra_tags={
-                'time_source': time_data_reference, "path_source_time": time_data_path},
+                'time_source': time_step, "path_source_time": time_step},
             section=alg_cfg_application, in_place=False,
             template_keys=('file_time_destination',)
         )

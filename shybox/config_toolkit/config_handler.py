@@ -4,7 +4,7 @@ Class Features
 Name:          config_handler
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20251120'
-Version:       '1.5.0'
+Version:       '1.6.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -32,7 +32,7 @@ class ConfigManager:
     """
     Wrapper around a configuration root (default: 'settings'), with
     full support for:
-      - priority / flags / variables / application (mandatory)
+      - priority / flags / variables / application (application is configurable)
       - optional sections
       - LUT merging (stored only in variables['lut'] or self.lut)
       - LUT/template/format validation (strict or lazy)
@@ -42,43 +42,8 @@ class ConfigManager:
       - flatten/unflatten nested configuration (lut/format/template),
         optionally lifting them out of `variables` into top-level
         attributes: self.lut, self.format, self.template
-
-    Constructor parameters
-    ----------------------
-    settings : dict
-        The content of the selected root key (e.g. config["settings"]).
-    auto_merge_lut : bool, default True
-        If True, merge LUTs according to priority during initialization
-        and overwrite variables['lut'] with the merged dict.
-    auto_env_override : bool, default True
-        If True, after merging LUT, override LUT values from system
-        environment variables (names held as LUT values).
-    env_warn_missing : bool, default True
-        If True, warn about LUT keys for which the referenced
-        environment variable is not found.
-    auto_validate : bool, default True
-        If True, validate LUT/format/template during initialization.
-    strict_validation : bool, default True
-        - True  -> strict: raise if mismatches exist.
-        - False -> lazy: fill missing LUT keys with None and warn.
-    apply_time_template_for_none : bool, default True
-        If True, after validation, any LUT key with value None will be
-        replaced using variables['template'][key] when that template
-        looks like a time format (contains %X codes).
-    wrap_time_template_in_braces : bool, default False
-        If True, time template values are wrapped like "{%Y%m%d_%H00}".
-    flat_variables : bool, default False
-        If True, flatten variables['lut'], variables['format'],
-        variables['template'] at the end of initialization and lift them
-        to self.lut, self.format, self.template; if all are lifted,
-        self.variables is removed.
-    flat_separator : str, default ":"
-        Separator to use for 'key:value' flattening.
-    flat_key_mode : str, default "key:value"
-        Mode for building flattened keys:
-          - "key:value" -> full path ("group:sub:leaf")
-          - "value"     -> last segment ("leaf")
-          - "key"       -> first segment ("group")
+      - application wrappers via ApplicationConfig
+      - environment expansion in arbitrary objects
     """
 
     # --------------------------------------------------------------
@@ -98,6 +63,7 @@ class ConfigManager:
         flat_key_mode: str = "key:value",
         auto_fill_lut: bool = True,
         convert_none_to_nan: bool = False,
+        application_key: str | None = "application",
     ):
 
         if settings is None:
@@ -124,8 +90,11 @@ class ConfigManager:
         self._auto_fill_lut = auto_fill_lut
         self._convert_none_to_nan = convert_none_to_nan
 
+        # Application key name (can be None if no application is mandatory)
+        self._application_key = application_key
+
         # Mandatory sections
-        self._init_mandatory_sections(settings)
+        self._init_mandatory_sections(settings, application_key=application_key)
 
         # 1) merge LUT (combine user/environment into a single LUT)
         if self._auto_merge_lut:
@@ -149,7 +118,6 @@ class ConfigManager:
 
         # 4) optional LUT autofill (keeps external use unchanged)
         if self._auto_fill_lut:
-            # default behaviour: same as external call without arguments
             self.autofill_lut()
 
         # 5) optionally flatten lut/format/template and lift out of variables
@@ -162,16 +130,34 @@ class ConfigManager:
 
     # --------------------------------------------------------------
     # Mandatory sections initializer
-    def _init_mandatory_sections(self, settings: dict) -> None:
-        required = ("priority", "flags", "variables", "application")
-        missing = [k for k in required if k not in settings]
-        if missing:
-            raise KeyError(f"Missing mandatory settings section(s): {', '.join(missing)}")
+    def _init_mandatory_sections(self, settings: dict, application_key: str | None = "application") -> None:
+        """
+        Initialize core sections from the 'settings' dict.
+
+        - Always mandatory: priority, flags, variables
+        - Application section:
+            * if application_key is None -> no mandatory application
+            * else                        -> that key must exist in settings
+        """
+        required_base = ("priority", "flags", "variables")
+        missing_base = [k for k in required_base if k not in settings]
+        if missing_base:
+            raise KeyError(f"Missing mandatory settings section(s): {', '.join(missing_base)}")
 
         self.priority = settings["priority"]
         self.flags = settings["flags"]
         self.variables = settings["variables"]
-        self.application = settings["application"]
+
+        if application_key is None:
+            # No mandatory application section; expose empty dict
+            self.application = {}
+        else:
+            if application_key not in settings:
+                raise KeyError(
+                    f"Missing mandatory application section '{application_key}' in settings."
+                )
+            # Expose it as generic attribute 'application'
+            self.application = settings[application_key]
 
     # --------------------------------------------------------------
     # CLASS METHOD: load from dict / JSON string / file
@@ -192,6 +178,7 @@ class ConfigManager:
         flat_key_mode: str = "key:value",
         auto_fill_lut: bool = True,
         convert_none_to_nan: bool = True,
+        application_key: str | None = "application",
     ) -> "ConfigManager":
         """
         Create Config from:
@@ -236,7 +223,8 @@ class ConfigManager:
             flat_separator=flat_separator,
             flat_key_mode=flat_key_mode,
             auto_fill_lut=auto_fill_lut,
-            convert_none_to_nan=convert_none_to_nan
+            convert_none_to_nan=convert_none_to_nan,
+            application_key=application_key,
         )
         obj._raw_config = data
         obj._root_key = root_key
@@ -259,7 +247,7 @@ class ConfigManager:
         ----------
         section : str | None
             Name of the section to retrieve. If None, defaults to
-            "application".
+            the configured application key (or "application").
         root_key : str | None
             Root key to use when searching in the raw config for
             optional sections. If None, use self._root_key.
@@ -267,15 +255,45 @@ class ConfigManager:
             If True, raise KeyError when the section cannot be found
             in either the mandatory attributes or the optional
             sections. If False, return None.
-
-        Returns
-        -------
-        dict | Any | None
-            The requested section or None if not found (and
-            raise_if_missing is False).
         """
 
-        name = section or "application"
+        default_app_name = getattr(self, "_application_key", None) or "application"
+        name = section or default_app_name
+
+        # ------------------------------------------------------------------
+        # SPECIAL CASE: treat "lut", "format", "template" as pseudo-sections
+        # ------------------------------------------------------------------
+        if name in ("lut", "format", "template"):
+            src = None
+
+            # Prefer lifted top-level attribute if available (self.lut, self.format, self.template)
+            if hasattr(self, name) and isinstance(getattr(self, name), dict):
+                src = getattr(self, name)
+            else:
+                # Fallback to variables[name]
+                vars_dict = getattr(self, "variables", None)
+                if isinstance(vars_dict, dict) and name in vars_dict:
+                    src = vars_dict[name]
+
+            if src is None:
+                if raise_if_missing:
+                    raise KeyError(f"Section '{name}' not found (no {name} in variables).")
+                return None
+
+            # Optionally convert None → np.nan
+            if getattr(self, "_convert_none_to_nan", False):
+                src = self._convert_none_to_nan_recursive(copy.deepcopy(src))
+            else:
+                src = copy.deepcopy(src)
+
+            # Expand $HOME (and other uppercase env vars) inside this object
+            src = self.expand_env(src, deep_copy=False)
+
+            return src
+
+        # ------------------------------------------------------------------
+        # NORMAL SECTIONS: priority, flags, variables, application, etc.
+        # ------------------------------------------------------------------
 
         # 1) mandatory sections first
         mandatory_map = {
@@ -287,13 +305,21 @@ class ConfigManager:
 
         if name in mandatory_map and mandatory_map[name] is not None:
             section_data = mandatory_map[name]
+
+            # Work on a copy to avoid mutating internal state
+            section_copy = copy.deepcopy(section_data)
+
+            # Expand env ($HOME, $RUN, ...) in this view
+            section_copy = self.expand_env(section_copy, deep_copy=False)
+
             if getattr(self, "_convert_none_to_nan", False):
-                return self._convert_none_to_nan_recursive(copy.deepcopy(section_data))
-            return section_data
+                section_copy = self._convert_none_to_nan_recursive(section_copy)
+
+            return section_copy
 
         # 2) optional sections via raw config (if available)
         if self._raw_config is not None:
-            # first try under the main root (e.g. 'settings')
+            # first try under the main root (e.g. 'settings' or 'configuration')
             main_root = root_key if root_key is not None else self._root_key
 
             section_data = None
@@ -314,9 +340,13 @@ class ConfigManager:
                 )
 
             if section_data is not None:
+                section_copy = copy.deepcopy(section_data)
+                section_copy = self.expand_env(section_copy, deep_copy=False)
+
                 if getattr(self, "_convert_none_to_nan", False):
-                    return self._convert_none_to_nan_recursive(copy.deepcopy(section_data))
-                return section_data
+                    section_copy = self._convert_none_to_nan_recursive(section_copy)
+
+                return section_copy
 
         # 3) nothing found
         if raise_if_missing:
@@ -324,7 +354,53 @@ class ConfigManager:
 
         return None
 
+
     # --------------------------------------------------------------
+    # Helper: get an ApplicationConfig wrapper
+    def get_application(
+        self,
+        section_name: str | None = None,
+        root_key: str | None = None,
+    ) -> "ApplicationConfig":
+        """
+        Convenience factory for ApplicationConfig.
+
+        Parameters
+        ----------
+        section_name : str | None
+            Name of the application section.
+            - If None, use self._application_key (default: 'application').
+        root_key : str | None
+            - None: section is expected at top-level in the raw config.
+            - non-None: section is expected under raw_config[root_key].
+
+        Returns
+        -------
+        ApplicationConfig
+
+        Raises
+        ------
+        KeyError
+            If the requested section cannot be found.
+        """
+        # Decide application section name
+        if section_name is None:
+            default_app_name = getattr(self, "_application_key", None) or "application"
+            section_name = default_app_name
+
+        # Auto-detect root_key if not explicitly provided
+        if root_key is None:
+            if (
+                hasattr(self, "_root_key")
+                and self._root_key is not None
+                and section_name == getattr(self, "_application_key", None)
+            ):
+                root_key = self._root_key
+
+        # Early check
+        _ = self.get_section(section_name, root_key=root_key, raise_if_missing=True)
+
+        return ApplicationConfig(self, section_name, root_key=root_key)
 
     # --------------------------------------------------------------
     # Priority handling
@@ -655,10 +731,7 @@ class ConfigManager:
         else:
             fmt = self.variables.get("format", {})
 
-        # decide which keys to check:
-        #  - if explicit `keys` provided → use those
-        #  - else, if we have env-lut keys → use ONLY those (reference)
-        #  - else → fallback to all LUT keys
+        # decide which keys to check
         if keys is not None:
             keys_to_check = list(keys)
         elif getattr(self, "_env_lut_keys", None):
@@ -698,7 +771,6 @@ class ConfigManager:
                             new_val = int(raw_val)
                         elif t in ("float", "double", "number"):
                             new_val = float(raw_val)
-                        # NEW: treat "time" as string (no casting)
                         elif t in ("time", "datetime"):
                             new_val = raw_val
                         else:
@@ -710,7 +782,6 @@ class ConfigManager:
                 lut[cfg_key] = new_val
                 updated.append(cfg_key)
             else:
-                # env var missing → warn + set None (for env-driven keys)
                 lut[cfg_key] = None
                 missing.append(cfg_key)
 
@@ -752,10 +823,6 @@ class ConfigManager:
 
           - or at top-level (config[section_key]) if root_key is None
             and no self._root_key is used.
-
-        This allows configurations like:
-            { "settings": { ... }, "WORKFLOW": { ... } }
-        where WORKFLOW is a sibling of 'settings'.
         """
         if self._raw_config is None:
             raise ValueError("Raw config not available (use from_source).")
@@ -917,8 +984,6 @@ class ConfigManager:
             setattr(self, name, nested)
 
     # --------------------------------------------------------------
-
-    # --------------------------------------------------------------
     def _convert_none_to_nan_recursive(self, obj):
         """
         Recursively convert None → np.nan inside obj.
@@ -935,7 +1000,7 @@ class ConfigManager:
 
         return obj
 
-    # INTERNAL: flatten dict keys (similar to your collector version)
+    # INTERNAL: flatten dict keys for view()
     def __flat_dict_key(
         self,
         data: dict,
@@ -963,6 +1028,7 @@ class ConfigManager:
 
     # --------------------------------------------------------------
     # PUBLIC: generic view for LUT or any dict (e.g. application)
+    # PUBLIC: generic view for LUT or any dict (e.g. application)
     def view(
             self,
             section: dict | str | None = None,
@@ -972,37 +1038,9 @@ class ConfigManager:
             table_print: bool = True,
             separator: str = ":",
             table_name: str = "table",
-    ) -> (str, None):
+    ) -> str:
         """
         View a configuration dictionary as a table.
-
-        Parameters
-        ----------
-        section : dict | str | None
-            What to view:
-              - None (default): view LUT
-              - "lut"          : view LUT explicitly
-              - "<name>"       : any section name retrievable via get_section("<name>")
-              - dict           : any dict object to flatten and display
-        table_variable : str
-            Column name for the variable/key.
-        table_values : str
-            Column name for the value.
-        table_format : str
-            Tabulate table format (e.g. 'psql', 'github', 'grid', ...).
-        table_print : bool
-            If True, print to stdout. If False, just return the table string.
-        separator : str
-            Separator used when flattening dictionary keys.
-        active : bool
-            Whether the view session is active.
-        table_name : str
-            Name displayed in a dedicated row inside the table.
-
-        Returns
-        -------
-        str
-            The formatted table including the title row.
         """
 
         # --- decide what to display ---
@@ -1064,53 +1102,21 @@ class ConfigManager:
                 print(final)
             return final
 
-        # --- find header line (the one containing both column names) ---
-        header_idx = None
-        for i, line in enumerate(lines):
-            if (table_variable in line) and (table_values in line) and "|" in line:
-                header_idx = i
-                header_line = line
-                break
+        # --- build full-width title row (no truncation inside first column) ---
+        table_width = len(border_line)            # total width including '+' at ends
+        inner_width = table_width - 2             # between the two border chars
 
-        if header_idx is None:
-            header_line = lines[border_idx + 1] if border_idx + 1 < len(lines) else lines[border_idx]
+        title_text = f" view :: {table_name}"
+        # pad or truncate to inner_width
+        title_content = title_text.ljust(inner_width)[:inner_width]
+        title_row = "|" + title_content + "|"
 
-        # --- build a title row with same structure as header_line ---
-        # Use header_line as a template: keep '|' positions, replace inner text
-        row_chars = list(header_line)
-        pipe_positions = [idx for idx, ch in enumerate(row_chars) if ch == "|"]
-
-        title_text = f" view :: {table_name}"  # leading space to match header style
-
-        for col_index in range(len(pipe_positions) - 1):
-            start = pipe_positions[col_index] + 1
-            end = pipe_positions[col_index + 1]  # exclusive
-            width = end - start
-
-            if col_index == 0:
-                # fill first column with title text, padded/truncated to width
-                content = title_text.ljust(width)[:width]
-            else:
-                # other columns: just spaces
-                content = " " * width
-
-            row_chars[start:end] = list(content)
-
-        title_row = "".join(row_chars)
-
-        # --- insert title row and border right after the first border line ---
-        # Structure:
-        #   border
-        #   title_row
-        #   border
-        #   (original content starting from old border_idx+1)
+        # --- insert title row and a border right after the top border line ---
         insert_pos = border_idx + 1
         lines.insert(insert_pos, title_row)
         lines.insert(insert_pos + 1, border_line)
 
         final_table = "\n".join(lines)
-
-        # add space after the table
         final_table = "\n" + final_table + "\n"
 
         if table_print:
@@ -1118,7 +1124,11 @@ class ConfigManager:
 
         return final_table
 
+    # --------------------------------------------------------------
     def autofill_lut(self, extra_tags=None, max_iter=3, strict=False):
+        """
+        Autofill nested placeholders in the LUT using autofill_mapping.
+        """
         # determine LUT container
         if hasattr(self, "lut") and isinstance(self.lut, dict):
             lut = self.lut
@@ -1127,7 +1137,7 @@ class ConfigManager:
             lut = self.variables["lut"]
             lut_is_attr = False
 
-        # 🔥 REMOVE surrounding quotes first
+        # remove surrounding quotes first
         sanitize_lut_quotes(lut)
 
         # autofill nested placeholders
@@ -1141,6 +1151,7 @@ class ConfigManager:
 
         return lut
 
+    # --------------------------------------------------------------
     def fill_obj_from_lut(
             self,
             section,
@@ -1153,38 +1164,7 @@ class ConfigManager:
             template_keys: tuple[str, ...] | list[str] | None = None,
     ):
         """
-        Fill an object from LUT placeholders.
-
-        Behaviour of time-related keys
-        ------------------------------
-        - resolve_time_placeholders=False:
-            * Time-like keys that are NOT listed in `time_keys` are treated
-              as "pure placeholders" and removed from the LUT passed to
-              fill_with_mapping → their {key} stays in 'section'.
-            * Time-like keys listed in `time_keys` are kept in the LUT and
-              thus get filled.
-
-        - resolve_time_placeholders=True and time_keys=None:
-            * All detected time-like keys are resolved using 'when' and used
-              to fill placeholders.
-
-        - resolve_time_placeholders=True and time_keys=<iterable>:
-            * Only those keys in `time_keys` are resolved via 'when'.
-              Other time-like keys remain unresolved (placeholders).
-
-        Detection of time-like keys
-        ---------------------------
-        Uses:
-          - format[key] == 'time'
-          - OR template[key] with %X codes
-          - OR key name starting with 'time_'
-
-        Extra template behaviour for some LUT keys
-        ------------------------------------------
-        For keys listed in `template_keys`, the corresponding template is
-        taken from `self.template` or variables['template'][key] and copied
-        into the LUT. Then {key} inside 'section' is replaced by that raw
-        template string (e.g. "%Y%m%d%H%M"), without any datetime formatting.
+        Fill an object from LUT placeholders with advanced time handling.
         """
 
         # base LUT
@@ -1208,7 +1188,6 @@ class ConfigManager:
         # ---- handle time placeholders (optional) ----
         if not resolve_time_placeholders:
             # remove only those time-like keys that are NOT explicitly requested
-            # → placeholders remain for them
             keys_to_drop = detected_time_keys - explicit_time_keys
             for k in keys_to_drop:
                 effective_lut.pop(k, None)
@@ -1227,22 +1206,18 @@ class ConfigManager:
             else:
                 keys_to_resolve = detected_time_keys
 
-            # Build a minimal LUT with only time keys we want to resolve
             sub_lut = {k: base_lut[k] for k in keys_to_resolve if k in base_lut}
 
             if sub_lut:
-                # Resolve only the desired time keys
                 resolved_sub = self.resolve_time_templates(
                     when=when,
                     lut=sub_lut,
                     update_variables=False,
                 )
-                # Update the effective LUT with resolved timestamps
                 effective_lut.update(resolved_sub)
 
         # ---- handle template_keys: copy template value into LUT ----
         if template_keys is not None:
-            # get template dict (flattened or nested already flattened earlier)
             if hasattr(self, "template") and isinstance(self.template, dict):
                 template_dict = self.template
             else:
@@ -1258,14 +1233,17 @@ class ConfigManager:
                         raise KeyError(
                             f"Template for key '{k}' not found in template dictionary."
                         )
-                    # non-strict: just skip this key
                     continue
 
                 tmpl_val = template_dict[k]
-                # we do NOT interpret %Y etc. here; we just copy it verbatim
                 effective_lut[k] = tmpl_val
 
-        # ---- final fill of the section using the effective LUT ----
+        # update extra_tags with effective LUT values (to adapt the request format)
+        if extra_tags is not None and extra_tags:
+            for elk, elv in effective_lut.items():
+                if elk in list(extra_tags.keys()):
+                    extra_tags[elk] = elv
+
         filled = fill_with_mapping(
             section,
             effective_lut,
@@ -1275,6 +1253,7 @@ class ConfigManager:
         )
         return filled
 
+    # --------------------------------------------------------------
     def fill_string_with_times(self, string_raw: str, **time_values) -> str:
         """
         Fill a string by replacing {key} only for keys that:
@@ -1283,8 +1262,6 @@ class ConfigManager:
             (or variables['template'])
 
         Keys without a template, or not provided, are left as {key}.
-
-        time_values values can be datetime or pandas.Timestamp.
         """
         if not isinstance(string_raw, str) or not time_values:
             return string_raw
@@ -1295,53 +1272,45 @@ class ConfigManager:
         else:
             template = self.variables.get("template", {}) if hasattr(self, "variables") else {}
 
-        # build map key -> formatted string (only when a valid time template exists)
         formatted_values: dict[str, str] = {}
 
         for key, val in time_values.items():
-            # only process if we have a template for this key
             tmpl = template.get(key)
             if tmpl is None or not isinstance(tmpl, str):
                 continue
 
-            # only treat as time template if it actually contains %X
             if not self._is_time_template(tmpl):
                 continue
 
-            # normalize value to datetime
             if hasattr(val, "to_pydatetime") and callable(getattr(val, "to_pydatetime")):
                 dt = val.to_pydatetime()
             else:
                 dt = val
 
             if not hasattr(dt, "strftime"):
-                # not a datetime-like: skip
                 continue
 
-            # strip outer braces if present: "{%Y%m%d_%H}" -> "%Y%m%d_%H"
             inner = tmpl[1:-1] if tmpl.startswith("{") and tmpl.endswith("}") else tmpl
 
             try:
                 formatted_values[key] = dt.strftime(inner)
             except Exception:
-                # on failure, just skip this key (keeps {key} unchanged)
                 continue
 
         if not formatted_values:
-            # nothing to replace
             return string_raw
 
-        # Safe partial replacement: only replace known keys, leave others as {key}
         pattern = re.compile(r"\{([^{}]+)\}")
 
         def _repl(match: re.Match) -> str:
             k = match.group(1)
             if k in formatted_values:
                 return str(formatted_values[k])
-            return match.group(0)  # leave untouched
+            return match.group(0)
 
         return pattern.sub(_repl, string_raw)
 
+    # --------------------------------------------------------------
     def fill_section_with_times(
             self,
             section,
@@ -1352,30 +1321,8 @@ class ConfigManager:
         """
         Recursively fill all strings in a section (or dict) using
         fill_string_with_times, WITHOUT mutating internal config.
-
-        Parameters
-        ----------
-        section : dict | str
-            - dict: object to process
-            - str : name of a section (e.g. 'application', 'flags', or
-                    an optional section) retrievable via get_section().
-        time_values : dict
-            Mapping like {'time_source': datetime/Timestamp, ...}.
-        root_key : str | None
-            Passed to get_section when section is a name.
-        deep_copy : bool
-            If True, work on a deep copy and return it. If False,
-            modify the given object in-place (but still not Config internals
-            if you pass an external copy).
-
-        Returns
-        -------
-        Any
-            The processed object (dict/list/str/...), with only the
-            relevant {time_*} placeholders replaced.
         """
 
-        # resolve section if a name is given
         if isinstance(section, str):
             obj = self.get_section(section, root_key=root_key, raise_if_missing=True)
         else:
@@ -1392,12 +1339,364 @@ class ConfigManager:
             elif isinstance(value, tuple):
                 return tuple(_walk(v) for v in value)
             elif isinstance(value, str):
-                # 1) resolve only time placeholders in the string
                 s = self.fill_string_with_times(value, **time_values)
-                # 2) normalize path-like strings (collapse "//" → "/")
                 s = _normalize_path_like_string(s)
                 return s
             else:
                 return value
 
         return _walk(obj)
+
+    # --------------------------------------------------------------
+    # Environment expansion helpers
+    def _expand_env_in_string(
+        self,
+        s: str,
+        env_map: dict[str, str],
+    ) -> str:
+        """
+        Expand environment-like variables inside a string using env_map.
+
+        Rules:
+        - Supports: $VAR and ${VAR}
+        - Only expands variables with names matching [A-Z_][A-Z0-9_]*.
+          This preserves lowercase HMC-style tokens like $yyyy, $mm, $dd.
+        - Also applies os.path.expanduser() so that '~' is expanded.
+        """
+
+        if not isinstance(s, str) or not s:
+            return s
+
+        # Expand '~', '~user', etc.
+        s = os.path.expanduser(s)
+
+        pattern = re.compile(
+            r"\$(?:\{(?P<braced>[A-Z_][A-Z0-9_]*)\}|(?P<plain>[A-Z_][A-Z0-9_]*))"
+        )
+
+        def _repl(match: re.Match) -> str:
+            name = match.group("braced") or match.group("plain")
+            if name in env_map:
+                return env_map[name]
+            return match.group(0)
+
+        return pattern.sub(_repl, s)
+
+    def expand_env(
+        self,
+        obj,
+        extra_env: dict[str, str] | None = None,
+        deep_copy: bool = True,
+    ):
+        """
+        Recursively expand environment variables in all strings
+        contained in 'obj'.
+
+        This function respects HMC-style tokens like $yyyy/$mm/$dd by
+        only expanding uppercase names.
+
+        Parameters
+        ----------
+        obj : Any
+            Arbitrary nested structure (dict/list/tuple/str/...).
+        extra_env : dict or None
+            Optional mapping that overrides or extends os.environ.
+        deep_copy : bool
+            If True, work on a deep copy and return it.
+            If False, modify the structure in-place.
+
+        Returns
+        -------
+        Any
+            The object with environment variables expanded in all strings.
+        """
+        if deep_copy:
+            obj = copy.deepcopy(obj)
+
+        env_map = dict(os.environ)
+        if extra_env:
+            env_map.update(extra_env)
+
+        def _walk(value):
+            if isinstance(value, dict):
+                return {k: _walk(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [_walk(v) for v in value]
+            elif isinstance(value, tuple):
+                return tuple(_walk(v) for v in value)
+            elif isinstance(value, str):
+                return self._expand_env_in_string(value, env_map)
+            else:
+                return value
+
+        return _walk(obj)
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Application wrapper
+class ApplicationConfig:
+    """
+    Lightweight wrapper around a specific application section
+    (e.g., 'application_execution', 'application_namelist').
+
+    This class delegates all LUT and time-template resolution to a
+    ConfigManager instance, while providing a clean API:
+
+        - .raw         → raw section from config (no substitutions)
+        - .with_times  → apply {time_*} template filling only
+        - .with_lut    → apply LUT-based placeholder filling only
+        - .resolved    → apply time filling + LUT filling + env + optional validation
+    """
+
+    def __init__(self, cfg: ConfigManager, section_name: str, root_key: str | None = None):
+        """
+        Parameters
+        ----------
+        cfg : ConfigManager
+            The initialized ConfigManager (LUT parsed, env applied, etc.).
+        section_name : str
+            Name of the target application section in the JSON.
+            Example: "application_execution".
+        root_key : str | None
+            If None: the application section lives at the top-level.
+            Otherwise: the section is taken from raw_config[root_key][section_name].
+        """
+        self._cfg = cfg
+        self._section_name = section_name
+        self._root_key = root_key
+
+    # --------------------------------------------------------------
+    @property
+    def raw(self) -> dict:
+        """
+        Return the application section exactly as it appears in the config
+        (no time template substitutions, no LUT filling).
+        """
+        return self._cfg.get_section(
+            self._section_name,
+            root_key=self._root_key,
+            raise_if_missing=True,
+        )
+
+    @property
+    def structure(self) -> dict:
+        """
+        Return the raw application section as a dictionary.
+        Alias for .raw for user convenience.
+        """
+        return self.raw
+
+    # --------------------------------------------------------------
+    def with_times(self, time_values: dict) -> dict:
+        """
+        Apply only time-template substitution to the raw application section.
+
+        Example time_values:
+        {
+            "time_run": datetime(...),
+            "time_restart": datetime(...)
+        }
+
+        Returns
+        -------
+        dict (deep copy)
+        """
+        return self._cfg.fill_section_with_times(
+            section=self.raw,
+            time_values=time_values,
+            root_key=self._root_key,
+            deep_copy=True,
+        )
+
+    # --------------------------------------------------------------
+    def with_lut(
+        self,
+        obj: dict | None = None,
+        when=None,
+        strict: bool = False,
+        resolve_time_placeholders: bool = True,
+        time_keys: list[str] | tuple[str, ...] | None = None,
+        template_keys: list[str] | tuple[str, ...] | None = None,
+        extra_tags: dict | None = None,
+    ) -> dict:
+        """
+        Apply only LUT-driven placeholder filling (no time substitution).
+        """
+        section = self.raw if obj is None else obj
+
+        return self._cfg.fill_obj_from_lut(
+            section=section,
+            extra_tags=extra_tags,
+            strict=strict,
+            in_place=False,
+            when=when,
+            resolve_time_placeholders=resolve_time_placeholders,
+            time_keys=time_keys,
+            template_keys=template_keys,
+        )
+
+    # --------------------------------------------------------------
+    def validate(
+        self,
+        obj: dict | None = None,
+        *,
+        strict: bool = True,
+        allow_placeholders: bool = False,
+        allow_none: bool = False,
+    ) -> dict:
+        """
+        Validate an application section for unresolved placeholders and None values.
+
+        Parameters
+        ----------
+        obj : dict or None
+            - None: validate the raw application section.
+            - dict: validate this specific object instead.
+        strict : bool
+            If True, raise ValueError when issues are found and not allowed.
+            If False, only return a summary.
+        allow_placeholders : bool
+            If False, any '{...}' placeholder is reported as an issue.
+        allow_none : bool
+            If False, any None value is reported as an issue.
+
+        Returns
+        -------
+        dict
+            {
+              "unresolved_placeholders": [ "executable.location", ... ],
+              "none_values": [ "info.location", ... ]
+            }
+        """
+        if obj is None:
+            obj = self.raw
+
+        unresolved_placeholders: list[str] = []
+        none_values: list[str] = []
+
+        placeholder_pattern = re.compile(r"\{[^{}]+\}")
+
+        def _walk(value, path: str):
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    new_path = f"{path}.{k}" if path else k
+                    _walk(v, new_path)
+            elif isinstance(value, list):
+                for i, v in enumerate(value):
+                    new_path = f"{path}[{i}]"
+                    _walk(v, new_path)
+            elif isinstance(value, tuple):
+                for i, v in enumerate(value):
+                    new_path = f"{path}[{i}]"
+                    _walk(v, new_path)
+            else:
+                if value is None:
+                    none_values.append(path)
+
+                if isinstance(value, str) and placeholder_pattern.search(value):
+                    unresolved_placeholders.append(path)
+
+        _walk(obj, path="")
+
+        summary = {
+            "unresolved_placeholders": unresolved_placeholders,
+            "none_values": none_values,
+        }
+
+        if strict:
+            errors = []
+            if not allow_placeholders and unresolved_placeholders:
+                errors.append(
+                    f"Unresolved placeholders in {self._section_name}: "
+                    + ", ".join(unresolved_placeholders)
+                )
+            if not allow_none and none_values:
+                errors.append(
+                    f"None values in {self._section_name}: "
+                    + ", ".join(none_values)
+                )
+
+            if errors:
+                raise ValueError("ApplicationConfig validation failed:\n" + "\n".join(errors))
+
+        return summary
+
+    # --------------------------------------------------------------
+    def resolved(
+        self,
+        time_values: dict | None = None,
+        when=None,
+        strict: bool = False,
+        resolve_time_placeholders: bool = True,
+        time_keys: list[str] | tuple[str, ...] | None = None,
+        template_keys: list[str] | tuple[str, ...] | None = None,
+        extra_tags: dict | None = None,
+        expand_env: bool = True,
+        env_extra: dict[str, str] | None = None,
+        validate_result: bool = False,
+        validate_allow_placeholders: bool = False,
+        validate_allow_none: bool = False,
+    ) -> dict:
+        """
+        Full pipeline:
+
+            1. Apply time-template substitution (if time_values provided)
+            2. Apply LUT placeholder filling
+            3. Optionally expand environment variables ($HOME, $RUN, ...)
+            4. Optionally validate final result
+        """
+        obj = self.raw
+
+        # Step 1: time placeholders
+        if time_values:
+            obj = self._cfg.fill_section_with_times(
+                section=obj,
+                time_values=time_values,
+                root_key=self._root_key,
+                deep_copy=True,
+            )
+
+        # Step 2: LUT placeholders
+        obj = self._cfg.fill_obj_from_lut(
+            section=obj,
+            extra_tags=extra_tags,
+            strict=strict,
+            in_place=False,
+            when=when,
+            resolve_time_placeholders=resolve_time_placeholders,
+            time_keys=time_keys,
+            template_keys=template_keys,
+        )
+
+        # Step 3: environment expansion
+        if expand_env:
+            obj = self._cfg.expand_env(
+                obj,
+                extra_env=env_extra,
+                deep_copy=False,
+            )
+
+        # Step 4: validation (optional)
+        if validate_result:
+            self.validate(
+                obj=obj,
+                strict=True,
+                allow_placeholders=validate_allow_placeholders,
+                allow_none=validate_allow_none,
+            )
+
+        return obj
+
+    # --------------------------------------------------------------
+    def view(self, table_name: str | None = None, **view_kwargs) -> str:
+        """
+        Display the raw application section using ConfigManager.view(),
+        rendered as a table.
+        """
+        name = table_name or self._section_name
+        return self._cfg.view(
+            section=self.raw,
+            table_name=name,
+            **view_kwargs,
+        )
+# ----------------------------------------------------------------------------------------------------------------------
