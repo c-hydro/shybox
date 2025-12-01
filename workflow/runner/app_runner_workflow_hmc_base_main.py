@@ -44,6 +44,7 @@ from shybox.runner_toolkit.execution.driver_app_execution import DrvExec
 
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
+from shybox.time_toolkit.time_handler import TimeManager
 
 from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
@@ -94,6 +95,11 @@ def main(alg_collectors_settings: dict = None):
     alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
     alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=True)
 
+    # create time object
+    alg_cfg_time = TimeManager.from_config_to_nml(
+        alg_cfg_obj, start_days_before=2,
+        time_as_string=('time_start', 'time_end'), time_as_int=('time_period',))
+
     # get application execution
     alg_app_exec = alg_cfg_obj.get_application("application_execution", root_key=None)
     # fill application execution
@@ -129,29 +135,24 @@ def main(alg_collectors_settings: dict = None):
     # view application namelist section
     alg_cfg_obj.view(section=alg_app_nml, table_name='application [cfg application namelist]', table_print=True)
 
-    # get application namelist section
-    alg_cfg_application_nml = alg_cfg_obj.get_section(section='application_namelist')
-    # fill application namelist section
-    alg_cfg_application_nml = alg_cfg_obj.fill_obj_from_lut(
-        section=alg_cfg_application_nml,
-        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
-        template_keys=('file_time_destination',)
-    )
-    # view application namelist section
-    alg_cfg_obj.view(section=alg_cfg_application_nml, table_name='application [cfg namelist]', table_print=True)
-
-    # get application execution section
-    alg_cfg_application_nml = alg_cfg_obj.get_section(section='application_execution')
-    # view application execution section
-    alg_cfg_obj.view(section=alg_cfg_application_nml, table_name='application [cfg namelist]', table_print=True)
-
     # get workflow section
     alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow')
+
+    # fill application namelist
+    alg_cfg_workflow = alg_cfg_workflow.resolved(
+        time_values=None,  # no fill_section_with_times
+        when=None,  # no LUT time resolution
+        strict=False,
+        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
+        expand_env=True,  # BUT expand $HOME, $RUN, ...
+        env_extra=None,  # or {"RUN": "base"} etc
+        validate_result=False,  # or True + allow_placeholders=True if needed
+        validate_allow_placeholders=True,
+        validate_allow_none=False,
+    )
     # view workflow section
     alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=True)
     # ------------------------------------------------------------------------------------------------------------------
-
-
 
     # ------------------------------------------------------------------------------------------------------------------
     # get file settings

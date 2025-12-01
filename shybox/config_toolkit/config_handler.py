@@ -1636,7 +1636,7 @@ class ApplicationConfig:
         validate_result: bool = False,
         validate_allow_placeholders: bool = False,
         validate_allow_none: bool = False,
-    ) -> dict:
+    ) -> (None, dict):
         """
         Full pipeline:
 
@@ -1646,6 +1646,10 @@ class ApplicationConfig:
             4. Optionally validate final result
         """
         obj = self.raw
+
+        # if the section is missing, return None
+        if obj is None:
+            return None
 
         # Step 1: time placeholders
         if time_values:
