@@ -3,22 +3,18 @@ Library Features:
 
 Name:          lib_utils_namelist
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20241202'
-Version:       '4.0.0'
+Date:          '20251202'
+Version:       '4.5.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import re
 import numpy as np
 import pandas as pd
-from typing import Tuple, List
+from typing import Tuple, List, Any, Dict
 
-from shybox.generic_toolkit.lib_default_namelist import (
-    type_namelist_hmc_316, structure_namelist_hmc_316,
-    type_namelist_hmc_320, structure_namelist_hmc_320,
-    type_namelist_hmc_330, structure_namelist_hmc_330,
-    type_namelist_s3m_533, structure_namelist_s3m_533)
 from shybox.generic_toolkit.lib_default_args import time_format_datasets
 
 from shybox.generic_toolkit.lib_utils_string import convert_list2string
@@ -30,39 +26,105 @@ from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow
 logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
-# method to select namelist type
-def select_namelist_type_hmc(namelist_type: str = 'hmc', namelist_version: str = '3.1.6') -> (dict, dict):
-    # select namelist type and structure
-    if namelist_type == 'hmc' and namelist_version == '3.1.6':
-        type_namelist = type_namelist_hmc_316
-        structure_namelist = structure_namelist_hmc_316
-    elif namelist_type == 'hmc' and namelist_version == '3.2.0':
-        type_namelist = type_namelist_hmc_320
-        structure_namelist = structure_namelist_hmc_320
-    elif namelist_type == 'hmc' and namelist_version == '3.3.0':
-        type_namelist = type_namelist_hmc_330
-        structure_namelist = structure_namelist_hmc_330
-    else:
-        logger_stream.error(logger_arrow.error + 'Namelist type "' + namelist_type + '" is not allowed')
-        raise NotImplementedError('Namelist type not implemented yet')
-    return type_namelist, structure_namelist
-# ----------------------------------------------------------------------------------------------------------------------
+# helper to parse scalar token
+def _parse_scalar(token: str) -> Any:
+    """Parse a single scalar Fortran-ish token into Python."""
+    token = token.strip()
+    if not token:
+        return None
 
-# ----------------------------------------------------------------------------------------------------------------------
-# method to select namelist type
-def select_namelist_type_s3m(namelist_type: str = 's3m', namelist_version: str = '5.3.3') -> (dict, dict):
+    # Strip trailing commas if any
+    if token.endswith(","):
+        token = token[:-1].rstrip()
 
-    if namelist_type == 's3m' and namelist_version == '5.3.3':
-        type_namelist = type_namelist_s3m_533
-        structure_namelist = structure_namelist_s3m_533
-    else:
-        logger_stream.error(logger_arrow.error + 'Namelist type "' + namelist_type + '" is not allowed')
-        raise NotImplementedError('Namelist type not implemented yet')
-    return type_namelist, structure_namelist
-# ----------------------------------------------------------------------------------------------------------------------
+    # Logical
+    low = token.lower()
+    if low in (".true.", "true"):
+        return True
+    if low in (".false.", "false"):
+        return False
 
+    # String in quotes
+    if (token.startswith("'") and token.endswith("'")) or \
+       (token.startswith('"') and token.endswith('"')):
+        return token[1:-1]
+
+    # Int / float
+    try:
+        if re.match(r"^[+-]?\d+$", token):
+            return int(token)
+        # fallback float
+        return float(token)
+    except ValueError:
+        # last resort
+        return token
+
+# method to parse fortran namelist
+def parse_fortran_namelist(text: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Parse a basic Fortran namelist into:
+    {
+      "HMC_Namelist": { "iSimLength": 72, "sTimeStart": "202010020000", ... },
+      "HMC_Parameters": { ... },
+      ...
+    }
+    """
+    sections: Dict[str, Dict[str, Any]] = {}
+    current_section: str | None = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        # Comments only
+        if line.startswith("!"):
+            continue
+
+        # Start of section: &NAME
+        if line.startswith("&"):
+            current_section = line[1:].strip()
+            # Remove any trailing comment in that line (&HMC_Parameters ! comment)
+            if "!" in current_section:
+                current_section = current_section.split("!", 1)[0].strip()
+            sections.setdefault(current_section, {})
+            continue
+
+        # End of section: "/"
+        if line == "/":
+            current_section = None
+            continue
+
+        if current_section is None:
+            # ignore lines outside sections
+            continue
+
+        # Strip inline comment
+        if "!" in line:
+            line = line.split("!", 1)[0].rstrip()
+        if not line:
+            continue
+
+        # param = value
+        if "=" not in line:
+            continue
+        name_part, value_part = line.split("=", 1)
+        name = name_part.strip()
+        value_str = value_part.strip()
+
+        # split potential list
+        # e.g. "1, 2, 3" or "'foo','bar'"
+        tokens = [t for t in value_str.split(",") if t.strip()]
+        if len(tokens) == 1:
+            value = _parse_scalar(tokens[0])
+        else:
+            value = [_parse_scalar(t) for t in tokens]
+
+        sections[current_section][name] = value
+
+    return sections
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------

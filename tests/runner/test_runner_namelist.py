@@ -3,7 +3,7 @@ import os
 
 from shybox.generic_toolkit.lib_utils_test import configure_home, extract_obj_by_list
 from shybox.generic_toolkit.lib_default_args import collector_data
-from shybox.runner_toolkit.namelist.driver_app_namelist import DrvNamelist
+from shybox.runner_toolkit.namelist.old.driver_app_namelist import DrvNamelist
 
 class TestNamelist(unittest.TestCase):
 

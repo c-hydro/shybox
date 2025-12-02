@@ -321,7 +321,7 @@ def exec_astronomic_radiation(
     time,          # pd.Timestamp
     geo_lz, geo_lm, geo_phi,
     param_gsc, param_as, param_bs=None,
-    geo_z=None, time_delta=pd.Timedelta('1H'),
+    geo_z=None, time_delta=pd.Timedelta('1h'),
     return_mode="both"  # "both", "ar", "k"
 ):
     """

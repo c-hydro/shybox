@@ -1028,7 +1028,6 @@ class ConfigManager:
 
     # --------------------------------------------------------------
     # PUBLIC: generic view for LUT or any dict (e.g. application)
-    # PUBLIC: generic view for LUT or any dict (e.g. application)
     def view(
             self,
             section: dict | str | None = None,
@@ -1150,6 +1149,146 @@ class ConfigManager:
             self.variables["lut"] = lut
 
         return lut
+
+    # method to update lut using a flat dict of extra tags
+    def update_lut_using_extra_tags(
+        self,
+        extra_tags: dict,
+        *,
+        keys: Iterable[str] | None = None,
+        overwrite: bool = False,
+        ignore_missing_in_lut: bool = True,
+        apply_template: bool = True,
+    ) -> dict:
+        """
+        Generic LUT updater using a flat dict of tags (time or other).
+
+        Behaviour
+        ---------
+        For each key in `extra_tags` (or in `keys`, if provided):
+
+          * If `apply_template` is True AND the key has an entry in
+            self.template that is a time-template (contains %Y, %m, ...),
+            AND the provided value is datetime-like, then:
+
+                - the value is formatted using that template via
+                  fill_string_with_times(), e.g.:
+
+                      template["time_run"] = "{%Y-%m-%d %H:%M}"
+                      extra_tags["time_run"] = pd.Timestamp(...)
+
+                  -> LUT["time_run"] = "2025-11-20 12:00"
+
+          * Otherwise, the raw value from extra_tags is assigned
+            (optionally respecting `overwrite` and `ignore_missing_in_lut`).
+
+        Parameters
+        ----------
+        extra_tags : dict
+            Mapping of key -> value to push into LUT.
+            Values can be strings, numbers, or time-like objects.
+        keys : Iterable[str] | None
+            Optional subset of keys from extra_tags to apply.
+            - None: use all keys in extra_tags.
+        overwrite : bool
+            - False (default): only update LUT entries that are missing
+              or None / "".
+            - True: always overwrite existing LUT values.
+        ignore_missing_in_lut : bool
+            - True (default): skip keys that are not already in LUT.
+            - False: create new LUT entries for missing keys.
+        apply_template : bool
+            If True, try to apply a time template (if defined) for
+            datetime-like values.
+
+        Returns
+        -------
+        dict
+            The updated LUT dictionary.
+        """
+
+        if not extra_tags:
+            # nothing to do
+            if hasattr(self, "lut") and isinstance(self.lut, dict):
+                return self.lut
+            elif hasattr(self, "variables") and isinstance(self.variables, dict):
+                return self.variables.get("lut", {})
+            return {}
+
+        # --- determine LUT container ---
+        if hasattr(self, "lut") and isinstance(self.lut, dict):
+            lut = self.lut
+            lut_is_attr = True
+        else:
+            vars_dict = getattr(self, "variables", None)
+            if not isinstance(vars_dict, dict):
+                raise ValueError("LUT not available (variables is not a dict).")
+            lut = vars_dict.setdefault("lut", {})
+            lut_is_attr = False
+
+        # --- template dict (for time formatting) ---
+        if hasattr(self, "template") and isinstance(self.template, dict):
+            template = self.template
+        else:
+            template = (
+                self.variables.get("template", {})
+                if hasattr(self, "variables") and isinstance(self.variables, dict)
+                else {}
+            )
+
+        # --- which keys to use from extra_tags? ---
+        if keys is None:
+            keys_to_use = list(extra_tags.keys())
+        else:
+            keys_to_use = [k for k in keys if k in extra_tags]
+
+        for key in keys_to_use:
+            if ignore_missing_in_lut and key not in lut:
+                # key not in LUT and we don't want to create new ones
+                continue
+
+            raw_val = extra_tags[key]
+            new_val = raw_val
+
+            # Try to apply time template if requested
+            if apply_template and key in template:
+                tmpl = template.get(key)
+
+                # Only treat it as a time template if it contains %... (your rule)
+                if isinstance(tmpl, str) and self._is_time_template(tmpl):
+                    # Use fill_string_with_times, which already knows how
+                    # to look up template[key] and strftime with it.
+                    formatted = self.fill_string_with_times(
+                        string_raw=f"{{{key}}}",
+                        **{key: raw_val},
+                    )
+
+                    # If substitution did NOT occur, formatted will still be "{key}"
+                    if formatted != f"{{{key}}}":
+                        new_val = formatted
+                    else:
+                        # fallback: if it's datetime-like, use isoformat
+                        if hasattr(raw_val, "isoformat"):
+                            new_val = raw_val.isoformat()
+                        else:
+                            new_val = str(raw_val)
+
+            # Respect overwrite flag
+            if not overwrite and key in lut:
+                old_val = lut[key]
+                if old_val is not None and old_val != "":
+                    continue
+
+            lut[key] = new_val
+
+        # write back
+        if lut_is_attr:
+            self.lut = lut
+        else:
+            self.variables["lut"] = lut
+
+        return lut
+
 
     # --------------------------------------------------------------
     def fill_obj_from_lut(

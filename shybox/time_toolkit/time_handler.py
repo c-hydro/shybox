@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tabulate import tabulate
 from typing import Optional, Dict, Any, Tuple, Set
 import warnings
 
@@ -129,7 +130,7 @@ class TimeManager:
         return ts
 
     @staticmethod
-    def _parse_delta(val, default: Optional[str] = None) -> Optional[pd.Timedelta]:
+    def _parse_str_to_delta(val, default: Optional[str] = None) -> Optional[pd.Timedelta]:
         if val is None:
             if default is None:
                 return None
@@ -137,19 +138,75 @@ class TimeManager:
         if isinstance(val, pd.Timedelta):
             return val
         if isinstance(val, str):
+            # convert to lowercase for uniformity
+            val = val.lower()
             # handle shorthand like "h" -> "1h"
             if not any(ch.isdigit() for ch in val):
                 val = "1" + val
         return pd.to_timedelta(val)
 
-    @classmethod
-    def from_config_to_nml(cls, obj,
-                    start_days_before='2D',
-                    time_as_string=("time_start", "time_end"),
-                    time_as_int=("time_period",),
-                    tz: str = "Europe/Rome") -> "TimeManager":
+    @staticmethod
+    def _parse_delta_to_str(delta: Optional[pd.Timedelta]) -> Optional[str]:
         """
-        Build a TimeManager from a generic object.
+        Convert a pandas.Timedelta back into a clean, minimal string
+        compatible with _parse_delta().
+
+        Examples:
+            3600s -> "1h"
+            7200s -> "2h"
+            90min -> "90min"
+            1 day -> "1d"
+            1 day 2:00:00 -> "26h"
+            None -> None
+        """
+        if delta is None:
+            return None
+
+        if not isinstance(delta, pd.Timedelta):
+            raise TypeError(f"_delta_to_str expects Timedelta, got {type(delta)}")
+
+        total_seconds = delta.total_seconds()
+
+        # Prefer canonical forms: hours, minutes, seconds, days
+        # 1) DAYS
+        if total_seconds % 86400 == 0:
+            days = int(total_seconds // 86400)
+            return f"{days}d"
+
+        # 2) HOURS
+        if total_seconds % 3600 == 0:
+            hours = int(total_seconds // 3600)
+            return f"{hours}h"
+
+        # 3) MINUTES
+        if total_seconds % 60 == 0:
+            minutes = int(total_seconds // 60)
+            return f"{minutes}min"
+
+        # 4) FALLBACK → raw string format
+        # (Preserves structure of parseable Timedelta)
+        raw = str(delta)
+
+        # Pandas fires `0 days 01:30:00` → convert to "90min"
+        if "days" in raw:
+            # fallback to total minutes
+            minutes = int(total_seconds // 60)
+            return f"{minutes}min"
+
+        return raw
+
+    @classmethod
+    def from_config(
+        cls,
+        obj,
+        *,
+        start_days_before: int = 2,
+        time_as_string: Tuple[str, ...] = ("time_start", "time_end"),
+        time_as_int:    Tuple[str, ...] = ("time_period",),
+        tz: str = "Europe/Rome",
+    ) -> "TimeManager":
+        """
+        Build a TimeManager from a generic config object using a LUT.
 
         Supported input patterns:
           - obj["lut"]
@@ -157,8 +214,15 @@ class TimeManager:
           - obj.lut
           - obj.variables["lut"]
 
-        Raises:
-          ValueError if no LUT dict is found.
+        The LUT is expected to contain at least:
+          - time_period      : int, number of steps
+          - time_frequency   : str, offset alias (e.g. 'H', '3H')
+        Optional:
+          - time_run, time_start, time_end, time_rounding, time_restart
+
+        start_days_before:
+          number of whole days before time_run.date() at 00:00
+          used only if time_start is not explicitly set.
         """
 
         lut = None
@@ -178,13 +242,15 @@ class TimeManager:
 
         else:
             raise ValueError(
-                "Unable to locate 'lut' in config object: expected obj.lut, obj['lut'], or obj.variables['lut'].")
+                "Unable to locate 'lut' in config object: "
+                "expected obj.lut, obj['lut'], or obj.variables['lut']."
+            )
 
         if not isinstance(lut, dict):
             raise ValueError("'lut' found, but it is not a dictionary.")
 
         # ----------- convert LUT into TimeManager configuration ----------- #
-        # time_period (int steps) + time_frequency -> timedelta
+        # time_period (int steps) + time_frequency -> timedelta string, e.g. '48H'
         period_steps = lut.get("time_period")
         if period_steps is None:
             raise ValueError("'time_period' is required in LUT.")
@@ -192,17 +258,18 @@ class TimeManager:
         freq_unit = lut.get("time_frequency", "H")
         time_period_str = f"{int(period_steps)}{freq_unit}"
 
-        # build config for from_dict()
-        cfg = {
-            "time_run": lut.get("time_run"),
-            "time_start": lut.get("time_start"),
-            "time_end": lut.get("time_end"),
-            "time_period": time_period_str,
-            "time_frequency": lut.get("time_frequency"),
-            "time_rounding": lut.get("time_rounding"),
-            "start_days_before": start_days_before}
+        # Build cfg in the exact shape expected by from_dict()
+        cfg: Dict[str, Any] = {
+            "time_run":          lut.get("time_run"),
+            "time_start":        lut.get("time_start"),
+            "time_end":          lut.get("time_end"),
+            "time_period":       time_period_str,           # e.g. '48H'
+            "time_frequency":    lut.get("time_frequency", "1H"),
+            "time_rounding":     lut.get("time_rounding"),
+            "start_days_before": start_days_before,         # <- integer, compatible
+        }
 
-        # create TimeManager (time_period returned as int)
+        # Create TimeManager using the central from_dict()
         tm = cls.from_dict(
             cfg,
             tz=tz,
@@ -210,8 +277,13 @@ class TimeManager:
             time_as_int=time_as_int,
         )
 
-        # add time_restart if template exists
+        # Optional derived key: time_restart
         if "time_restart" in lut:
+
+            restart_as_str = False
+            if 'time_restart' in time_as_string:
+                restart_as_str = True
+
             tm.add_time_key(
                 "time_restart",
                 {
@@ -219,22 +291,20 @@ class TimeManager:
                     "time_step": -1,
                     "time_frequency": tm.time_frequency,
                     "time_template": lut["time_restart"],
-                    "time_as_str": True,
+                    "time_as_str": restart_as_str,
                 },
             )
 
         return tm
-
     # ------------------------------------------------------------------ #
     # from_dict: main factory
     # ------------------------------------------------------------------ #
-
     @classmethod
     def from_dict(
         cls,
         cfg: Dict[str, Any],
         tz: str = "Europe/Rome",
-        time_as_string: Tuple[str, ...] = ("time_start", "time_end"),
+        time_as_string: Tuple[str, ...] = ("time_start", "time_end", "time_frequency"),
         time_as_int: Tuple[str, ...] = (),
     ) -> "TimeManager":
         """
@@ -247,19 +317,6 @@ class TimeManager:
           time_frequency     : Timedelta/str, default '1H'
           time_rounding      : pandas offset alias, e.g. 'H'
           start_days_before  : int (0=today, 1=yesterday, ...)
-
-        Behavior:
-          1) parse time_run, time_period, time_frequency
-          2) detect templates for time_start/time_end (string with '%')
-             and ignore them *as datetime* during raw logic
-          3) compute raw time_start/time_end using:
-               - explicit start/end
-               - start_days_before
-               - time_period
-               - time_run + rounding
-          4) apply templates (if any) to a base timestamp
-             (raw start/end if present, otherwise time_run)
-          5) recompute time_period = time_end - time_start
         """
 
         def _parse_time_run(val) -> pd.Timestamp:
@@ -288,10 +345,22 @@ class TimeManager:
                 ts = ts.tz_convert(tz)
             return ts
 
+        # --- 0) base parsing -------------------------------------------------
+        # raw time_run from cfg or "now"
         time_run_ts = _parse_time_run(cfg.get("time_run"))
-        period = cls._parse_delta(cfg.get("time_period"))
-        freq = cls._parse_delta(cfg.get("time_frequency"), default="1H")
+
+        period = cls._parse_str_to_delta(cfg.get("time_period"))
+        freq = cls._parse_str_to_delta(cfg.get("time_frequency"), default="1H")
         time_rounding = cfg.get("time_rounding")
+
+        # conversion to lowercase for uniformity
+        if time_rounding is not None:
+            time_rounding = time_rounding.lower()
+
+        # NEW: apply rounding to time_run itself, so the stored time_run
+        #      matches the value effectively used to build the window.
+        if time_rounding is not None:
+            time_run_ts = time_run_ts.floor(time_rounding)  # NEW
 
         start_days_before = cfg.get("start_days_before")
         if start_days_before is not None:
@@ -306,43 +375,38 @@ class TimeManager:
 
         # for raw logic, ignore template strings as datetime
         t_start = None if start_template is not None else _parse_time_value(raw_start)
-        t_end = None if end_template is not None else _parse_time_value(raw_end)
+        t_end_explicit = None if end_template is not None else _parse_time_value(raw_end)
 
-        # ---- 1) raw window resolution (no templates yet) --------------- #
-
-        # use start_days_before if no explicit start
-        if t_start is None and start_days_before is not None:
-            base_day = time_run_ts.normalize()  # midnight of time_run date
-            t_start = base_day - pd.Timedelta(days=start_days_before)
-
-        # combinations
-        if t_start is not None and t_end is not None:
-            if period is None:
-                period = t_end - t_start
-
-        elif t_start is not None and t_end is None:
-            if period is None:
-                raise ValueError("When only time_start is given, time_period is required.")
-            t_end = t_start + period
-
-        elif t_start is None and t_end is not None:
-            if period is None:
-                raise ValueError("When only time_end is given, time_period is required.")
-            t_start = t_end - period
-
+        # --- 1) resolve raw time_end using time_run as reference -------------
+        if t_end_explicit is not None:
+            # explicit end wins
+            t_end = t_end_explicit
         else:
-            # neither start nor end given
-            if period is None:
-                raise ValueError(
-                    "Need at least time_period when both time_start and time_end are missing."
-                )
-            t_end = time_run_ts
+            # anchor to (possibly rounded) time_run and then add period if available
+            base_end = time_run_ts                         # CHANGED: already rounded
             if time_rounding is not None:
-                t_end = t_end.floor(time_rounding)
-            t_start = t_end - period
+                # harmless second floor, but you can remove this block if you want
+                base_end = base_end.floor(time_rounding)
+            if period is not None:
+                t_end = base_end + period
+            else:
+                t_end = base_end
 
-        # ---- 2) apply templates to override start/end ------------------ #
+        # --- 2) resolve raw time_start --------------------------------------
+        if t_start is None:
+            if start_days_before is not None:
+                # start_days_before is anchored to time_run's date at midnight
+                base_day = time_run_ts.normalize()         # uses rounded time_run
+                t_start = base_day - pd.Timedelta(days=start_days_before)
+            elif period is not None:
+                t_start = t_end - period
+            else:
+                raise ValueError(
+                    "Need at least one of 'time_start', 'start_days_before', or 'time_period' "
+                    "when resolving the time window."
+                )
 
+        # --- 3) apply templates to override start/end ------------------------
         if start_template is not None:
             base = t_start if t_start is not None else time_run_ts
             t_start = cls._apply_template(base, start_template, tz)
@@ -351,15 +415,17 @@ class TimeManager:
             base = t_end if t_end is not None else time_run_ts
             t_end = cls._apply_template(base, end_template, tz)
 
-        # ---- 3) final consistency & recompute period ------------------- #
-
+        # --- 4) final consistency & recompute period -------------------------
         if t_start > t_end:
             raise ValueError("time_start cannot be after time_end.")
 
-        period = t_end - t_start  # recompute after templates
+        period = t_end - t_start
+
+        if 'time_frequency' in time_as_string:
+            freq = cls._parse_delta_to_str(freq)
 
         return cls(
-            time_run_ts=time_run_ts,
+            time_run_ts=time_run_ts,           # <- now the rounded value
             time_start_ts=t_start,
             time_end_ts=t_end,
             time_period=period,
@@ -552,7 +618,7 @@ class TimeManager:
         if isinstance(freq_val, pd.Timedelta):
             freq_td = freq_val
         else:
-            freq_td = self._parse_delta(freq_val)
+            freq_td = self._parse_str_to_delta(freq_val)
         target_ts = base_ts + step * freq_td
 
         template = spec.get("time_template")
@@ -787,10 +853,139 @@ class TimeManager:
 
         self._adjust_for_new_end(new_end, keep_start=keep_start)
 
+
+    # ------------------------------------------------------------------ #
+    # Helpers for view()#
+    @staticmethod
+    def __flat_dict_key(
+        data: Dict[str, Any],
+        parent_key: str = "",
+        separator: str = ":",
+    ) -> Dict[str, Any]:
+        """
+        Flatten a nested dict using separator between parent/child keys.
+        Example:
+            {"a": {"b": 1}} -> {"a:b": 1}  (if separator=":")
+        """
+        flat: Dict[str, Any] = {}
+
+        for key, value in data.items():
+            if parent_key:
+                new_key = f"{parent_key}{separator}{key}"
+            else:
+                new_key = str(key)
+
+            if isinstance(value, dict):
+                flat.update(TimeManager.__flat_dict_key(value, new_key, separator))
+            else:
+                flat[new_key] = value
+
+        return flat
+
+    # view method
+    def view(
+        self,
+        section: dict | str | None = None,
+        table_variable: str = "key",
+        table_values: str = "value",
+        table_format: str = "psql",
+        table_print: bool = True,
+        separator: str = ":",
+        table_name: str = "table",
+    ) -> str:
+        """
+        View configuration-like content as a table.
+
+        Parameters
+        ----------
+        section
+            - None  -> use self.as_dict()
+            - dict  -> display that dict
+            - str   -> reserved for named sections (not used in TimeManager; raises)
+        """
+
+        # --- decide what to display ---
+        if isinstance(section, dict):
+            data = section
+
+        elif section is None:
+            # Default: show full TimeManager configuration
+            data = self.as_dict()
+
+        elif isinstance(section, str):
+            # No named sections in TimeManager; you can extend this if you like.
+            raise ValueError(
+                "TimeManager.view(): section by name is not supported. "
+                "Pass section=None (to show as_dict()) or a dict."
+            )
+        else:
+            raise TypeError(
+                "section must be None, a section name (str), or a dict, "
+                f"not {type(section)}"
+            )
+
+        if not isinstance(data, dict):
+            raise ValueError("view() expects a dict-like object to display.")
+
+        # --- flatten dict ---
+        flat = self.__flat_dict_key(data, separator=separator)
+
+        # --- build DataFrame ---
+        df = pd.DataFrame.from_dict(flat, orient="index", columns=[table_values])
+        df.index.name = table_variable
+
+        # --- create base table ---
+        base = tabulate(
+            df,
+            headers=[table_variable, table_values],
+            tablefmt=table_format,
+            showindex=True,
+            missingval="N/A",
+        )
+
+        lines = base.split("\n")
+
+        # --- find first border line (e.g. "+-----+-----+") ---
+        border_idx = None
+        border_line = None
+        for i, line in enumerate(lines):
+            if line.startswith("+") and line.endswith("+"):
+                border_idx = i
+                border_line = line
+                break
+
+        if border_idx is None or border_line is None:
+            # fallback: no border detected, just prepend title line
+            title_line = f"view :: {table_name}"
+            final = f"{title_line}\n{base}"
+            if table_print:
+                print(final)
+            return final
+
+        # --- build full-width title row (no truncation inside first column) ---
+        table_width = len(border_line)            # total width including '+' at ends
+        inner_width = table_width - 2             # between the two border chars
+
+        title_text = f" view :: {table_name}"
+        # pad or truncate to inner_width
+        title_content = title_text.ljust(inner_width)[:inner_width]
+        title_row = "|" + title_content + "|"
+
+        # --- insert title row and a border right after the top border line ---
+        insert_pos = border_idx + 1
+        lines.insert(insert_pos, title_row)
+        lines.insert(insert_pos + 1, border_line)
+
+        final_table = "\n".join(lines)
+        final_table = "\n" + final_table + "\n"
+
+        if table_print:
+            print(final_table)
+
+        return final_table
+
     # ------------------------------------------------------------------ #
     # Representation
-    # ------------------------------------------------------------------ #
-
     def __repr__(self) -> str:
         return (
             f"TimeManager("
