@@ -9,18 +9,14 @@ Version:       '1.0.0'
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-import logging
-import sys
 import datetime as dt
 from copy import deepcopy
-from typing import Callable, List
+from typing import Callable
 from functools import partial
 
 import numpy as np
 import pandas as pd
 import xarray as xr
-
-from shybox.generic_toolkit.lib_utils_time import convert_time_format
 
 from shybox.generic_toolkit.lib_utils_geo import match_coords_to_reference
 from shybox.generic_toolkit.lib_utils_debug import plot_data

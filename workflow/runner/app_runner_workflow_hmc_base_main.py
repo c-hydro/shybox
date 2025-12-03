@@ -34,13 +34,8 @@ import time
 from shybox.generic_toolkit.lib_utils_args import get_args
 from shybox.generic_toolkit.lib_utils_logging import set_logging_stream
 
-from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
-from shybox.generic_toolkit.lib_default_args import collector_data
-
-from shybox.runner_toolkit.settings.driver_app_settings import DrvSettings
-from shybox.runner_toolkit.time.driver_app_time import DrvTime
-from shybox.runner_toolkit.namelist.old.driver_app_namelist import DrvNamelist
-from shybox.runner_toolkit.execution.driver_app_execution import DrvExec
+from shybox.default.lib_default_args import logger_name, logger_format, logger_arrow
+from shybox.default.lib_default_args import collector_data
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
@@ -68,7 +63,7 @@ alg_release = '2025-01-15'
 
 # ----------------------------------------------------------------------------------------------------------------------
 # script main
-def main(view_table: bool = True):
+def main(view_table: bool = False, dry_run=False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## SETTINGS MANAGEMENT
@@ -186,7 +181,9 @@ def main(view_table: bool = True):
         timeout=None,  # or int seconds
     )
     # run execution
-    execution_info = app_execution_manager.run()
+    execution_info = app_execution_manager.run(dry_run=dry_run)
+    # view execution info
+    app_execution_manager.view(table_name='execution_info', table_print=True)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -346,6 +343,6 @@ def main(view_table: bool = True):
 # call script from external library
 if __name__ == "__main__":
 
-    main(view_table=False)
+    main(view_table=False, dry_run=True)
 
 # ----------------------------------------------------------------------------------------------------------------------

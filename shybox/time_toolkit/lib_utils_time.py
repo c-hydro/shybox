@@ -17,9 +17,9 @@ from typing import Union, Optional
 
 from datetime import date, datetime
 
-from shybox.generic_toolkit.lib_default_args import (logger_name, logger_arrow,
-                                                     time_format_datasets as format_dset,
-                                                     time_format_algorithm as format_alg)
+from shybox.default.lib_default_args import (logger_name, logger_arrow,
+                                             time_format_datasets as format_dset,
+                                             time_format_algorithm as format_alg)
 
 # manage logger
 try:

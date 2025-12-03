@@ -8,7 +8,6 @@ Version:       '1.0.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-import logging
 import os.path
 import time as tm
 import rasterio
@@ -17,19 +16,18 @@ import pandas as pd
 import numpy as np
 
 from datetime import datetime
-from netCDF4 import Dataset, date2num, num2date
+from netCDF4 import Dataset, date2num
 from rasterio.crs import CRS
 from copy import deepcopy
 
-from shybox.generic_toolkit.lib_default_args import file_conventions, file_title, file_institution, file_source, \
+from shybox.default.lib_default_args import file_conventions, file_title, file_institution, file_source, \
     file_history, file_references, file_comment, file_email, file_web_site, file_project_info, file_algorithm
-from shybox.generic_toolkit.lib_default_args import time_units, time_calendar
+from shybox.default.lib_default_args import time_units, time_calendar
 from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
 
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 #from shybox.dataset_toolkit.merge.app_data_grid_main import logger_name, logger_arrow
-from shybox.default.lib_default_geo import crs_epsg, crs_wkt
 
 # logging
 #logger_stream = logging.getLogger(logger_name)

@@ -10,12 +10,11 @@ Version:       '1.5.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # Library
 import pandas as pd
-from shybox.generic_toolkit.lib_default_method import ArrowPrinter, DataCollector
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # data collector
-collector_data = DataCollector()
+#collector_data = DataCollector()
 
 # time information
 time_type = 'GMT'  # 'GMT', 'local'
@@ -31,7 +30,6 @@ logger_file = 'app_shybox_runner.txt'
 logger_handle = 'file'  # 'file' or 'stream'
 logger_format = '%(asctime)s %(name)-12s %(levelname)-8s ' \
                 '%(message)-80s %(filename)s:[%(lineno)-6s - %(funcName)-20s()] '
-logger_arrow = ArrowPrinter()
 
 # definition of wkt for projections
 proj_wkt = 'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,' \

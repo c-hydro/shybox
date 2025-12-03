@@ -10,10 +10,9 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
-import os
 
 from shybox.generic_toolkit.lib_utils_file import expand_file_path
-from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow, time_format_datasets
+from shybox.default.lib_default_args import logger_name, logger_arrow
 
 # logging
 logger_stream = logging.getLogger(logger_name)

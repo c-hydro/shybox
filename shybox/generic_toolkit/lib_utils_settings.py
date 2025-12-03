@@ -12,7 +12,7 @@ import os
 import json
 import logging
 
-from shybox.generic_toolkit.lib_default_args import logger_name, logger_arrow, collector_data
+from shybox.default.lib_default_args import logger_name, logger_arrow, collector_data
 
 # logging
 logger_stream = logging.getLogger(logger_name)

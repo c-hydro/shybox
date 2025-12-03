@@ -12,7 +12,7 @@ Version:       '1.0.0'
 import logging
 logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
 
-from typing import Optional, Generator, Callable, Union, Tuple, Literal
+from typing import Optional, Generator, Union, Tuple, Literal
 import datetime as dt
 import numpy as np
 import pandas as pd
@@ -29,13 +29,11 @@ import re
 from shybox.dataset_toolkit.dataset_handler_utils import make_namespaces
 from shybox.logging_toolkit.logging_handler import LoggingManager
 from shybox.default.lib_default_geo import crs_wkt as default_crs_wkt
-from shybox.generic_toolkit.lib_utils_time import convert_time_format
 
 from shybox.dataset_toolkit.lib_dataset_parse import substitute_string, extract_date_and_tags
 from shybox.dataset_toolkit.lib_dataset_generic import (
     get_format_from_path, map_dims, map_coords, map_vars, flat_dims,
-    straighten_data, straighten_time, straighten_dims, select_by_time, select_by_vars,
-    rename_da_by_template, select_da_by_mapping,
+    straighten_data, straighten_time, straighten_dims, select_by_time, rename_da_by_template, select_da_by_mapping,
     set_type, check_data_format, select_variable)
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 from shybox.logging_toolkit.lib_logging_utils import with_logger

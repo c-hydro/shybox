@@ -15,7 +15,7 @@ import re
 
 import numpy as np
 
-from shybox.generic_toolkit.lib_default_args import logger_name
+from shybox.default.lib_default_args import logger_name
 
 # logging
 log_stream = logging.getLogger(logger_name)

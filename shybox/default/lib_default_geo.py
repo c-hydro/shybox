@@ -20,12 +20,4 @@ crs_grid_mapping_name = "latitude_longitude"
 crs_longitude_of_prime_meridian = 0.0
 crs_semi_major_axis = 6378137.0
 crs_inverse_flattening = 298.257223563
-
-# definition of time and geographical variables, coords and dims
-time_var_name = 'time'
-time_coord_name = 'time'
-time_dim_name = 'time'
-geo_var_name_x, geo_var_name_y = 'longitude', 'latitude'
-geo_coord_name_x, geo_coord_name_y = 'longitude', 'latitude'
-geo_dim_name_x, geo_dim_name_y = 'longitude', 'latitude'
 # ----------------------------------------------------------------------------------------------------------------------

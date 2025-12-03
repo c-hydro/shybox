@@ -1,8 +1,8 @@
 import unittest
 
 from shybox.generic_toolkit.lib_utils_test import configure_home
-from shybox.generic_toolkit.lib_default_args import collector_data
-from shybox.runner_toolkit.time.driver_app_time import DrvTime
+from shybox.default.lib_default_args import collector_data
+from shybox.runner_toolkit.old.time.driver_app_time import DrvTime
 
 class TestTime(unittest.TestCase):
 

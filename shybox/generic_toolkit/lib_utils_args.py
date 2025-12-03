@@ -12,7 +12,7 @@ Version:       '1.0.0'
 import os
 import argparse
 
-from shybox.generic_toolkit.lib_default_args import logger_name as logger_name_package
+from shybox.default.lib_default_args import logger_name as logger_name_package
 # ----------------------------------------------------------------------------------------------------------------------
 
 
