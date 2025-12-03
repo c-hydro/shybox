@@ -20,10 +20,9 @@ from shybox.default.lib_default_args import time_format_datasets
 from shybox.generic_toolkit.lib_utils_string import convert_list2string
 from shybox.generic_toolkit.lib_utils_fortran import define_var_format
 from shybox.time_toolkit.lib_utils_time import is_date
-from shybox.default.lib_default_args import logger_name, logger_arrow
 
-# logging
-logger_stream = logging.getLogger(logger_name)
+# logging (with decoretor: @with_logger(var_name="logger_stream") )
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

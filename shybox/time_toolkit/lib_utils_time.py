@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_utils_time
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20241202'
-Version:       '1.0.0'
+Date:          '20251203'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -17,16 +17,7 @@ from typing import Union, Optional
 
 from datetime import date, datetime
 
-from shybox.default.lib_default_args import (logger_name, logger_arrow,
-                                             time_format_datasets as format_dset,
-                                             time_format_algorithm as format_alg)
-
-# manage logger
-try:
-    from shybox.logging_toolkit.lib_logging_utils import with_logger
-    logger_stream = logging.getLogger(logger_name) # double import for logging (to manage old loggers)
-except Exception as e:
-    logger_stream = logging.getLogger(logger_name)
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -127,6 +118,7 @@ def normalize_to_datetime_index(
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to convert time frequency from string to seconds
+@with_logger(var_name="logger_stream")
 def convert_time_frequency(time_frequency: (str, int), frequency_conversion: str = 'str_to_int') -> (int, str):
     if frequency_conversion == 'str_to_int':
         if isinstance(time_frequency, str):
@@ -135,7 +127,7 @@ def convert_time_frequency(time_frequency: (str, int), frequency_conversion: str
         elif isinstance(time_frequency, (int, float)):
             time_frequency = int(time_frequency)
         else:
-            logger_stream.error(logger_arrow.error + 'Time frequency type is not expected')
+            logger_stream.error('Time frequency type is not expected')
             raise NotImplementedError('Only string or integer/float type are allowed')
     elif frequency_conversion == 'int_to_str':
         if isinstance(time_frequency, (int, float)):
@@ -148,13 +140,13 @@ def convert_time_frequency(time_frequency: (str, int), frequency_conversion: str
             elif time_frequency.isalpha():
                 time_frequency = time_frequency.lower()
             else:
-                logger_stream.error(logger_arrow.error + 'Time frequency type is not expected')
+                logger_stream.error('Time frequency type is not expected')
                 raise NotImplementedError('Only string or integer/float type are allowed')
         else:
-            logger_stream.error(logger_arrow.error + 'Time frequency type is not expected')
+            logger_stream.error('Time frequency type is not expected')
             raise NotImplementedError('Only string or integer/float type are allowed')
     else:
-        logger_stream.error(logger_arrow.error + 'Time frequency conversion not recognized')
+        logger_stream.error('Time frequency conversion not recognized')
         raise NotImplementedError('Time frequency conversion not recognized')
     return time_frequency
 # ----------------------------------------------------------------------------------------------------------------------
@@ -162,6 +154,7 @@ def convert_time_frequency(time_frequency: (str, int), frequency_conversion: str
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check string has the date format
+@with_logger(var_name="logger_stream")
 def is_date(date_obj: (str, pd.Timestamp), date_format: str = '%Y%m%d%H%M') -> bool:
     """
     Return whether the string can be interpreted as a date.
@@ -183,11 +176,12 @@ def is_date(date_obj: (str, pd.Timestamp), date_format: str = '%Y%m%d%H%M') -> b
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time run
+@with_logger(var_name="logger_stream")
 def select_time_run(time_run_args: pd.Timestamp = None, time_run_file: pd.Timestamp = None,
                     time_rounding: str = 'H', **kwargs) -> (pd.Timestamp, None):
 
     # info algorithm (start)
-    logger_stream.info(logger_arrow.info(tag='time_fx_lev1') + 'Select time run ... ')
+    logger_stream.info('Select time run ... ')
 
     # case 1: time information defined by "time_now" argument
     if (time_run_args is not None) or (time_run_file is not None):
@@ -195,19 +189,16 @@ def select_time_run(time_run_args: pd.Timestamp = None, time_run_file: pd.Timest
         # check time args and time file
         if time_run_args is not None:
             time_run = time_run_args
-            logger_stream.info(
-                logger_arrow.info(tag='time_fx_lev2') + 'Time "' + time_run.strftime(format_alg) + '" set by argument')
+            logger_stream.info('Time "' + time_run.strftime(format_alg) + '" set by argument')
         elif (time_run_args is None) and (time_run_file is not None):
             time_run = time_run_file
-            logger_stream.info(
-                logger_arrow.info(tag='time_fx_lev2') + 'Time "' + time_run.strftime(format_alg) + '" set by user')
+            logger_stream.info('Time "' + time_run.strftime(format_alg) + '" set by user')
         elif (time_run_args is None) and (time_run_file is None):
             time_run = date.today()
-            logger_stream.info(
-                logger_arrow.info(tag='time_fx_lev2') + 'Time "' + time_run.strftime(format_alg) + '" set by system')
+            logger_stream.info('Time "' + time_run.strftime(format_alg) + '" set by system')
         else:
-            logger_stream.info(logger_arrow.info(tag='time_fx_lev1') + 'Select time run ... FAILED')
-            logger_stream.error(logger_arrow.error + 'Argument "time_run" is not correctly set')
+            logger_stream.info('Select time run ... FAILED')
+            logger_stream.error('Argument "time_run" is not correctly set')
             raise IOError('Time type or format is wrong')
 
         time_df = pd.DataFrame([{'time_now': pd.Timestamp(time_run)}])
@@ -216,13 +207,12 @@ def select_time_run(time_run_args: pd.Timestamp = None, time_run_file: pd.Timest
         time_run = pd.Timestamp(time_df['time_round'].values[0])
 
         # info algorithm (end)
-        logger_stream.info(logger_arrow.info(tag='time_fx_lev1') + 'Select time run ... DONE')
+        logger_stream.info('Select time run ... DONE')
 
     else:
         # info algorithm (end)
         time_run = None
-        logger_stream.info(logger_arrow.info(tag='time_fx_lev1') +
-                           'Select time run ... SKIPPED. Variable is defined by NoneType')
+        logger_stream.info('Select time run ... SKIPPED. Variable is defined by NoneType')
 
     return time_run
 # ----------------------------------------------------------------------------------------------------------------------
@@ -230,14 +220,15 @@ def select_time_run(time_run_args: pd.Timestamp = None, time_run_file: pd.Timest
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time restart
+@with_logger(var_name="logger_stream")
 def select_time_restart(time_run: pd.Timestamp, time_shift: int = 1, time_frequency: str = 'h') -> pd.Timestamp:
 
     # info algorithm (start)
-    logger_stream.info(logger_arrow.info(tag='time_fx_lev1') + 'Select time restart ... ')
+    logger_stream.info('Select time restart ... ')
     # compute time restart
     time_restart = time_run - pd.Timedelta(time_shift, unit=time_frequency.lower())
     # info algorithm (start)
-    logger_stream.info(logger_arrow.info(tag='time_fx_lev1') + 'Select time restart ... DONE')
+    logger_stream.info('Select time restart ... DONE')
 
     return time_restart
 # ----------------------------------------------------------------------------------------------------------------------
@@ -245,6 +236,7 @@ def select_time_restart(time_run: pd.Timestamp, time_shift: int = 1, time_freque
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time range
+@with_logger(var_name="logger_stream")
 def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd.Timestamp) = None,
                       time_period: int = 1,
                       time_frequency: str = 'h', time_rounding: str = 'h',
@@ -261,7 +253,7 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
     # check time start and time end if are both defined
     if (time_start is not None) and (time_end is not None):
         if time_start > time_end:
-            logger_stream.error(logger_arrow.error + 'Time start is after time end')
+            logger_stream.error('Time start is after time end')
             raise ValueError('Time start is after time end')
 
     time_rounding, time_frequency = time_rounding.lower(), time_frequency.lower()
@@ -316,6 +308,8 @@ def select_time_range(time_start: (str, pd.Timestamp) = None, time_end: (str, pd
     return time_range
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to ensure time range
 def ensure_time_range(
     time_start,
     time_end,
@@ -382,10 +376,8 @@ def ensure_time_range(
         else:
             raise ValueError("when_long must be 'keep', 'shrink-backward', 'shrink-forward', or 'shrink-both'")
 
-    # if time_delta == ref_delta → nothing to do
-
     return time_start, time_end
-
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to select time format

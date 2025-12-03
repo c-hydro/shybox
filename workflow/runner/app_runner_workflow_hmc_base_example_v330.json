@@ -1,5 +1,5 @@
 {
-  "__comment__" : "configuration file for the hmc runner information",
+  "__comment__" : "configuration file for the hmc runner information [3.3.0]",
   "configuration": {
     "priority": {"reference": "environment", "other": "user"},
     "flags": {"update_namelist": true, "update_execution": true},
@@ -42,14 +42,6 @@
         "path_namelist": "string", "file_namelist": "string",
         "execution_name": "string", "execution_mode": "string"
       }
-    },
-    "log": {
-        "path": "{path_log}",
-        "file_name": "runner_hmc.txt"
-    },
-    "tmp": {
-        "path": "{path_tmp}",
-        "file_name": null
     }
   },
   "application_namelist": {
@@ -123,5 +115,11 @@
       "location": "$HOME/fp_system_apps/hmc/HMC_Model_V3_$RUN.x",
       "dependencies": ["$HOME/fp_system_libs_hmc/nc4/lib/"]
     }
+  },
+  "log": {
+      "path": "{path_log}",  "file_name": "runner_hmc.txt"
+  },
+  "tmp": {
+      "path": "{path_tmp}", "file_name": null
   }
 }

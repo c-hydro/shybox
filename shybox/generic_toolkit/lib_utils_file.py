@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_utils_file
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20250114'
-Version:       '1.0.0'
+Date:          '20251202'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -14,13 +14,11 @@ import sys
 import shutil
 import errno, os
 
-from shybox.default.lib_default_args import logger_name, logger_arrow
+# logging (with decoretor: @with_logger(var_name="logger_stream") )
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 
 # Sadly, Python fails to provide the following magic number for us.
 ERROR_INVALID_NAME = 123
-
-# logging
-logger_stream = logging.getLogger(logger_name)
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -60,10 +58,11 @@ def split_file_path(file_path: str) -> (str, str):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join file path
+@with_logger(var_name="logger_stream")
 def join_file_path(file_name: str, folder_name: str = None) -> str:
 
     if file_name is None:
-        logger_stream.error(logger_arrow.error + ' File name is not defined')
+        logger_stream.error('File name is not defined')
         raise IOError('File name is not defined')
 
     if folder_name is not None:
@@ -76,6 +75,7 @@ def join_file_path(file_name: str, folder_name: str = None) -> str:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check file path
+@with_logger(var_name="logger_stream")
 def check_file_path(file_path: str) -> None:
 
     file_name = os.path.basename(file_path)
@@ -83,13 +83,12 @@ def check_file_path(file_path: str) -> None:
 
     check_valid = True
     if folder_name == '':
-        logger_stream.warning(logger_arrow.warning + 'Folder name is defined by empty string. '
-                                                     'Folder will be based on current working directory')
+        logger_stream.warning('Folder name is defined by empty string. Folder will be based on current working directory')
     else:
         check_valid = is_pathname_valid(folder_name)
 
     if not check_valid:
-        logger_stream.error(logger_arrow.error + ' Folder name "' + folder_name + '" is not valid')
+        logger_stream.error('Folder name "' + folder_name + '" is not valid')
         raise IOError('Folder name is not valid')
 
     check_creatable = True
@@ -99,7 +98,7 @@ def check_file_path(file_path: str) -> None:
         check_creatable = is_path_creatable(folder_name)
 
     if not check_creatable:
-        logger_stream.error(logger_arrow.error + ' Folder name "' + folder_name + '" is not creatable')
+        logger_stream.error('Folder name "' + folder_name + '" is not creatable')
         raise IOError('Folder name is not creatable')
 
     pass
@@ -108,6 +107,7 @@ def check_file_path(file_path: str) -> None:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to copy file from source to destination
+@with_logger(var_name="logger_stream")
 def copy_file(file_path_src: str, file_path_dest: str) -> None:
     if os.path.exists(file_path_src):
         if not file_path_src == file_path_dest:
@@ -115,7 +115,7 @@ def copy_file(file_path_src: str, file_path_dest: str) -> None:
                 os.remove(file_path_dest)
             shutil.copy2(file_path_src, file_path_dest)
     else:
-        logger_stream.warning(logger_arrow.warning + 'Copy file "' + file_path_src + '" failed! Source not available!')
+        logger_stream.warning('Copy file "' + file_path_src + '" failed! Source not available!')
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_utils_string
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20250116'
-Version:       '4.0.0'
+Date:          '20251203'
+Version:       '4.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -16,10 +16,8 @@ import numpy as np
 
 from datetime import datetime
 
-from shybox.default.lib_default_args import logger_name, logger_arrow
-
-# logging
-logger_stream = logging.getLogger(logger_name)
+# logging method (using decoretor: @with_logger(var_name="logger_stream") )
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -134,6 +132,7 @@ def fill_string(string_raw, **kwargs):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to add format(s) string (path or filename)
+@with_logger(var_name="logger_stream")
 def fill_tags2string(string_raw, tags_format=None, tags_filling=None, tags_template='[TMPL_TAG_{:}]'):
 
     apply_tags = False

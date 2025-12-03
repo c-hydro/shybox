@@ -18,10 +18,8 @@ from functools import reduce
 from collections.abc import MutableMapping ##patch
 from operator import getitem
 
-from shybox.default.lib_default_args import logger_name, logger_arrow
-
-# logging
-logger_stream = logging.getLogger(logger_name)
+# logging (with decoretor: @with_logger(var_name="logger_stream") )
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 
 # debugging
 # import matplotlib.pylab as plt
@@ -72,6 +70,7 @@ def flat_dict_key(data: dict, parent_key: str = '',
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check if two dictionaries have the same keys
+@with_logger(var_name="logger_stream")
 def check_keys_of_dict(d1, d2, name1='lut', name2='format'):
     if d1.keys() == d2.keys():
         return True
@@ -83,9 +82,9 @@ def check_keys_of_dict(d1, d2, name1='lut', name2='format'):
         two_not_one = [x for x in list2 if x not in list1]
 
         for key in one_not_two:
-            logger_stream.error(logger_arrow.error + 'Key "' + key + '" is not in the "' + name2 + '" dictionary')
+            logger_stream.error('Key "' + key + '" is not in the "' + name2 + '" dictionary')
         for key in two_not_one:
-            logger_stream.error(logger_arrow.error + 'Key "' + key + '" is not in the "' + name1 + '" dictionary')
+            logger_stream.error('Key "' + key + '" is not in the "' + name1 + '" dictionary')
         raise ValueError('The two dictionaries have different keys. Add the keys to the dictionaries')
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -100,6 +99,7 @@ def swap_keys_values(d):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to create a dictionary from a list
+@with_logger(var_name="logger_stream")
 def filter_dict_by_keys(dict_obj_in: dict, key_list: list = None,
                         default_value: (int, float, str, None) = None) -> dict:
 
@@ -116,7 +116,7 @@ def filter_dict_by_keys(dict_obj_in: dict, key_list: list = None,
                 dict_obj_out[key_step] = tmp_value
             else:
                 logger_stream.warning(
-                    logger_arrow.warning + 'Variable "' + str(key_step) +
+                    'Variable "' + str(key_step) +
                     '" is not in the dictionary. Variable is set to default value "' + str(default_value) + '"')
                 dict_obj_out[key_step] = default_value
     else:
@@ -127,6 +127,7 @@ def filter_dict_by_keys(dict_obj_in: dict, key_list: list = None,
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to create dictionary from keys and values list
+@with_logger(var_name="logger_stream")
 def create_dict_from_list(list_keys: list = None, list_values: (list, str, int, float) = None,
                           default_key: str = 'key_{:}') -> dict:
 
@@ -141,7 +142,7 @@ def create_dict_from_list(list_keys: list = None, list_values: (list, str, int, 
         list_values = [list_values] * len(list_keys)
 
     if len(list_keys) != len(list_values):
-        logger_stream.error(logger_arrow.error + ' Keys and values have different length')
+        logger_stream.error('Keys and values have different length')
         raise ValueError('Keys and values must have the same length')
 
     dict_obj = dict(map(lambda i, j: (i, j), list_keys, list_values))
@@ -164,7 +165,6 @@ def get_dict_value_by_key(dct, key, init=None):
                 value_fx, key_fx = obj_fx[0], obj_fx[1]
                 if key_fx == key:
                     return value_fx, key_fx
-
         else:
             pass
 

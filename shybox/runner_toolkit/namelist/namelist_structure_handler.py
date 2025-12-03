@@ -184,7 +184,8 @@ class NamelistCreator:
         flat = self.__flat_dict_key(data, separator=separator)
 
         # --- build DataFrame ---
-        df = pd.DataFrame.from_dict(flat, orient="index", columns=[table_values])
+        s = pd.Series(flat, dtype=object)
+        df = s.to_frame(name=table_values)
         df.index.name = table_variable
 
         # --- create base table ---
@@ -246,7 +247,7 @@ class NamelistCreator:
         n_sections = len(self.values)
         n_vars = sum(len(sec) for sec in self.values.values())
         return (
-            f"Namelist(model={self.model!r}, version={self.version!r}, "
+            f"NamelistStructManager(model={self.model!r}, version={self.version!r}, "
             f"sections={n_sections}, total_vars={n_vars})"
         )
 

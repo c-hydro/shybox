@@ -23,7 +23,7 @@ logger_stream = logging.getLogger(logger_name)
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to get env variable(s)
-def get_variable_envs(obj_variable_lut: dict) -> (dict, dict):
+def get_variable_envs_OLD(obj_variable_lut: dict) -> (dict, dict):
 
     env_system_obj = dict(os.environ)
 
@@ -40,7 +40,7 @@ def get_variable_envs(obj_variable_lut: dict) -> (dict, dict):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to set env variable(s()
-def set_variable_envs(obj_variable_data: dict, obj_variable_lut: dict, no_data: str = '') -> bool:
+def set_variable_envs_OLD(obj_variable_data: dict, obj_variable_lut: dict, no_data: str = '') -> bool:
 
     # get environment variables
     obj_variable_env = dict(os.environ)
