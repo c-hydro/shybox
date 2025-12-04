@@ -12,6 +12,7 @@ from shybox.runner_toolkit.namelist.lib_utils_dataclass import Mode, Var
 from shybox.runner_toolkit.namelist.lib_utils_namelist import parse_fortran_namelist
 from shybox.runner_toolkit.namelist.namelist_template_handler import NamelistTemplateManager
 
+from shybox.logging_toolkit.logging_handler import LoggingManager
 
 # ======================================================================================
 # Result object: contains final dict + Fortran text + helpers
@@ -264,7 +265,14 @@ class NamelistStructureManager:
       - export to Fortran NAMELIST format (string or NamelistCreator)
     """
 
-    def __init__(self, template_manager: NamelistTemplateManager):
+    def __init__(self, template_manager: NamelistTemplateManager,
+                 logger: LoggingManager | None = None):
+
+        # Set up logger for this instance
+        self.log = LoggingManager.get_logger(
+            logger=logger, name="NamelistStructureManager", set_as_current=False,
+        )
+
         self.templates = template_manager
 
     # ---------- CLASSMETHOD entry points ----------
@@ -279,6 +287,7 @@ class NamelistStructureManager:
         *,
         check: bool = True,
         as_object: bool = False,
+        logger: LoggingManager | None = None,
     ) -> str | NamelistCreator:
         """
         Convenience: build a namelist starting from a Python dict.
@@ -295,6 +304,12 @@ class NamelistStructureManager:
         NamelistCreator
             Rich object (dict + text + view + write_to_ascii) if as_object=True.
         """
+
+        # Set up logger for this instance
+        log = LoggingManager.get_logger(
+            logger=logger, name="NamelistStructureManager", set_as_current=False,
+        )
+
         manager = cls(template_manager)
         return manager.to_fortran(
             model=model,
@@ -614,6 +629,7 @@ class NamelistStructureManager:
         *,
         check: bool = True,
         as_object: bool = False,
+        logger: LoggingManager | None = None,
     ) -> str | NamelistCreator:
         """
         Build, validate and return either:
@@ -622,6 +638,12 @@ class NamelistStructureManager:
           - a NamelistCreator object  (as_object=True) containing both
             the final dict and the text.
         """
+
+        # Set up logger for this instance
+        log = LoggingManager.get_logger(
+            logger=logger, name="NamelistStructureManager", set_as_current=False,
+        )
+
         values = self.build_values(model, version, user_values)
 
         if check:

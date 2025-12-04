@@ -2,6 +2,8 @@
 # libraries
 from shybox.runner_toolkit.namelist.namelist_template_hmc import *
 from shybox.runner_toolkit.namelist.namelist_template_s3m import *
+
+from shybox.logging_toolkit.logging_handler import LoggingManager
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -22,7 +24,15 @@ NAMELIST_TEMPLATES_S3M: Dict[tuple[str, str], Dict[str, Dict[str, Var]]] = {
 # class to handle namelist templates
 class NamelistTemplateManager:
 
-    def __init__(self, templates: Dict[tuple[str, str], Dict[str, Dict[str, Var]]] = None):
+    def __init__(self,
+                 templates: Dict[tuple[str, str], Dict[str, Dict[str, Var]]] = None,
+                 logger: LoggingManager | None = None):
+
+        # Set up logger for this instance
+        self.log = LoggingManager.get_logger(
+            logger=logger, name="NamelistTemplateManager", set_as_current=False,
+        )
+
         if templates is not None:
             self.registry = templates
         else:
@@ -31,6 +41,7 @@ class NamelistTemplateManager:
     def get(self, model, version):
         key = (model.lower(), version)
         if key not in self.registry:
+            self.log.error(f"No template found for model '{model}' version '{version}'")
             raise KeyError(f"No template for {key}")
         return self.registry[key]
 

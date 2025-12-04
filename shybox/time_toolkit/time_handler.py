@@ -6,6 +6,7 @@ import warnings
 
 import pandas as pd
 
+from shybox.logging_toolkit.logging_handler import LoggingManager
 
 class TimeManager:
     """
@@ -90,7 +91,14 @@ class TimeManager:
         time_end_template: Optional[str] = None,
         time_as_string: Tuple[str, ...] = ("time_start", "time_end"),
         time_as_int: Tuple[str, ...] = (),
+        logger: LoggingManager | None = None,
     ) -> None:
+
+        # Set up logger for this ConfigManager instance
+        self.log = LoggingManager.get_logger(
+            logger=logger, name="TimeManager", set_as_current=False,
+        )
+
         self._tz = tz
         self._time_run = time_run_ts
         self._time_start = time_start_ts
@@ -204,6 +212,7 @@ class TimeManager:
         time_as_string: Tuple[str, ...] = ("time_start", "time_end"),
         time_as_int:    Tuple[str, ...] = ("time_period",),
         tz: str = "Europe/Rome",
+        log: LoggingManager | None = None,
     ) -> "TimeManager":
         """
         Build a TimeManager from a generic config object using a LUT.
@@ -224,6 +233,14 @@ class TimeManager:
           number of whole days before time_run.date() at 00:00
           used only if time_start is not explicitly set.
         """
+
+        # Set up logger for this ConfigManager instance
+        logger = LoggingManager.get_logger(
+            logger=log, name="TimeManager", set_as_current=False,
+        )
+
+        # info start
+        logger.info_up("Time ... ", tag="config")
 
         lut = None
 
@@ -275,6 +292,7 @@ class TimeManager:
             tz=tz,
             time_as_string=time_as_string,
             time_as_int=time_as_int,
+            log=logger,
         )
 
         # Optional derived key: time_restart
@@ -295,6 +313,9 @@ class TimeManager:
                 },
             )
 
+        # info end
+        logger.info_down("Time ... DONE", tag="config")
+
         return tm
     # ------------------------------------------------------------------ #
     # from_dict: main factory
@@ -306,6 +327,7 @@ class TimeManager:
         tz: str = "Europe/Rome",
         time_as_string: Tuple[str, ...] = ("time_start", "time_end", "time_frequency"),
         time_as_int: Tuple[str, ...] = (),
+        log: LoggingManager | None = None,
     ) -> "TimeManager":
         """
         cfg keys:
@@ -318,6 +340,11 @@ class TimeManager:
           time_rounding      : pandas offset alias, e.g. 'H'
           start_days_before  : int (0=today, 1=yesterday, ...)
         """
+
+        # Set up logger for this ConfigManager instance
+        logger = LoggingManager.get_logger(
+            logger=log, name="TimeManager", set_as_current=False,
+        )
 
         def _parse_time_run(val) -> pd.Timestamp:
             if val is None:
@@ -436,6 +463,7 @@ class TimeManager:
             time_end_template=end_template,
             time_as_string=time_as_string,
             time_as_int=time_as_int,
+            logger=logger,
         )
 
     # ------------------------------------------------------------------ #
