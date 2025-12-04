@@ -3,8 +3,8 @@ Class Features
 
 Name:          logging_handler
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251107'
-Version:       '1.3.0'
+Date:          '20251204'
+Version:       '1.4.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -17,19 +17,28 @@ from contextlib import contextmanager
 from typing import Optional, Tuple, Dict
 
 from contextvars import ContextVar
+
+
+# defaults
+try:
+    # Import your default definitions
+    from shybox.default.lib_default_log import (
+        log_name as DEFAULT_LOG_NAME,
+        log_file as DEFAULT_LOG_FILE,
+        log_folder as DEFAULT_LOG_FOLDER,
+        log_format as DEFAULT_LOG_FORMAT,
+        log_handler as DEFAULT_LOG_HANDLER,
+    )
+except ImportError:
+    # Fallbacks if lib_default_log is not available
+    DEFAULT_LOG_NAME = "app"
+    DEFAULT_LOG_FILE = "app.log"
+    DEFAULT_LOG_FOLDER = None
+    DEFAULT_LOG_FORMAT = "%(asctime)s %(name)s %(levelname)s %(message)s"
+    DEFAULT_LOG_HANDLER = ["file", "stream"]
+
 _CURRENT_LOGGER: ContextVar["LoggingManager | None"] = ContextVar("_CURRENT_LOGGER", default=None)
 # ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
-# defaults
-log_file     = 'shybox.log'
-log_folder   = None
-log_handler  = ['file', 'stream']
-log_format   = (
-    '%(asctime)s %(name)-12s %(levelname)-8s '
-    '%(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()] '
-)
-# --------------------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------------------
 # LoggingPrinter — depth/bookkeeping + rendering of the arrow prefix (internal)
@@ -100,7 +109,7 @@ class LoggingManager:
       - info_up/info_down wrappers (default store = tag), info_header
       - Auto tag generation (default_0, default_1, ...) if no tag is provided
       - last_prefix_len, set_prefix_len, reset_prefix_len, reset
-      - Object comparison (__lt__/__gt__/…) and merge_with(max|min) utilities
+      - Object comparison (__lt__/__gt__/…) and compare(max|min) utilities
 
     Depth semantics:
       * `begin=True` increases the logical depth **before** rendering the line,
@@ -110,18 +119,18 @@ class LoggingManager:
 
     ArrowPrinter compatibility helpers:
       * Use `info_header()` for header/blank lines.
-      * Use `LoggingManager.rule_line()` to generate break lines (replaces `arrow_main_break`).
-      * Use `warning_fixed_prefix`/`error_fixed_prefix` in `setup()` to emulate fixed prefixes like `===>`.
+      * Use `LoggingManager.rule_line()` to generate break lines.
+      * Use `warning_fixed_prefix`/`error_fixed_prefix` in setup to emulate fixed prefixes like `===>`.
     """
 
     _root_configured = False
     _root_lock = threading.RLock()
     _log_path: Optional[str] = None
 
-    # Global arrow defaults (configurable via setup())
+    # Global arrow defaults (configurable via setup)
     _global_arrow_base_len = 3
-    _global_arrow_prefix    = "-"
-    _global_arrow_suffix    = ">"
+    _global_arrow_prefix = "-"
+    _global_arrow_suffix = ">"
 
     # per-severity body chars
     _global_warning_prefix = "="
@@ -131,45 +140,32 @@ class LoggingManager:
     _global_warning_dynamic: bool = True
     _global_error_dynamic: bool = True
     _global_warning_fixed_prefix: Optional[str] = None  # e.g., "===> "
-    _global_error_fixed_prefix: Optional[str] = None    # e.g., "!!!> "
+    _global_error_fixed_prefix: Optional[str] = None  # e.g., "!!!> "
 
     # ---------- Root setup ----------
     @classmethod
     def setup(
-        cls,
-        logger_folder: Optional[str] = None,
-        logger_file: Optional[str] = None,
-        logger_format: Optional[str] = None,
-        level: int = logging.DEBUG,
-        handlers: Optional[list] = None,
-        *,
-        arrow_base_len: int = 3,
-        arrow_prefix: str = "-",
-        arrow_suffix: str = ">",
-        warning_prefix: str = "=",
-        error_prefix: str = "!",
-        force_reconfigure: bool = False,
-        warning_dynamic: bool = True,
-        error_dynamic: bool = True,
-        warning_fixed_prefix: Optional[str] = None,
-        error_fixed_prefix: Optional[str] = None,
+            cls,
+            logger_folder: Optional[str] = None,
+            logger_file: Optional[str] = None,
+            logger_format: Optional[str] = None,
+            level: int = logging.DEBUG,
+            handlers: Optional[list] = None,
+            *,
+            arrow_base_len: int = 3,
+            arrow_prefix: str = "-",
+            arrow_suffix: str = ">",
+            warning_prefix: str = "=",
+            error_prefix: str = "!",
+            force_reconfigure: bool = False,
+            warning_dynamic: bool = True,
+            error_dynamic: bool = True,
+            warning_fixed_prefix: Optional[str] = None,
+            error_fixed_prefix: Optional[str] = None,
     ):
-        """Configure the root logger once (thread-safe) and set global arrow defaults.
-
-        Reconfigure (Point 3):
-          - If `force_reconfigure=True`, existing root handlers are removed and
-            rebuilt using the provided parameters (level/format/handlers).
-          - If the root is already configured and `force_reconfigure=False`, we
-            only update global defaults/flags and return.
-
-        Severity behavior:
-          - `warning_dynamic` / `error_dynamic`: if True, warning/error follow the
-            depth-based arrow like info. If False, they use the base length only.
-          - `warning_fixed_prefix` / `error_fixed_prefix`: if provided, they are
-            used literally (e.g., "===> ") and override dynamic behavior.
-        """
         with cls._root_lock:
             if cls._root_configured and not force_reconfigure:
+                # just update arrow global defaults
                 cls._global_arrow_base_len = arrow_base_len
                 cls._global_arrow_prefix = arrow_prefix
                 cls._global_arrow_suffix = arrow_suffix
@@ -181,11 +177,17 @@ class LoggingManager:
                 cls._global_error_fixed_prefix = error_fixed_prefix
                 return
 
-            folder_default = globals().get("log_folder") or os.getcwd()
+            # ---- DEFAULTS HERE ----
+            folder_default = DEFAULT_LOG_FOLDER or os.getcwd()
             folder = logger_folder if logger_folder not in (None, "") else folder_default
-            file_name = logger_file or (globals().get("log_file") or "shybox.log")
-            fmt = logger_format or (globals().get("log_format") or "%(message)s")
-            effective_handlers = handlers if handlers is not None else (globals().get("log_handler") or ["file", "stream"])
+
+            file_name = logger_file or DEFAULT_LOG_FILE
+            fmt = logger_format or DEFAULT_LOG_FORMAT
+
+            effective_handlers = (
+                handlers if handlers is not None else DEFAULT_LOG_HANDLER
+            )
+            # ------------------------
 
             os.makedirs(folder, exist_ok=True)
             log_path = os.path.join(folder, file_name)
@@ -213,7 +215,6 @@ class LoggingManager:
                 ch.setFormatter(formatter)
                 root.addHandler(ch)
 
-            # Store global arrow defaults and behavior
             cls._global_arrow_base_len = arrow_base_len
             cls._global_arrow_prefix = arrow_prefix
             cls._global_arrow_suffix = arrow_suffix
@@ -227,20 +228,98 @@ class LoggingManager:
             cls._root_configured = True
             cls._log_path = log_path
 
+            # suppress debug message from noisy libraries
+            cls.suppress_noisy_libraries()
+
+    @classmethod
+    def setup_logger(cls, *args, **kwargs):
+        """
+        Convenience alias for setup(...).
+
+        This is just nicer to read at call sites:
+
+            LoggingManager.setup_logger(...)
+
+        instead of:
+
+            LoggingManager.setup(...)
+        """
+        return cls.setup(*args, **kwargs)
+
+    @classmethod
+    def get_logger(
+            cls,
+            logger: "LoggingManager | None" = None,
+            *,
+            name: Optional[str] = None,
+            set_as_current: bool = False,
+            setup_kwargs: Optional[dict] = None,
+    ) -> "LoggingManager":
+        """
+        Smart logger getter.
+
+        Priority:
+        1. If `logger` is provided, return it (and optionally register as current).
+        2. Else reuse the current global LoggingManager if already set.
+        3. Else call setup_logger(...) (using default/global config or setup_kwargs)
+           and create a new LoggingManager instance.
+
+        If set_as_current=True, the returned instance becomes the global current logger.
+        """
+
+        # 1) explicit logger passed in
+        if logger is not None:
+            if set_as_current:
+                cls.set_current(logger)
+            return logger
+
+        # 2) reuse current logger if exists
+        current = cls.get_current()
+        if current is not None:
+            return current
+
+        # 3) no logger exists yet → configure root using defaults or custom kwargs
+        if setup_kwargs is None:
+            setup_kwargs = {}
+
+        cls.setup_logger(**setup_kwargs)
+
+        effective_name = (
+                name
+                or globals().get("log_name")
+                or __name__
+        )
+
+        lm = cls(
+            name=effective_name,
+            level=logging.INFO,
+            use_arrows=True,
+            arrow_dynamic=True,
+            arrow_tag=None,
+            propagate=None,
+            set_as_current=False,
+        )
+
+        if set_as_current:
+            cls.set_current(lm)
+
+        return lm
+
     # ---------- Instance ----------
     def __init__(
-        self,
-        name: Optional[str] = None,
-        level: int = logging.INFO,
-        use_arrows: bool = True,
-        arrow_dynamic: bool = True,
-        arrow_tag: Optional[str] = None,
-        arrow_base_len: Optional[int] = None,  # per-instance override
-        *,
-        propagate: Optional[bool] = None,      # control logger propagation
-        set_as_current: bool = False
+            self,
+            name: Optional[str] = None,
+            level: int = logging.INFO,
+            use_arrows: bool = True,
+            arrow_dynamic: bool = True,
+            arrow_tag: Optional[str] = None,
+            arrow_base_len: Optional[int] = None,  # per-instance override
+            *,
+            propagate: Optional[bool] = None,  # control logger propagation
+            set_as_current: bool = False,
     ):
         if not self._root_configured:
+            # lazy default setup using global defaults (log_file, log_folder, etc.)
             self.setup()
 
         self.logger = logging.getLogger(name or "default")
@@ -252,7 +331,9 @@ class LoggingManager:
         self.use_arrows = use_arrows
         self.arrow_dynamic = arrow_dynamic
         self.arrow_tag = arrow_tag
-        self.arrow_base_len = arrow_base_len if arrow_base_len is not None else self._global_arrow_base_len
+        self.arrow_base_len = (
+            arrow_base_len if arrow_base_len is not None else self._global_arrow_base_len
+        )
 
         self._printer = LoggingPrinter() if use_arrows else None
         if self._printer:
@@ -286,7 +367,13 @@ class LoggingManager:
     def _tagkey(self, tag: Optional[str]) -> str:
         return self._remember_tag(tag)
 
-    # ---------- Current-logger context (no explicit param needed) ----------
+    # ---------- Current-logger context ----------
+    @classmethod
+    def suppress_noisy_libraries(cls, level=logging.WARNING):
+        noisy = ["matplotlib", "matplotlib.pyplot", "urllib3", "PIL", "asyncio"]
+        for n in noisy:
+            logging.getLogger(n).setLevel(level)
+
     @classmethod
     def set_current(cls, log: "LoggingManager") -> None:
         """Set the current logger for this context (thread/async-safe)."""
@@ -309,7 +396,6 @@ class LoggingManager:
 
     def use_as_current(self):
         """Context manager to install this logger as current within a block."""
-        from contextlib import contextmanager
         from contextvars import Token
 
         @contextmanager
@@ -319,6 +405,7 @@ class LoggingManager:
                 yield self
             finally:
                 _CURRENT_LOGGER.reset(token)
+
         return _cm()
 
     # ---------- Stores ----------
@@ -711,3 +798,4 @@ class LoggingManager:
         finally:
             if self._printer and self.arrow_dynamic:
                 self._printer.pop_depth(tag=t)
+# ----------------------------------------------------------------------------------------------------------------------

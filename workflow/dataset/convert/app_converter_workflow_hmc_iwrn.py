@@ -34,13 +34,15 @@ import os
 import numpy as np
 import pandas as pd
 
-from shybox.generic_toolkit.lib_utils_args import get_args
-from shybox.default.lib_default_args import collector_data
-from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_format,
-                                                get_time_length, get_time_bounds)
+from shybox.config_toolkit.arguments_handler import ArgumentsManager
+from shybox.config_toolkit.config_handler import ConfigManager
+
+from shybox.time_toolkit.lib_utils_time import (
+    select_time_range, select_time_format, get_time_length, get_time_bounds)
+
 from shybox.generic_toolkit.lib_utils_string import fill_string
 
-from shybox.runner_toolkit.old.settings.driver_app_settings import DrvSettings
+#from shybox.runner_toolkit.old.settings.driver_app_settings import DrvSettings
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
 
@@ -64,35 +66,37 @@ def main(alg_collectors_settings: dict = None):
     # ------------------------------------------------------------------------------------------------------------------
     ## SETTINGS MANAGEMENT
     # get file settings
-    alg_file_settings, alg_time_settings = get_args(settings_folder=os.path.dirname(os.path.realpath(__file__)))
+    alg_args_obj = ArgumentsManager(settings_folder=os.path.dirname(os.path.realpath(__file__)))
+    alg_args_file, alg_args_time = alg_args_obj.get()
 
-    # method to initialize settings class
-    driver_settings = DrvSettings(file_name=alg_file_settings, file_time=alg_time_settings,
-                                  file_key='settings', settings_collectors=alg_collectors_settings)
+    # crete configuration object
+    alg_cfg_obj = ConfigManager.from_source(
+        alg_args_file,
+        root_key="settings",
+        auto_validate=True, auto_fill_lut=True,
+        flat_variables=True, flat_key_mode='value')
+    # view lut section
+    alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
+    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=True)
 
-    # method to configure variable settings
-    (alg_variables_settings,
-     alg_variables_collector, alg_variables_system) = driver_settings.configure_variable_by_settings()
-    # method to organize variable settings
-    alg_variables_settings = driver_settings.organize_variable_settings(
-        alg_variables_settings, alg_variables_collector)
-    # method to view variable settings
-    driver_settings.view_variable_settings(data=alg_variables_settings, mode=True)
-
-    # get variables application
-    alg_variables_application = driver_settings.get_variable_by_tag('application')
-    alg_variables_application = driver_settings.fill_variable_by_dict(alg_variables_application, alg_variables_settings)
-
-    # collector data
-    collector_data.view(table_print=False)
+    # get application section
+    alg_cfg_application = alg_cfg_obj.get_section(section='application')
+    # fill application section
+    alg_cfg_application = alg_cfg_obj.fill_obj_from_lut(
+        section=alg_cfg_application,
+        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
+        template_keys=('file_time_destination',)
+    )
+    # view application section
+    alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## LOGGING MANAGEMENT
     # set logging instance
     LoggingManager.setup(
-        logger_folder=alg_variables_settings['path_log'],
-        logger_file=alg_variables_settings['file_log'],
+        logger_folder=alg_cfg_application['log']['path'],
+        logger_file=alg_cfg_application['log']['file_name'],
         logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
         handlers=['file', 'stream'],
         force_reconfigure=True,
@@ -168,14 +172,14 @@ def main(alg_collectors_settings: dict = None):
     ## TIME MANAGEMENT (GLOBAL)
     # Time generic configuration
     alg_generic_time = select_time_range(
-        time_start=alg_variables_application['time']['start'],
-        time_end=alg_variables_application['time']['end'],
-        time_frequency=alg_variables_application['time']['frequency'], ensure_range=True)
-    alg_time_generic = select_time_format(alg_generic_time, time_format=alg_variables_application['time']['format'])
+        time_start=alg_cfg_application['time']['start'],
+        time_end=alg_cfg_application['time']['end'],
+        time_frequency=alg_cfg_application['time']['frequency'], ensure_range=True)
+    alg_time_generic = select_time_format(alg_generic_time, time_format=alg_cfg_application['time']['format'])
     # Time orchestrator configuration
     alg_orchestrator_time = select_time_range(
-        time_start=alg_variables_application['time']['start'],
-        time_end=alg_variables_application['time']['end'],
+        time_start=alg_cfg_application['time']['start'],
+        time_end=alg_cfg_application['time']['end'],
         time_frequency='h', ensure_range=False)
     alg_time_orc = select_time_format(alg_orchestrator_time)
     # ------------------------------------------------------------------------------------------------------------------
@@ -184,8 +188,8 @@ def main(alg_collectors_settings: dict = None):
     ## GEO MANAGEMENT
     # geographic reference
     geo_data = DataLocal(
-        path=alg_variables_application['geo']['terrain']['path'],
-        file_name=alg_variables_application['geo']['terrain']['file_name'],
+        path=alg_cfg_application['geo']['terrain']['path'],
+        file_name=alg_cfg_application['geo']['terrain']['file_name'],
         file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_io='input',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
@@ -229,11 +233,11 @@ def main(alg_collectors_settings: dict = None):
         ## DATASETS MANAGEMENT
         # LAI data source
         file_name = fill_string(
-            alg_variables_application['data_source']['lai']['file_name'],
+            alg_cfg_application['data_source']['lai']['file_name'],
             time_lai=time_file_lai, path_lai=path_time_lai)
 
         path_name = fill_string(
-            alg_variables_application['data_source']['lai']['path'],
+            alg_cfg_application['data_source']['lai']['path'],
             time_lai=time_file_lai, path_lai=path_time_lai)
 
         lai_data = DataLocal(
@@ -251,11 +255,11 @@ def main(alg_collectors_settings: dict = None):
 
         # Air Temperature
         file_name = fill_string(
-            alg_variables_application['data_source']['air_t']['file_name'],
+            alg_cfg_application['data_source']['air_t']['file_name'],
             time_source=time_file_vars)
 
         airt_data = DataLocal(
-            path=alg_variables_application['data_source']['air_t']['path'],
+            path=alg_cfg_application['data_source']['air_t']['path'],
             file_name=file_name,
             file_type='grid_3d', file_format='netcdf', file_mode='local', file_variable='AIR_T', file_io='input',
             variable_template={
@@ -269,11 +273,11 @@ def main(alg_collectors_settings: dict = None):
 
         # Relative Humidity
         file_name = fill_string(
-            alg_variables_application['data_source']['rh']['file_name'],
+            alg_cfg_application['data_source']['rh']['file_name'],
             time_source=time_file_vars)
 
         rh_data = DataLocal(
-            path=alg_variables_application['data_source']['rh']['path'],
+            path=alg_cfg_application['data_source']['rh']['path'],
             file_name=file_name,
             file_type='grid_3d', file_format='netcdf', file_mode='local', file_variable='RH', file_io='input',
             variable_template={
@@ -287,11 +291,11 @@ def main(alg_collectors_settings: dict = None):
 
         # Solar Radiation
         file_name = fill_string(
-            alg_variables_application['data_source']['inc_rad']['file_name'],
+            alg_cfg_application['data_source']['inc_rad']['file_name'],
             time_source=time_file_vars)
 
         sr_data = DataLocal(
-            path=alg_variables_application['data_source']['inc_rad']['path'],
+            path=alg_cfg_application['data_source']['inc_rad']['path'],
             file_name=file_name,
             file_type='grid_3d', file_format='netcdf', file_mode='local', file_variable='SR', file_io='input',
             variable_template={
@@ -305,11 +309,11 @@ def main(alg_collectors_settings: dict = None):
 
         # Total Precipitation
         file_name = fill_string(
-            alg_variables_application['data_source']['rain']['file_name'],
+            alg_cfg_application['data_source']['rain']['file_name'],
             time_source=time_file_vars)
 
         tp_data = DataLocal(
-            path=alg_variables_application['data_source']['rain']['path'],
+            path=alg_cfg_application['data_source']['rain']['path'],
             file_name=file_name,
             file_type='grid_3d', file_format='netcdf', file_mode='local', file_variable='TP', file_io='input',
             variable_template={
@@ -323,11 +327,11 @@ def main(alg_collectors_settings: dict = None):
 
         # Wind
         file_name = fill_string(
-            alg_variables_application['data_source']['wind']['file_name'],
+            alg_cfg_application['data_source']['wind']['file_name'],
             time_source=time_file_vars)
 
         wind_data = DataLocal(
-            path=alg_variables_application['data_source']['wind']['path'],
+            path=alg_cfg_application['data_source']['wind']['path'],
             file_name=file_name,
             file_type='grid_3d', file_format='netcdf', file_mode='local', file_variable='WIND', file_io='input',
             variable_template={
@@ -341,11 +345,11 @@ def main(alg_collectors_settings: dict = None):
 
         # Output data destination
         file_name = fill_string(
-            alg_variables_application['data_destination']['file_name'],
+            alg_cfg_application['data_destination']['file_name'],
             time_destination="%Y%m%d%H%M")
 
         output_data = DataLocal(
-            path=alg_variables_application['data_destination']['path'],
+            path=alg_cfg_application['data_destination']['path'],
             file_name=file_name,
             time_signature='step',
             file_format='netcdf', file_type='hmc', file_mode='local', 

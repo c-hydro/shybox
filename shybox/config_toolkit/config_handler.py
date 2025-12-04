@@ -20,9 +20,10 @@ import pandas as pd
 from typing import Iterable
 from tabulate import tabulate
 
+from shybox.logging_toolkit.logging_handler import LoggingManager
+
 from shybox.config_toolkit.lib_config_utils import (
     autofill_mapping, fill_with_mapping, sanitize_lut_quotes, _normalize_path_like_string)
-from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -64,8 +65,15 @@ class ConfigManager:
         auto_fill_lut: bool = True,
         convert_none_to_nan: bool = False,
         application_key: str | None = "application",
+        logger: LoggingManager | None = None,
     ):
 
+        # Set up logger for this ConfigManager instance
+        self.log = LoggingManager.get_logger(
+            logger=logger, name="ConfigManager", set_as_current=False,
+        )
+
+        # check settings (if None nothing to do)
         if settings is None:
             raise ValueError("Settings object is None.")
 
@@ -179,13 +187,18 @@ class ConfigManager:
         auto_fill_lut: bool = True,
         convert_none_to_nan: bool = True,
         application_key: str | None = "application",
+        logger: LoggingManager | None = None,
     ) -> "ConfigManager":
-        """
-        Create Config from:
-            - dict
-            - JSON string
-            - file path
-        """
+
+        # Normalize logger: use provided, or current, or create default
+        log = LoggingManager.get_logger(
+            logger=logger,
+            name="ConfigManager",
+            set_as_current=False,
+        )
+
+        # info start
+        log.info_up("Configuration ... ", tag="config")
 
         # Case 1: Already dict
         if isinstance(src, dict):
@@ -198,14 +211,17 @@ class ConfigManager:
         # Case 3: File path
         elif isinstance(src, str):
             if not os.path.isfile(src):
+                log.error(f"JSON file not found: {src}", tag="config")
                 raise FileNotFoundError(f"JSON file not found: {src}")
             with open(src, "r") as f:
                 data = json.load(f)
 
         else:
+            log.error(f"Unsupported source type: {type(src)}", tag="config")
             raise TypeError(f"Unsupported source type: {type(src)}")
 
         if root_key not in data:
+            log.error(f"Root key '{root_key}' not found in configuration.", tag="config")
             raise KeyError(f"Root key '{root_key}' not found in configuration.")
 
         settings_section = data[root_key]
@@ -225,11 +241,15 @@ class ConfigManager:
             auto_fill_lut=auto_fill_lut,
             convert_none_to_nan=convert_none_to_nan,
             application_key=application_key,
+            logger=log,  # pass the normalized logger into the instance
         )
         obj._raw_config = data
         obj._root_key = root_key
-        return obj
 
+        # info end
+        log.info_down("Configuration ... DONE", tag="config")
+
+        return obj
     # --------------------------------------------------------------
     # Unified accessor for mandatory / optional sections
     def get_section(
@@ -350,6 +370,7 @@ class ConfigManager:
 
         # 3) nothing found
         if raise_if_missing:
+            self.log.error(f"Section '{name}' not found in mandatory or optional config.")
             raise KeyError(f"Section '{name}' not found in mandatory or optional config.")
 
         return None
@@ -723,6 +744,7 @@ class ConfigManager:
             lut_is_attr = False
 
         if lut is None:
+            self.log.error("LUT not available for environment update.")
             raise ValueError("LUT not available.")
 
         # choose format container
@@ -792,17 +814,15 @@ class ConfigManager:
             self.variables["lut"] = lut
 
         if warn_missing and missing:
-            warnings.warn(
+            self.log.warning(
                 "Environment variables missing for LUT keys (set to None): "
                 + ", ".join(missing),
-                UserWarning,
             )
 
         if cast_failed:
-            warnings.warn(
+            self.log.warning(
                 "Failed to cast environment values for LUT keys: "
                 + ", ".join(cast_failed),
-                UserWarning,
             )
 
         return {"updated": updated, "missing": missing, "cast_failed": cast_failed}
