@@ -90,7 +90,7 @@ def main(alg_collectors_settings: dict = None):
     alg_cfg_application = alg_cfg_obj.fill_obj_from_lut(
         section=alg_cfg_application,
         resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
-        template_keys=('file_time_destination',)
+        template_keys=('path_destination_time', 'time_destination',)
     )
     # view application section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)
