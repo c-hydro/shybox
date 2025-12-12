@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Continuum Dashboard — Maps{% endblock %}
+
+{% block head_extra %}
+  <!-- OpenLayers -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/ol@latest/ol.css">
+  <script src="https://cdn.jsdelivr.net/npm/ol@latest/dist/ol.js"></script>
+
+  <style>
+    #maps-container {
+      height: 75vh;
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #dde3e8;
+    }
+
+    .map-toolbar {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+
+<div class="box">
+  <h3 class="title is-4">Maps</h3>
+
+  <p class="is-size-7 has-text-grey-dark mb-3">
+    Visualize DEM, river network and monitoring sections.
+    Use the controls below to toggle layers.
+  </p>
+
+  <!-- Toolbar -->
+  <div class="map-toolbar">
+    <label class="checkbox">
+      <input type="checkbox" id="toggle-dem">
+      DEM
+    </label>
+
+    <label class="checkbox">
+      <input type="checkbox" id="toggle-rivers" checked>
+      River network
+    </label>
+
+    <div class="select is-small">
+      <select id="basin-select">
+        <option value="all">All basins</option>
+        {% for b in basins %}
+          <option value="{{ b }}" {% if b == selected_basin %}selected{% endif %}>
+            {{ b }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div id="maps-container"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const demMeta = {{ dem_meta | tojson }};
+  const sections = {{ sections | tojson }};
+
+  // Base OSM
+  const osmLayer = new ol.layer.Tile({
+    source: new ol.source.OSM()
+  });
+
+  // DEM layer (optional)
+  let demLayer = null;
+  if (demMeta) {
+    const x0 = demMeta.xllcorner;
+    const y0 = demMeta.yllcorner;
+    const cs = demMeta.cellsize;
+    const xmax = x0 + cs * demMeta.ncols;
+    const ymax = y0 + cs * demMeta.nrows;
+
+    demLayer = new ol.layer.Image({
+      visible: false,
+      opacity: 0.7,
+      source: new ol.source.ImageStatic({
+        url: "{{ url_for('maps_dem_png') }}",
+        imageExtent: [x0, y0, xmax, ymax],
+        projection: 'EPSG:4326'
+      })
+    });
+  }
+
+  // Rivers
+  const riversLayer = new ol.layer.Vector({
+    visible: true,
+    source: new ol.source.Vector({
+      url: "{{ url_for('maps_rivers_geojson') }}",
+      format: new ol.format.GeoJSON()
+    }),
+    style: new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 1.5,
+        fill: new ol.style.Fill({ color: 'rgba(0, 112, 255, 0.8)' })
+      })
+    })
+  });
+
+  // Sections
+  const sectionFeatures = sections
+    .filter(s => s.lon != null && s.lat != null)
+    .map(s => new ol.Feature({
+      geometry: new ol.geom.Point(
+        ol.proj.fromLonLat([s.lon, s.lat])
+      ),
+      basin: s.basin,
+      name: s.name
+    }));
+
+  const sectionsSource = new ol.source.Vector({
+    features: sectionFeatures
+  });
+
+  const sectionsLayer = new ol.layer.Vector({
+    source: sectionsSource,
+    style: new ol.style.Style({
+      image: new ol.style.RegularShape({
+        points: 3,
+        radius: 9,
+        rotation: Math.PI,
+        fill: new ol.style.Fill({ color: 'rgba(243,146,0,0.95)' }),
+        stroke: new ol.style.Stroke({ color: '#804600', width: 1.5 })
+      })
+    })
+  });
+
+  // Map
+  const layers = [osmLayer];
+  if (demLayer) layers.push(demLayer);
+  layers.push(riversLayer, sectionsLayer);
+
+  const map = new ol.Map({
+    target: 'maps-container',
+    layers: layers,
+    view: new ol.View({
+      center: ol.proj.fromLonLat([12.5, 43.5]),
+      zoom: 8
+    })
+  });
+
+  // Fit extent
+  map.once('postrender', () => {
+    if (demLayer && demMeta) {
+      const extent = ol.proj.transformExtent(
+        [
+          demMeta.xllcorner,
+          demMeta.yllcorner,
+          demMeta.xllcorner + demMeta.cellsize * demMeta.ncols,
+          demMeta.yllcorner + demMeta.cellsize * demMeta.nrows
+        ],
+        'EPSG:4326',
+        map.getView().getProjection()
+      );
+      map.getView().fit(extent, { padding: [20,20,20,20] });
+    }
+  });
+
+  // UI controls
+  document.getElementById('toggle-dem')?.addEventListener('change', e => {
+    if (demLayer) demLayer.setVisible(e.target.checked);
+  });
+
+  document.getElementById('toggle-rivers')?.addEventListener('change', e => {
+    riversLayer.setVisible(e.target.checked);
+  });
+
+  document.getElementById('basin-select')?.addEventListener('change', e => {
+    const basin = e.target.value;
+    sectionsSource.clear();
+
+    sectionFeatures.forEach(f => {
+      if (basin === 'all' || f.get('basin') === basin) {
+        sectionsSource.addFeature(f);
+      }
+    });
+  });
+</script>
+{% endblock %}
+

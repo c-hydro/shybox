@@ -123,7 +123,7 @@ def main(view_table: bool = False, dry_run : bool = False):
     ## TIME MANAGEMENT
     # create time object
     alg_cfg_time = TimeManager.from_config(
-        alg_cfg_obj, start_days_before=1,
+        alg_cfg_obj, start_days_before=0,
         time_as_string=('time_frequency',), time_as_int=('time_period',))
     # update lut using time tags
     alg_cfg_obj.update_lut_using_extra_tags(extra_tags=alg_cfg_time.as_dict(), overwrite=True)
@@ -243,6 +243,6 @@ def main(view_table: bool = False, dry_run : bool = False):
 # call script from external library
 if __name__ == "__main__":
 
-    main(view_table=True, dry_run=True)
+    main(view_table=True, dry_run=False)
 
 # ----------------------------------------------------------------------------------------------------------------------

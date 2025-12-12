@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}Continuum Dashboard — Maps{% endblock %}
+
+{% block head_extra %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@latest/ol.css">
+  <script src="https://cdn.jsdelivr.net/npm/ol@latest/dist/ol.js"></script>
+
+  <style>
+    #geomap {
+      width: 100%;
+      height: 70vh;
+      border-radius: 6px;
+      border: 1px solid #dde3e8;
+    }
+
+    .map-control-panel {
+      margin-bottom: 1rem;
+    }
+
+    .map-tooltip {
+      background: rgba(0, 59, 77, 0.9);
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+
+<h2 class="title is-4">Maps</h2>
+
+<form method="get" action="{{ url_for('maps_view') }}" class="box mb-4">
+  <div class="field is-horizontal">
+    <div class="field-body">
+      <div class="field">
+        <label class="label">Basin (sections)</label>
+        <div class="control">
+          <div class="select">
+            <select name="basin" onchange="this.form.submit()">
+              <option value="all" {% if selected_basin == 'all' %}selected{% endif %}>
+                All basins
+              </option>
+              {% for basin in basins %}
+                <option value="{{ basin }}" {% if basin == selected_basin %}selected{% endif %}>
+                  {{ basin }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <p class="help is-size-7 has-text-grey-dark">
+          Filter only the sections overlay; DEM and river network always cover the full domain.
+        </p>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="box map-control-panel">
+  <div class="field is-grouped is-grouped-multiline">
+    <div class="control">
+      <label class="checkbox">
+        <input type="checkbox" id="toggle-dem" checked>
+        DEM layer
+      </label>
+    </div>
+    <div class="control">
+      <label class="checkbox">
+        <input type="checkbox" id="toggle-rivers" checked>
+        River network
+      </label>
+    </div>
+    <div class="control">
+      <label class="checkbox">
+        <input type="checkbox" id="toggle-sections" checked>
+        Sections
+      </label>
+    </div>
+  </div>
+  <p class="is-size-7 has-text-grey-dark">
+    Default: all sections of all basins. When you choose a basin above, only its sections are shown.
+  </p>
+</div>
+
+<div class="box" style="height: 75vh; display: flex; flex-direction: column;">
+  <div style="flex: 1 1 auto;">
+    <div id="geomap"></div>
+  </div>
+  <p class="is-size-7 has-text-grey-dark mt-2">
+    Background: DEM (from ASCII) with river mask and sections overlay.
+  </p>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // --- DEM metadata from backend (may be null if DEM failed to load) ---
+  const demMeta = {{ dem_meta | tojson }};
+  let demExtent = null;
+  let demLayer = null;
+
+  if (demMeta) {
+    const x0 = demMeta.xllcorner;
+    const y0 = demMeta.yllcorner;
+    const cs = demMeta.cellsize;
+    const ncols = demMeta.ncols;
+    const nrows = demMeta.nrows;
+    const xmax = x0 + cs * ncols;
+    const ymax = y0 + cs * nrows;
+    demExtent = [x0, y0, xmax, ymax];
+
+    demLayer = new ol.layer.Image({
+      visible: true,
+      source: new ol.source.ImageStatic({
+        url: "{{ url_for('maps_dem_png') }}",
+        imageExtent: demExtent,
+        projection: 'EPSG:4326'
+      }),
+      opacity: 0.7
+    });
+  } else {
+    console.warn("DEM metadata is not available; DEM layer disabled.");
+  }
+
+  // --- Rivers from backend GeoJSON ---
+  const riversSource = new ol.source.Vector({
+    url: "{{ url_for('maps_rivers_geojson') }}",
+    format: new ol.format.GeoJSON()
+  });
+
+  const riversLayer = new ol.layer.Vector({
+    visible: true,
+    source: riversSource,
+    style: new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 2,
+        fill: new ol.style.Fill({ color: 'rgba(0, 59, 77, 0.95)' }),
+        stroke: new ol.style.Stroke({ color: 'rgba(0, 59, 77, 1)', width: 0.5 })
+      })
+    })
+  });
+
+  // --- Sections from backend (already filtered by basin) ---
+  const sectionsData = {{ sections | tojson }};
+
+  const sectionFeatures = [];
+  sectionsData.forEach(sec => {
+    if (sec.lon == null || sec.lat == null) return;
+    const f = new ol.Feature({
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([sec.lon, sec.lat])),
+      sectionId: sec.id,
+      basin: sec.basin,
+      name: sec.name,
+      dem_z: sec.dem_z,
+      river_code: sec.river_code
+    });
+    sectionFeatures.push(f);
+  });
+
+  const sectionsSource = new ol.source.Vector({ features: sectionFeatures });
+
+  const sectionsLayer = new ol.layer.Vector({
+    visible: true,
+    source: sectionsSource,
+    style: new ol.style.Style({
+      image: new ol.style.RegularShape({
+        points: 3,
+        radius: 9,
+        fill: new ol.style.Fill({ color: 'rgba(243, 146, 0, 0.95)' }),
+        stroke: new ol.style.Stroke({ color: 'rgba(128, 70, 0, 1)', width: 1.5 }),
+        rotation: Math.PI
+      })
+    })
+  });
+
+  // --- Base OSM layer ---
+  const osmLayer = new ol.layer.Tile({
+    source: new ol.source.OSM()
+  });
+
+  const layers = [osmLayer];
+  if (demLayer) layers.push(demLayer);
+  layers.push(riversLayer);
+  layers.push(sectionsLayer);
+
+  const map = new ol.Map({
+    target: 'geomap',
+    layers: layers,
+    view: new ol.View({
+      center: ol.proj.fromLonLat([12.5, 43.5]),
+      zoom: 8
+    })
+  });
+
+  function fitInitialView() {
+    if (demExtent) {
+      const ext3857 = ol.proj.transformExtent(demExtent, 'EPSG:4326', 'EPSG:3857');
+      map.getView().fit(ext3857, { padding: [20, 20, 20, 20] });
+    } else if (sectionsSource.getFeatures().length > 0) {
+      const ext = sectionsSource.getExtent();
+      map.getView().fit(ext, { padding: [20, 20, 20, 20] });
+    } else if (riversSource.getFeatures().length > 0) {
+      const ext = riversSource.getExtent();
+      map.getView().fit(ext, { padding: [20, 20, 20, 20] });
+    }
+  }
+
+  if (demExtent) {
+    fitInitialView();
+  } else {
+    riversSource.once('change', fitInitialView);
+  }
+
+  // --- Tooltip overlay ---
+  const tooltipEl = document.createElement('div');
+  tooltipEl.className = 'map-tooltip';
+  tooltipEl.style.display = 'none';
+  const tooltipOverlay = new ol.Overlay({
+    element: tooltipEl,
+    offset: [10, 0],
+    positioning: 'bottom-left'
+  });
+  map.addOverlay(tooltipOverlay);
+
+  function showTooltip(feature, coordinate) {
+    if (feature.get('sectionId') != null) {
+      const name = feature.get('name');
+      const basin = feature.get('basin');
+      const dem = feature.get('dem_z');
+      tooltipEl.innerHTML = `<strong>${name}</strong><br>Basin: ${basin}` +
+        (dem != null ? `<br>DEM: ${dem.toFixed(1)} m` : '');
+    } else {
+      tooltipEl.innerHTML = `<strong>River cell</strong>`;
+    }
+    tooltipEl.style.display = 'block';
+    tooltipOverlay.setPosition(coordinate);
+  }
+
+  function hideTooltip() {
+    tooltipEl.style.display = 'none';
+  }
+
+  map.on('pointermove', evt => {
+    if (evt.dragging) {
+      hideTooltip();
+      return;
+    }
+    const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+    if (feature) {
+      showTooltip(feature, evt.coordinate);
+    } else {
+      hideTooltip();
+    }
+  });
+
+  // --- UI Toggles ---
+  document.getElementById('toggle-dem').addEventListener('change', (e) => {
+    if (demLayer) demLayer.setVisible(e.target.checked);
+  });
+  document.getElementById('toggle-rivers').addEventListener('change', (e) => {
+    riversLayer.setVisible(e.target.checked);
+  });
+  document.getElementById('toggle-sections').addEventListener('change', (e) => {
+    sectionsLayer.setVisible(e.target.checked);
+  });
+</script>
+{% endblock %}
+

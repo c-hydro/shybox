@@ -1,0 +1,674 @@
+{% extends "base.html" %}
+
+{% block title %}Continuum Dashboard — TS Deterministic Chart{% endblock %}
+
+{% block head_extra %}
+  <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
+  <style>
+    .ts-chart-container { margin-bottom: 1.5rem; }
+
+    .ts-chart-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: #000000 !important;
+    }
+    .ts-chart-title,
+    .ts-chart-title strong {
+      color: #000000 !important;
+    }
+
+    .ts-chart-plot {
+      width: 100%;
+      height: 420px;
+
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      background: #ffffff;
+
+      box-sizing: border-box;
+      overflow: hidden;
+      position: relative;
+
+      padding: 0;
+      margin-top: 0.3rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Full border around each section block */
+    article.message {
+      border: 1px solid #3273dc;
+      border-radius: 4px;
+    }
+    article.message .message-header {
+      border-bottom: 1px solid #3273dc;
+    }
+    .message-header p {
+      color: #23a24d !important;
+      font-weight: 600;
+    }
+
+    .json-path {
+      max-width: 260px;
+      display: inline-block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: bottom;
+    }
+
+    .ts-header-strong {
+      color: #006c2e !important;
+      font-weight: 700;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+
+<h2 class="title is-4">Time-series Chart</h2>
+
+<form method="get" action="{{ url_for('ts_det_chart_view') }}" class="box mb-5">
+  <div class="field is-horizontal">
+    <div class="field-body">
+
+      <div class="field">
+        <label class="label">TimeSeries Run Configuration</label>
+        <div class="control">
+          <div class="select">
+            <select name="run_cfg" onchange="this.form.submit()">
+              {% for key, cfg in run_configs.items() %}
+                {% set label = cfg.name if cfg.name is defined else key %}
+                <option value="{{ key }}" {% if key == selected_run_cfg_key %}selected{% endif %}>
+                  {{ label }}{% if key == active_run_key %} (default){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Run time</label>
+        <div class="control">
+          {% if available_runs %}
+            <div class="select">
+              <select name="run" onchange="this.form.submit()">
+                {% for r in available_runs %}
+                  {% set value = r.strftime('%Y-%m-%dT%H:%M') %}
+                  <option value="{{ value }}" {% if value == selected_run_iso %}selected{% endif %}>
+                    {{ r.strftime('%Y-%m-%d %H:00') }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          {% else %}
+            <input class="input" type="text" value="No runs found" disabled>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Basin</label>
+        <div class="control">
+          <div class="select">
+            <select name="basin" onchange="this.form.submit()">
+              {% for basin in basins %}
+                <option value="{{ basin }}" {% if basin == selected_basin %}selected{% endif %}>
+                  {{ basin }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Section</label>
+        <div class="control">
+          <div class="select">
+            <select name="section" onchange="this.form.submit()">
+              {% for sec in sections %}
+                <option value="{{ sec }}" {% if sec == selected_section %}selected{% endif %}>
+                  {% if sec == 'all_sections' %}All sections{% else %}{{ sec }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</form>
+
+{% set run_time = selected_run_iso.replace('T',' ') %}
+{% set run_start = '' %}
+{% set run_end   = '' %}
+
+{% if selected_section == 'all_sections' %}
+  {% if charts_data %}
+    {% set keys = charts_data.keys() | list | sort %}
+    {% set first_sec = keys[0] %}
+    {% set cd = charts_data[first_sec] %}
+    {% if cd.time_labels %}
+      {% set run_start = cd.time_labels[0] %}
+      {% set run_end   = cd.time_labels[-1] %}
+    {% endif %}
+  {% endif %}
+{% else %}
+  {% if ts_time %}
+    {% set run_start = ts_time[0] %}
+    {% set run_end   = ts_time[-1] %}
+  {% endif %}
+{% endif %}
+
+<div class="mb-3">
+  <p class="is-size-6 ts-header-strong">
+    Run Time: {{ run_time }}
+    {% if run_start %}
+      &nbsp;&nbsp;--&nbsp;&nbsp;Run Start: {{ run_start }}
+      &nbsp;&nbsp;--&nbsp;&nbsp;Run End: {{ run_end }}
+    {% endif %}
+  </p>
+
+  <p class="is-size-6 ts-header-strong">
+    Basin: {{ selected_basin }},
+    Section:
+    {% if selected_section == 'all_sections' %}All Sections{% else %}{{ selected_section }}{% endif %}
+  </p>
+</div>
+
+<div class="box">
+  {% if selected_section == 'all_sections' %}
+    {% if charts_data %}
+      {% for sec_name, cd in charts_data.items() %}
+        <div class="ts-chart-container">
+          <div class="ts-chart-title">Section: <strong>{{ sec_name }}</strong></div>
+          <div id="ts-chart-{{ sec_name | replace(' ', '_') | replace('.', '_') }}" class="ts-chart-plot"></div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="is-size-7 has-text-grey-dark">No time-series data available for this basin/run.</p>
+    {% endif %}
+  {% else %}
+    {% if ts_time and ts_q_sim %}
+      <div class="ts-chart-container">
+        <div class="ts-chart-title">Section: <strong>{{ selected_section }}</strong></div>
+        <div id="ts-chart-single" class="ts-chart-plot"></div>
+
+        <p class="is-size-7 has-text-grey-dark mt-2">
+          {% if time_now %}
+            <strong>time_now:</strong> {{ time_now }}<br>
+          {% endif %}
+          {% if json_path %}
+            {% set json_basename = json_path.rsplit('/', 1)[-1] %}
+            <strong>JSON file:</strong>
+            <span class="json-path" title="{{ json_path }}">
+              <code style="font-size:0.75rem;">{{ json_basename }}</code>
+            </span>
+          {% endif %}
+        </p>
+      </div>
+    {% else %}
+      <p class="is-size-7 has-text-grey-dark">No time-series data found for this section.</p>
+    {% endif %}
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const selectedSection = {{ selected_section | tojson }};
+  const chartsData = {{ charts_data | tojson }};
+
+  // For single-section mode (backend arrays)
+  const tsTimeSingle = {{ ts_time | tojson }};
+  const tsQSimSingle = {{ ts_q_sim | tojson }};
+  const tsQObsSingle = {{ ts_q_obs | tojson }};
+  const tsRainSingle = {{ ts_rain | tojson }};
+  const tsSMSingle   = {{ ts_sm   | tojson }};
+  const thrAlertSingle = {{ thr_alert | tojson }};
+  const thrAlarmSingle = {{ thr_alarm | tojson }};
+  const timeNowSingle  = {{ time_now | tojson }};
+
+  function hasValid(arr) {
+    if (!Array.isArray(arr)) return false;
+    return arr.some(v => v !== null && v !== undefined);
+  }
+
+  function maxValid(arr) {
+    if (!Array.isArray(arr)) return null;
+    let m = null;
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      if (v === null || v === undefined) continue;
+      const n = Number(v);
+      if (!isFinite(n)) continue;
+      if (m === null || n > m) m = n;
+    }
+    return m;
+  }
+
+  function minValid(arr) {
+    if (!Array.isArray(arr)) return null;
+    let m = null;
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      if (v === null || v === undefined) continue;
+      const n = Number(v);
+      if (!isFinite(n)) continue;
+      if (m === null || n < m) m = n;
+    }
+    return m;
+  }
+
+  // Normalize timestamps like "2025-12-02 03:00" → ISO
+  function normalizeTimestamp(ts) {
+    if (!ts) return null;
+    if (ts.includes('T')) return ts;
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(ts)) return ts.replace(' ', 'T') + ':00';
+    if (/^\d{12}$/.test(ts)) {
+      return ts.substring(0,4) + '-' +
+             ts.substring(4,6) + '-' +
+             ts.substring(6,8) + 'T' +
+             ts.substring(8,10) + ':' +
+             ts.substring(10,12) + ':00';
+    }
+    return ts;
+  }
+
+  function isoKeyFromLabel(lbl) {
+    const iso = normalizeTimestamp(String(lbl));
+    const d = new Date(iso);
+    if (!isFinite(d.getTime())) return null;
+    return d.toISOString();
+  }
+
+  // Build a global time grid (union of timestamps) for all_sections padding
+  function buildGlobalTimeGrid(chartsData) {
+    const set = new Set();
+    Object.keys(chartsData || {}).forEach(secName => {
+      const cd = chartsData[secName];
+      const rawTimes = (cd && cd.time_labels) ? cd.time_labels : [];
+      rawTimes.forEach(t => {
+        const k = isoKeyFromLabel(t);
+        if (k) set.add(k);
+      });
+    });
+    return Array.from(set).sort();
+  }
+
+  function alignArrayToGrid(timeLabels, values, globalGrid) {
+    const map = new Map();
+    for (let i = 0; i < (timeLabels || []).length; i++) {
+      const k = isoKeyFromLabel(timeLabels[i]);
+      if (!k) continue;
+      map.set(k, (values && i < values.length) ? values[i] : null);
+    }
+    return globalGrid.map(k => (map.has(k) ? map.get(k) : null));
+  }
+
+  function prepareSeriesAligned(cd, globalGrid) {
+    const rawTimes = cd.time_labels || [];
+    const times = globalGrid.map(k => new Date(k));
+    return {
+      times,
+      qSim: alignArrayToGrid(rawTimes, cd.q_sim || [], globalGrid),
+      qObs: alignArrayToGrid(rawTimes, cd.q_obs || [], globalGrid),
+      rain: alignArrayToGrid(rawTimes, cd.rain  || [], globalGrid),
+      sm:   alignArrayToGrid(rawTimes, cd.sm    || [], globalGrid),
+      thrAlert: cd.thr_alert,
+      thrAlarm: cd.thr_alarm,
+      timeNow:  cd.time_now
+    };
+  }
+
+  function prepareSeries(cd) {
+    const rawTimes = cd.time_labels || [];
+    const times = rawTimes.map(t => new Date(normalizeTimestamp(String(t))));
+    return {
+      times,
+      qSim: cd.q_sim || [],
+      qObs: cd.q_obs || [],
+      rain: cd.rain  || [],
+      sm:   cd.sm    || [],
+      thrAlert: cd.thr_alert,
+      thrAlarm: cd.thr_alarm,
+      timeNow: cd.time_now
+    };
+  }
+
+function drawChart(targetId, series, explicitThrAlert, explicitThrAlarm, forcedXRange) {
+  const tsTime = series.times;
+  const tsQSim = series.qSim;
+  const tsQObs = series.qObs;
+  const tsRain = series.rain;
+  const tsSM   = series.sm;
+  const thrAlert = (explicitThrAlert !== undefined) ? explicitThrAlert : series.thrAlert;
+  const thrAlarm = (explicitThrAlarm !== undefined) ? explicitThrAlarm : series.thrAlarm;
+  const timeNow  = series.timeNow;
+
+  if (!Array.isArray(tsTime) || tsTime.length === 0 || !hasValid(tsQSim)) return;
+
+  const hasRain  = hasValid(tsRain);
+  const hasHydro = hasValid(tsQSim) || hasValid(tsQObs) || hasValid(tsSM);
+
+  // ----- GAP BETWEEN PANELS -----
+  const PANEL_GAP = 0.08;      // ✅ suggested value
+  const BOT_HEIGHT = 0.60;     // discharge panel height fraction
+
+  const dischargeDomain = (hasRain && hasHydro)
+    ? [0.0, BOT_HEIGHT - PANEL_GAP / 2]
+    : [0.0, 1.0];
+
+  const rainDomain = (hasRain && hasHydro)
+    ? [BOT_HEIGHT + PANEL_GAP / 2, 1.0]
+    : [0.0, 1.0];
+
+  const traces = [];
+
+  // Rain (top) uses x2 to unify hover with discharge
+  if (hasRain) {
+    traces.push({
+      x: tsTime,
+      y: tsRain,
+      name: 'Rainfall',
+      type: 'bar',
+      opacity: 0.6,
+      marker: { color: 'rgba(0, 180, 255, 0.75)' },
+      hovertemplate: '%{x}<br>Rain=%{y:.2f} mm/h<extra></extra>',
+      xaxis: 'x2',
+      yaxis: 'y'
+    });
+  }
+
+  // Discharge (bottom)
+  traces.push({
+    x: tsTime,
+    y: tsQSim,
+    name: 'Simulated discharge',
+    mode: 'lines',
+    line: { width: 2, color: 'rgba(0, 120, 230, 1)' },
+    hovertemplate: '%{x}<br>Discharge_sim=%{y:.2f} m³/s<extra></extra>',
+    xaxis: 'x2',
+    yaxis: 'y2'
+  });
+
+  if (hasValid(tsQObs)) {
+    traces.push({
+      x: tsTime,
+      y: tsQObs,
+      name: 'Observed discharge',
+      mode: 'lines+markers',
+      line: { width: 1.5, color: 'rgba(0,0,0,0.9)', dash: 'dot' },
+      marker: { size: 5 },
+      hovertemplate: '%{x}<br>Discharge_obs=%{y:.2f} m³/s<extra></extra>',
+      xaxis: 'x2',
+      yaxis: 'y2'
+    });
+  }
+
+  // Soil moisture (right axis overlay)
+  if (hasValid(tsSM)) {
+    traces.push({
+      x: tsTime,
+      y: tsSM,
+      name: 'Soil moisture',
+      mode: 'lines',
+      line: { width: 1.5, color: 'rgba(0,150,0,0.85)' },
+      hovertemplate: '%{x}<br>SM=%{y:.3f}<extra></extra>',
+      xaxis: 'x2',
+      yaxis: 'y3'
+    });
+  }
+
+  const layout = {
+    margin: { t: 35, r: 80, b: 70, l: 60 },
+    legend: { orientation: 'h', x: 0, y: 1.23 },
+    hovermode: 'x unified',
+    paper_bgcolor: '#ffffff',
+    plot_bgcolor: '#ffffff',
+    shapes: [],
+
+    // TOP X axis: no ticks, no title, no grid (avoid double vertical grid)
+    xaxis: {
+      type: 'date',
+      anchor: 'y',
+      domain: [0, 1],
+      showticklabels: false,
+      title: '',
+      showline: false,
+      mirror: false,
+      showgrid: false
+    },
+
+    yaxis: {
+      title: 'Rain [mm/h]',
+      domain: rainDomain,
+      zeroline: false,
+      showline: false,
+      mirror: false,
+      showgrid: true,
+      gridcolor: '#e0e0e0',
+      gridwidth: 1,
+      tickmode: 'linear',
+      rangemode: 'tozero',
+      tick0: 0,
+      dtick: 10
+    },
+
+    // BOTTOM X axis: this is the only axis showing "Time"
+    xaxis2: {
+      type: 'date',
+      anchor: 'y2',
+      domain: [0, 1],
+      matches: 'x',
+      title: 'Time',
+      showline: false,
+      mirror: false,
+      showgrid: true,
+      gridcolor: '#e0e0e0',
+      gridwidth: 1
+    },
+
+    yaxis2: {
+      title: 'Discharge [m³/s]',
+      domain: dischargeDomain,
+      zeroline: false,
+      showline: false,
+      mirror: false,
+      showgrid: true,
+      gridcolor: '#e0e0e0',
+      gridwidth: 1,
+      tickmode: 'linear',
+      rangemode: 'tozero',
+      tick0: 0,
+      dtick: 25
+    },
+
+    yaxis3: {
+      title: 'Soil moisture',
+      overlaying: 'y2',
+      side: 'right',
+      zeroline: false,
+      showline: false,
+      mirror: false,
+      showgrid: false
+    }
+  };
+
+  // Force identical x-range for all charts
+  if (forcedXRange && forcedXRange.length === 2) {
+    layout.xaxis.range  = forcedXRange;
+    layout.xaxis2.range = forcedXRange;
+  }
+
+  // Rain range
+  if (hasRain) {
+    const maxRain = maxValid(tsRain);
+    layout.yaxis.range = (maxRain !== null) ? [0, Math.max(50, maxRain * 1.05)] : [0, 50];
+  }
+
+  // Discharge range: ALWAYS start at 0
+  const maxQSim = maxValid(tsQSim) || 0;
+  const maxQObs = maxValid(tsQObs) || 0;
+  const maxQ = Math.max(maxQSim, maxQObs);
+  const topQ = (maxQ > 0) ? Math.max(150, maxQ * 1.05) : 150;
+  layout.yaxis2.range = [0, topQ];
+
+  // ----- Correct SM sync for overlay axis -----
+  if (hasValid(tsSM)) {
+    const y2Min = layout.yaxis2.range[0];
+    const y2Max = layout.yaxis2.range[1];
+    const span = y2Max - y2Min;
+
+    for (let i = 0; i < traces.length; i++) {
+      if (traces[i].name === 'Soil moisture') {
+        const yOrig = traces[i].y;
+        traces[i].customdata = yOrig;
+        traces[i].y = yOrig.map(v => (v === null || v === undefined) ? null : (y2Min + v * span));
+        traces[i].hovertemplate = '%{x}<br>SM=%{customdata:.3f}<extra></extra>';
+      }
+    }
+
+    layout.yaxis3.range = [y2Min, y2Max];
+    const smTicks = [0, 0.2, 0.4, 0.6, 0.8, 1.0];
+    layout.yaxis3.tickmode = 'array';
+    layout.yaxis3.tickvals = smTicks.map(s => y2Min + s * span);
+    layout.yaxis3.ticktext = smTicks.map(s => s.toFixed(1));
+  }
+
+  // Thresholds (same dash)
+  if (thrAlert !== null && thrAlert !== undefined) {
+    layout.shapes.push({
+      type: 'line',
+      xref: 'x2',
+      yref: 'y2',
+      x0: tsTime[0],
+      x1: tsTime[tsTime.length - 1],
+      y0: thrAlert,
+      y1: thrAlert,
+      line: { color: 'rgba(255,165,0,0.9)', width: 1.5, dash: 'dash' }
+    });
+  }
+  if (thrAlarm !== null && thrAlarm !== undefined) {
+    layout.shapes.push({
+      type: 'line',
+      xref: 'x2',
+      yref: 'y2',
+      x0: tsTime[0],
+      x1: tsTime[tsTime.length - 1],
+      y0: thrAlarm,
+      y1: thrAlarm,
+      line: { color: 'rgba(255,0,0,0.9)', width: 1.5, dash: 'dash' }
+    });
+  }
+
+  // Vertical time_now line
+  if (timeNow) {
+    const tnIso = normalizeTimestamp(String(timeNow));
+    const tnDate = new Date(tnIso);
+    if (isFinite(tnDate.getTime())) {
+      layout.shapes.push({
+        type: 'line',
+        xref: 'x2',
+        yref: 'paper',
+        x0: tnDate,
+        x1: tnDate,
+        y0: 0,
+        y1: 1,
+        line: { color: 'rgba(200,0,0,0.85)', width: 1.5, dash: 'dash' }
+      });
+    }
+  }
+
+  // Panel borders (slightly darker than grid)
+  const GRID_BORDER = { color: '#cfcfcf', width: 1 };
+
+  const x0b = (layout.xaxis2 && layout.xaxis2.range) ? layout.xaxis2.range[0] : tsTime[0];
+  const x1b = (layout.xaxis2 && layout.xaxis2.range) ? layout.xaxis2.range[1] : tsTime[tsTime.length - 1];
+
+  if (hasRain && layout.yaxis && layout.yaxis.range) {
+    layout.shapes.push({
+      type: 'rect',
+      xref: 'x2',
+      yref: 'y',
+      x0: x0b,
+      x1: x1b,
+      y0: layout.yaxis.range[0],
+      y1: layout.yaxis.range[1],
+      line: GRID_BORDER,
+      fillcolor: 'rgba(0,0,0,0)',
+      layer: 'below'
+    });
+  }
+
+  layout.shapes.push({
+    type: 'rect',
+    xref: 'x2',
+    yref: 'y2',
+    x0: x0b,
+    x1: x1b,
+    y0: layout.yaxis2.range[0],
+    y1: layout.yaxis2.range[1],
+    line: GRID_BORDER,
+    fillcolor: 'rgba(0,0,0,0)',
+    layer: 'below'
+  });
+
+  Plotly.newPlot(targetId, traces, layout, {
+    responsive: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['select2d', 'lasso2d']
+  });
+}
+
+
+
+
+  // --- MAIN ---
+  if (selectedSection === 'all_sections') {
+
+    const globalGrid = buildGlobalTimeGrid(chartsData);
+    const globalXRange = (globalGrid.length >= 2)
+      ? [new Date(globalGrid[0]), new Date(globalGrid[globalGrid.length - 1])]
+      : null;
+
+    Object.keys(chartsData || {}).forEach(secName => {
+      const cd = chartsData[secName];
+      if (!cd) return;
+
+      const targetId = 'ts-chart-' + secName.replace(/\s+/g, '_').replace(/\./g, '_');
+      const series = prepareSeriesAligned(cd, globalGrid);
+
+      drawChart(targetId, series, undefined, undefined, globalXRange);
+    });
+
+  } else {
+
+    if (chartsData && chartsData[selectedSection]) {
+      const cd = chartsData[selectedSection];
+      const series = prepareSeries(cd);
+      drawChart('ts-chart-single', series);
+
+    } else if (Array.isArray(tsTimeSingle) && tsTimeSingle.length > 0 && hasValid(tsQSimSingle)) {
+
+      const times = tsTimeSingle.map(t => new Date(normalizeTimestamp(String(t))));
+      const series = {
+        times: times,
+        qSim: tsQSimSingle,
+        qObs: tsQObsSingle,
+        rain: tsRainSingle,
+        sm:   tsSMSingle,
+        thrAlert: thrAlertSingle,
+        thrAlarm: thrAlarmSingle,
+        timeNow: timeNowSingle
+      };
+      drawChart('ts-chart-single', series, thrAlertSingle, thrAlarmSingle);
+    }
+  }
+</script>
+{% endblock %}
+

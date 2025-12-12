@@ -1,0 +1,607 @@
+{% extends "base.html" %}
+
+{% block title %}Continuum Dashboard — Home{% endblock %}
+
+{% block head_extra %}
+  <!-- OpenLayers CSS & JS -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/ol@latest/ol.css">
+  <script src="https://cdn.jsdelivr.net/npm/ol@latest/dist/ol.js"></script>
+
+  <style>
+    #home-map {
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      border: 1px solid #dde3e8;
+    }
+
+    .basin-card--selected {
+      box-shadow: 0 0 0 2px var(--cima-accent, #006c2e) inset;
+      border-color: var(--cima-accent, #006c2e);
+    }
+
+    .home-hero-header {
+      position: relative;
+      overflow: hidden;
+      border-radius: 8px;
+      max-height: 220px;
+    }
+
+    .home-hero-header img {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .home-hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to right, rgba(0, 59, 77, 0.85), rgba(0, 59, 77, 0.1));
+      display: flex;
+      align-items: center;
+      padding: 1.2rem;
+      color: #ffffff;
+    }
+
+    .home-hero-title {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .home-hero-subtitle {
+      font-size: 0.9rem;
+      max-width: 40rem;
+      opacity: 0.9;
+    }
+
+    .map-tooltip {
+      background: rgba(0, 59, 77, 0.9);
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .ts-run-current {
+      color: #006c2e;
+      font-weight: 700;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+
+<!-- HEADER with smaller picture -->
+<div class="box home-hero-header mb-5">
+  <figure class="image">
+    <img src="{{ url_for('static', filename='img/app_home_header.png') }}"
+         alt="Continuum Dashboard overview">
+  </figure>
+  <div class="home-hero-overlay">
+    <div>
+      <div class="home-hero-title">Continuum Hydrological Dashboard</div>
+      <div class="home-hero-subtitle">
+        Real-time and forecasted discharge from the CONTINUUM model, powered by CIMA Research Foundation.
+        Select a run configuration, basin and model run, then explore time-series and network sections.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GLOBAL SELECTION PANEL: run config + basin + SECTIONS + run datetime -->
+<div class="box mb-5">
+  <h3 class="title is-5">Global selection</h3>
+
+  <p class="is-size-7 has-text-grey-dark mb-2">
+    These settings define the current context for the dashboard.
+    They are used as defaults when you open the Time-series Table or Chart views.
+  </p>
+
+  <div class="columns">
+    <div class="column is-6">
+      <div class="field">
+        <label class="label">TimeSeries Run Configuration</label>
+        <div class="control">
+          <form method="get" action="{{ url_for('home') }}">
+            <div class="select">
+              <select name="run_cfg" onchange="this.form.submit()">
+                {% for key, cfg in run_configs.items() %}
+                  {% set label = cfg.name if cfg.name is defined else key %}
+                  <option value="{{ key }}"
+                    {% if key == selected_run_cfg_key %}selected{% endif %}>
+                    {{ label }}{% if key == active_run_key %} (default){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <input type="hidden" name="basin" value="{{ selected_basin }}">
+            {% if available_runs %}
+              <input type="hidden" name="run" value="{{ selected_run_iso }}">
+            {% endif %}
+            <input type="hidden" name="section" value="all_sections">
+          </form>
+        </div>
+
+        <p class="is-size-7 has-text-grey-dark mt-1">
+          Current time-series run configuration:
+          {% if selected_run_cfg_key %}
+            {% set cfg = run_configs[selected_run_cfg_key] %}
+            <span class="ts-run-current">
+              {{ cfg.name if cfg.name is defined else selected_run_cfg_key }}
+            </span>
+            <span class="has-text-grey-dark"> ({{ selected_run_cfg_key }})</span>
+          {% else %}
+            <span class="has-text-grey-dark">none selected</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <div class="column is-6">
+      <form method="get" action="{{ url_for('home') }}">
+        <div class="field is-horizontal">
+          <div class="field-body">
+
+            <input type="hidden" name="run_cfg" value="{{ selected_run_cfg_key }}">
+            <input type="hidden" name="section" value="all_sections">
+
+            <div class="field">
+              <label class="label">Basin</label>
+              <div class="control">
+                <div class="select">
+                  <select name="basin" onchange="this.form.submit()">
+                    {% for b in basins %}
+                      <option value="{{ b }}" {% if b == selected_basin %}selected{% endif %}>
+                        {{ b }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <p class="is-size-7 has-text-grey-dark">
+                Default basin for runs, sections and time-series.
+              </p>
+            </div>
+
+            <div class="field">
+              <label class="label">Run datetime</label>
+              <div class="control">
+                {% if available_runs %}
+                  <div class="select">
+                    <select name="run" onchange="this.form.submit()">
+                      {% for r in available_runs %}
+                        {% set value = r.strftime('%Y-%m-%dT%H:%M') %}
+                        <option value="{{ value }}"
+                          {% if value == selected_run_iso %}selected{% endif %}>
+                          {{ r.strftime('%Y-%m-%d %H:00') }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <p class="is-size-7 has-text-grey-dark">
+                    Last {{ available_runs|length }} run(s) found for this basin.
+                    Default is the most recent.
+                  </p>
+                {% else %}
+                  <input class="input" type="text" value="No runs found" disabled>
+                  <p class="is-size-7 has-text-grey-dark">
+                    No dynamic data found in the history window.
+                  </p>
+                {% endif %}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT: basin cards + sections map -->
+<div class="columns">
+  <!-- LEFT: basins cards -->
+  <div class="column is-4">
+    <div class="box" style="max-height: 70vh; overflow-y: auto;">
+      <h3 class="title is-5">Basins</h3>
+      <p class="is-size-7 has-text-grey-dark mb-3">
+        Click a basin card to show only its sections on the map.
+        Click again to close and restore all basins.
+      </p>
+
+      {% for card in basin_cards %}
+        <article class="message is-info basin-card"
+                 data-basin-card="{{ card.name }}">
+          <div class="message-header" style="cursor: pointer;"
+               onclick="toggleBasinDetails('{{ card.name }}')">
+            <p>{{ card.name }}</p>
+            <button class="button is-small is-white">
+              <span class="icon is-small">&#9662;</span>
+            </button>
+          </div>
+          <div class="message-body" id="basin-details-{{ card.name }}" style="display:none;">
+            {% if card.latest_date %}
+              <p>
+                <strong>Latest run datetime:</strong>
+                {{ card.latest_date.strftime('%Y-%m-%d %H:00') }}<br>
+                <strong>Latest time_now (run string):</strong>
+                {{ card.latest_time_now or 'n/a' }}
+              </p>
+            {% else %}
+              <p>No runs found in the last {{ history_days }} days.</p>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- RIGHT: map of all sections -->
+  <div class="column is-8">
+    <div class="box" style="height: 70vh; display: flex; flex-direction: column;">
+      <h3 class="title is-5">Network sections map</h3>
+      <p class="is-size-7 has-text-grey-dark">
+        Click a section to:
+        <ul class="is-size-7 has-text-grey-dark ml-4">
+          <li>show only sections of its basin on the map,</li>
+          <li>activate the corresponding basin card on the left,</li>
+          <li>store the basin + section as defaults for Time-series Table and Chart views.</li>
+        </ul>
+      </p>
+      <div style="flex:1 1 auto;">
+        <div id="home-map"></div>
+      </div>
+
+      <!-- Separate lines for layers & background -->
+      <p class="is-size-7 has-text-grey-dark mt-2">
+        <strong>Layers:</strong>
+        <label class="checkbox ml-2">
+          <input type="checkbox" id="home-toggle-dem">
+          DEM
+        </label>
+        <label class="checkbox ml-2">
+          <input type="checkbox" id="home-toggle-rivers" checked>
+          River network
+        </label>
+      </p>
+      <p class="is-size-7 has-text-grey-dark mt-1">
+        <strong>Background:</strong> OpenStreetMap. Hover a point to see section info.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Initial selected basin from server
+  let selectedBasinName = {{ selected_basin | tojson }};
+  let selectedSectionId = null;  // for highlighting selected section
+
+  function toggleBasinDetails(name) {
+    const el = document.getElementById('basin-details-' + name);
+    if (!el) return;
+    el.style.display = (el.style.display === 'none' || el.style.display === '')
+      ? 'block'
+      : 'none';
+  }
+
+  function highlightBasinCard(basin) {
+    const cards = document.querySelectorAll('.basin-card');
+    cards.forEach(card => {
+      const cardBasin = card.dataset.basinCard;
+      const details = card.querySelector('.message-body');
+      if (cardBasin === basin) {
+        card.classList.add('basin-card--selected');
+        if (details && (details.style.display === 'none' || details.style.display === '')) {
+          details.style.display = 'block';
+        }
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        card.classList.remove('basin-card--selected');
+      }
+    });
+  }
+
+  // --- DEM metadata / layer ---
+  const demMeta = {{ dem_meta | tojson }};
+  let demExtent = null;
+  let demLayer = null;
+
+  if (demMeta) {
+    const x0 = demMeta.xllcorner;
+    const y0 = demMeta.yllcorner;
+    const cs = demMeta.cellsize;
+    const ncols = demMeta.ncols;
+    const nrows = demMeta.nrows;
+    const xmax = x0 + cs * ncols;
+    const ymax = y0 + cs * nrows;
+    demExtent = [x0, y0, xmax, ymax];
+
+    demLayer = new ol.layer.Image({
+      visible: false,   // OFF by default on Home
+      source: new ol.source.ImageStatic({
+        url: "{{ url_for('maps_dem_png') }}",
+        imageExtent: demExtent,
+        projection: 'EPSG:4326'
+      }),
+      opacity: 0.7
+    });
+  } else {
+    console.warn("DEM metadata not available on Home view");
+  }
+
+  // --- River network ---
+  const riversSource = new ol.source.Vector({
+    url: "{{ url_for('maps_rivers_geojson') }}",
+    format: new ol.format.GeoJSON()
+  });
+
+  const riversLayer = new ol.layer.Vector({
+    visible: true,
+    source: riversSource,
+    style: new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 1.5,
+        fill: new ol.style.Fill({ color: 'rgba(0, 112, 255, 0.8)' }),
+        stroke: new ol.style.Stroke({ color: 'rgba(0, 70, 180, 1)', width: 0.5 })
+      })
+    })
+  });
+
+  // --- Sections data (all basins) ---
+  const allSections = {{ SECTIONS_ALL | tojson }};
+
+  const sectionFeatures = [];
+  let secMinLon =  999;
+  let secMinLat =  999;
+  let secMaxLon = -999;
+  let secMaxLat = -999;
+
+  allSections.forEach(sec => {
+    if (sec.lon == null || sec.lat == null) return;
+
+    secMinLon = Math.min(secMinLon, sec.lon);
+    secMaxLon = Math.max(secMaxLon, sec.lon);
+    secMinLat = Math.min(secMinLat, sec.lat);
+    secMaxLat = Math.max(secMaxLat, sec.lat);
+
+    const f = new ol.Feature({
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([sec.lon, sec.lat])),
+      sectionId: sec.id,
+      basin: sec.basin,
+      name: sec.name
+    });
+    sectionFeatures.push(f);
+  });
+
+  const sectionsSource = new ol.source.Vector({ features: sectionFeatures });
+  const allSectionFeatures = sectionFeatures.slice();
+
+  // Styles:
+  // normal (same as geo section viewer: orange triangle)
+  const normalSectionStyle = new ol.style.Style({
+    image: new ol.style.RegularShape({
+      points: 3,
+      radius: 9,
+      fill: new ol.style.Fill({ color: 'rgba(243, 146, 0, 0.95)' }),
+      stroke: new ol.style.Stroke({ color: 'rgba(128, 70, 0, 1)', width: 1.5 }),
+      rotation: Math.PI
+    })
+  });
+
+  // selected (yellow / black, slightly larger)
+  const selectedSectionStyle = new ol.style.Style({
+    image: new ol.style.RegularShape({
+      points: 3,
+      radius: 11,
+      fill: new ol.style.Fill({ color: 'rgba(255, 215, 0, 0.95)' }),
+      stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 1)', width: 2 }),
+      rotation: Math.PI
+    })
+  });
+
+  const sectionsLayer = new ol.layer.Vector({
+    source: sectionsSource,
+    style: function(feature) {
+      const sid = feature.get('sectionId');
+      if (selectedSectionId && sid === selectedSectionId) {
+        return selectedSectionStyle;
+      }
+      return normalSectionStyle;
+    }
+  });
+
+  // Filter sections by basin (null → all basins)
+  function filterSectionsByBasin(basin) {
+    sectionsSource.clear();
+    if (!basin) {
+      sectionsSource.addFeatures(allSectionFeatures);
+    } else {
+      const subset = allSectionFeatures.filter(f => f.get('basin') === basin);
+      sectionsSource.addFeatures(subset);
+    }
+  }
+
+  // Base OSM layer
+  const osmLayer = new ol.layer.Tile({
+    source: new ol.source.OSM()
+  });
+
+  const mapLayers = [osmLayer];
+  if (demLayer) mapLayers.push(demLayer);
+  mapLayers.push(riversLayer);
+  mapLayers.push(sectionsLayer);
+
+  const map = new ol.Map({
+    target: 'home-map',
+    layers: mapLayers,
+    view: new ol.View({
+      center: ol.proj.fromLonLat([12.5, 43.5]),
+      zoom: 8
+    })
+  });
+
+  // --- Fit view to full domain (DEM if available, otherwise sections extent) ---
+  map.once('postrender', () => {
+    const view = map.getView();
+    const proj = view.getProjection();
+
+    if (demExtent) {
+      const demProjExtent = ol.proj.transformExtent(demExtent, 'EPSG:4326', proj);
+      view.fit(demProjExtent, { padding: [20, 20, 20, 20], maxZoom: 12 });
+    } else if (secMinLon < secMaxLon && secMinLat < secMaxLat) {
+      const secExtent = ol.proj.transformExtent(
+        [secMinLon, secMinLat, secMaxLon, secMaxLat],
+        'EPSG:4326',
+        proj
+      );
+      view.fit(secExtent, { padding: [20, 20, 20, 20], maxZoom: 12 });
+    }
+  });
+
+  // DEM / river toggles
+  const homeToggleDem = document.getElementById('home-toggle-dem');
+  const homeToggleRivers = document.getElementById('home-toggle-rivers');
+
+  if (homeToggleDem && demLayer) {
+    homeToggleDem.addEventListener('change', (e) => {
+      demLayer.setVisible(e.target.checked);
+    });
+  }
+  if (homeToggleRivers) {
+    homeToggleRivers.addEventListener('change', (e) => {
+      riversLayer.setVisible(e.target.checked);
+    });
+  }
+
+  // Tooltip overlay for sections
+  const tooltipEl = document.createElement('div');
+  tooltipEl.className = 'map-tooltip';
+  tooltipEl.style.display = 'none';
+  const tooltipOverlay = new ol.Overlay({
+    element: tooltipEl,
+    offset: [10, 0],
+    positioning: 'bottom-left'
+  });
+  map.addOverlay(tooltipOverlay);
+
+  function showTooltip(feature, coordinate) {
+    const name = feature.get('name');
+    const basin = feature.get('basin');
+    tooltipEl.innerHTML = `<strong>${name}</strong><br>Basin: ${basin}`;
+    tooltipEl.style.display = 'block';
+    tooltipOverlay.setPosition(coordinate);
+  }
+
+  function hideTooltip() {
+    tooltipEl.style.display = 'none';
+  }
+
+  map.on('pointermove', evt => {
+    if (evt.dragging) {
+      hideTooltip();
+      return;
+    }
+    const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+    if (feature) {
+      showTooltip(feature, evt.coordinate);
+    } else {
+      hideTooltip();
+    }
+  });
+
+  // Click on a section → filter to its basin + highlight card + store defaults
+  function selectFeature(feature) {
+    const basin = feature.get('basin');
+    const sectionId = feature.get('sectionId');
+
+    if (!basin) return;
+
+    selectedBasinName = basin;
+    selectedSectionId = sectionId;
+
+    // Filter map to show only this basin's sections
+    filterSectionsByBasin(basin);
+
+    // Redraw section styles
+    sectionsLayer.changed();
+
+    // Highlight card
+    highlightBasinCard(basin);
+
+    // Store defaults for other views
+    const state = {
+      run_cfg: "{{ selected_run_cfg_key }}",
+      basin: basin,
+      section: sectionId,
+      run: "{{ selected_run_iso }}"
+    };
+    try {
+      localStorage.setItem('cima_dashboard_state', JSON.stringify(state));
+    } catch (e) {
+      console.warn('Unable to store state in localStorage', e);
+    }
+
+    // Update URL
+    const url = new URL(window.location.href);
+    url.searchParams.set('basin', basin);
+    if (sectionId) {
+      url.searchParams.set('section', sectionId);
+    } else {
+      url.searchParams.delete('section');
+    }
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  map.on('singleclick', evt => {
+    const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+    if (!feature) return;
+    selectFeature(feature);
+  });
+
+  // Make whole basin card clickable & toggling
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.basin-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return; // ignore header button itself
+
+        const basin = card.dataset.basinCard;
+        const details = card.querySelector('.message-body');
+        const isSelected = card.classList.contains('basin-card--selected');
+
+        if (isSelected) {
+          // Click again → close card and restore all basins/sections styles
+          card.classList.remove('basin-card--selected');
+          if (details) details.style.display = 'none';
+          selectedBasinName = null;
+          selectedSectionId = null;
+          filterSectionsByBasin(null);
+          sectionsLayer.changed();
+        } else {
+          // Select this basin
+          highlightBasinCard(basin);
+          if (details) details.style.display = 'block';
+          selectedBasinName = basin;
+          selectedSectionId = null;  // no specific section selected
+          filterSectionsByBasin(basin);
+          sectionsLayer.changed();
+        }
+      });
+    });
+
+    // On load: highlight & filter to selected basin (from server)
+    if (selectedBasinName) {
+      highlightBasinCard(selectedBasinName);
+      filterSectionsByBasin(selectedBasinName);
+    }
+  });
+</script>
+{% endblock %}
+

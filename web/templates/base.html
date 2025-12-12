@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}Time-series Viewer{% endblock %}</title>
+
+  <!-- Bulma CSS -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bulma@1.0.0/css/bulma.min.css">
+
+  <style>
+    :root {
+      --cima-primary: #00a7b5;
+      --cima-primary-dark: #007582;
+      --cima-accent: #f39200;
+      --cima-dark: #003b4d;
+      --cima-grey-bg: #f5f7f8;
+      --cima-text: #222831;
+    }
+
+    body {
+      padding-top: 3.25rem;
+      background-color: var(--cima-grey-bg);
+      color: var(--cima-text);
+    }
+
+    .navbar.is-primary {
+      background-color: var(--cima-dark);
+    }
+
+    /* Menu background same as navbar */
+    .navbar-menu {
+      background-color: var(--cima-dark);
+    }
+
+    .navbar-item,
+    .navbar-link {
+      color: #ffffff !important;
+    }
+
+    .navbar-item:hover,
+    .navbar-link:hover {
+      background-color: rgba(255, 255, 255, 0.06) !important;
+      color: #ffffff !important;
+    }
+
+    .navbar-item.is-active {
+      background-color: rgba(0, 167, 181, 0.25) !important;
+    }
+
+    /* Titles: darker, more solid gray */
+    .title,
+    .title.is-4,
+    .title.is-5 {
+      color: #2e343a;
+    }
+    
+    /* Make all Bulma labels dark and readable */
+    label.label {
+	  color: #363636 !important; /* Bulma default dark grey */
+    }
+
+    /* Selects (Basin, Run, etc.) styled like navbar */
+    .select select {
+      background-color: var(--cima-dark);
+      border-color: var(--cima-dark);
+      color: #ffffff;
+    }
+    .select select:focus {
+      border-color: var(--cima-primary);
+      box-shadow: 0 0 0 0.125em rgba(0, 167, 181, 0.25);
+    }
+
+    /* So placeholder-like values are still readable */
+    .select:not(.is-multiple):not(.is-loading)::after {
+      border-color: #ffffff;
+    }
+
+    .box {
+      border-radius: 8px;
+      border: 1px solid #dde3e8;
+      background: #ffffff;
+    }
+
+    .button.is-primary {
+      background-color: var(--cima-primary);
+      border-color: var(--cima-primary);
+      color: #fff;
+    }
+    .button.is-primary:hover {
+      background-color: var(--cima-primary-dark);
+      border-color: var(--cima-primary-dark);
+    }
+
+    .button.is-link {
+      background-color: var(--cima-dark);
+      border-color: var(--cima-dark);
+      color: #fff;
+    }
+    .button.is-link:hover {
+      background-color: var(--cima-primary-dark);
+      border-color: var(--cima-primary-dark);
+    }
+    
+    /* Standard logo size */
+	.brand-logo {
+	  height: 42px;
+	  width: auto;
+	  object-fit: contain;
+	  display: block;
+	}
+
+	/* Clickable logos get hover effects */
+	.logo-link {
+	  padding: 4px 8px !important;     /* consistent spacing */
+	  display: flex;
+	  align-items: center;              /* vertical alignment */
+	  transition: transform 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.logo-link:hover {
+	  transform: scale(1.08);           /* gentle grow on hover */
+	  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+	  border-radius: 6px;               /* smooth highlight */
+	  background: rgba(0,0,0,0.03);
+	}
+
+	/* If you want slightly rounder logos, uncomment this:
+	.brand-logo {
+		border-radius: 4px;
+	}
+	*/
+
+    .footer {
+      background-color: var(--cima-dark);
+      color: #ffffff;
+      margin-top: 2rem;
+    }
+    .footer a {
+      color: #ffffff;
+    }
+  </style>
+
+  {% block head_extra %}{% endblock %}
+</head>
+
+<body>
+<nav class="navbar is-primary is-fixed-top" role="navigation" aria-label="main navigation">
+
+	<div class="navbar-brand">
+
+	  <!-- CIMA Foundation logo -->
+	  <a class="navbar-item logo-link"
+		 href="https://www.cimafoundation.org/"
+		 target="_blank"
+		 rel="noopener"
+		 title="CIMA Foundation — www.cimafoundation.org">
+		<img src="{{ url_for('static', filename='img/app_logo_fcima.png') }}"
+		     alt="CIMA Foundation"
+		     class="brand-logo">
+	  </a>
+
+	  <!-- Continuum Framework logo -->
+	  <a class="navbar-item logo-link"
+		 href="https://c-hydro.github.io/"
+		 target="_blank"
+		 rel="noopener"
+		 title="Continuum Hydrological Framework — c-hydro.github.io">
+		<img src="{{ url_for('static', filename='img/app_logo_continuum.jpg') }}"
+		     alt="Continuum Framework"
+		     class="brand-logo">
+	  </a>
+
+	  <!-- Mobile burger -->
+	  <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false"
+		 data-target="mainNavbar">
+		<span aria-hidden="true"></span>
+		<span aria-hidden="true"></span>
+		<span aria-hidden="true"></span>
+	  </a>
+
+	</div>
+
+  <div id="mainNavbar" class="navbar-menu">
+	<div class="navbar-start">
+	  <a class="navbar-item" href="{{ url_for('home') }}">Home</a>
+
+	  <div class="navbar-item has-dropdown is-hoverable">
+		<a class="navbar-link">GeoInfo</a>
+		<div class="navbar-dropdown">
+		  <a class="navbar-item" id="nav-sections" href="{{ url_for('sections_view') }}">
+		    Sections
+		  </a>
+		  <a class="navbar-item" id="nav-geo-maps" href="{{ url_for('geo_maps_view') }}">
+		    Geo Maps (static)
+		  </a>
+		</div>
+	  </div>
+
+	  <!-- New Dynamic Maps page -->
+	  <a class="navbar-item" id="nav-maps" href="{{ url_for('maps_view') }}">Maps</a>
+
+
+	  <div class="navbar-item has-dropdown is-hoverable">
+		<a class="navbar-link">Time-Series</a>
+		<div class="navbar-dropdown">
+		  <div class="navbar-item has-text-weight-semibold">Deterministic</div>
+		  <a class="navbar-item" id="nav-ts-det-table" href="{{ url_for('ts_det_table_view') }}">
+		    Table
+		  </a>
+		  <a class="navbar-item" id="nav-ts-det-chart" href="{{ url_for('ts_det_chart_view') }}">
+		    Chart
+		  </a>
+
+		  {#
+		  Future extension (enable when implemented):
+		  <hr class="navbar-divider">
+		  <div class="navbar-item has-text-weight-semibold">Probabilistic</div>
+		  <a class="navbar-item" id="nav-ts-prob-table" href="{{ url_for('ts_prob_table_view') }}">Table</a>
+		  <a class="navbar-item" id="nav-ts-prob-chart" href="{{ url_for('ts_prob_chart_view') }}">Chart</a>
+		  #}
+		</div>
+	  </div>
+	</div>
+</nav>
+
+<section class="section">
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</section>
+
+<script>
+  // Scroll memory
+  window.addEventListener("beforeunload", function () {
+    localStorage.setItem("scrollPosition", window.scrollY);
+  });
+
+  window.addEventListener("load", function () {
+    const pos = localStorage.getItem("scrollPosition");
+    if (pos !== null) {
+      window.scrollTo(0, parseInt(pos));
+    }
+  });
+
+  // Shared state keys
+  const LS_RUN_CFG  = 'continuum_run_cfg';
+  const LS_BASIN    = 'continuum_basin';
+  const LS_RUN      = 'continuum_run';
+  const LS_SECTION  = 'continuum_section';
+
+  function storeStateFromParams() {
+    const url = new URL(window.location.href);
+    const p = url.searchParams;
+
+    const runCfg = p.get('run_cfg');
+    const basin  = p.get('basin');
+    const run    = p.get('run');
+    const section= p.get('section');
+
+    if (runCfg) localStorage.setItem(LS_RUN_CFG, runCfg);
+    if (basin)  localStorage.setItem(LS_BASIN, basin);
+    if (run)    localStorage.setItem(LS_RUN, run);
+    if (section)localStorage.setItem(LS_SECTION, section);
+  }
+
+  function attachStateListeners() {
+    document.querySelectorAll('select[name="run_cfg"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        localStorage.setItem(LS_RUN_CFG, sel.value);
+      });
+    });
+
+    document.querySelectorAll('select[name="basin"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        localStorage.setItem(LS_BASIN, sel.value);
+      });
+    });
+
+    document.querySelectorAll('select[name="run"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        localStorage.setItem(LS_RUN, sel.value);
+      });
+    });
+
+    document.querySelectorAll('select[name="section"]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        localStorage.setItem(LS_SECTION, sel.value);
+      });
+    });
+  }
+
+  function withAllState(url) {
+    const storedRunCfg = localStorage.getItem(LS_RUN_CFG);
+    const storedBasin  = localStorage.getItem(LS_BASIN);
+    const storedRun    = localStorage.getItem(LS_RUN);
+    const storedSection= localStorage.getItem(LS_SECTION);
+
+    const u = new URL(url, window.location.origin);
+    if (storedRunCfg) u.searchParams.set('run_cfg', storedRunCfg);
+    if (storedBasin)  u.searchParams.set('basin', storedBasin);
+    if (storedRun)    u.searchParams.set('run', storedRun);
+    if (storedSection)u.searchParams.set('section', storedSection);
+    return u.toString();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    storeStateFromParams();
+    attachStateListeners();
+
+    // Mobile burger
+    const burger = document.querySelector('.navbar-burger');
+    const menu = burger ? document.getElementById(burger.dataset.target) : null;
+    if (burger && menu) {
+      burger.addEventListener('click', () => {
+        burger.classList.toggle('is-active');
+        menu.classList.toggle('is-active');
+      });
+    }
+
+    // Navbar links: preserve shared querystring state across views
+    const linkIds = [
+      'nav-sections',
+      'nav-geo-maps',
+      'nav-maps',
+      'nav-ts-det-table',
+      'nav-ts-det-chart',
+      'nav-ts-prob-table',
+      'nav-ts-prob-chart',
+      // Future:
+      // 'nav-ts-prob-table',
+      // 'nav-ts-prob-chart',
+    ];
+
+    // Home: there are 2 possible anchors ("/" and "/home")
+    document.querySelectorAll('a.navbar-item[href$="/home"], a.navbar-item[href="/"]')
+      .forEach(a => {
+        a.addEventListener('click', evt => {
+          evt.preventDefault();
+          window.location.href = withAllState(a.href);
+        });
+      });
+
+    linkIds.forEach(id => {
+      const a = document.getElementById(id);
+      if (!a) return;
+      a.addEventListener('click', evt => {
+        evt.preventDefault();
+        window.location.href = withAllState(a.href);
+      });
+    });
+  });
+	  
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+
+<footer class="footer">
+  <div class="content has-text-centered">
+    <p>
+      <strong>Hydrological Model CONTINUUM - Dashboard</strong> — Powered by CIMA Research Foundation.
+    </p>
+  </div>
+</footer>
+</html>
+

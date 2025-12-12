@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Continuum Dashboard — TS Deterministic Table{% endblock %}
+
+{% block head_extra %}
+  <style>
+    .json-path {
+      max-width: 260px;
+      display: inline-block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: bottom;
+    }
+    
+    .run-comment {
+    	font-size: 0.75rem;     
+  		color: #7a7a7a;         
+  		line-height: 1.2;
+  	}
+
+  	.run-value {
+    	color: #00a651;   /* solid green */
+    	font-size: 0.75rem;
+    	font-weight: 600;
+    	opacity: 1;
+  	}
+    
+  </style>
+{% endblock %}
+
+{% block content %}
+
+<h2 class="title is-4">Table View</h2>
+
+<form method="get" action="{{ url_for('ts_det_table_view') }}" class="box mb-5">
+  <div class="field is-horizontal">
+    <div class="field-body">
+
+      <div class="field">
+        <label class="label">TimeSeries Run Configuration</label>
+        <div class="control">
+          <div class="select">
+            <select name="run_cfg" onchange="this.form.submit()">
+              {% for key, cfg in run_configs.items() %}
+                {% set label = cfg.name if cfg.name is defined else key %}
+                <option value="{{ key }}"
+                  {% if key == selected_run_cfg_key %}selected{% endif %}>
+                  {{ label }}{% if key == active_run_key %} (default){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Run time</label>
+        <div class="control">
+          {% if available_runs %}
+            <div class="select">
+              <select name="run" onchange="this.form.submit()">
+                {% for r in available_runs %}
+                  {% set value = r.strftime('%Y-%m-%dT%H:%M') %}
+                  <option value="{{ value }}"
+                    {% if value == selected_run_iso %}selected{% endif %}>
+                    {{ r.strftime('%Y-%m-%d %H:00') }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          {% else %}
+            <input class="input" type="text" value="No runs found" disabled>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Basin</label>
+        <div class="control">
+          <div class="select">
+            <select name="basin" onchange="this.form.submit()">
+              {% for basin in basins %}
+                <option value="{{ basin }}" {% if basin == selected_basin %}selected{% endif %}>
+                  {{ basin }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</form>
+
+<div class="box">
+
+  <p class="run-comment">
+	  Run time:
+	  <span class="run-value">{{ selected_run_iso.replace('T', ' ') }}</span>,
+	  basin:
+	  <span class="run-value">{{ selected_basin }}</span>.
+	  Fields with value &lt; 0 or equal to the configured missing value are hidden.
+  </p>
+
+  {% if section_tables %}
+    {% for sec_name, table in section_tables.items() %}
+      <article class="message">
+        <div class="message-header" style="cursor: pointer;"
+             onclick="toggleSectionTable('{{ sec_name }}')">
+          <p>{{ sec_name }}</p>
+          <button class="button is-small is-white">
+            <span class="icon is-small">&#9662;</span>
+          </button>
+        </div>
+        <div class="message-body" id="section-table-{{ sec_name }}" style="display:none;">
+
+          <div class="columns">
+            <!-- LEFT: multi-variable time-series table -->
+            <div class="column is-8">
+              {% if table.columns and table.rows %}
+                <table class="table is-striped is-fullwidth is-hoverable is-size-7">
+                  <thead>
+                    <tr>
+                      {% for col in table.columns %}
+                        <th>{{ col.label }}</th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in table.rows %}
+                      <tr>
+                        {% for col in table.columns %}
+                          <td>{{ row[col.key] }}</td>
+                        {% endfor %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% else %}
+                <p class="has-text-grey is-size-7">No time-series data for this section.</p>
+              {% endif %}
+            </div>
+
+            <!-- RIGHT: metadata card -->
+            <div class="column is-4">
+              <div class="box is-size-7">
+                <p class="has-text-weight-semibold mb-2">Section metadata</p>
+                <p class="mb-2">
+                  <span class="has-text-grey">JSON file:</span><br>
+                  {% set full_path = json_paths.get(sec_name) %}
+                  {% if full_path %}
+                    {% set json_basename = full_path.rsplit('/', 1)[-1] %}
+                    <span class="json-path" title="{{ full_path }}">
+                      <code style="font-size:0.75rem;">{{ json_basename }}</code>
+                    </span>
+                  {% else %}
+                    <span class="has-text-grey is-size-7">n/a</span>
+                  {% endif %}
+                </p>
+
+                {% set meta = section_meta.get(sec_name) %}
+                {% if meta %}
+                  <hr style="margin: 0.4rem 0;">
+                  <dl>
+                    {% for k, v in meta.items() %}
+                      <dt class="has-text-weight-semibold">{{ k }}</dt>
+                      <dd style="margin-bottom:0.3rem;">{{ v }}</dd>
+                    {% endfor %}
+                  </dl>
+                {% else %}
+                  <p class="has-text-grey is-size-7">No metadata available.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </article>
+    {% endfor %}
+  {% else %}
+    <p class="has-text-grey is-size-7">No sections found for this run and basin.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function toggleSectionTable(name) {
+    const el = document.getElementById('section-table-' + name);
+    if (!el) return;
+    el.style.display = (el.style.display === 'none' || el.style.display === '') ? 'block' : 'none';
+  }
+</script>
+{% endblock %}
+
