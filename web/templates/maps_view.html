@@ -1,194 +1,330 @@
 {% extends "base.html" %}
 
-{% block title %}Continuum Dashboard — Maps{% endblock %}
+{% block title %}Maps Viewer{% endblock %}
 
 {% block head_extra %}
-  <!-- OpenLayers -->
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/ol@latest/ol.css">
-  <script src="https://cdn.jsdelivr.net/npm/ol@latest/dist/ol.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@9.2.4/ol.css">
+  <script src="https://cdn.jsdelivr.net/npm/ol@9.2.4/dist/ol.js" crossorigin="anonymous"></script>
 
   <style>
     #maps-container {
-      height: 75vh;
       width: 100%;
-      border-radius: 8px;
+      height: 76vh;
       border: 1px solid #dde3e8;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+      position: relative;
     }
-
-    .map-toolbar {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-bottom: 0.75rem;
+    .map-toolbar .field { margin-bottom: 0; }
+    .map-tooltip {
+      position: absolute;
+      background: rgba(0,0,0,0.75);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
     }
+    .map-error {
+      position:absolute;
+      inset: 0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:14px;
+      color:#b00020;
+      padding:16px;
+      text-align:center;
+      background: rgba(255,255,255,0.88);
+      z-index: 50;
+    }
+    
+    .legend-box{
+		position:absolute;
+		right:10px;
+		bottom:10px;
+		background: rgba(255,255,255,0.85);
+		padding:6px 8px;
+		border-radius:6px;
+		border:1px solid #ddd;
+		z-index: 60;
+  	}
+  	.legend-box img{ display:block; }
+    
   </style>
 {% endblock %}
 
 {% block content %}
-
 <div class="box">
-  <h3 class="title is-4">Maps</h3>
+  <div class="columns is-vcentered is-multiline map-toolbar">
 
-  <p class="is-size-7 has-text-grey-dark mb-3">
-    Visualize DEM, river network and monitoring sections.
-    Use the controls below to toggle layers.
-  </p>
+    {% if maps_run_configs is defined %}
+      <div class="column is-narrow">
+        <div class="field">
+          <label class="label is-size-7 mb-1">Maps Run Configuration</label>
+          <div class="control">
+            <div class="select is-small">
+              <select id="maps-run-cfg" name="maps_run_cfg">
+                {% for key, cfg in maps_run_configs.items() %}
+                  {% set label = cfg.name if cfg.name is defined else key %}
+                  <option value="{{ key }}" {% if key == maps_selected_run_cfg_key %}selected{% endif %}>
+                    {{ label }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
 
-  <!-- Toolbar -->
-  <div class="map-toolbar">
-    <label class="checkbox">
-      <input type="checkbox" id="toggle-dem">
-      DEM
-    </label>
+      <div class="column is-narrow">
+        <div class="field">
+          <label class="label is-size-7 mb-1">Maps Run datetime</label>
+          <div class="control">
+            {% if maps_available_runs is defined and maps_available_runs %}
+              <div class="select is-small">
+                <select id="maps-run-dt" name="maps_run">
+                  {% for r in maps_available_runs %}
+                    <option value="{{ r }}" {% if r == maps_selected_run_iso %}selected{% endif %}>
+                      {{ r }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+            {% else %}
+              <div class="select is-small">
+                <select id="maps-run-dt" name="maps_run" disabled>
+                  <option value="">No map runs found</option>
+                </select>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
 
-    <label class="checkbox">
-      <input type="checkbox" id="toggle-rivers" checked>
-      River network
-    </label>
+      {% if maps_variables %}
+      <div class="column is-narrow">
+        <div class="field">
+          <label class="label is-size-7 mb-1">Variable</label>
+          <div class="control">
+            <div class="select is-small">
+              <select id="maps-var" name="maps_var">
+                {% for v in maps_variables %}
+                  <option value="{{ v }}" {% if v == maps_selected_var %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    {% endif %}
 
-    <div class="select is-small">
-      <select id="basin-select">
-        <option value="all">All basins</option>
-        {% for b in basins %}
-          <option value="{{ b }}" {% if b == selected_basin %}selected{% endif %}>
-            {{ b }}
-          </option>
-        {% endfor %}
-      </select>
+    <div class="column is-narrow">
+      <div class="field">
+        <label class="label is-size-7 mb-1">Overlays</label>
+        <label class="checkbox mr-3">
+          <input id="toggle-dem" type="checkbox">
+          DEM
+        </label>
+        <label class="checkbox">
+          <input id="toggle-rivers" type="checkbox" checked>
+          Rivers
+        </label>
+      </div>
     </div>
+
   </div>
 
-  <!-- Map -->
   <div id="maps-container"></div>
+  <div class="legend-box">
+  	<img id="legend-img" alt="legend">
+  </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const demMeta = {{ dem_meta | tojson }};
-  const sections = {{ sections | tojson }};
-
-  // Base OSM
-  const osmLayer = new ol.layer.Tile({
-    source: new ol.source.OSM()
-  });
-
-  // DEM layer (optional)
-  let demLayer = null;
-  if (demMeta) {
-    const x0 = demMeta.xllcorner;
-    const y0 = demMeta.yllcorner;
-    const cs = demMeta.cellsize;
-    const xmax = x0 + cs * demMeta.ncols;
-    const ymax = y0 + cs * demMeta.nrows;
-
-    demLayer = new ol.layer.Image({
-      visible: false,
-      opacity: 0.7,
-      source: new ol.source.ImageStatic({
-        url: "{{ url_for('maps_dem_png') }}",
-        imageExtent: [x0, y0, xmax, ymax],
-        projection: 'EPSG:4326'
-      })
-    });
+  function showMapError(msg) {
+    const c = document.getElementById('maps-container');
+    if (!c) return;
+    const d = document.createElement('div');
+    d.className = 'map-error';
+    d.textContent = msg;
+    c.appendChild(d);
   }
 
-  // Rivers
-  const riversLayer = new ol.layer.Vector({
-    visible: true,
-    source: new ol.source.Vector({
-      url: "{{ url_for('maps_rivers_geojson') }}",
-      format: new ol.format.GeoJSON()
-    }),
-    style: new ol.style.Style({
-      image: new ol.style.Circle({
-        radius: 1.5,
-        fill: new ol.style.Fill({ color: 'rgba(0, 112, 255, 0.8)' })
-      })
-    })
+  window.addEventListener('error', (e) => {
+    const extra = [
+      e?.filename ? ` | ${e.filename}` : '',
+      e?.lineno ? `:${e.lineno}` : '',
+      e?.colno ? `:${e.colno}` : ''
+    ].join('');
+    showMapError(`JS error: ${e?.message || 'unknown'}${extra} (see Console)`);
   });
 
-  // Sections
-  const sectionFeatures = sections
-    .filter(s => s.lon != null && s.lat != null)
-    .map(s => new ol.Feature({
-      geometry: new ol.geom.Point(
-        ol.proj.fromLonLat([s.lon, s.lat])
-      ),
-      basin: s.basin,
-      name: s.name
-    }));
+  const demMeta = {{ dem_meta | tojson }};
+  const sections = {{ sections | tojson }};
+  const mapsPngUrl = {{ maps_png_url | default(None) | tojson }};
+  const mapsPngExtent4326 = {{ maps_png_extent | default(None) | tojson }};
 
-  const sectionsSource = new ol.source.Vector({
-    features: sectionFeatures
-  });
+  if (typeof ol === 'undefined') {
+    showMapError('OpenLayers (ol) not loaded. Check CDN/network.');
+  } else {
+    const osmLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
 
-  const sectionsLayer = new ol.layer.Vector({
-    source: sectionsSource,
-    style: new ol.style.Style({
-      image: new ol.style.RegularShape({
-        points: 3,
-        radius: 9,
-        rotation: Math.PI,
-        fill: new ol.style.Fill({ color: 'rgba(243,146,0,0.95)' }),
-        stroke: new ol.style.Stroke({ color: '#804600', width: 1.5 })
-      })
-    })
-  });
+    // DEM optional
+    let demLayer = null;
+    let demExtent4326 = null;
+    if (demMeta) {
+      const x0 = demMeta.xllcorner;
+      const y0 = demMeta.yllcorner;
+      const cs = demMeta.cellsize;
+      const xmax = x0 + cs * demMeta.ncols;
+      const ymax = y0 + cs * demMeta.nrows;
+      demExtent4326 = [x0, y0, xmax, ymax];
 
-  // Map
-  const layers = [osmLayer];
-  if (demLayer) layers.push(demLayer);
-  layers.push(riversLayer, sectionsLayer);
-
-  const map = new ol.Map({
-    target: 'maps-container',
-    layers: layers,
-    view: new ol.View({
-      center: ol.proj.fromLonLat([12.5, 43.5]),
-      zoom: 8
-    })
-  });
-
-  // Fit extent
-  map.once('postrender', () => {
-    if (demLayer && demMeta) {
-      const extent = ol.proj.transformExtent(
-        [
-          demMeta.xllcorner,
-          demMeta.yllcorner,
-          demMeta.xllcorner + demMeta.cellsize * demMeta.ncols,
-          demMeta.yllcorner + demMeta.cellsize * demMeta.nrows
-        ],
-        'EPSG:4326',
-        map.getView().getProjection()
-      );
-      map.getView().fit(extent, { padding: [20,20,20,20] });
+      demLayer = new ol.layer.Image({
+        visible: false,
+        opacity: 0.7,
+        source: new ol.source.ImageStatic({
+          url: "{{ url_for('maps_dem_png') }}",
+          imageExtent: demExtent4326,
+          projection: 'EPSG:4326'
+        })
+      });
     }
-  });
 
-  // UI controls
-  document.getElementById('toggle-dem')?.addEventListener('change', e => {
-    if (demLayer) demLayer.setVisible(e.target.checked);
-  });
+    // Rivers
+    const riversLayer = new ol.layer.Vector({
+      visible: true,
+      source: new ol.source.Vector({
+        url: "{{ url_for('maps_rivers_geojson') }}",
+        format: new ol.format.GeoJSON()
+      }),
+      style: new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 1.5,
+          fill: new ol.style.Fill({ color: 'rgba(0, 112, 255, 0.8)' })
+        })
+      })
+    });
 
-  document.getElementById('toggle-rivers')?.addEventListener('change', e => {
-    riversLayer.setVisible(e.target.checked);
-  });
+    // Sections
+    const sectionFeatures = (sections || []).map(s => {
+      const lon = s.lon ?? s.longitude ?? s.x;
+      const lat = s.lat ?? s.latitude ?? s.y;
+      if (lon == null || lat == null) return null;
+      return new ol.Feature({
+        geometry: new ol.geom.Point(ol.proj.fromLonLat([lon, lat])),
+        name: s.name ?? s.section_name ?? s.id ?? 'section'
+      });
+    }).filter(Boolean);
 
-  document.getElementById('basin-select')?.addEventListener('change', e => {
-    const basin = e.target.value;
-    sectionsSource.clear();
+    const sectionsLayer = new ol.layer.Vector({
+      source: new ol.source.Vector({ features: sectionFeatures }),
+      style: new ol.style.Style({
+        image: new ol.style.RegularShape({
+          points: 3,
+          radius: 9,
+          rotation: Math.PI,
+          fill: new ol.style.Fill({ color: 'rgba(243,146,0,0.95)' }),
+          stroke: new ol.style.Stroke({ color: '#804600', width: 1.5 })
+        })
+      })
+    });
 
-    sectionFeatures.forEach(f => {
-      if (basin === 'all' || f.get('basin') === basin) {
-        sectionsSource.addFeature(f);
+    // Raster PNG overlay (rendered from GeoTIFF by /maps/tif_png)
+    let rasterLayer = null;
+    if (mapsPngUrl && mapsPngExtent4326) {
+      rasterLayer = new ol.layer.Image({
+        visible: true,
+        opacity: 0.85,
+        source: new ol.source.ImageStatic({
+          url: mapsPngUrl,
+          imageExtent: mapsPngExtent4326,
+          projection: 'EPSG:4326'
+        })
+      });
+    } else if (mapsPngUrl && !mapsPngExtent4326) {
+      showMapError("Raster PNG URL is set but extent is missing. Check GeoTIFF CRS/metadata.");
+    }
+
+    const layers = [osmLayer];
+    if (demLayer) layers.push(demLayer);
+    if (rasterLayer) layers.push(rasterLayer);
+    layers.push(riversLayer, sectionsLayer);
+
+    const map = new ol.Map({
+      target: 'maps-container',
+      layers,
+      view: new ol.View({
+        center: ol.proj.fromLonLat([12.5, 43.5]),
+        zoom: 8
+      })
+    });
+
+    // Fit to raster first, fallback DEM
+    map.once('postrender', () => {
+      if (mapsPngExtent4326) {
+        const extent = ol.proj.transformExtent(mapsPngExtent4326, 'EPSG:4326', map.getView().getProjection());
+        map.getView().fit(extent, { padding: [20,20,20,20], maxZoom: 12 });
+      } else if (demExtent4326) {
+        const extent = ol.proj.transformExtent(demExtent4326, 'EPSG:4326', map.getView().getProjection());
+        map.getView().fit(extent, { padding: [20,20,20,20], maxZoom: 12 });
       }
     });
-  });
+
+    // Tooltip
+    const tooltipEl = document.createElement('div');
+    tooltipEl.className = 'map-tooltip';
+    tooltipEl.style.display = 'none';
+    const tooltipOverlay = new ol.Overlay({ element: tooltipEl, offset: [10,0], positioning: 'bottom-left' });
+    map.addOverlay(tooltipOverlay);
+
+    map.on('pointermove', evt => {
+      if (evt.dragging) { tooltipEl.style.display = 'none'; return; }
+      const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+      if (feature) {
+        tooltipEl.innerHTML = `<strong>${feature.get('name') || 'section'}</strong>`;
+        tooltipEl.style.display = 'block';
+        tooltipOverlay.setPosition(evt.coordinate);
+      } else {
+        tooltipEl.style.display = 'none';
+      }
+    });
+
+    document.getElementById('toggle-dem')?.addEventListener('change', e => {
+      if (demLayer) demLayer.setVisible(e.target.checked);
+    });
+    document.getElementById('toggle-rivers')?.addEventListener('change', e => {
+      riversLayer.setVisible(e.target.checked);
+    });
+
+    function reloadWithMapsParams() {
+      const url = new URL(window.location.href);
+      const cfgEl = document.getElementById('maps-run-cfg');
+      const dtEl  = document.getElementById('maps-run-dt');
+      const varEl = document.getElementById('maps-var');
+      if (cfgEl) url.searchParams.set('maps_run_cfg', cfgEl.value);
+      if (dtEl)  url.searchParams.set('maps_run', dtEl.value);
+      if (varEl) url.searchParams.set('maps_var', varEl.value);
+      window.location.href = url.toString();
+    }
+
+    document.getElementById('maps-run-cfg')?.addEventListener('change', reloadWithMapsParams);
+    document.getElementById('maps-run-dt')?.addEventListener('change', reloadWithMapsParams);
+    document.getElementById('maps-var')?.addEventListener('change', reloadWithMapsParams);
+  }
+  
+  const selectedVar = {{ maps_selected_var | tojson }};
+  const legend = document.getElementById("legend-img");
+
+  if (legend && selectedVar) {
+    legend.src = `/maps/legend_png?var=${encodeURIComponent(selectedVar)}`;
+  }
+  
 </script>
 {% endblock %}
-

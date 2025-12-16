@@ -243,6 +243,6 @@ def main(view_table: bool = False, dry_run : bool = False):
 # call script from external library
 if __name__ == "__main__":
 
-    main(view_table=True, dry_run=False)
+    main(view_table=True, dry_run=True)
 
 # ----------------------------------------------------------------------------------------------------------------------

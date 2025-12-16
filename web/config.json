@@ -1,30 +1,35 @@
 {
-  "data_root": "data",
-  "dynamic_root": "/home/fabio/Desktop/shybox/web/data/dynamic",
-  "basins": [
-    "Arzilla",
-    "Burano",
-    "Metauro"
-  ],
+  "ts_history_days": 3,
+  "ts_debug_today": "2025-12-02",
+  
+  "maps_history_days": 3,
+  "maps_debug_today": "2024-01-04",
+  
   "default_basin": "Arzilla",
-  
-  "sections_csv": "/home/fabio/Desktop/shybox/web/data/static/point/sections_marche_FloodPROOFS.csv",
-  "dem_file": "/home/fabio/Desktop/shybox/web/data/static/gridded/marche.dem.txt",
-  "choice_file": "/home/fabio/Desktop/shybox/web/data/static/gridded/marche.choice.txt",
-  
-  "history_days": 3,
-  "debug_today": "2025-12-02",
   "active_time_series": [
-    "run_type_1",
-    "run_type_2"
+    "ts_type_1",
+    "ts_type_2"
   ],
   "active_maps": [
-  	"run_type_1",
-  	"run_type_2"
+    "maps_type_1",
+    "maps_type_2"
   ],
+  "geo": {
+    "sections": {
+      "file_name": "/home/fabio/Desktop/shybox/web/data/static/point/sections_marche_FloodPROOFS.csv"
+    },
+    "layers": {
+      "terrain": {
+        "file_name": "/home/fabio/Desktop/shybox/web/data/static/gridded/marche.dem.txt"
+      },
+      "river_network": {
+        "file_name": "/home/fabio/Desktop/shybox/web/data/static/gridded/marche.choice.txt"
+      }
+    }
+  },
   "runs": {
     "run_time_series": {
-      "run_type_1": {
+      "ts_type_1": {
         "type": "ts_deterministic",
         "name": "Deterministic Weather Stations",
         "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/time_series/deterministic_weather_stations/{date_path}/collections",
@@ -38,7 +43,7 @@
         "basin_field": "section_domain",
         "section_field": "section_name"
       },
-      "run_type_2": {
+      "ts_type_2": {
         "type": "ts_deterministic",
         "name": "Deterministic Radar",
         "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/time_series/deterministic_weather_stations/{date_path}/collections",
@@ -54,23 +59,25 @@
       }
     },
     "run_maps": {
-      "run_type_1": {
+      "maps_type_1": {
         "type": "maps_instantaneous",
-        "name": "ExpertForecast NWP Ecmwf0100",
-        "variable": "t2q max",
+        "name": "ExpertForecast NWP Ecmwf0100",	
         "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/maps/simulated_q2t/{date_path}/TQ_MAX/",
-        "format_of_date_path": "%Y/%m/",
+        "format_of_date_path": "%Y/%m/%d",
         "file_glob": "TQ_*.tif",
-        "format_of_date_file": "%Y%m%d%H0000"
+        "format_of_date_file": "%Y%m%d%H0000",
+        "variable_name": "t2q max",
+        "variable_cmap": null
       },
-      "run_type_2": {
+      "maps_type_2": {
         "type": "maps_instantaneous",
-        "name": "ExpertForecast NWP Ecmwf0100",
-        "variable": "t2q hourly",
-        "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/maps/simulated_q2t/{date_path}/TQ/",
-        "format_of_date_path": "%Y/%m/",
-        "file_glob": "TQ_*.tif",
-        "format_of_date_file": "%Y%m%d%H0000"
+        "name": "Observed Forcing",
+        "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/forcing/{date_path}/",
+        "format_of_date_path": "%Y/%m/%d",
+        "file_glob": "hmc.forcing-grid.*.nc.gz",
+        "format_of_date_file": "%Y%m%d%H00",
+        "variable_name": ["AirTemperature", "Rain", "WindSpeed", "test_no_data"],
+        "variable_cmap": null
       }
     }
   }

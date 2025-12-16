@@ -10,6 +10,8 @@ pip install flask
 pip install pillow
 pip install matplotlib
 pip install rasterio
+pip install xarray
+pip install netCDF4
 
 # app run
 python app.py

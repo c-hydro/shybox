@@ -1,11 +1,26 @@
+# utils_runs.py
+from __future__ import annotations
+
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 import json
 
 from flask import request
 
-from utils_config import CONFIG, DATA_ROOT, DYNAMIC_ROOT, HISTORY_DAYS, BASE_DIR, get_today
+from utils_config import (
+    CONFIG,
+    DATA_ROOT,
+    DYNAMIC_ROOT,
+    HISTORY_DAYS,   # legacy name, but app.py patches it to TS_HISTORY_DAYS
+    BASE_DIR,
+    get_today,      # MUST be based on CONFIG["ts_debug_today"] in utils_config.py
+)
+
+# -----------------------------------------------------------------------------
+# TS-scoped settings (canonical keys)
+# -----------------------------------------------------------------------------
+TS_HISTORY_DAYS = int(CONFIG.get("ts_history_days", HISTORY_DAYS))
 
 
 # -----------------------------------------------------------------------------
@@ -13,12 +28,14 @@ from utils_config import CONFIG, DATA_ROOT, DYNAMIC_ROOT, HISTORY_DAYS, BASE_DIR
 # -----------------------------------------------------------------------------
 _raw_runs = CONFIG.get("runs", {}) or {}
 
-# Time-series runs
+# Time-series runs:
+# - If runs is grouped: CONFIG["runs"]["run_time_series"]
+# - If runs is legacy flat: CONFIG["runs"]
 if isinstance(_raw_runs, dict) and "run_time_series" in _raw_runs:
-    RUNS: Dict[str, Any] = _raw_runs["run_time_series"] or {}
+    RUNS: Dict[str, Any] = _raw_runs.get("run_time_series") or {}
     print("[CONFIG] using runs.run_time_series for time-series run configs")
 else:
-    RUNS = _raw_runs
+    RUNS = _raw_runs if isinstance(_raw_runs, dict) else {}
     print("[CONFIG] using top-level runs as time-series configs")
 
 # Active time-series runs
@@ -31,14 +48,14 @@ if _raw_active is None:
         _raw_active = [legacy_single]
 
 if isinstance(_raw_active, str):
-    active_time_series_list = [_raw_active]
+    ts_active_list = [_raw_active]
 elif isinstance(_raw_active, list):
-    active_time_series_list = [str(x) for x in _raw_active]
+    ts_active_list = [str(x) for x in _raw_active]
 else:
-    active_time_series_list = []
+    ts_active_list = []
 
-# Keep only keys that actually exist in RUNS
-ACTIVE_TIME_SERIES: List[str] = [k for k in active_time_series_list if k in RUNS]
+# Keep only keys that exist
+ACTIVE_TIME_SERIES: List[str] = [k for k in ts_active_list if k in RUNS]
 
 # If still empty, default to the first run if any
 if not ACTIVE_TIME_SERIES and RUNS:
@@ -47,8 +64,10 @@ if not ACTIVE_TIME_SERIES and RUNS:
 ACTIVE_RUN_KEY: Optional[str] = ACTIVE_TIME_SERIES[0] if ACTIVE_TIME_SERIES else None
 ACTIVE_RUN = RUNS.get(ACTIVE_RUN_KEY) if ACTIVE_RUN_KEY else None
 
-# Map run configurations (for future "maps" view)
-MAP_RUNS: Dict[str, Any] = _raw_runs.get("run_maps", {}) if isinstance(_raw_runs, dict) else {}
+# Map run configurations (kept for future maps logic)
+MAP_RUNS: Dict[str, Any] = {}
+if isinstance(_raw_runs, dict) and "run_maps" in _raw_runs:
+    MAP_RUNS = _raw_runs.get("run_maps") or {}
 ACTIVE_MAPS = CONFIG.get("active_maps", [])
 
 
@@ -57,8 +76,8 @@ ACTIVE_MAPS = CONFIG.get("active_maps", [])
 # -----------------------------------------------------------------------------
 def get_current_run_config() -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
     """
-    Determine current run configuration from ?run_cfg=, falling back
-    to active_run, then first available.
+    Determine current time-series run configuration from ?run_cfg=, falling back
+    to active_time_series, then first available.
     """
     key = request.args.get("run_cfg")
     if key and key in RUNS:
@@ -74,23 +93,23 @@ def get_current_run_config() -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
     return None, None
 
 
-def build_run_directory(dt: datetime, basin: Optional[str] = None) -> Optional[Path]:
+def build_run_directory(ts_dt: datetime, basin: Optional[str] = None) -> Optional[Path]:
     """
     Build the directory path for a given datetime and basin,
-    using the current run configuration.
+    using the current time-series run configuration.
     """
-    run_cfg_key, run_cfg = get_current_run_config()
-    if not RUNS or run_cfg is None:
+    _, ts_run_cfg = get_current_run_config()
+    if not RUNS or ts_run_cfg is None:
         return None
 
-    run_type = run_cfg.get("run_type", "")
-    path_template = run_cfg.get("path_template")
-    fmt_path = run_cfg.get("format_of_date_path", "%Y/%m/%d/%H")
+    run_type = ts_run_cfg.get("run_type", "")
+    path_template = ts_run_cfg.get("path_template")
+    fmt_path = ts_run_cfg.get("format_of_date_path", "%Y/%m/%d/%H")
 
     if not path_template:
         return None
 
-    date_path = dt.strftime(fmt_path)
+    date_path = ts_dt.strftime(fmt_path)
     context = {
         "dynamic_root": str(DYNAMIC_ROOT),
         "run_type": run_type,
@@ -109,98 +128,102 @@ def build_run_directory(dt: datetime, basin: Optional[str] = None) -> Optional[P
 # Recent runs and run selection
 # -----------------------------------------------------------------------------
 def list_recent_available_runs_for_basin(
-    basin: str, days_back: Optional[int] = None
+    basin: str, ts_days_back: Optional[int] = None
 ) -> List[datetime]:
     """
-    Scan the dynamic/legacy folders to find available runs for a basin.
+    Scan the dynamic/legacy folders to find available time-series runs for a basin.
+
+    NOTE:
+      - TS "today" must come from utils_config.get_today(), which must read
+        CONFIG["ts_debug_today"] (no debug_today anywhere).
     """
-    if days_back is None:
-        days_back = HISTORY_DAYS
+    if ts_days_back is None:
+        ts_days_back = TS_HISTORY_DAYS
 
-    today = get_today()
-    runs: List[datetime] = []
+    ts_today = get_today()
+    ts_runs: List[datetime] = []
 
-    run_cfg_key, run_cfg = get_current_run_config()
-    if not RUNS or run_cfg is None:
+    _, ts_run_cfg = get_current_run_config()
+    if not RUNS or ts_run_cfg is None:
         # Legacy: only date-based
         file_glob = "timeseries.json"
-        for i in range(days_back):
-            d = today - timedelta(days=i)
+        for i in range(ts_days_back):
+            d = ts_today - timedelta(days=i)
             folder_name = d.strftime("%Y%m%d")
             base_dir = DATA_ROOT / folder_name / basin
             if not base_dir.exists():
                 continue
             if any(base_dir.rglob(file_glob)):
-                runs.append(datetime(d.year, d.month, d.day, 0, 0))
-        return sorted(runs)
+                ts_runs.append(datetime(d.year, d.month, d.day, 0, 0))
+        return sorted(ts_runs)
 
-    file_glob = run_cfg.get("file_glob", "hydrograph_*.json")
+    file_glob = ts_run_cfg.get("file_glob", "hydrograph_*.json")
 
-    for i in range(days_back):
-        d = today - timedelta(days=i)
+    for i in range(ts_days_back):
+        d = ts_today - timedelta(days=i)
         for hour in range(24):
-            dt = datetime(d.year, d.month, d.day, hour, 0)
-            run_dir = build_run_directory(dt, basin=basin)
+            ts_dt = datetime(d.year, d.month, d.day, hour, 0)
+            run_dir = build_run_directory(ts_dt, basin=basin)
             if not run_dir or not run_dir.exists():
                 continue
             if any(run_dir.glob(file_glob)):
-                runs.append(dt)
+                ts_runs.append(ts_dt)
 
-    return sorted(runs)
+    return sorted(ts_runs)
 
 
 def get_selected_or_latest_run_for_basin(
-    basin: str, days_back: Optional[int] = None
+    basin: str, ts_days_back: Optional[int] = None
 ) -> Tuple[datetime, List[datetime]]:
     """
     Read ?run= from query parameters; if valid and present in available runs, use it.
-    Otherwise, fall back to the latest available run, or "today 00:00" if none.
+    Otherwise, fall back to the latest available run, or "ts_today 00:00" if none.
     """
-    if days_back is None:
-        days_back = HISTORY_DAYS
+    if ts_days_back is None:
+        ts_days_back = TS_HISTORY_DAYS
 
-    available_runs = list_recent_available_runs_for_basin(basin, days_back)
+    ts_available_runs = list_recent_available_runs_for_basin(basin, ts_days_back)
     raw = request.args.get("run")
 
     if raw:
         try:
             sel = datetime.fromisoformat(raw)
-            if any(r == sel for r in available_runs):
-                return sel, available_runs
+            if any(r == sel for r in ts_available_runs):
+                return sel, ts_available_runs
         except ValueError:
             pass
 
-    if available_runs:
-        return available_runs[-1], available_runs
-    else:
-        base = get_today()
-        return datetime(base.year, base.month, base.day, 0, 0), available_runs
+    if ts_available_runs:
+        return ts_available_runs[-1], ts_available_runs
+
+    base = get_today()
+    return datetime(base.year, base.month, base.day, 0, 0), ts_available_runs
 
 
 # -----------------------------------------------------------------------------
 # Loading dynamic time-series data
 # -----------------------------------------------------------------------------
 def load_timeseries_sections(
-    selected_run: datetime, basin: str
+    ts_selected_run: datetime, basin: str
 ) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """
     Load dynamic hydrographs for the given run and basin.
 
     Returns:
-      sections[section_name] = {"time_now": str|None, "series": list[dict]}
-      json_paths[section_name] = path to file
+      ts_sections[section_name] = {"time_now": str|None, "series": list[dict]}
+      ts_json_paths[section_name] = path to file
     """
-    sections: Dict[str, Any] = {}
-    json_paths: Dict[str, str] = {}
+    ts_sections: Dict[str, Any] = {}
+    ts_json_paths: Dict[str, str] = {}
 
-    run_cfg_key, run_cfg = get_current_run_config()
-    if not RUNS or run_cfg is None:
-        # Legacy DATA_ROOT/YYYYMMDD/basin/section/timeseries.json
-        d = selected_run.date()
+    _, ts_run_cfg = get_current_run_config()
+    if not RUNS or ts_run_cfg is None:
+        # Legacy layout: DATA_ROOT/YYYYMMDD/basin/section/timeseries.json
+        d = ts_selected_run.date()
         folder_name = d.strftime("%Y%m%d")
         base_dir = DATA_ROOT / folder_name / basin
         if not base_dir.exists():
-            return sections, json_paths
+            return ts_sections, ts_json_paths
 
         for section_dir in sorted(p for p in base_dir.iterdir() if p.is_dir()):
             json_file = section_dir / "timeseries.json"
@@ -212,26 +235,26 @@ def load_timeseries_sections(
             except Exception:
                 continue
 
-            sections[section_dir.name] = {
+            ts_sections[section_dir.name] = {
                 "time_now": payload.get("time_now"),
                 "series": payload.get("series", []),
             }
-            json_paths[section_dir.name] = str(json_file)
+            ts_json_paths[section_dir.name] = str(json_file)
 
-        return sections, json_paths
+        return ts_sections, ts_json_paths
 
     # New dynamic layout
-    run_dir = build_run_directory(selected_run, basin=basin)
+    run_dir = build_run_directory(ts_selected_run, basin=basin)
     if not run_dir or not run_dir.exists():
-        return sections, json_paths
+        return ts_sections, ts_json_paths
 
-    file_glob = run_cfg.get("file_glob", "hydrograph_*.json")
-    time_field = run_cfg.get("time_field", "time_period")
-    obs_field = run_cfg.get("obs_field")
-    fcst_field = run_cfg.get("fcst_field")
-    missing_value = float(run_cfg.get("missing_value", -9998.0))
-    basin_field = run_cfg.get("basin_field", "section_domain")
-    section_field = run_cfg.get("section_field", "section_name")
+    file_glob = ts_run_cfg.get("file_glob", "hydrograph_*.json")
+    time_field = ts_run_cfg.get("time_field", "time_period")
+    obs_field = ts_run_cfg.get("obs_field")
+    fcst_field = ts_run_cfg.get("fcst_field")
+    missing_value = float(ts_run_cfg.get("missing_value", -9998.0))
+    basin_field = ts_run_cfg.get("basin_field", "section_domain")
+    section_field = ts_run_cfg.get("section_field", "section_name")
 
     for json_file in sorted(run_dir.glob(file_glob)):
         try:
@@ -284,9 +307,7 @@ def load_timeseries_sections(
                 try:
                     val_obs = float(obs_vals[i])
                     if val_obs != missing_value and val_obs >= 0.0:
-                        series.append(
-                            {"timestamp": ts, "value": val_obs, "type": "observed"}
-                        )
+                        series.append({"timestamp": ts, "value": val_obs, "type": "observed"})
                 except ValueError:
                     pass
 
@@ -295,28 +316,23 @@ def load_timeseries_sections(
                 try:
                     val_fc = float(fcst_vals[i])
                     if val_fc != missing_value and val_fc >= 0.0:
-                        series.append(
-                            {"timestamp": ts, "value": val_fc, "type": "forecast"}
-                        )
+                        series.append({"timestamp": ts, "value": val_fc, "type": "forecast"})
                 except ValueError:
                     pass
 
         if not series:
             continue
 
-        sections[section_name] = {
-            "time_now": time_now,
-            "series": series,
-        }
-        json_paths[section_name] = str(json_file)
+        ts_sections[section_name] = {"time_now": time_now, "series": series}
+        ts_json_paths[section_name] = str(json_file)
 
-    return sections, json_paths
+    return ts_sections, ts_json_paths
 
 
 # -----------------------------------------------------------------------------
 # Build multi-variable time series table for one JSON
 # -----------------------------------------------------------------------------
-def build_section_table_from_json(json_file: Path, run_cfg: Optional[Dict[str, Any]]):
+def build_section_table_from_json(json_file: Path, ts_run_cfg: Optional[Dict[str, Any]]):
     """
     Build a multi-variable time-series table for one section from a hydrograph JSON.
 
@@ -334,12 +350,12 @@ def build_section_table_from_json(json_file: Path, run_cfg: Optional[Dict[str, A
         payload = json.load(f)
 
     # Config
-    if run_cfg is None:
+    if ts_run_cfg is None:
         time_field = "time_period"
         missing_value = -9998.0
     else:
-        time_field = run_cfg.get("time_field", "time_period")
-        missing_value = float(run_cfg.get("missing_value", -9998.0))
+        time_field = ts_run_cfg.get("time_field", "time_period")
+        missing_value = float(ts_run_cfg.get("missing_value", -9998.0))
 
     # Time axis
     time_str = payload.get(time_field, "")
@@ -367,7 +383,7 @@ def build_section_table_from_json(json_file: Path, run_cfg: Optional[Dict[str, A
     )
 
     def series_label(key: str) -> str:
-        short = key[len("time_series_"):]
+        short = key[len("time_series_") :]
         if short == "discharge_observed":
             return "Q obs [m³/s]"
         elif short == "discharge_simulated":
@@ -435,35 +451,29 @@ def build_section_table_from_json(json_file: Path, run_cfg: Optional[Dict[str, A
 # -----------------------------------------------------------------------------
 # Basin summary cards for Home view
 # -----------------------------------------------------------------------------
-def get_basin_cards(basins: List[str], days_back: Optional[int] = None):
+def get_basin_cards(basins: List[str], ts_days_back: Optional[int] = None):
     """
     Build basin cards with latest run and time_now info for each basin.
     """
-    if days_back is None:
-        days_back = HISTORY_DAYS
+    if ts_days_back is None:
+        ts_days_back = TS_HISTORY_DAYS
 
     cards = []
     for basin in basins:
-        recent_runs = list_recent_available_runs_for_basin(basin, days_back)
-        if not recent_runs:
-            cards.append(
-                {"name": basin, "latest_date": None, "latest_time_now": None}
-            )
+        ts_recent_runs = list_recent_available_runs_for_basin(basin, ts_days_back)
+        if not ts_recent_runs:
+            cards.append({"name": basin, "latest_date": None, "latest_time_now": None})
             continue
 
-        latest_run = recent_runs[-1]
-        sections, _ = load_timeseries_sections(latest_run, basin)
-        latest_time_now = None
-        if sections:
-            first_section_name = sorted(sections.keys())[0]
-            latest_time_now = sections[first_section_name].get("time_now")
+        ts_latest_run = ts_recent_runs[-1]
+        ts_sections, _ = load_timeseries_sections(ts_latest_run, basin)
+        ts_latest_time_now = None
+        if ts_sections:
+            first_section_name = sorted(ts_sections.keys())[0]
+            ts_latest_time_now = ts_sections[first_section_name].get("time_now")
 
         cards.append(
-            {
-                "name": basin,
-                "latest_date": latest_run,
-                "latest_time_now": latest_time_now,
-            }
+            {"name": basin, "latest_date": ts_latest_run, "latest_time_now": ts_latest_time_now}
         )
     return cards
 

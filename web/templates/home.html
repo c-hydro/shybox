@@ -93,7 +93,7 @@
   </div>
 </div>
 
-<!-- GLOBAL SELECTION PANEL: run config + basin + SECTIONS + run datetime -->
+<!-- GLOBAL SELECTION PANEL -->
 <div class="box mb-5">
   <h3 class="title is-5">Global selection</h3>
 
@@ -102,6 +102,9 @@
     They are used as defaults when you open the Time-series Table or Chart views.
   </p>
 
+  <!-- ========================================================= -->
+  <!-- Time-series configuration row (UNCHANGED layout)          -->
+  <!-- ========================================================= -->
   <div class="columns">
     <div class="column is-6">
       <div class="field">
@@ -119,11 +122,20 @@
                 {% endfor %}
               </select>
             </div>
+
             <input type="hidden" name="basin" value="{{ selected_basin }}">
             {% if available_runs %}
               <input type="hidden" name="run" value="{{ selected_run_iso }}">
             {% endif %}
             <input type="hidden" name="section" value="all_sections">
+
+            {# Preserve maps selectors if present #}
+            {% if maps_selected_run_cfg_key is defined and maps_selected_run_cfg_key %}
+              <input type="hidden" name="maps_run_cfg" value="{{ maps_selected_run_cfg_key }}">
+            {% endif %}
+            {% if maps_selected_run_iso is defined and maps_selected_run_iso %}
+              <input type="hidden" name="maps_run" value="{{ maps_selected_run_iso }}">
+            {% endif %}
           </form>
         </div>
 
@@ -149,6 +161,14 @@
 
             <input type="hidden" name="run_cfg" value="{{ selected_run_cfg_key }}">
             <input type="hidden" name="section" value="all_sections">
+
+            {# Preserve maps selectors if present #}
+            {% if maps_selected_run_cfg_key is defined and maps_selected_run_cfg_key %}
+              <input type="hidden" name="maps_run_cfg" value="{{ maps_selected_run_cfg_key }}">
+            {% endif %}
+            {% if maps_selected_run_iso is defined and maps_selected_run_iso %}
+              <input type="hidden" name="maps_run" value="{{ maps_selected_run_iso }}">
+            {% endif %}
 
             <div class="field">
               <label class="label">Basin</label>
@@ -201,6 +221,117 @@
       </form>
     </div>
   </div>
+
+  <!-- ========================================================= -->
+  <!-- Maps configuration row (NEW, placed BELOW TS row)          -->
+  <!-- ========================================================= -->
+  {% if maps_run_configs is defined %}
+    <hr class="my-3">
+
+    <p class="is-size-7 has-text-grey-dark mb-2">
+      Maps settings define the run configuration and timestamp used to search and display map layers.
+    </p>
+
+    <div class="columns">
+      <div class="column is-6">
+        <div class="field">
+          <label class="label">Maps Run Configuration</label>
+          <div class="control">
+            <form method="get" action="{{ url_for('home') }}">
+              <div class="select">
+                <select name="maps_run_cfg" onchange="this.form.submit()">
+                  {% for key, cfg in maps_run_configs.items() %}
+                    {% set label = cfg.name if cfg.name is defined else key %}
+                    <option value="{{ key }}"
+                      {% if key == maps_selected_run_cfg_key %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              {# Preserve TS selectors #}
+              <input type="hidden" name="run_cfg" value="{{ selected_run_cfg_key }}">
+              <input type="hidden" name="basin" value="{{ selected_basin }}">
+              {% if available_runs %}
+                <input type="hidden" name="run" value="{{ selected_run_iso }}">
+              {% endif %}
+              <input type="hidden" name="section" value="all_sections">
+
+              {# Preserve maps datetime if present #}
+              {% if maps_selected_run_iso is defined and maps_selected_run_iso %}
+                <input type="hidden" name="maps_run" value="{{ maps_selected_run_iso }}">
+              {% endif %}
+            </form>
+          </div>
+
+          <p class="is-size-7 has-text-grey-dark mt-1">
+            {% if maps_selected_run_cfg_key %}
+              Selected maps configuration: <strong>{{ maps_selected_run_cfg_key }}</strong>
+            {% else %}
+              Selected maps configuration: <span class="has-text-grey-dark">none</span>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
+      <div class="column is-6">
+        <div class="field">
+          <label class="label">Maps Run datetime</label>
+          <div class="control">
+            <form method="get" action="{{ url_for('home') }}">
+              {% if maps_available_runs is defined and maps_available_runs %}
+                <div class="select">
+                  <select name="maps_run" onchange="this.form.submit()">
+                    {% for r in maps_available_runs %}
+                      <option value="{{ r }}"
+                        {% if r == maps_selected_run_iso %}selected{% endif %}>
+                        {{ r }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <p class="is-size-7 has-text-grey-dark">
+                  Last {{ maps_available_runs|length }} map run(s) found for this maps configuration.
+                </p>
+              {% else %}
+				  <div class="select">
+					<select name="maps_run" disabled>
+					  <option value="">No map runs found</option>
+					</select>
+				  </div>
+				  <p class="is-size-7 has-text-grey-dark">
+					No map runs found in the maps history window.
+				  </p>
+              {% endif %}
+
+              {# Preserve TS selectors #}
+              <input type="hidden" name="run_cfg" value="{{ selected_run_cfg_key }}">
+              <input type="hidden" name="basin" value="{{ selected_basin }}">
+              {% if available_runs %}
+                <input type="hidden" name="run" value="{{ selected_run_iso }}">
+              {% endif %}
+              <input type="hidden" name="section" value="all_sections">
+
+              {# Preserve maps cfg #}
+              {% if maps_selected_run_cfg_key is defined and maps_selected_run_cfg_key %}
+                <input type="hidden" name="maps_run_cfg" value="{{ maps_selected_run_cfg_key }}">
+              {% endif %}
+            </form>
+          </div>
+
+          <p class="is-size-7 has-text-grey-dark mt-1">
+            {% if maps_selected_run_iso is defined and maps_selected_run_iso %}
+              Selected maps datetime: <strong>{{ maps_selected_run_iso }}</strong>
+            {% else %}
+              Selected maps datetime: <span class="has-text-grey-dark">none</span>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
 </div>
 
 <!-- MAIN LAYOUT: basin cards + sections map -->
@@ -385,7 +516,6 @@
   const allSectionFeatures = sectionFeatures.slice();
 
   // Styles:
-  // normal (same as geo section viewer: orange triangle)
   const normalSectionStyle = new ol.style.Style({
     image: new ol.style.RegularShape({
       points: 3,
@@ -396,7 +526,6 @@
     })
   });
 
-  // selected (yellow / black, slightly larger)
   const selectedSectionStyle = new ol.style.Style({
     image: new ol.style.RegularShape({
       points: 3,
@@ -541,7 +670,14 @@
       run_cfg: "{{ selected_run_cfg_key }}",
       basin: basin,
       section: sectionId,
-      run: "{{ selected_run_iso }}"
+      run: "{{ selected_run_iso }}",
+      // Optional maps keys (only if template vars exist)
+      {% if maps_selected_run_cfg_key is defined %}
+      maps_run_cfg: {{ maps_selected_run_cfg_key | tojson }},
+      {% endif %}
+      {% if maps_selected_run_iso is defined %}
+      maps_run: {{ maps_selected_run_iso | tojson }},
+      {% endif %}
     };
     try {
       localStorage.setItem('cima_dashboard_state', JSON.stringify(state));
@@ -549,7 +685,7 @@
       console.warn('Unable to store state in localStorage', e);
     }
 
-    // Update URL
+    // Update URL (basin + section only, as before)
     const url = new URL(window.location.href);
     url.searchParams.set('basin', basin);
     if (sectionId) {
