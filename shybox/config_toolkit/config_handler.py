@@ -325,6 +325,7 @@ class ConfigManager:
             "application": getattr(self, "application", None),
         }
 
+        section_copy = None
         if name in mandatory_map and mandatory_map[name] is not None:
             section_data = mandatory_map[name]
 
@@ -337,7 +338,15 @@ class ConfigManager:
             if getattr(self, "_convert_none_to_nan", False):
                 section_copy = self._convert_none_to_nan_recursive(section_copy)
 
-            return section_copy
+            # if section copy is empty (and it is in the mandatory fields). try to search in another section
+            if not section_copy:
+                pass
+            else:
+                return section_copy
+
+        if (name in mandatory_map) and not section_copy:
+            self.log.warning(f"Section '{name}' not found in mandatory fields. "
+                             f"Try to another section. Change name to remove this warning.")
 
         # 2) optional sections via raw config (if available)
         if self._raw_config is not None:
@@ -1024,25 +1033,47 @@ class ConfigManager:
 
     # INTERNAL: flatten dict keys for view()
     def __flat_dict_key(
-        self,
-        data: dict,
-        parent_key: str = "",
-        separator: str = ":",
-        obj_dict: dict | None = None,
+            self,
+            data: dict,
+            parent_key: str = "",
+            separator: str = ":",
+            obj_dict: dict | None = None,
     ) -> dict:
         """
         Flatten a nested dict into { "a:b:c": value } style keys.
+        Supports dicts and lists (list indices are used as keys).
         """
         if obj_dict is None:
             obj_dict = {}
 
         for k, v in data.items():
-            full_key = parent_key + separator + k if parent_key else k
+            full_key = parent_key + separator + str(k) if parent_key else str(k)
+
+            # --- dict ---
             if isinstance(v, dict):
                 if v:  # non-empty dict
                     self.__flat_dict_key(v, full_key, separator, obj_dict)
                 else:
                     obj_dict[full_key] = v
+
+            # --- list / tuple ---
+            elif isinstance(v, (list, tuple)):
+                if v:
+                    for i, item in enumerate(v):
+                        list_key = full_key + separator + str(i)
+                        if isinstance(item, dict):
+                            self.__flat_dict_key(item, list_key, separator, obj_dict)
+                        elif isinstance(item, (list, tuple)):
+                            # recurse into nested lists
+                            self.__flat_dict_key(
+                                {i: item}, full_key, separator, obj_dict
+                            )
+                        else:
+                            obj_dict[list_key] = item
+                else:
+                    obj_dict[full_key] = v
+
+            # --- scalar ---
             else:
                 obj_dict[full_key] = v
 

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-SHYBOX PACKAGE - APP PROCESSING DATASET MAIN
+SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - CONVERTER
 
 __date__ = '20251126'
 __version__ = '1.2.0'
@@ -53,7 +53,7 @@ from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_f
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Application for processing datasets'
+alg_name = 'Application for processing datasets - Converter'
 alg_type = 'Package'
 alg_version = '1.Q.0'
 alg_release = '2025-11-18'
@@ -62,7 +62,7 @@ alg_release = '2025-11-18'
 
 # ----------------------------------------------------------------------------------------------------------------------
 # script main
-def main(alg_collectors_settings: dict = None):
+def main():
 
     # ------------------------------------------------------------------------------------------------------------------
     ## SETTINGS MANAGEMENT (GLOBAL)

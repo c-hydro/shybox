@@ -14,7 +14,7 @@
       border-radius: 8px;
       overflow: hidden;
       background: #fff;
-      position: relative;
+      position: relative; /* needed for absolute legend overlay */
     }
     .map-toolbar .field { margin-bottom: 0; }
     .map-tooltip {
@@ -40,19 +40,27 @@
       background: rgba(255,255,255,0.88);
       z-index: 50;
     }
-    
+
+    /* Option A legend: fixed-pixel overlay, independent of map zoom */
     .legend-box{
-		position:absolute;
-		right:10px;
-		bottom:10px;
-		background: rgba(255,255,255,0.85);
-		padding:6px 8px;
-		border-radius:6px;
-		border:1px solid #ddd;
-		z-index: 60;
-  	}
-  	.legend-box img{ display:block; }
-    
+      position:absolute;
+      left:12px;     /* anchor left */
+      bottom:12px;   /* anchor bottom (switch to top:12px if desired) */
+      background: rgba(255,255,255,0.88);
+      padding:6px 8px;
+      border-radius:8px;
+      border:1px solid #dde3e8;
+      z-index: 60;
+      pointer-events:none;   /* don't block map interactions */
+      max-width: 220px;      /* prevent it from getting huge */
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .legend-box img{
+      display:block;
+      width: 200px;   /* fixed size -> never scales with zoom */
+      max-width: 100%;
+      height:auto;
+    }
   </style>
 {% endblock %}
 
@@ -138,9 +146,11 @@
 
   </div>
 
-  <div id="maps-container"></div>
-  <div class="legend-box">
-  	<img id="legend-img" alt="legend">
+  <!-- IMPORTANT: legend is INSIDE the container so it anchors correctly -->
+  <div id="maps-container">
+    <div class="legend-box">
+      <img id="legend-img" alt="legend">
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -236,7 +246,7 @@
       })
     });
 
-    // Raster PNG overlay (rendered from GeoTIFF by /maps/tif_png)
+    // Raster PNG overlay
     let rasterLayer = null;
     if (mapsPngUrl && mapsPngExtent4326) {
       rasterLayer = new ol.layer.Image({
@@ -318,13 +328,13 @@
     document.getElementById('maps-run-dt')?.addEventListener('change', reloadWithMapsParams);
     document.getElementById('maps-var')?.addEventListener('change', reloadWithMapsParams);
   }
-  
+
+  // Legend (fixed overlay; independent from zoom)
   const selectedVar = {{ maps_selected_var | tojson }};
   const legend = document.getElementById("legend-img");
-
   if (legend && selectedVar) {
-    legend.src = `/maps/legend_png?var=${encodeURIComponent(selectedVar)}`;
+    legend.src = `/maps/legend_png?var=${encodeURIComponent(selectedVar)}&v=${Date.now()}`;
   }
-  
 </script>
 {% endblock %}
+
