@@ -41,7 +41,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 from shybox.runner_toolkit.namelist.namelist_template_handler import NamelistTemplateManager
 from shybox.runner_toolkit.namelist.namelist_structure_handler import NamelistStructureManager
 
-from shybox.runner_toolkit.execution.execution_handler import ExecutionManager
+from shybox.runner_toolkit.execution.execution_handler import ExecutionManager, ExecutionAnalyzer
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -68,6 +68,22 @@ def main(view_table: bool = False, dry_run : bool = False):
         src=alg_args_file,
         root_key="configuration",
         application_key=None
+    )
+
+    ## INFO MANAGEMENT
+    # get application logging
+    alg_app_info = alg_cfg_obj.get_application("info", root_key=None, convert_none_to_nan=False,)
+    # fill application logging
+    alg_app_info = alg_app_info.resolved(
+        time_values=None,  # no fill_section_with_times
+        when=None,  # no LUT time resolution
+        strict=False,
+        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
+        expand_env=True,  # BUT expand $HOME, $RUN, ...
+        env_extra=None,  # or {"RUN": "base"} etc
+        validate_result=False,  # or True + allow_placeholders=True if needed
+        validate_allow_placeholders=True,
+        validate_allow_none=False,
     )
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -222,6 +238,16 @@ def main(view_table: bool = False, dry_run : bool = False):
     app_execution_info = app_execution_obj.run(dry_run=dry_run)
     # view execution info
     app_execution_obj.view(table_name='execution_info', table_print=True)
+
+    # analyze execution obj
+    app_analyzer_obj = app_execution_obj.analyze(app_execution_info)
+
+    # view execution info
+    app_analyzer_obj.view(table_name='execution_info', table_print=True)
+    # dump execution info ['ascii', 'json', 'env']
+    app_analyzer_obj.write_to(
+        path=alg_app_info['path'], file_name=alg_app_info['file_name'],
+        objects=alg_cfg_time, fmt=alg_app_info['format'])
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

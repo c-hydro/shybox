@@ -113,6 +113,9 @@
       "dependencies": ["$HOME/fp_system_libs_hmc/nc4/lib/"]
     }
   },
+  "info": {
+    "path": null, "file_name": "hmc_runner.env", "format": "env"
+  },
   "log": {
       "path": "{path_log}",  "file_name": "runner_hmc.txt"
   },

@@ -259,6 +259,7 @@ class ConfigManager:
         section: str | None = None,
         root_key: str | None = None,
         raise_if_missing: bool = False,
+        convert_none_to_nan: bool = None,
     ):
         """
         Retrieve a configuration section, checking both mandatory
@@ -374,7 +375,11 @@ class ConfigManager:
                 section_copy = copy.deepcopy(section_data)
                 section_copy = self.expand_env(section_copy, deep_copy=False)
 
-                if getattr(self, "_convert_none_to_nan", False):
+                if convert_none_to_nan is not None:
+                    if convert_none_to_nan:
+                        section_copy = self._convert_none_to_nan_recursive(section_copy)
+
+                elif getattr(self, "_convert_none_to_nan", False):
                     section_copy = self._convert_none_to_nan_recursive(section_copy)
 
                 return section_copy
@@ -393,6 +398,7 @@ class ConfigManager:
         self,
         section_name: str | None = None,
         root_key: str | None = None,
+        convert_none_to_nan: bool = True,
     ) -> "ApplicationConfig":
         """
         Convenience factory for ApplicationConfig.
@@ -430,9 +436,11 @@ class ConfigManager:
                 root_key = self._root_key
 
         # Early check
-        _ = self.get_section(section_name, root_key=root_key, raise_if_missing=True)
+        _ = self.get_section(section_name, root_key=root_key, raise_if_missing=True,
+                             convert_none_to_nan=convert_none_to_nan)
 
-        return ApplicationConfig(self, section_name, root_key=root_key)
+        return ApplicationConfig(self, section_name,
+                                 root_key=root_key, convert_none_to_nan=convert_none_to_nan)
 
     # --------------------------------------------------------------
     # Priority handling
@@ -1640,7 +1648,8 @@ class ApplicationConfig:
         - .resolved    → apply time filling + LUT filling + env + optional validation
     """
 
-    def __init__(self, cfg: ConfigManager, section_name: str, root_key: str | None = None):
+    def __init__(self, cfg: ConfigManager, section_name: str, root_key: str | None = None,
+                 convert_none_to_nan: bool = True):
         """
         Parameters
         ----------
@@ -1656,6 +1665,7 @@ class ApplicationConfig:
         self._cfg = cfg
         self._section_name = section_name
         self._root_key = root_key
+        self._convert_none_to_nan = convert_none_to_nan
 
     # --------------------------------------------------------------
     @property
@@ -1668,6 +1678,7 @@ class ApplicationConfig:
             self._section_name,
             root_key=self._root_key,
             raise_if_missing=True,
+            convert_none_to_nan=self._convert_none_to_nan
         )
 
     @property

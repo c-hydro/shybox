@@ -120,6 +120,28 @@ class TimeManager:
         self._extra_templates: Dict[str, Optional[str]] = {}
         self._extra_as_string: Set[str] = set()
 
+    def __getstate__(self) -> dict:
+        """
+        Public, serializable state of the object.
+        No private '_' attributes are exposed.
+        """
+        return {
+            "tz": self.tz,
+            "time_run": self.time_run,
+            "time_start": self.time_start,
+            "time_end": self.time_end,
+            "time_period": self.time_period,
+            "time_frequency": self.time_frequency,
+            "time_rounding": self.time_rounding,
+            "time_as_string": tuple(self.time_as_string),
+            "time_as_int": tuple(self.time_as_int),
+            **{
+                k: (self._format_ts(v, self._extra_templates.get(k))
+                    if k in self._extra_as_string else v)
+                for k, v in self._extra_times.items()
+            },
+        }
+
     # ------------------------------------------------------------------ #
     # Static helpers
     # ------------------------------------------------------------------ #
@@ -552,6 +574,10 @@ class TimeManager:
     @property
     def time_frequency(self) -> pd.Timedelta:
         return self._time_frequency
+
+    @property
+    def time_rounding(self) -> pd.Timedelta:
+        return self._time_rounding
 
     @property
     def tz(self) -> str:

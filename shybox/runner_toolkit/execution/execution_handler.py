@@ -1,18 +1,21 @@
 
 # libraries
+from __future__ import annotations
+
 import os
 import subprocess
 import threading
 import queue
+import json
 import pandas as pd
+import datetime as dt
 
 from typing import Optional, Tuple, List, Any, Dict
 from tabulate import tabulate
+from pathlib import Path
 
 from shybox.logging_toolkit.lib_logging_utils import get_log
-
 from shybox.generic_toolkit.lib_utils_string import convert_bytes2string
-
 from shybox.runner_toolkit.execution.lib_utils_execution import (
     build_execution_collections,
     prepare_executable_from_library,
@@ -25,6 +28,11 @@ from shybox.runner_toolkit.execution.lib_utils_execution import (
     normalize_path,
     check_library_path,
 )
+
+from shybox.default.lib_default_time import time_format_algorithm
+from shybox.logging_toolkit.logging_handler import LoggingManager
+
+_SCALARS = (str, int, float, bool, type(None))
 
 # class ExecutionManager
 class ExecutionManager:
@@ -60,7 +68,13 @@ class ExecutionManager:
         execution_update: bool = True,
         stream_output: bool = True,
         timeout: Optional[int] = None,
+        logger: LoggingManager | None = None,
     ) -> None:
+
+        # Set up logger for this ConfigManager instance
+        self.log = LoggingManager.get_logger(
+            logger=logger, name="ExecutionManager", set_as_current=False,
+        )
 
         self.execution_obj = execution_obj
         self.time_obj = time_obj
@@ -552,6 +566,622 @@ class ExecutionManager:
             f"command={cmd_preview!r})"
         )
 
+    def analyze(self, execution_info: Dict[str, Any]) -> "ExecutionAnalyzer":
+        """
+        Create an ExecutionAnalyzer bound to this manager.
+        """
+        return ExecutionAnalyzer(self, execution_info)
+
+
+class ExecutionAnalyzer:
+    """
+    Analyzer for ExecutionManager results.
+
+    Rules:
+      - NO table rendering logic here.
+      - ASCII rendering delegates to ExecutionManager.view_sections() (same style as manager.view()).
+      - All dumping/writing methods (ascii/json/env_vars) are implemented in THIS class.
+      - Accepts extra dict sections to append, and generic objects to coerce into dict sections.
+
+    Instantiation pattern (recommended):
+      - Add ExecutionManager.analyze(execution_info) -> ExecutionAnalyzer(self, execution_info)
+      - Users don't pass manager explicitly.
+    """
+
+    def __init__(
+        self,
+        manager: Any,  # ExecutionManager injected by ExecutionManager.analyze(...)
+        execution_info: Dict[str, Any],
+        *,
+        name: str = "ExecutionAnalyzer",
+        logger: LoggingManager | None = None,
+    ) -> None:
+
+        # Set up logger for this ConfigManager instance
+        self.log = LoggingManager.get_logger(
+            logger=logger, name="ExecutionAnalyzer", set_as_current=False,
+        )
+
+        if execution_info is None or not isinstance(execution_info, dict):
+            raise TypeError(f"{name}: execution_info must be a dict, not {type(execution_info)}")
+
+        self.manager = manager
+        self.execution_info = execution_info
+        self.name = name
+
+        checks = execution_info.get("checks", {})
+        self._checks: Dict[str, Any] = checks if isinstance(checks, dict) else {}
+
+        resp = execution_info.get("exec_response", [None, None, None])
+        if isinstance(resp, (list, tuple)) and len(resp) == 3:
+            self._response = list(resp)
+        else:
+            self._response = [None, None, None]
+
+    # ------------------------------------------------------------------ #
+    # Core getters / status
+
+    @property
+    def exec_tag(self) -> Optional[str]:
+        v = self.execution_info.get("exec_tag", None)
+        return str(v) if v is not None else None
+
+    @property
+    def exec_mode(self) -> Optional[str]:
+        v = self.execution_info.get("exec_mode", None)
+        return str(v) if v is not None else None
+
+    @property
+    def stdout(self) -> Optional[str]:
+        v = self._response[0]
+        return None if v is None else str(v)
+
+    @property
+    def stderr(self) -> Optional[str]:
+        v = self._response[1]
+        return None if v is None else str(v)
+
+    @property
+    def exit_code(self) -> Optional[int]:
+        v = self._response[2]
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except Exception:
+            return None
+
+    @property
+    def dry_run(self) -> bool:
+        return bool(self._checks.get("dry_run", False))
+
+    @property
+    def command(self) -> Optional[str]:
+        cmd = self._checks.get("command_built", None)
+        if isinstance(cmd, str) and cmd.strip():
+            return cmd
+        return None
+
+    @property
+    def errors(self) -> List[str]:
+        errs = self._checks.get("errors", [])
+        if isinstance(errs, list):
+            return [str(e) for e in errs]
+        if errs:
+            return [str(errs)]
+        return []
+
+    @property
+    def ok(self) -> bool:
+        if self.dry_run:
+            return len(self.errors) == 0
+
+        if self.stderr is not None and self.stderr.strip() != "":
+            return False
+
+        code = self.exit_code
+        if code is not None and code != 0:
+            return False
+
+        return len(self.errors) == 0
+
+    # ------------------------------------------------------------------ #
+    # Section/object coercion
+    def _coerce_to_dict(self, obj: Any) -> Dict[str, Any]:
+        """
+        Convert arbitrary objects to a dict section.
+
+        Priority:
+          - None -> {}
+          - dict -> dict
+          - pd.Timestamp / datetime / date -> {"value": iso-string}
+          - pd.Timedelta / datetime.timedelta -> {"value": string}
+          - has __getstate__() -> that (if dict)
+          - has as_dict() -> that (if dict)
+          - has __dict__ -> vars(obj)
+          - else -> {"value": str(obj)}
+        """
+        if obj is None:
+            return {}
+
+        if isinstance(obj, dict):
+            return obj
+
+        # ---- time-like scalars -------------------------------------------------
+        # pandas Timestamp
+        if isinstance(obj, pd.Timestamp):
+            if isinstance(time_format_algorithm, str) and time_format_algorithm:
+                value = obj.strftime(time_format_algorithm)
+            else:
+                value = obj.isoformat()
+            return {"value": value}
+        # python datetime/date
+        if isinstance(obj, (dt.datetime, dt.date)):
+            if isinstance(time_format_algorithm, str) and time_format_algorithm:
+                value = obj.strftime(time_format_algorithm)
+            else:
+                value = obj.isoformat()
+            return {"value": value}
+
+        # pandas Timedelta
+        if isinstance(obj, pd.Timedelta):
+            return {"value": str(obj)}
+
+        # python timedelta
+        if isinstance(obj, dt.timedelta):
+            return {"value": str(obj)}
+
+        # ---- default object hook (pickle-style) --------------------------------
+        getstate = getattr(obj, "__getstate__", None)
+        if callable(getstate):
+            try:
+                d = getstate()
+                if isinstance(d, dict):
+                    return d
+            except Exception:
+                pass
+
+        # ---- custom export ------------------------------------------------------
+        as_dict = getattr(obj, "as_dict", None)
+        if callable(as_dict):
+            try:
+                d = as_dict()
+                if isinstance(d, dict):
+                    return d
+            except Exception:
+                pass
+
+        # ---- plain object attributes -------------------------------------------
+        try:
+            d = vars(obj)
+            if isinstance(d, dict):
+                return d
+        except Exception:
+            pass
+
+        return {"value": str(obj)}
+
+    # ------------------------------------------------------------------ #
+    # Data building
+
+    def summary_dict(self) -> Dict[str, Any]:
+        return {
+            "exec_tag": self.exec_tag,
+            "exec_mode": self.exec_mode,
+            "dry_run": self.dry_run,
+            "ok": self.ok,
+            "exit_code": self.exit_code,
+            "command": self.command,
+            "n_errors": len(self.errors),
+        }
+
+    def as_dict(self, *, include_raw: bool = True) -> Dict[str, Any]:
+        d: Dict[str, Any] = {
+            "summary": self.summary_dict(),
+            "checks": self._checks,
+            "errors": {"errors": self.errors},
+            "io": {"stdout": self.stdout, "stderr": self.stderr},
+        }
+        if include_raw:
+            d["raw"] = self.execution_info
+        return d
+
+    def as_sections(
+        self,
+        *,
+        extras: Optional[Dict[str, Dict[str, Any]]] = None,
+        objects: Optional[Dict[str, Any]] = None,
+        include_object_snapshot: bool = True,
+        include_raw_result: bool = True,
+        include_analyzer_blocks: bool = True,
+        include_raw_in_analyzer: bool = False,
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Build sections dict[str, dict] for rendering/writing.
+
+        extras:
+            Strict dict[str, dict] - already dict sections.
+
+        objects:
+            Flexible dict[str, Any] - values can be dict or any object.
+            Non-dict values will be coerced to dict via _coerce_to_dict().
+
+        include_object_snapshot:
+            Add manager.as_dict() under 'object'.
+
+        include_analyzer_blocks:
+            Add 'summary', 'checks', 'errors', 'io' (and optionally 'raw').
+
+        include_raw_result:
+            Add the raw execution_info dict under 'result'.
+
+        include_raw_in_analyzer:
+            If True, includes 'raw' section inside analyzer blocks (can be large).
+        """
+        sections: Dict[str, Dict[str, Any]] = {}
+
+        if include_object_snapshot:
+            obj = self.manager.as_dict()
+            if isinstance(obj, dict):
+                sections["object"] = obj
+
+        if include_analyzer_blocks:
+            report = self.as_dict(include_raw=include_raw_in_analyzer)
+            for k, v in report.items():
+                if isinstance(v, dict):
+                    sections[k] = v
+
+        if include_raw_result:
+            sections["result"] = self.execution_info
+
+        if extras is not None:
+
+            if isinstance(extras, dict):
+                obj_map = extras
+            else:
+                try:
+                    if hasattr(extras, "__getstate__"):
+                        obj_map = extras.__getstate__()
+                    else:
+                        obj_map = vars(extras)  # fallback
+                except TypeError:
+                    self.log.error(
+                        f"objects must be a dict or an object with __dict__, not {type(extras)}"
+                    )
+
+            for k, obj in obj_map.items():
+                if not str(k) in sections.keys():
+                    sections[str(k)] = self._coerce_to_dict(obj)
+                else:
+                    self.log.warning(
+                        f"ExecutionAnalyzer.as_sections(): skipping object key '{k}' "
+                        "because it already exists in sections."
+                    )
+
+        if objects is not None:
+            if isinstance(objects, dict):
+                obj_map = objects
+            else:
+                try:
+                    if hasattr(objects, "__getstate__"):
+                        obj_map = objects.__getstate__()
+                    else:
+                        obj_map = vars(objects)  # fallback
+                except TypeError:
+                    self.log.error(
+                        f"objects must be a dict or an object with __dict__, not {type(objects)}"
+                    )
+
+            for k, obj in obj_map.items():
+                if obj is None:
+                    continue
+                if not str(k) in sections.keys():
+                    sections[str(k)] = self._coerce_to_dict(obj)
+                else:
+                    self.log.warning(
+                        f"ExecutionAnalyzer.as_sections(): skipping object key '{k}' "
+                        "because it already exists in sections."
+                    )
+
+        return sections
+
+    # ------------------------------------------------------------------ #
+    # View (delegates to ExecutionManager ONLY for ascii rendering)
+
+    def view(
+        self,
+        *,
+        extras: Optional[Dict[str, Dict[str, Any]]] = None,
+        objects: Optional[Dict[str, Any]] = None,
+        include_object_snapshot: bool = True,
+        include_raw_result: bool = True,
+        include_analyzer_blocks: bool = True,
+        include_raw_in_analyzer: bool = False,
+        table_print: bool = True,
+        table_name: str = "ExecutionAnalyzer",
+        **view_kwargs: Any,
+    ) -> str:
+        sections = self.as_sections(
+            extras=extras,
+            objects=objects,
+            include_object_snapshot=include_object_snapshot,
+            include_raw_result=include_raw_result,
+            include_analyzer_blocks=include_analyzer_blocks,
+            include_raw_in_analyzer=include_raw_in_analyzer,
+        )
+
+        return self.manager.view(
+            sections,
+            table_print=table_print,
+            table_name=table_name,
+            **view_kwargs,
+        )
+
+    def view_summary(
+        self,
+        *,
+        extras: Optional[Dict[str, Dict[str, Any]]] = None,
+        objects: Optional[Dict[str, Any]] = None,
+        table_print: bool = True,
+        table_name: str = "ExecutionAnalyzer",
+        **view_kwargs: Any,
+    ) -> str:
+        sections: Dict[str, Dict[str, Any]] = {"summary": self.summary_dict()}
+
+        if extras:
+            for k, v in extras.items():
+                if isinstance(v, dict):
+                    sections[str(k)] = v
+
+        if objects:
+            for k, obj in objects.items():
+                if obj is None:
+                    continue
+                sections[str(k)] = self._coerce_to_dict(obj)
+
+        return self.manager.view_sections(
+            sections,
+            table_print=table_print,
+            table_name=table_name,
+            **view_kwargs,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Dump helpers (strings)
+
+    def dump_ascii(self, **kwargs: Any) -> str:
+        """
+        Same args as view(), but forces table_print=False.
+        """
+        kwargs.setdefault("table_print", False)
+        return self.view(**kwargs)
+
+    def dump_json(
+        self,
+        *,
+        extras: Optional[Dict[str, Dict[str, Any]]] = None,
+        objects: Optional[Dict[str, Any]] = None,
+        include_object_snapshot: bool = True,
+        include_raw_result: bool = True,
+        include_analyzer_blocks: bool = True,
+        include_raw_in_analyzer: bool = False,
+        indent: int = 2,
+    ) -> str:
+        sections = self.as_sections(
+            extras=extras,
+            objects=objects,
+            include_object_snapshot=include_object_snapshot,
+            include_raw_result=include_raw_result,
+            include_analyzer_blocks=include_analyzer_blocks,
+            include_raw_in_analyzer=include_raw_in_analyzer,
+        )
+        return json.dumps(sections, indent=indent, default=str, ensure_ascii=False)
+
+    # ---------------- env var helpers (self-contained)
+
+    def _env_key(self, s: str) -> str:
+        out = []
+        for ch in str(s):
+            out.append(ch.upper() if ch.isalnum() else "_")
+        key = "".join(out)
+        while "__" in key:
+            key = key.replace("__", "_")
+        return key.strip("_") or "KEY"
+
+    def _env_quote(self, v: Any) -> str:
+        if v is None:
+            return '""'
+        if isinstance(v, bool):
+            return '"1"' if v else '"0"'
+        if isinstance(v, (int, float)):
+            return f'"{v}"'
+
+        if isinstance(v, (list, tuple)):
+            try:
+                s = " ".join(map(str, v))
+            except Exception:
+                s = repr(v)
+        else:
+            try:
+                s = str(v)
+            except Exception:
+                s = repr(v)
+
+        s = s.replace("\\", "\\\\").replace('"', '\\"')
+        s = s.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
+        return f'"{s}"'
+
+    def dump_env_vars(
+        self,
+        *,
+        extras: Optional[Dict[str, Dict[str, Any]]] = None,
+        objects: Optional[Dict[str, Any]] = None,
+        include_object_snapshot: bool = True,
+        include_raw_result: bool = True,
+        include_analyzer_blocks: bool = True,
+        include_raw_in_analyzer: bool = False,
+        prefix: str = "EXECUTION",
+        separator: str = ":",
+        include_section: bool = True,
+        sort_keys: bool = True,
+    ) -> str:
+        sections = self.as_sections(
+            extras=extras,
+            objects=objects,
+            include_object_snapshot=include_object_snapshot,
+            include_raw_result=include_raw_result,
+            include_analyzer_blocks=include_analyzer_blocks,
+            include_raw_in_analyzer=include_raw_in_analyzer,
+        )
+
+        # Use manager's flatten for consistency (name-mangled private method)
+        flatten = getattr(self.manager, "_ExecutionManager__flat_dict_key")
+
+        lines: List[str] = []
+        pfx = self._env_key(prefix)
+
+        for sec_name, sec_data in sections.items():
+            if not isinstance(sec_data, dict):
+                continue
+
+            flat = flatten(sec_data, separator=separator)
+            items = list(flat.items())
+            if sort_keys:
+                items.sort(key=lambda x: str(x[0]))
+
+            for k, v in items:
+                parts = [pfx]
+                if include_section:
+                    parts.append(self._env_key(sec_name))
+                parts.append(self._env_key(str(k).replace(separator, "_")))
+                env_key = "_".join(parts)
+                lines.append(f"{env_key}={self._env_quote(v)}")
+
+        return "\n".join(lines) + "\n"
+
+    # ------------------------------------------------------------------ #
+    # Write helpers (files)
+
+    def write_to_ascii(self, path: str, **kwargs: Any) -> str:
+        content = self.dump_ascii(**kwargs)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return content
+
+    def write_to_json(self, path: str, *, indent: int = 2, **kwargs: Any) -> str:
+        content = self.dump_json(indent=indent, **kwargs)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return content
+
+    def write_to_env_vars(self, path: str, **kwargs: Any) -> str:
+        content = self.dump_env_vars(**kwargs)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return content
+
+    def write_to(
+        self,
+        path: Optional[str] = None,
+        *,
+        file_name: Optional[str] = None,
+        fmt: str = "env",
+        prefix: str = "HMC",
+        **kwargs: Any,
+    ) -> str:
+        fmt_norm = (fmt or "").lower().strip()
+
+        # Canonical format + default filename + expected extension
+        if fmt_norm in ("ascii", "txt", "text", "table"):
+            fmt_kind = "ascii"
+            default_name = "info.txt"
+            expected_ext = ".txt"
+        elif fmt_norm == "json":
+            fmt_kind = "json"
+            default_name = "info.json"
+            expected_ext = ".json"
+        elif fmt_norm in ("env", "env_vars", "dotenv"):
+            fmt_kind = "env"
+            default_name = "info.env"
+            expected_ext = ".env"
+        else:
+            self.log.error(f"ExecutionAnalyzer.write_to(): unsupported fmt '{fmt}'.")
+            raise ValueError(f"Unsupported fmt '{fmt}'")
+
+        file_name_provided = file_name is not None
+
+        # Base fallback: folder of the running app
+        try:
+            app_dir = Path(__file__).resolve().parent
+        except NameError:
+            app_dir = Path.cwd()
+
+        # Resolve destination directory + file name
+        dest_dir: Path
+        fname: Optional[str] = file_name.strip() if file_name and file_name.strip() else None
+
+        if path is None:
+            dest_dir = app_dir
+        else:
+            p = Path(path)
+
+            # If path looks like a file and no file_name override → split
+            if p.suffix and not file_name_provided:
+                dest_dir = p.parent
+                fname = p.name
+            else:
+                dest_dir = p
+
+            # Try to create directory + writability check
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                test_file = dest_dir / ".write_check"
+                test_file.touch(exist_ok=True)
+                test_file.unlink()
+            except Exception:
+                dest_dir = app_dir
+                self.log.warning(
+                    "write_to(): info path is not writable; using application directory instead."
+                )
+
+        # Default filename (format-related) if still missing
+        if not fname:
+            fname = default_name
+
+        # Extension check (+ add extension if missing)
+        name_path = Path(fname)
+        current_ext = name_path.suffix.lower()
+
+        if not current_ext:
+            # No extension at all -> add expected one quietly
+            fname = str(name_path.with_suffix(expected_ext))
+        elif current_ext != expected_ext:
+            self.log.warning(
+                f"write_to(): file extension '{current_ext}' does not match fmt '{fmt_kind}' "
+                f"(expected '{expected_ext}'). Using '{fname}' as provided."
+            )
+
+        dest = dest_dir / fname
+        dest_str = str(dest)
+
+        # Dispatch by format
+        if fmt_kind == "ascii":
+            return self.write_to_ascii(dest_str, **kwargs)
+
+        if fmt_kind == "json":
+            return self.write_to_json(dest_str, **kwargs)
+
+        # fmt_kind == "env"
+        env_prefix = (prefix or "").strip()
+        if env_prefix and not env_prefix.endswith("_"):
+            env_prefix += "_"
+
+        return self.write_to_env_vars(
+            dest_str,
+            prefix=env_prefix,
+            **kwargs,
+        )
+
 # helpers
 def _pump_lines(stream, name: str, q: "queue.Queue[tuple[str, str]]"):
     try:
@@ -562,3 +1192,4 @@ def _pump_lines(stream, name: str, q: "queue.Queue[tuple[str, str]]"):
             stream.close()
         except Exception:
             pass
+
