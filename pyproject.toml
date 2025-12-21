@@ -4,25 +4,30 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shybox"
-version = "1.0.0"
+version = "1.3.3"
 description = "A package to set and run snow and hydrological models and analyze results, developed by CIMA Research Foundation"
+
 authors = [
     { name = "Fabio Delogu", email = "fabio.delogu@cimafoundation.org" },
     { name = "Andrea Libertino", email = "andrea.libertino@cimafoundation.org" },
     { name = "Francesco Avanzi", email = "francesco.avanzi@cimafoundation.org" }
 ]
+
 maintainers = [
-    { name = "Fabio Delogu", email = "fabio.delogu@cimafoundation.org"}
-    { name = "Andrea Libertino", email = "andrea.libertino@cimafoundation.org"}
+    { name = "Fabio Delogu", email = "fabio.delogu@cimafoundation.org" },
+    { name = "Andrea Libertino", email = "andrea.libertino@cimafoundation.org" }
 ]
+
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.9"
+
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: ECPL License",
+    "License :: OSI Approved",
     "Operating System :: OS Independent",
 ]
+
 dependencies = [
     "numpy>=1.21.5",
     "xarray>=2024.3.0",
@@ -34,9 +39,5 @@ dependencies = [
 Repository = "https://github.com/c-hydro/shybox"
 
 [project.optional-dependencies]
-
-# dependencies for creating thumbnails
 thumbnails = []
-
-# dependencies for reading and writing remote data
 remote-data = []
