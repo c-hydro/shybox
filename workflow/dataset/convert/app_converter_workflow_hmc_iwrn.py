@@ -2,8 +2,8 @@
 """
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN
 
-__date__ = '20251116'
-__version__ = '1.1.1'
+__date__ = '20260114'
+__version__ = '1.2.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -22,6 +22,8 @@ PATH_DST='/home/fabio/Desktop/shybox/dset/case_study_iwrn/dynamic/destination'
 PATH_LOG=/home/fabio/Desktop/shybox/dset/case_study_iwrn/log/;
 
 Version(s):
+20260114 (1.2.0) --> Refactor to the orchestrator grid class for multi-variable processing
+20251118 (1.1.1) --> Fix time update reference method
 20251116 (1.1.0) --> Release for shybox package (hmc datasets converter base configuration)
 """
 
@@ -37,17 +39,18 @@ import pandas as pd
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.time_toolkit.lib_utils_time import (
-    select_time_range, select_time_format, get_time_length, get_time_bounds)
-
-from shybox.generic_toolkit.lib_utils_string import fill_string
-
-#from shybox.runner_toolkit.old.settings.driver_app_settings import DrvSettings
-
-from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
 
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
+
+# fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
+from shybox.processing_toolkit.lib_proc_interp import interpolate_data
+from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
+
+from shybox.time_toolkit.lib_utils_time import (
+    select_time_range, select_time_format, get_time_length, get_time_bounds)
+from shybox.generic_toolkit.lib_utils_string import fill_string
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -55,8 +58,8 @@ from shybox.logging_toolkit.logging_handler import LoggingManager
 project_name = 'shybox'
 alg_name = 'Application for processing datasets'
 alg_type = 'Package'
-alg_version = '1.1.0'
-alg_release = '2025-11-16'
+alg_version = '1.2.0'
+alg_release = '2026-01-14'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

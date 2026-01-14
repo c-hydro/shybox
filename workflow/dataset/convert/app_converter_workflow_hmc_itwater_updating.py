@@ -39,7 +39,7 @@ import pandas as pd
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
@@ -48,10 +48,6 @@ from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
 
 from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_format)
-
-# set logger
-logger_stream = logging.getLogger(logger_name)
-logger_stream.setLevel(logging.ERROR)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -117,7 +113,7 @@ def main(alg_collectors_settings: dict = None):
 
     # define logging instance
     logging_handle = LoggingManager(
-        name="shybox_algorithm_converter_itwater_hmc_forcing",
+        name="shybox_algorithm_converter_itwater_hmc_updating",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------
@@ -233,7 +229,7 @@ def main(alg_collectors_settings: dict = None):
             path=alg_cfg_application['data_destination']['path'],
             file_name=alg_cfg_application['data_destination']['file_name'],
             time_signature='step',
-            file_format='netcdf', file_type='hmc', file_mode='local',
+            file_format='netcdf', file_type='grid_hmc', file_mode='local',
             file_variable=['snow_mask'], file_io='output',
             variable_template={
                 "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},

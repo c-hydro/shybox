@@ -230,7 +230,7 @@ class TimeManager:
         cls,
         obj,
         *,
-        start_days_before: int = 2,
+        start_days_before: (int, None) = 2,
         time_as_string: Tuple[str, ...] = ("time_start", "time_end"),
         time_as_int:    Tuple[str, ...] = ("time_period",),
         tz: str = "Europe/Rome",

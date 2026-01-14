@@ -18,7 +18,7 @@ TIME_PERIOD=24;
 TIME_START='2024-10-17 06:00';
 TIME_END='2024-10-17 06:00';
 PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_static/gridded/';
-PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/source/icon/';
+PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/source/icon';
 PATH_DST='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/destination/icon/';
 PATH_LOG=/home/fabio/Desktop/shybox/dset/case_study_destine/log/
 
@@ -34,14 +34,20 @@ import os
 
 import pandas as pd
 
-from shybox.default.lib_default_args import logger_arrow
-from shybox.default.lib_default_args import collector_data
 from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_format)
 
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
+# fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
+from shybox.processing_toolkit.lib_proc_interp import interpolate_data
+from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
+from shybox.processing_toolkit.lib_proc_compute_temperature import convert_temperature_units
+from shybox.processing_toolkit.lib_proc_compute_wind import compute_data_wind_speed
+from shybox.processing_toolkit.lib_proc_compute_humidity import compute_data_rh
+from shybox.processing_toolkit.lib_proc_compute_radiation import compute_data_incoming_radiation
+
+from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 # ----------------------------------------------------------------------------------------------------------------------
@@ -311,7 +317,7 @@ def main(alg_collectors_settings: dict = None):
         path=alg_cfg_application['data_destination']['path'],
         file_name=alg_cfg_application['data_destination']['file_name'],
         time_signature='step',
-        file_format='netcdf', file_type='hmc', file_mode='local',
+        file_format='netcdf', file_type='grid_hmc', file_mode='local',
         file_variable=['RAIN', 'AIR_T', 'RH','INC_RAD','WIND_SPEED'], file_io='output',
         variable_template={
             "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
@@ -335,7 +341,7 @@ def main(alg_collectors_settings: dict = None):
         data_package_in=[rain_data, airt_data, rh_data, inc_rad_data, wind_speed_data],
         data_package_out=output_data,
         data_ref=geo_data,
-        priority=['WIND_SPEED'],
+        priority=['RAIN'],
         configuration=alg_cfg_workflow,
         logger=logging_handle
     )

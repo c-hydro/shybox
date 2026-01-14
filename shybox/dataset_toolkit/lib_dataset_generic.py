@@ -35,8 +35,11 @@ except ImportError:
 from decimal import Decimal
 from typing import Optional, Dict
 
+from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
-from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m, write_file_nc_itwater
+from shybox.io_toolkit.lib_io_nc_s3m import write_dataset_s3m
+from shybox.io_toolkit.lib_io_nc_hmc import write_dataset_hmc, write_ts_hmc
+from shybox.io_toolkit.lib_io_nc_other import write_dataset_itwater
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.time_toolkit.lib_utils_time import is_date
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -201,9 +204,27 @@ def read_from_file(
             if len(squeeze_dims) > 0:
                 data = data.squeeze(squeeze_dims)
 
-        elif file_type == 'time_series':
+        elif file_type == 'points_section_db':
+
+            # read section database (flood-proofs format)
+            data = read_sections_db(file_path=path)
+
+        elif file_type == 'points_section_hmc':
+
+            # read section registry (hmc format)
+            data = read_sections_registry(filepath=path)
+
+        elif file_type == 'time_series_hmc':
+
+            # read time series data (hmc format)
+            data = read_sections_data(path=path)
+
+        elif file_type == 'points' or file_type == 'points_generic':
+
+            # read generic points file
             with open(path, 'r') as f:
                 data = f.readlines()
+
         else:
             with open(path, 'r') as f:
                 data = f.readlines()
@@ -213,7 +234,7 @@ def read_from_file(
         data:gpd.GeoDataFrame = gpd.read_file(path)
 
     # read the data from a geotiff (and similar formats)
-    elif file_format in ['tiff', 'geotiff', 'tiff']:
+    elif file_format in ['tiff', 'geotiff', 'tif']:
 
         if file_variable is not None:
             if not file_variable:
@@ -395,17 +416,20 @@ def write_to_file(data, path,
 
     # write the data to a geotiff
     elif file_format == 'geotiff':
+
         data.rio.to_raster(path, compress = 'LZW')
 
     # write the data to a netcdf
     elif file_format == 'netcdf':
 
-        if file_type in ['grid_hmc', 'hmc', 'HMC']:
-            write_file_nc_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
-        elif file_type in ['grid_s3m', 's3m', 'S3M']:
-            write_file_nc_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
+        if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
+            write_dataset_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
+        elif file_type in ['time_series_hmc', 'ts_hmc']:
+            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None, **kwargs)
+        elif file_type in ['grid_s3m', 'forcing_s3m']:
+            write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['itwater', 'it_water']:
-            write_file_nc_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
+            write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         else:
             data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
 

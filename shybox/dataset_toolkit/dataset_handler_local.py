@@ -30,12 +30,44 @@ class DataLocal(Dataset):
 
     type = 'local_dataset'
 
-    _default_variable_template = {
-        "vars_data": {"variable": "variable"},
-        "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-        "coords_geo": {"longitude": "longitude", "latitude": "latitude"},
-        "vars_wf": ['variable']
+    # Backward-compatible layout templates (defaults used only if user doesn't provide them)
+    _layout_templates = {
+        "geo": {
+            "dims_key": "dims_geo",
+            "coords_key": "coords_geo",
+            "dims": {"longitude": "longitude", "latitude": "latitude"},
+            "coords": {"longitude": "longitude", "latitude": "latitude"},
+        },
+        "grid": {  # same defaults as geo (you said you can use geo also for grid)
+            "dims_key": "dims_geo",
+            "coords_key": "coords_geo",
+            "dims": {"longitude": "longitude", "latitude": "latitude"},
+            "coords": {"longitude": "longitude", "latitude": "latitude"},
+        },
+        "points": {
+            # keep supporting your old "dims_point" convention
+            "dims_key": "dims_point",
+            "coords_key": "coords_geo",  # points may still have lon/lat coords
+            "dims": {"point": "point"},  # safe generic fallback
+            "coords": {"longitude": "longitude", "latitude": "latitude"},
+        },
+        "time_series": {
+            "dims_key": "dims_time",
+            "coords_key": "coords_time",
+            "dims": {"time": "time"},
+            "coords": {"time": "time"},
+        },
     }
+
+    # Aliases to be forgiving with naming
+    _layout_aliases = {
+        "ts": "time_series",
+        "timeseries": "time_series",
+        "time-series": "time_series",
+        "point": "points",
+    }
+
+    _default_vars_wf = ["variable"]
 
     def __init__(self,
                  path: Optional[str] = None, file_name: Optional[str] = None,
@@ -52,6 +84,11 @@ class DataLocal(Dataset):
         else:
             self.file_deps = []
 
+        if 'data_layout' in kwargs:
+            self.data_layout = kwargs.pop('data_layout')
+        else:
+            self.data_layout = 'geo'
+
         # determine directory name
         if path is not None:
             self.dir_name = path
@@ -64,7 +101,6 @@ class DataLocal(Dataset):
         else:
             self.dir_name = ensure_folder_tmp()
 
-         #
         self._file_io = None  # internal storage
         if file_io is not None:
             self.file_io = file_io  # triggers the setter
@@ -82,7 +118,7 @@ class DataLocal(Dataset):
             self.file_name = ensure_file_tmp()
 
         # handle file_template normalization
-        file_variable = kwargs.get('file_variable', self._default_variable_template['vars_data']['variable'])
+        file_variable = kwargs.get('file_variable', 'variable')
         n_vars = kwargs.pop('n_vars', 1) or 1
 
         # variable template normalization
@@ -93,9 +129,34 @@ class DataLocal(Dataset):
             self.logger.error("Variable template must be a dict if provided.")
             raise ValueError("Variable template must be a dict if provided.")
 
-        # define dims and vars
-        dims_geo = variable_template.get("dims_geo") or self._default_variable_template["dims_geo"]
-        coords_geo = variable_template.get("coords_geo") or self._default_variable_template["coords_geo"]
+        # define dims and vars - layout handling (backward compatible)
+        layout_raw = getattr(self, "data_layout", "geo") or "geo"
+        layout_norm = self._layout_aliases.get(str(layout_raw).lower(), str(layout_raw).lower())
+
+        if layout_norm not in self._layout_templates:
+            raise ValueError(f"Unsupported data_layout '{layout_raw}'. Allowed: {list(self._layout_templates.keys())}")
+
+        layout_cfg = self._layout_templates[layout_norm]
+        dims_key_default = layout_cfg["dims_key"]
+        coords_key_default = layout_cfg["coords_key"]
+
+        dims_user = (
+                variable_template.get(dims_key_default)
+                or variable_template.get("dims_geo")
+                or variable_template.get("dims_point")
+                or variable_template.get("dims_time")
+        )
+        coords_user = (
+                variable_template.get(coords_key_default)
+                or variable_template.get("coords_geo")
+                or variable_template.get("coords_point")
+                or variable_template.get("coords_time")
+        )
+
+        dims_geo = dims_user or layout_cfg["dims"]
+        coords_geo = coords_user or layout_cfg["coords"]
+
+        # vars_data (unchanged)
         vars_data = variable_template.get("vars_data")
         if not vars_data:
             if file_variable:
@@ -110,7 +171,7 @@ class DataLocal(Dataset):
         elif self.file_io == 'derived':
             file_workflow = list(vars_data.values())
         else:
-            file_workflow = variable_template.get("vars_wf") or self._default_variable_template["vars_wf"]
+            file_workflow = variable_template.get("vars_wf") or self._default_vars_wf
 
         # ensure valid structure
         if not all(isinstance(x, dict) for x in (dims_geo, coords_geo, vars_data)):
@@ -129,6 +190,7 @@ class DataLocal(Dataset):
             'logger': self.logger,
             'message': message,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
+            "data_layout": layout_norm,
             'file_variable': file_variable,
             'file_workflow': file_workflow
         })

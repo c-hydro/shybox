@@ -1,5 +1,74 @@
 class DatasetNamespace:
     """
+    Bidirectional namespace, with a safe rule for duplicate values:
+    - If multiple keys point to the same value, reverse maps value -> value (self-map).
+      Then get(value) returns value (unambiguous).
+    """
+    __slots__ = ("_forward", "_reverse")
+
+    def __init__(self, **pairs):
+        object.__setattr__(self, "_forward", {})
+        object.__setattr__(self, "_reverse", {})
+        for k, v in pairs.items():
+            self.add(k, v)
+
+    def add(self, key, value):
+        # Remove old mapping for this key (if any)
+        if key in self._forward:
+            old_val = self._forward.pop(key)
+            # only remove reverse if it was uniquely pointing to this key
+            if self._reverse.get(old_val) == key:
+                self._reverse.pop(old_val, None)
+
+        # If value already exists in reverse:
+        if value in self._reverse:
+            existing = self._reverse[value]
+
+            # If it's already "many-to-one" (self-mapped), keep it
+            if existing == value:
+                pass
+            # If collision with a different key, convert to self-map (unambiguous)
+            elif existing != key:
+                self._reverse[value] = value
+            # else: same key, fine
+
+        else:
+            # First time we see this value: value -> key
+            self._reverse[value] = key
+
+        # Always keep forward mapping
+        self._forward[key] = value
+        return self
+
+    def get(self, x, default=None):
+        if x in self._forward:
+            return self._forward[x]
+        if x in self._reverse:
+            return self._reverse[x]
+        if default is not None:
+            return default
+        raise KeyError(f"{x!r} not found")
+
+    def __getattr__(self, name):
+        if name in self._forward:
+            return self._forward[name]
+        raise AttributeError(f"{name} not found")
+
+    def __setattr__(self, name, value):
+        self.add(name, value)
+
+    def as_dict(self):
+        return dict(self._forward)
+
+    def __repr__(self):
+        items = ", ".join(f"{k}={v!r}" for k, v in self._forward.items())
+        return f"DatasetNamespace({items})"
+
+
+
+
+class DatasetNamespace_OLD:
+    """
     Bidirectional namespace:
     - Add key/value pairs dynamically
     - get(x): automatically returns the opposite side (key↔value)

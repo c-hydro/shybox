@@ -122,9 +122,11 @@ class ProcessorContainer:
 
         # get information about id and variable(s)
         fx_id = kwargs['id']
-        fx_variable_wf, fx_variable_tag = kwargs['workflow'], kwargs['tag']
-        fx_variable_trace = ':'.join([fx_variable_tag, fx_variable_wf])
+        fx_variable_name, fx_variable_wf = kwargs['reference'].split(':')
+        #fx_variable_wf, fx_variable_tag = kwargs['workflow'], kwargs['tag']
+        fx_variable_trace = ':'.join([fx_variable_name, fx_variable_wf])
 
+        # organize data raw and names (internal data object or from memory)
         if fx_id == 0 and 'memory' in kwargs:
             if (fx_variable_wf is not None) and (fx_variable_wf in kwargs['memory']):
                 data_raw = kwargs['memory'][fx_variable_wf]
@@ -133,32 +135,86 @@ class ProcessorContainer:
         else:
             data_raw = self.in_obj
 
+        # check data names (list or single)
+        if isinstance(data_raw, list):
+            data_names = ['data'] * len(data_raw)
+        else:
+            data_names = 'data'
+
         # adjust data (if deps are available)
+        id_deps, in_deps, names_deps = 0, [], []
+        str_vars_raw, str_deps_raw = [], []
         if (self.in_deps is not None) and (len(self.in_deps) > 0):
 
+            if isinstance(self.in_deps, dict):
+
+                # get names and deps
+                in_deps = list(self.in_deps.values())
+                names_deps = list(self.in_deps.keys())
+
+            elif isinstance(self.in_deps, list):
+
+                # get deps
+                in_deps = self.in_deps
+                # flatten only if it's a list of lists
+                if in_deps and isinstance(in_deps[0], (list, tuple)):
+                    in_deps = [x for sub in in_deps for x in sub]
+                # get names
+                names_deps = [f"dep_{i}" for i in range(len(in_deps))]
+
+            else:
+                # get deps and names type mismatch
+                self.logger.error('Data object is parsed as generic object for input dependencies')
+                raise TypeError('Deps object is not expected type. It must be a dict or a list.')
+
+            # append deps to data_raw and data_names
             if isinstance(data_raw, list):
-                data_raw.extend(self.in_deps)
+                id_deps = len(data_raw)
+                data_raw.extend(in_deps)
+                data_names.extend(names_deps)
             elif isinstance(data_raw, DataLocal):
-                data_raw = [data_raw] + self.in_deps
+                id_deps = 1
+                data_raw = [data_raw] + in_deps
+                data_names.extend(names_deps)
             else:
                 self.logger.error('Data object is not compatible with input dependencies')
                 raise TypeError('Data object is not compatible with input dependencies')
 
-            str_vars_raw, str_deps_raw = [], []
-            for data_tmp in data_raw:
-                if isinstance(data_tmp, DataLocal):
-                    str_part1_tmp = data_tmp.file_namespace.get('variable')
-                    str_part2_tmp = data_tmp.file_namespace.get('workflow')
-                    var_tmp = ':'.join([str_part1_tmp, str_part2_tmp])
-                    str_vars_raw.append(var_tmp)
-                    str_deps_raw.append(str_part1_tmp)
-                else:
-                    self.logger.error('Data object in the list is not a DataLocal instance')
+            # normalize data to list of DataLocal (if needed)
+            data_list = _normalize_local_data(data_raw)
+            for data_tmp in data_list:
+                if not isinstance(data_tmp, DataLocal):
+                    self.logger.error(
+                        f'Data object {type(data_tmp)} is not a DataLocal instance'
+                    )
                     raise TypeError('Data object in the list is not a DataLocal instance')
-        else:
-            str_vars_raw = [':'.join([fx_variable_tag, fx_variable_wf])]
-            str_deps_raw = [fx_variable_tag]
 
+                str_variable = data_tmp.file_namespace.get('variable')
+                str_workflow = data_tmp.file_namespace.get('workflow')
+
+                var_tag = ':'.join([str_variable, str_workflow])
+
+                str_vars_raw.append(var_tag)
+                str_deps_raw.append(str_variable)
+
+        else:
+            # normalize data to list of DataLocal (if needed)
+            id_deps = None
+            data_list = _normalize_local_data(data_raw)
+            for data_tmp in data_list:
+                if not isinstance(data_tmp, DataLocal):
+                    self.logger.error(
+                        f'Data object {type(data_tmp)} is not a DataLocal instance'
+                    )
+                    raise TypeError('Data object in the list is not a DataLocal instance')
+
+                str_variable = data_tmp.file_namespace.get('variable')
+                str_workflow = data_tmp.file_namespace.get('workflow')
+
+                var_tag = ':'.join([str_variable, str_workflow])
+                str_vars_raw.append(var_tag)
+
+        # manage time if data_raw is a list or single object
         if isinstance(time, list):
             if isinstance(data_raw, list):
                 data_raw = data_raw * len(time)
@@ -198,9 +254,14 @@ class ProcessorContainer:
         # get the data (using the class signature)
         if isinstance(data_raw, list):
 
+            # normalize data to list of DataLocal (if needed)
+            data_list = _normalize_local_data(data_raw)
+
             # iterate over the list of data objects
             fx_data, fx_metadata, fx_deps = [], {}, []
-            for data_id, (data_tmp, str_var_tmp, time_tmp) in enumerate(zip(data_raw, str_vars_raw, time)):
+            fx_other = {}
+            for data_id, (data_tmp, data_name, str_var_tmp, time_tmp) in enumerate(
+                    zip(data_list, data_names, str_vars_raw, time)):
 
                 # check nested list
                 if isinstance(data_tmp, list):
@@ -244,7 +305,10 @@ class ProcessorContainer:
                 if self.debug_state_in: plot_data(fx_tmp)
 
                 # append data (in list format)
-                fx_data.append(fx_tmp)
+                if (id_deps is None) or (data_id < id_deps):
+                    fx_data.append(fx_tmp)
+                else:
+                    fx_other[data_name] = fx_tmp
 
                 # create metadata
                 if 'fx_variable' not in fx_metadata:
@@ -259,14 +323,18 @@ class ProcessorContainer:
                 if time_ref != time:
                     return None, None
 
+            # obtain variable name from data object
+            str_workflow, str_variable = fx_variable_trace.split(':')
+            var_name = ':'.join([str_workflow, str_variable])
+
             # manage variable mapping
-            kwargs['variable'] = str_vars_raw[0]
+            kwargs['variable'] = var_name
 
             # update logger (for messages consistency)
             data_raw.logger = self.logger.compare(data_raw.logger)
             # get data
-            fx_data = data_raw.get_data(time=time, name=str_vars_raw[0], **kwargs)
-            fx_deps = [str_vars_raw[0]]
+            fx_data = data_raw.get_data(time=time, name=var_name, **kwargs)
+            fx_deps = []
 
             # convert to DataArray if single variable
             fx_data = _to_dataarray_if_single_var(fx_data)
@@ -276,11 +344,21 @@ class ProcessorContainer:
             # debug data in
             if self.debug_state_in: plot_data(fx_data)
 
+            # create other data dict
+            fx_other = {}
             # create metadata
             fx_metadata = {'fx_variable': fx_vars}
 
-        # check if data is available
-        if _is_empty_fx_data(fx_data):
+        # check if fx data in empty and fx other is available to use (merge for variable that are not in fx_data)
+        add_other = True
+        if _is_empty_fx_data(fx_data) :
+            if fx_other:
+                for key, obj in fx_other.items():
+                    fx_data.append(obj)
+                add_other = False
+
+        # check if fx data is available or not
+        if _is_empty_fx_data(fx_data) :
             self.logger.info_down(
                 f"Run :: {self.fx_name} - {time_str} - {fx_variable_trace} ... SKIPPED. DATA NOT AVAILABLE")
             return None, None
@@ -289,9 +367,12 @@ class ProcessorContainer:
         fx_memory = None
         if fx_id == 0:
             if isinstance(data_raw, list):
-                fx_memory = [data_tmp.memory_data for data_tmp in data_raw]
+                # normalize data to list of DataLocal (if needed)
+                data_list = _normalize_local_data(data_raw)
+                # check memory data for each data object
+                fx_memory = [_get_memory_data(data_tmp) for data_tmp in data_list]
             else:
-                fx_memory = data_raw.memory_data
+                fx_memory = _get_memory_data(data_raw)
 
         # reduce data if only one element in the list
         if isinstance(fx_data, list):
@@ -322,15 +403,23 @@ class ProcessorContainer:
                         dep_key = next(k for k, v in deps_vars.items() if v == fx_var)
                         fx_data[dep_key] = tmp_values
 
+        # add other data and deps if available
+        if fx_other:
+            # if add in data avoid to add in the args
+            if add_other:
+                fx_args = {**fx_args, **fx_other}
+
         # run function to process data
         fx_save = self.fx_obj(data=fx_data, **fx_args)
         fx_metadata['fx_variable'] = _sync_variable_name(fx_save, fx_metadata['fx_variable'])
 
-        # define the variable to control the workflow of processes
+        # define the variable to control the workflow of processes (grid and time-series datasets)
         if isinstance(fx_save, xr.DataArray):
             fx_variable_data = fx_variable_wf
         elif isinstance(fx_save, xr.Dataset):
             fx_variable_data = list(fx_save.data_vars)
+        elif isinstance(fx_save, pd.DataFrame):
+            fx_variable_data = fx_save.name
         else:
             self.logger.error('Unknown fx output type')
             raise ValueError('Unknown fx output type')
@@ -345,11 +434,11 @@ class ProcessorContainer:
             # data array case
             if isinstance(fx_variable_data, str):
                 fx_save.name = fx_variable_data
-                _set_name_and_attrs(fx_save, fx_variable_data, fx_variable_wf, fx_variable_tag)
+                _set_name_and_attrs(fx_save, fx_variable_data, fx_variable_wf, fx_variable_name)
             elif isinstance(fx_variable_data, list):
                 if len(fx_variable_data) == 1:
                     fx_save.name = fx_variable_data[0]
-                    _set_name_and_attrs(fx_save, fx_variable_data[0], fx_variable_wf, fx_variable_tag)
+                    _set_name_and_attrs(fx_save, fx_variable_data[0], fx_variable_wf, fx_variable_name)
                 else:
                     self.logger.error(
                         'fx_var must be a single string when fx_save is a DataArray with multiple variables.')
@@ -370,7 +459,7 @@ class ProcessorContainer:
             if isinstance(fx_variable_data, str):
                 if fx_variable_data in fx_save.data_vars:
                     fx_save[fx_variable_data].name = fx_variable_data
-                    _set_name_and_attrs(fx_save[fx_variable_data], fx_variable_data, fx_variable_wf, fx_variable_tag)
+                    _set_name_and_attrs(fx_save[fx_variable_data], fx_variable_data, fx_variable_wf, fx_variable_name)
                 else:
                     self.logger.error(f'Variable {fx_variable_data} not found in Dataset data_vars.')
                     raise ValueError(f"Variable '{fx_variable_data}' not found in Dataset data_vars.")
@@ -379,7 +468,7 @@ class ProcessorContainer:
                 for var in fx_variable_data:
                     if var in fx_save.data_vars:
                         fx_save[var].name = var
-                        _set_name_and_attrs(fx_save[var], var, fx_variable_wf, fx_variable_tag)
+                        _set_name_and_attrs(fx_save[var], var, fx_variable_wf, fx_variable_name)
                     else:
                         self.logger.error(f'Variable {var} not found in Dataset data_vars.')
                         raise ValueError(f"Variable '{var}' not found in Dataset data_vars.")
@@ -389,7 +478,14 @@ class ProcessorContainer:
 
             # Optionally attach dataset-level attributes
             fx_save.attrs["workflow"] = fx_variable_wf
-            fx_save.attrs["tag"] = fx_variable_tag
+            fx_save.attrs["tag1"] = fx_variable_name
+            fx_save.attrs["name"] = fx_variable_name
+
+        elif isinstance(fx_save, pd.DataFrame):
+
+            fx_save.attrs["workflow"] = fx_variable_wf
+            fx_save.attrs["tag1"] = fx_variable_name
+            fx_save.attrs["name"] = fx_variable_name
 
         else:
             # error for unknown type (dataarray or dataset only)
@@ -429,6 +525,10 @@ class ProcessorContainer:
                 else:
                     fx_out = fx_save[fx_var_list]
                     fx_names = fx_var_list
+
+            elif isinstance(fx_save, pd.DataFrame):
+                fx_names = fx_save.name
+
             else:
                 self.logger.error("Unknown fx output type")
                 raise ValueError("Unknown fx output type")
@@ -460,20 +560,35 @@ class ProcessorContainer:
                     fx_collections[fx_variable_trace] = fx_save
 
                     # iterate over collections variables
-                    collections_dset = xr.Dataset()
-                    for key, da_raw in fx_collections.items():
+                    collections_obj = None
+                    for key, obj_raw in fx_collections.items():
                         self.logger.info_up(f'Variable {key} ... ')
-                        if da_raw is not None:
+                        if obj_raw is not None:
 
-                            # method to match coordinates to reference (no interpolation)
-                            da_match = match_coords_to_reference(da_raw, self.fx_static['ref'])
+                            if isinstance(obj_raw, pd.DataFrame):
+                                obj_match = obj_raw
+                            elif isinstance(obj_raw, xr.DataArray):
+                                # method to match coordinates to reference (no interpolation)
+                                obj_match = match_coords_to_reference(obj_raw, self.fx_static['ref'])
+                            else:
+                                self.logger.error('Collections data must be xarray DataArray or pandas DataFrame')
+                                raise TypeError('Collections data must be xarray DataArray or pandas DataFrame')
+
+                            if collections_obj is None:
+                                if isinstance(obj_match, pd.DataFrame):
+                                    collections_obj = {}
+                                elif isinstance(obj_match, xr.DataArray):
+                                    collections_obj = xr.Dataset()
+                                else:
+                                    self.logger.error('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
+                                    raise TypeError('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
 
                             # organize data to keep the data array format
-                            collections_dset[key] = da_match
+                            collections_obj[key] = obj_match
 
                             # debug data out
-                            if self.debug_state_out: plot_data(da_match)
-                            if self.debug_state_out: plot_data(collections_dset[key])
+                            if self.debug_state_out: plot_data(obj_match)
+                            if self.debug_state_out: plot_data(collections_obj[key])
 
                             self.logger.info_down(f'Variable {key} ... ADDED')
                         else:
@@ -485,7 +600,13 @@ class ProcessorContainer:
                     raise TypeError('Collections must be defined as a dictionary')
 
                 # define collections variables
-                collections_variables = list(collections_dset.data_vars)
+                if isinstance(collections_obj, dict):
+                    collections_variables = list(collections_obj.keys())
+                elif isinstance(collections_obj, xr.Dataset):
+                    collections_variables = list(collections_obj.data_vars)
+                else:
+                    self.logger.error('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
+                    raise TypeError('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
 
                 # collections kwargs
                 kwargs['time_format'] = self.out_obj.get_attribute('time_format')
@@ -496,11 +617,11 @@ class ProcessorContainer:
                 collections_metadata = {'variables': collections_variables}
 
                 # save the data
-                if not len(collections_dset.data_vars) == 0:
+                if not len(collections_variables) == 0:
 
                     # write collections
                     self.out_obj.write_data(
-                        collections_dset, time,
+                        collections_obj, time,
                         metadata=collections_metadata, **kwargs)
 
                     # info dump end
@@ -526,6 +647,28 @@ class ProcessorContainer:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
+def _get_memory_data(obj):
+    if hasattr(obj, "memory_data"):
+        return obj.memory_data
+    else:
+        print(f"'memory_data' not available for object of type {type(obj).__name__}")
+        return None
+
+# method to normalize local data
+def _normalize_local_data(data_raw):
+    normalized = []
+
+    if isinstance(data_raw, (list, tuple)):
+        for item in data_raw:
+            if isinstance(item, (list, tuple)):
+                normalized.extend(_normalize_local_data(item))
+            else:
+                normalized.append(item)
+    else:
+        normalized.append(data_raw)
+
+    return normalized
+
 # method to sync variable names
 @with_logger(var_name="logger_stream")
 def _sync_variable_name(data, vars):
@@ -539,8 +682,14 @@ def _sync_variable_name(data, vars):
         data_vars = [data.name]
     elif isinstance(data, xr.Dataset):  # xr.Dataset
         data_vars = list(data.data_vars)
+    elif isinstance(data, pd.DataFrame):
+        if hasattr(data, "name") and data.name is not None:
+            data_vars = [data.name]
+        else:
+            logger_stream.error(f"Object fx_data DataFrame has no attribute 'name' or it is None.")
+            raise TypeError("Object fx_data DataFrame has no attribute 'name' or it is None.")
     else:
-        logger_stream.error("fx_data must be an xarray DataArray or Dataset")
+        logger_stream.error("Object fx_data must be an xarray [DataArray, Dataset] or pandas [DataFrame].")
         raise NotImplementedError('Case not implemented yet')
 
     select_vars = []
@@ -549,7 +698,10 @@ def _sync_variable_name(data, vars):
             if tmp_var not in select_vars:
                 select_vars.append(tmp_var)
         else:
-            logger_stream.warning(f"Variable '{tmp_var}' found in data but not in fx_vars list")
+            if isinstance(data, pd.DataFrame):
+                select_vars = data_vars
+            else:
+                logger_stream.warning(f"Variable '{tmp_var}' found in data but not in fx_vars list")
 
     return select_vars
 
@@ -569,6 +721,16 @@ def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}")
                 names.append(indexed_default.format(i))
             else:
                 names.append(name)
+        return names
+
+    elif isinstance(obj, pd.DataFrame):
+
+        if getattr(obj, "name", None) is None:
+            obj.name = default
+            logger_stream.warning(f"DataFrame name is not defined; setting default='{default}'")
+
+        names = [obj.name]
+
         return names
 
     else:

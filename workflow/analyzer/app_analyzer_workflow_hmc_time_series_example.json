@@ -1,0 +1,128 @@
+{
+  "__comment__": "configuration file for the datasets information",
+  "configuration": {
+    "priority": {
+      "reference": "environment",
+      "other": "user"
+    },
+    "flags": {
+      "update_namelist": true,
+      "update_execution": true
+    },
+    "variables": {
+      "lut": {
+        "user": {
+          "path_time_source": null,
+          "path_time_destination": null,
+          "time_rounding": "H",
+          "time_frequency": "H",
+          "time_direction": "forward",
+          "file_log": "{execution_name}_{domain_name}.log",
+          "execution_name": "analyzer_time_series_hmc",
+          "execution_mode": "history"
+        },
+        "environment": {
+          "path_static": "PATH_STATIC",
+          "domain_name": "DOMAIN_NAME",
+          "time_run": "TIME_RUN", "time_period" : "TIME_PERIOD",
+          "path_dynamic_source": "PATH_DYNAMIC_SRC",
+          "path_dynamic_destination": "PATH_DYNAMIC_DST",
+          "path_app": "PATH_APP",
+          "path_log": "PATH_LOG",
+          "path_tmp": "PATH_TMP"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_static": "string",
+        "path_dynamic_source": "string",
+        "path_dynamic_destination": "string",
+        "path_time_source": "string",
+        "path_time_destination": "string",
+        "time_direction": "string",
+        "time_run": "string",
+        "time_period": "int",
+        "time_rounding": "string",
+        "time_frequency": "string",
+        "path_app": "string",
+        "path_log": "string",
+        "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string",
+        "execution_mode": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_static": "string",
+        "path_dynamic_source": "string",
+        "path_dynamic_destination": "string",
+        "path_time_source": "%Y/%m/%d",
+        "path_time_destination": "%Y/%m/%d",
+        "time_direction": "string",
+        "time_run": "%Y%m%d%H00",
+        "time_period": "int",
+        "time_rounding": "string",
+        "time_frequency": "string",
+        "path_app": "string",
+        "path_log": "string",
+        "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string",
+        "execution_mode": "string"
+      }
+    }
+  },
+  "application": {
+    "time": {
+      "start": "{time_run}",
+      "end": "{time_run}",
+      "frequency": "H",
+      "format": "%Y-%m-%d %H:%M",
+      "analysis": "{time_period}",
+      "dataset": "{time_period}"
+    },
+    "static_data": {
+      "registry_sections": {
+        "path": "{path_static}",
+        "file_name": "sections_italia_FloodPROOFS_Aggiornamento_soglie20250926.csv"
+      },
+      "registry_hmc": {
+        "path": "{path_static}",
+        "file_name": "{domain_name}.info_section.txt"
+      }
+    },
+    "dynamic_data_src": {
+      "path": "{path_dynamic_source}/{path_time_source}/",
+      "file_name": "hmc.hydrograph.txt"
+    },
+    "dynamic_data_dst": {
+      "path": "{path_dynamic_destination}/{path_time_destination}/",
+      "file_name": "hmc.hydrograph.nc",
+      "format": "netcdf",
+      "type": null,
+      "mode": "time_series",
+      "variable": ["discharge"],
+      "dims_data": {"time": "time", "sections": "sections"},
+      "vars_data": {"discharge": "discharge"}
+    }
+  },
+  "workflow": {
+    "options": {
+        "intermediate_output": "Tmp",
+        "tmp_dir": "tmp"
+    },
+    "process_list": {
+        "DISCHARGE": [
+            {"function": "join_time_series_by_registry", "fill_value": -9999, "no_data_value": -9999}
+        ]
+    }
+  },
+  "log": {
+    "path": "{path_log}",
+    "file_name": "analyzer_time_series_hmc.txt"
+  },
+  "tmp": {
+    "path": "{path_tmp}",
+    "file_name": null
+  }
+}

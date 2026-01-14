@@ -67,7 +67,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
     # default attributes
     _defaults = {
-        'type': None, 'time_signature' : 'end', "workflow": 'undefined',
+        'type': None, 'time_signature' : 'end', "workflow": 'undefined', "layout": 'undefined',
         'mode': 'local', 'format': 'tmp', 'variable': 'undefined'}
 
     def __init__(self, **kwargs):
@@ -119,6 +119,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.nan_value = None
         if 'nan_value' in kwargs:
             self.nan_value = kwargs.pop('nan_value')
+
+        self.data_layout = None
+        if 'data_layout' in kwargs:
+            self.data_layout = kwargs.pop('data_layout')
 
         self.variable_template = {}
         if 'variable_template' in kwargs:
@@ -177,7 +181,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
     # method to return a string representation
     def __repr__(self):
         return (f"{self.__class__.__name__}("
-                f"{self.file_name!r}, {self.file_mode!r}, {self.file_type!r}, "
+                f"{self.file_name!r}, {self.file_mode!r}, {self.data_layout!r}, {self.file_type!r}, "
                 f"{self.file_format!r}, {self.file_variable!r}, {self.file_namespace!r},"
                 f"status={self.status!r})")
 
@@ -785,7 +789,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         log_data('start', name=name, time=time, from_memory=False)
 
         # file format specific reading
-        if self.file_format in ['csv', 'json', 'txt', 'shp']:
+        if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
             if self._check_data(full_location):
 
                 # get data
@@ -804,6 +808,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     data = straighten_data(data)
                     # ensure that the data dimensions are flat
                     data = flat_dims(data)
+
+                # info log end (source case)
+                log_data('end', name=name, time=time, from_memory=False)
 
                 return data
 

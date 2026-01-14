@@ -39,7 +39,7 @@ import pandas as pd
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
@@ -304,7 +304,7 @@ def main():
             path=alg_cfg_application['data_destination']['path'],
             file_name=alg_cfg_application['data_destination']['file_name'],
             time_signature='step',
-            file_format='netcdf', file_type='hmc', file_mode='local',
+            file_format='netcdf', file_type='grid_hmc', file_mode='local',
             file_variable=['rain', 'air_t', 'rh', 'inc_rad', 'wind'], file_io='output',
             variable_template={
                 "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
