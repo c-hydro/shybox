@@ -76,7 +76,7 @@ crs_attrs_default = {
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
         file_name: str = None, file_format='NETCDF4',
-        ts : pd.DataFrame = None,
+        ts : pd.DataFrame = None, time: pd.DatetimeIndex = None, attrs_data: dict = None,
         registry_df : pd.DataFrame = None, registry_attrs : dict = registry_default_attrs,
         var_time_name : str = 'time',
         var_time_format: str = '%Y-%m-%d %H:%M', var_time_dim: str = 'time', var_time_type: str = 'float64',
@@ -85,7 +85,7 @@ def write_ts_hmc(
         var_data_fill_value: (float, int) = -9999.0,  var_data_no_value: (float, int) = -9999.0,
         var_name_crs: str = 'crs', crs_attrs: dict = crs_attrs_default,
         var_compression_flag : bool = True, var_compression_level: int = 5,
-        debug_flag : bool = True)  -> None:
+        debug_flag : bool = True, **kwargs)  -> None:
 
     # ------------------------------------------------------------------------------------------------------------------
     ## TIME PREPARATION
@@ -107,9 +107,29 @@ def write_ts_hmc(
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
+    ## ATTRS PREPARATION
+    attrs_data = ts.attrs
+    tags = attrs_data["tag"]
+
+    registry_data = {}
+    for i, tag in tags.items():
+        row = {}
+        for k, v in attrs_data.items():
+
+            if isinstance(v, pd.Series):
+                row[k] = v.iloc[i]
+            elif isinstance(v, (list, tuple, np.ndarray)):
+                row[k] = v[i]
+            else:
+                row[k] = v
+
+        registry_data[tag] = row
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
     ## DATA PREPARATION
     # define ts data (in 2d dimensions: time, ts)
-    var_data = ts[names_data].to_numpy(dtype=float)
+    var_data = ts.drop(columns=var_time_name).to_numpy(dtype=float)
     # get the data dimensions (time and time-series)
     time_n, var_n = var_data.shape
     # ------------------------------------------------------------------------------------------------------------------
@@ -122,7 +142,7 @@ def write_ts_hmc(
     # set generic attribute
     file_handle.Conventions = "CF-1.8"
     file_handle.title = "time series data (time, variable)"
-    file_handle.filedate = 'Created ' + time.ctime(time.time())
+    file_handle.filedate = 'Created ' + tm.ctime(tm.time())
 
     # create dimensions
     file_handle.createDimension(var_data_dim, var_n)
@@ -168,16 +188,13 @@ def write_ts_hmc(
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - REGISTRY OBJECT(S)
     # create registry object(s) -- 1d format
-    if registry_df is not None:
+    if registry_data is not None:
 
         # set registry dimension (use the data dimension)
         var_reg_dim = var_data_dim
 
         # iterate over registry variable(s)
-        for var_reg_key, var_reg_series in registry_df.items():
-
-            # convert from pandas series to numpy array (str, float or int)
-            var_reg_data = var_reg_series.values
+        for var_reg_key, var_reg_data in registry_data.items():
 
             # set registry type
             if var_reg_key in list(registry_attrs.keys()):
@@ -191,6 +208,7 @@ def write_ts_hmc(
                     var_reg_obj[:] = var_reg_data
 
                 else:
+
                     logger_stream.warning(f'Registry type for "{var_reg_key}" is defined by NoneType')
 
             else:

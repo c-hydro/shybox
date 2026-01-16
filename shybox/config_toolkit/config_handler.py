@@ -47,7 +47,6 @@ class ConfigManager:
       - environment expansion in arbitrary objects
     """
 
-    # --------------------------------------------------------------
     # Constructor
     def __init__(
         self,
@@ -136,7 +135,6 @@ class ConfigManager:
                 key_mode=self._flat_key_mode,
             )
 
-    # --------------------------------------------------------------
     # Mandatory sections initializer
     def _init_mandatory_sections(self, settings: dict, application_key: str | None = "application") -> None:
         """
@@ -167,7 +165,6 @@ class ConfigManager:
             # Expose it as generic attribute 'application'
             self.application = settings[application_key]
 
-    # --------------------------------------------------------------
     # CLASS METHOD: load from dict / JSON string / file
     @classmethod
     def from_source(
@@ -252,7 +249,7 @@ class ConfigManager:
         log.info_down("Configuration ... DONE", tag="config")
 
         return obj
-    # --------------------------------------------------------------
+
     # Unified accessor for mandatory / optional sections
     def get_section(
         self,

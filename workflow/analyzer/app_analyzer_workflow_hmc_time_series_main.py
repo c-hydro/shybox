@@ -58,7 +58,9 @@ def main(view_table: bool = False, dry_run : bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## CONFIGURATION MANAGEMENT
     # get file settings
-    alg_args_obj = ArgumentsManager(settings_folder=os.path.dirname(os.path.realpath(__file__)))
+    alg_args_obj = ArgumentsManager(
+        handlers=['stream'],
+        settings_folder=os.path.dirname(os.path.realpath(__file__)))
     alg_args_file, alg_args_time = alg_args_obj.get()
 
     # crete configuration object

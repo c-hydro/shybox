@@ -574,17 +574,26 @@ class ProcessorContainer:
                                 self.logger.error('Collections data must be xarray DataArray or pandas DataFrame')
                                 raise TypeError('Collections data must be xarray DataArray or pandas DataFrame')
 
+                            # manage the collections object
                             if collections_obj is None:
                                 if isinstance(obj_match, pd.DataFrame):
-                                    collections_obj = {}
+                                    collections_obj = obj_match
                                 elif isinstance(obj_match, xr.DataArray):
+                                    # organize data to keep the data array format
                                     collections_obj = xr.Dataset()
+                                    collections_obj[key] = obj_match
                                 else:
                                     self.logger.error('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
                                     raise TypeError('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
 
-                            # organize data to keep the data array format
-                            collections_obj[key] = obj_match
+                            else:
+                                if isinstance(obj_match, pd.DataFrame):
+                                    collections_obj = pd.concat([collections_obj, obj_match], axis=1)
+                                elif isinstance(obj_match, xr.DataArray):
+                                    collections_obj[key] = obj_match
+                                else:
+                                    self.logger.error('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
+                                    raise TypeError('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
 
                             # debug data out
                             if self.debug_state_out: plot_data(obj_match)
@@ -600,8 +609,8 @@ class ProcessorContainer:
                     raise TypeError('Collections must be defined as a dictionary')
 
                 # define collections variables
-                if isinstance(collections_obj, dict):
-                    collections_variables = list(collections_obj.keys())
+                if isinstance(collections_obj, pd.DataFrame):
+                    collections_variables = collections_obj.name
                 elif isinstance(collections_obj, xr.Dataset):
                     collections_variables = list(collections_obj.data_vars)
                 else:

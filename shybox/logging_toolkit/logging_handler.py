@@ -10,14 +10,13 @@ Version:       '1.4.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+import tempfile
 import os
 import sys
 import threading
 from contextlib import contextmanager
 from typing import Optional, Tuple, Dict
-
 from contextvars import ContextVar
-
 
 # defaults
 try:
@@ -40,9 +39,8 @@ except ImportError:
 _CURRENT_LOGGER: ContextVar["LoggingManager | None"] = ContextVar("_CURRENT_LOGGER", default=None)
 # ----------------------------------------------------------------------------------------------------------------------
 
-# --------------------------------------------------------------------------------------
-# LoggingPrinter — depth/bookkeeping + rendering of the arrow prefix (internal)
-# --------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+# class LoggingPrinter
 class LoggingPrinter:
     """Manages arrow formatting and per-tag depth tracking (thread-safe singleton)."""
     _instance = None
@@ -93,11 +91,10 @@ class LoggingPrinter:
     def render(self, base_len: int, visual_depth: int) -> str:
         d = max(0, base_len + max(0, visual_depth))
         return (self.arrow_prefix * d) + self.arrow_suffix + " "
+# ----------------------------------------------------------------------------------------------------------------------
 
-
-# --------------------------------------------------------------------------------------
-# LoggingManager — the main convenience wrapper
-# --------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+# class LoggingManager — the main convenience wrapper
 class LoggingManager:
     """Unified logger with depth arrows and persistent visual control.
 
@@ -142,7 +139,7 @@ class LoggingManager:
     _global_warning_fixed_prefix: Optional[str] = None  # e.g., "===> "
     _global_error_fixed_prefix: Optional[str] = None  # e.g., "!!!> "
 
-    # ---------- Root setup ----------
+    # class methods to setup root logger
     @classmethod
     def setup(
             cls,
@@ -177,21 +174,31 @@ class LoggingManager:
                 cls._global_error_fixed_prefix = error_fixed_prefix
                 return
 
-            # ---- DEFAULTS HERE ----
+            # define logger handlers
+            effective_handlers = (handlers if handlers is not None else DEFAULT_LOG_HANDLER)
+
+            # folder and file default settings
             folder_default = DEFAULT_LOG_FOLDER or os.getcwd()
             folder = logger_folder if logger_folder not in (None, "") else folder_default
-
             file_name = logger_file or DEFAULT_LOG_FILE
+
+            # check if folder is defined by string to activate the dump
+            if folder is not None:
+                os.makedirs(folder, exist_ok=True)
+                log_path = os.path.join(folder, file_name)
+            else:
+                if "file" in effective_handlers:
+                    if folder is None:
+                        folder = os.path.join(tempfile.gettempdir(), "logs")
+                        os.makedirs(folder, exist_ok=True)
+                        log_path = os.path.join(folder, file_name)
+                else:
+                    log_path = None
+
+            # define logger format
             fmt = logger_format or DEFAULT_LOG_FORMAT
 
-            effective_handlers = (
-                handlers if handlers is not None else DEFAULT_LOG_HANDLER
-            )
-            # ------------------------
-
-            os.makedirs(folder, exist_ok=True)
-            log_path = os.path.join(folder, file_name)
-
+            # define logger formatter and root logger
             formatter = logging.Formatter(fmt)
             root = logging.getLogger()
 
@@ -202,19 +209,22 @@ class LoggingManager:
                         h.close()
                     except Exception:
                         pass
-
+            # set logging level
             root.setLevel(level)
 
+            # active handlers (file, stream)
             if "file" in effective_handlers:
-                fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-                fh.setFormatter(formatter)
-                root.addHandler(fh)
+                if log_path is not None:
+                    fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+                    fh.setFormatter(formatter)
+                    root.addHandler(fh)
 
             if "stream" in effective_handlers:
                 ch = logging.StreamHandler(sys.stdout)
                 ch.setFormatter(formatter)
                 root.addHandler(ch)
 
+            # pass global arrow defaults
             cls._global_arrow_base_len = arrow_base_len
             cls._global_arrow_prefix = arrow_prefix
             cls._global_arrow_suffix = arrow_suffix
@@ -231,21 +241,12 @@ class LoggingManager:
             # suppress debug message from noisy libraries
             cls.suppress_noisy_libraries()
 
+    # method to setup logger (alias for setup)
     @classmethod
     def setup_logger(cls, *args, **kwargs):
-        """
-        Convenience alias for setup(...).
-
-        This is just nicer to read at call sites:
-
-            LoggingManager.setup_logger(...)
-
-        instead of:
-
-            LoggingManager.setup(...)
-        """
         return cls.setup(*args, **kwargs)
 
+    # method to get or create logger
     @classmethod
     def get_logger(
             cls,
@@ -282,14 +283,12 @@ class LoggingManager:
         if setup_kwargs is None:
             setup_kwargs = {}
 
+        # customize logger using setup_kwargs
         cls.setup_logger(**setup_kwargs)
 
-        effective_name = (
-                name
-                or globals().get("log_name")
-                or __name__
-        )
-
+        # determine effective name
+        effective_name = (name or globals().get("log_name") or __name__ )
+        # create new logger instance
         lm = cls(
             name=effective_name,
             level=logging.INFO,
@@ -300,12 +299,13 @@ class LoggingManager:
             set_as_current=False,
         )
 
+        # set as current if requested
         if set_as_current:
             cls.set_current(lm)
 
         return lm
 
-    # ---------- Instance ----------
+    # initializer
     def __init__(
             self,
             name: Optional[str] = None,
@@ -351,7 +351,7 @@ class LoggingManager:
         if set_as_current:
             LoggingManager.set_current(self)
 
-    # ---------- Tag helpers ----------
+    # method to remember or generate tag
     def _remember_tag(self, tag: Optional[str]) -> str:
         with self._state_lock:
             if tag is not None:
@@ -367,7 +367,7 @@ class LoggingManager:
     def _tagkey(self, tag: Optional[str]) -> str:
         return self._remember_tag(tag)
 
-    # ---------- Current-logger context ----------
+    # current logger context management
     @classmethod
     def suppress_noisy_libraries(cls, level=logging.WARNING):
         noisy = ["matplotlib", "matplotlib.pyplot", "urllib3", "PIL", "asyncio"]
@@ -408,7 +408,7 @@ class LoggingManager:
 
         return _cm()
 
-    # ---------- Stores ----------
+    # method to store
     def _store_key(self, tag: Optional[str], store: str) -> Tuple[str, str]:
         return (self._tagkey(tag), str(store))
 
@@ -513,11 +513,11 @@ class LoggingManager:
             self._abs_prefix_len[t] = max(self.arrow_base_len, cur - s)
         return 0
 
-    # ---------- Depth helpers ----------
+    # compute current depth (of line)
     def depth(self, tag: Optional[str] = None) -> int:
         return self._printer.get_depth(self._tagkey(tag)) if self._printer else 0
 
-    # ---------- Prefix computation/rendering ----------
+    # compute prefix length (of line)
     def _compute_prefix_len(self, *, mode: int, tag: Optional[str]) -> int:
         t = self._tagkey(tag)
 
@@ -532,7 +532,7 @@ class LoggingManager:
         visual_depth = max(0, depth - 1 + (mode or 0))
         return max(0, self.arrow_base_len + visual_depth)
 
-    # ---------- Core logging ----------
+    # logging level (info, debug, warning, error, exception)
     def info(self, msg: str, *args, mode: int = 0, tag: Optional[str] = None,
              begin: bool = False, end: bool = False,
              style: Optional[str] = None,
@@ -661,7 +661,8 @@ class LoggingManager:
 
         self.logger.exception(f"{prefix}{msg}", *args, **kwargs)
 
-    # ---------- Convenience wrappers ----------
+    # wrapper for main info with persistent visual control
+    # line info up
     def info_up(self, msg: str, tag: Optional[str] = None, step: int = 1,
                 store: Optional[str] = None, **kwargs):
         t = self._tagkey(tag)
@@ -673,6 +674,7 @@ class LoggingManager:
         self.set_prefix_len(new, tag=t, update_last=True)
         self.info(msg, tag=t, **kwargs)
 
+    # line info down
     def info_down(self, msg: str, tag: Optional[str] = None, step: int = 1,
                   store: Optional[str] = None, align: bool = True, **kwargs):
         t = self._tagkey(tag)
@@ -686,6 +688,7 @@ class LoggingManager:
         self.store_set(store_key, new, tag=t)
         self.set_prefix_len(new, tag=t, update_last=True)
 
+    # line info header
     def info_header(self, msg: str, *, blank_before: bool = False,
                     blank_after: bool = False, underline: bool = False):
         if blank_before:
@@ -697,7 +700,7 @@ class LoggingManager:
         if blank_after:
             self.logger.info("")
 
-    # ---------- Comparison utilities ----------
+    # utilities for prefix length comparison and synchronization
     def compare_prefix_len(self, tag_a: Optional[str] = None, tag_b: Optional[str] = None) -> int:
         a = self.last_prefix_len(tag_a)
         b = self.last_prefix_len(tag_b)
@@ -781,7 +784,7 @@ class LoggingManager:
             width = 1
         return char * width
 
-    # ---------- Context manager ----------
+    # Context manager for spans
     @contextmanager
     def span(self, msg: Optional[str] = None, tag: Optional[str] = None, level: str = "info"):
         """Increase depth for the block; optional opening message at given level.

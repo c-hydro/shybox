@@ -983,15 +983,27 @@ class Dataset(ABC, metaclass=DatasetMeta):
         out_file = self.get_key(time, **kwargs)
         out_path, out_name = os.path.dirname(out_file), os.path.basename(out_file)
 
+        # case of file-like data
+        if self.file_format == 'file':
+            self._write_data(data, out_file)
+            return
+
+        # case of csv, json, txt, shp files
         if self.file_format in ['csv', 'json', 'txt', 'shp']:
             append = kwargs.pop('append', False)
             self._write_data(data, out_file, append = append)
             return
-        
-        if self.file_format == 'file':
-            self._write_data(data, out_file)
-            return
-        
+
+        # case of pandas DataFrame
+        if isinstance(data, pd.DataFrame):
+
+            if not data.empty:
+                append = kwargs.pop('append', False)
+                self._write_data(data, out_file, append=append)
+                return
+            else:
+                self.logger.warning('Output DataFrame is empty and writing data is not activated.')
+
         # if data is a numpy array, ensure there is a structure template available
         if isinstance(data, np.ndarray):
 
@@ -1005,6 +1017,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
                 self.set_structure_template(data, template_key=variable, **kwargs)
                 structure_template = self.get_structure_template(**kwargs, make_it=False)
+
         else:
             self.logger.error(f'Invalid data type in writing method: {type(data)}')
             raise ValueError(f'Invalid data type in writing method: {type(data)}')

@@ -138,7 +138,7 @@ def autofill_mapping(
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# helpers to fill object with mapping
+# helpers to fill object with mapping (internal)
 def _normalize_path_like_string(value: str) -> str:
     """
     Normalize path-like strings by collapsing repeated slashes `//` → `/`,
@@ -158,48 +158,74 @@ def _normalize_path_like_string(value: str) -> str:
     # No scheme → assume filesystem-like path
     return re.sub(r"//+", "/", value)
 
-def _fill_obj_recursive(obj, tags: dict, strict: bool, unresolved: set):
+# helper to fill object recursively (internal)
+def _fill_obj_recursive(obj, tags: dict, strict: bool, unresolved: set, none_as_none: bool = True):
     """
     Internal: recursively walk obj and format strings with tags.
     """
     if isinstance(obj, dict):
         for k, v in obj.items():
-            obj[k] = _fill_obj_recursive(v, tags, strict, unresolved)
+            obj[k] = _fill_obj_recursive(v, tags, strict, unresolved, none_as_none)
         return obj
 
     if isinstance(obj, list):
-        return [_fill_obj_recursive(v, tags, strict, unresolved) for v in obj]
+        return [_fill_obj_recursive(v, tags, strict, unresolved, none_as_none) for v in obj]
 
     if isinstance(obj, tuple):
-        return tuple(_fill_obj_recursive(v, tags, strict, unresolved) for v in obj)
+        return tuple(_fill_obj_recursive(v, tags, strict, unresolved, none_as_none) for v in obj)
 
     if isinstance(obj, str):
         s = obj
 
         if "{" in s and "}" in s:
+
+            # Special case: the whole string is exactly one placeholder "{key}"
+            m_full = _PLACEHOLDER_RE.fullmatch(s)
+            if m_full:
+                key = m_full.group(1)
+                if key in tags:
+                    val = tags[key]
+
+                    if val is None:
+                        # True  -> return None
+                        # False -> keep "{key}"
+                        if none_as_none:
+                            return None
+                        unresolved.add(key)
+                        return s
+
+                    return str(val)
+
+                unresolved.add(key)
+                return s
+
+            # Otherwise: normal substitution inside a bigger string
             def repl(match: re.Match) -> str:
                 key = match.group(1)
+
                 if key in tags:
-                    return str(tags[key])
+                    val = tags[key]
+
+                    if val is None:
+                        # True  -> keep "{key}" (cannot return None inside string)
+                        # False -> keep "{key}"
+                        unresolved.add(key)
+                        return match.group(0)
+
+                    return str(val)
+
                 # unknown placeholder
                 unresolved.add(key)
-                if strict:
-                    # In strict mode we still perform the replacement,
-                    # but we'll raise later in fill_with_mapping
-                    return match.group(0)
-                else:
-                    # leave {key} unchanged
-                    return match.group(0)
+                return match.group(0)
 
             s = _PLACEHOLDER_RE.sub(repl, s)
 
-        # 🔥 normalize path-like strings (remove accidental `//`)
+        # normalize path-like strings (remove accidental `//`)
         s = _normalize_path_like_string(s)
         return s
 
     # int, float, None, etc.
     return obj
-
 
 # method to fill object with mapping
 def fill_with_mapping(
