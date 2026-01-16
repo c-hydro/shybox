@@ -87,7 +87,7 @@ def main():
         logger_folder='log/',
         logger_file="shybox_variable_merging_s3m_results.log",
         logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
-        handlers=['file', 'stream'],
+        handlers=['stream'],
         arrow_base_len=3, arrow_prefix='-', arrow_suffix='>',
         warning_dynamic=False, error_dynamic=False, warning_fixed_prefix="===> ", error_fixed_prefix="===> ",
         level=10

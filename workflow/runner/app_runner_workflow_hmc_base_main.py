@@ -94,7 +94,7 @@ def main(view_table: bool = False, dry_run : bool = False):
     LoggingManager.setup(
         logger_folder=alg_app_log['path'], logger_file=alg_app_log['file_name'],
         logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
-        handlers=['file', 'stream'],
+        handlers=['stream'],
         force_reconfigure=True,
         arrow_base_len=3, arrow_prefix='-', arrow_suffix='>',
         warning_dynamic=False, error_dynamic=False, warning_fixed_prefix="===> ", error_fixed_prefix="===> ",
