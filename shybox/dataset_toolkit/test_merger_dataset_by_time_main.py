@@ -1,9 +1,16 @@
 #!/usr/bin/python3
 """
+<<<<<<< HEAD
 SHYBOX PACKAGE - TEST DATA GRID - MERGER BY TIME
 
 __date__ = '20250123'
 __version__ = '1.0.0'
+=======
+HYMS PACKAGE - DATA GRID APP
+
+__date__ = '20250123'
+__version__ = '3.0.0'
+>>>>>>> origin/itwater_hmc
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -13,7 +20,17 @@ General command line:
 python test_dataset_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Version(s):
+<<<<<<< HEAD
 20250123 (1.0.0) --> Beta release for shybox package
+=======
+20250123 (3.0.0) --> Beta release for shybox package
+20221013 (2.1.0) --> Add codes to manage tiff format and fix bug in output variable(s)
+20220412 (2.0.3) --> Add codes to manage interpolating (nearest, linear, sample) and masking (watermark) method(s)
+20220322 (2.0.2) --> Add codes and functions to merge hmc and s3m subdomains datasets
+20211222 (2.0.1) --> Add no data filter
+20211201 (2.0.0) --> Upgrade codes and routines
+20211029 (1.0.0) --> First release
+>>>>>>> origin/itwater_hmc
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -25,10 +42,19 @@ import numpy as np
 import pandas as pd
 
 from shybox.generic_toolkit.lib_utils_args import get_logger_name
+<<<<<<< HEAD
 from shybox.default.lib_default_args import logger_name, logger_arrow
 from shybox.default.lib_default_args import collector_data
 
 from shybox.processing_toolkit.lib_proc_merge import merge_data
+=======
+from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
+from shybox.generic_toolkit.lib_default_args import collector_data
+
+from shybox.processing_toolkit.lib_proc_merge import merge_data, merge_data_by_time
+from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
+from shybox.processing_toolkit.lib_proc_interp import interpolate_data
+>>>>>>> origin/itwater_hmc
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
 
@@ -41,9 +67,15 @@ logger_stream = logging.getLogger(get_logger_name(logger_name_mode='by_script', 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
+<<<<<<< HEAD
 alg_name = 'Test for data grid - merger dy time'
 alg_type = 'Package'
 alg_version = '1.0.0'
+=======
+alg_name = 'Application for data grid'
+alg_type = 'Package'
+alg_version = '3.0.0'
+>>>>>>> origin/itwater_hmc
 alg_release = '2025-01-24'
 # ----------------------------------------------------------------------------------------------------------------------
 

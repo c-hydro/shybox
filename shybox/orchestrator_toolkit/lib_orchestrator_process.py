@@ -103,18 +103,31 @@ class ProcessorContainer:
     # method to run the process
     def run(self, time: (dt.datetime, str, pd.Timestamp), **kwargs) -> (None, None):
 
+<<<<<<< HEAD
         # check time information
+=======
+>>>>>>> origin/itwater_hmc
         if isinstance(time, pd.Timestamp):
             time = [time]
         elif isinstance(time, list):
             if isinstance(time[0], pd.Timestamp):
                 pass
             else:
+<<<<<<< HEAD
                 self.logger.error('Time format is not pd.Timestamp in the time list')
                 raise ValueError('Time format is not pd.Timestamp in the time list')
         else:
             self.logger.error('Time format is not pd.Timestamp in the time step')
             raise ValueError('Time format is not pd.Timestamp in the time step')
+=======
+                raise ValueError('Time format is not pd.Timestamp in the time list')
+        else:
+            raise ValueError('Time format is not pd.Timestamp in the time step')
+
+        if isinstance(time, list):
+            if len(time) == 1:
+                time = time[0]
+>>>>>>> origin/itwater_hmc
 
         # adjust list if only one timestamp is provided
         if isinstance(time, list):
@@ -133,6 +146,7 @@ class ProcessorContainer:
         else:
             data_raw = self.in_obj
 
+<<<<<<< HEAD
         # adjust data (if deps are available)
         if (self.in_deps is not None) and (len(self.in_deps) > 0):
 
@@ -159,12 +173,15 @@ class ProcessorContainer:
             str_vars_raw = [':'.join([fx_variable_tag, fx_variable_wf])]
             str_deps_raw = [fx_variable_tag]
 
+=======
+>>>>>>> origin/itwater_hmc
         if isinstance(time, list):
             if isinstance(data_raw, list):
                 data_raw = data_raw * len(time)
             elif isinstance(data_raw, DataLocal):
                 data_raw = [data_raw] * len(time)
 
+<<<<<<< HEAD
         # check if data_raw is a list and adapt time accordingly
         if isinstance(data_raw, list):
             if not isinstance(time, list):
@@ -244,6 +261,16 @@ class ProcessorContainer:
                 if self.debug_state_in: plot_data(fx_tmp)
 
                 # append data (in list format)
+=======
+        # memory is active only for start process
+        if fx_id != 0:
+            kwargs['memory_active'] = False
+
+        if isinstance(data_raw, list):
+            fx_data = []
+            for data_id, (data_tmp, time_tmp) in enumerate(zip(data_raw, time)):
+                fx_tmp = data_tmp.get_data(time=time_tmp, **kwargs)
+>>>>>>> origin/itwater_hmc
                 fx_data.append(fx_tmp)
 
                 # create metadata
@@ -293,6 +320,7 @@ class ProcessorContainer:
             else:
                 fx_memory = data_raw.memory_data
 
+<<<<<<< HEAD
         # reduce data if only one element in the list
         if isinstance(fx_data, list):
             if len(fx_data) == 1: fx_data = fx_data[0]
@@ -323,11 +351,21 @@ class ProcessorContainer:
                         fx_data[dep_key] = tmp_values
 
         # run function to process data
+=======
+        if isinstance(fx_data, list):
+            if len(fx_data) == 1:
+                fx_data = fx_data[0]
+
+        fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
+        fx_args['time'] = time
+        fx_args['ref'] = self.fx_static['ref']
+>>>>>>> origin/itwater_hmc
         fx_save = self.fx_obj(data=fx_data, **fx_args)
         fx_metadata['fx_variable'] = _sync_variable_name(fx_save, fx_metadata['fx_variable'])
 
         # define the variable to control the workflow of processes
         if isinstance(fx_save, xr.DataArray):
+<<<<<<< HEAD
             fx_variable_data = fx_variable_wf
         elif isinstance(fx_save, xr.Dataset):
             fx_variable_data = list(fx_save.data_vars)
@@ -395,6 +433,40 @@ class ProcessorContainer:
             # error for unknown type (dataarray or dataset only)
             self.logger.error("fx_save must be an xarray DataArray or Dataset.")
             raise TypeError("fx_save must be an xarray DataArray or Dataset.")
+=======
+            if hasattr(fx_save, 'name'):
+                fx_var = fx_save.name
+            if fx_var is None and fx_variable is not None:
+                fx_var = fx_variable
+        elif isinstance(fx_save, xr.Dataset):
+            fx_var = list(fx_save.data_vars)
+        # remove variable from args (directly pass to args)
+        kwargs.pop('variable', None)
+
+        out_opts = self.out_opts
+
+        if isinstance(time, list):
+            print(f'{self.fx_name} - from {time[0]} to {time[-1]} - {self.variable}')
+        else:
+            print(f'{self.fx_name} - {time} - {self.variable}')
+
+        #if 'variable' in kwargs:
+        #    if kwargs.pop('variable', None) is not None:
+        #        fx_var = kwargs.pop('variable', None)
+        if fx_var is not None:
+            if isinstance(fx_save, xr.DataArray):
+                fx_save.name = fx_var
+            elif isinstance(fx_save, xr.Dataset):
+                fx_save.name = fx_var
+
+        if self.dump_state:
+            if 'collections' in kwargs:
+                fx_collections = kwargs.pop('collections', None)
+                if fx_collections:
+                    fx_save = fx_save.to_dataset(name = fx_var)
+                    for tmp_key, tmp_data in fx_collections.items():
+                        fx_save[tmp_key] = tmp_data
+>>>>>>> origin/itwater_hmc
 
         # organize metadata
         kwargs['time_format'] = self.out_obj.get_attribute('time_format')
@@ -517,6 +589,19 @@ class ProcessorContainer:
                 # info dump end
                 self.logger.info_down(f'Dump collections at time {time_str} ... SKIPPED. NO COLLECTIONS FOUND')
 
+<<<<<<< HEAD
+=======
+        # arrange data to keep the data array format
+        if isinstance(fx_save, xr.DataArray):
+            fx_out = fx_save
+        elif isinstance(fx_save, xr.Dataset):
+            if len(fx_var) == 1:
+                fx_out = fx_save[fx_var[0]]
+                fx_out.name = fx_var[0]
+            else:
+                fx_out = fx_save[fx_var]
+                fx_out.name = fx_var
+>>>>>>> origin/itwater_hmc
         else:
             # exit for errors
             self.logger.error('Process unknown dump state')

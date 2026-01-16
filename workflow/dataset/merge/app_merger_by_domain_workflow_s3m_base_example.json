@@ -82,6 +82,7 @@
       },
       "data_destination": {
         "dset_01": {
+<<<<<<< HEAD:workflow/dataset/merge/app_merger_by_domain_workflow_s3m_base_example.json
           "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
           "file_name": "snow_mask.%Y%m%d%H%M.tiff",
           "format": "geotiff", "type": null, "mode": "grid", "variable": "snow_mask",
@@ -99,6 +100,17 @@
         },
         "dset_03": {
           "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
+=======
+          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
+          "file_name": "age.%Y%m%d%H%M.tiff",
+          "format": "geotiff", "type": null, "mode": "grid", "variable": "age",
+          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+          "vars_data": {"snow_age": "SNOW_AGE"}
+        },
+        "dset_02": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
+>>>>>>> origin/itwater_hmc:workflow/dataset/merge/app_merger_workflow_s3m_base_example.json
           "file_name": "albedo.%Y%m%d%H%M.tiff",
           "format": "geotiff", "type": null, "mode": "grid", "variable": "albedo",
           "dims_geo": {"longitude": "longitude", "latitude": "latitude"},

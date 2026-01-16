@@ -86,8 +86,19 @@ class OrchestratorHandler:
 
         self.memory_active = True
 
+<<<<<<< HEAD
         # mapper object to organize variables
         self.mapper = mapper
+=======
+    @classmethod
+    def multi_time(cls, data_package_in: (dict, list),
+                   data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
+                   configuration: dict = None) -> 'Orchestrator':
+
+        return cls.multi_tile(
+            data_package_in=data_package_in, data_package_out=data_package_out,
+            data_ref=data_ref, configuration=configuration)
+>>>>>>> origin/itwater_hmc
 
     @classmethod
     def multi_time(cls,
@@ -123,6 +134,7 @@ class OrchestratorHandler:
             # iterate over data package in
             fx_collections, data_collections_in = {}, {}
             for data_id, data_obj in enumerate(data_package_in):
+<<<<<<< HEAD
 
                 file_variable = data_obj.file_variable
                 file_namespace = data_obj.file_namespace
@@ -139,6 +151,17 @@ class OrchestratorHandler:
                     if var_tag not in fx_collections:
                         fx_collections[var_tag] = {}
                         fx_collections[var_tag] = [var_process]
+=======
+                var_package = data_obj.file_variable
+
+                if not isinstance(var_package, list):
+                    var_package = [var_package]
+
+                for var_id, var_name in enumerate(var_package):
+                    if var_name not in data_collections_in:
+                        data_collections_in[var_name] = {}
+                        data_collections_in[var_name] = [data_obj]
+>>>>>>> origin/itwater_hmc
                     else:
                         fx_collections[var_tag].append(var_process)
 
@@ -163,6 +186,7 @@ class OrchestratorHandler:
             fx_collections, data_collections_out = {}, {}
 
             for data_id, data_obj in enumerate(data_package_out):
+<<<<<<< HEAD
 
                 file_variable = data_obj.file_variable
                 file_namespace = data_obj.file_namespace
@@ -185,6 +209,17 @@ class OrchestratorHandler:
                     if var_tag not in data_collections_out:
                         data_collections_out[var_tag] = {}
                         data_collections_out[var_tag] = [data_obj]
+=======
+                var_package = data_obj.file_variable
+
+                if not isinstance(var_package, list):
+                    var_package = [var_package]
+
+                for var_id, var_name in enumerate(var_package):
+                    if var_name not in data_collections_out:
+                        data_collections_out[var_name] = {}
+                        data_collections_out[var_name] = [data_obj]
+>>>>>>> origin/itwater_hmc
                     else:
                         data_collections_out[var_tag].append(data_obj)
         else:
@@ -363,6 +398,7 @@ class OrchestratorHandler:
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
 
         # method to remap variable tags, in and out
+<<<<<<< HEAD
         workflow_mapper = MapperHandler(data_collections_in, data_collections_out)
 
         # organize deps collections in
@@ -421,14 +457,21 @@ class OrchestratorHandler:
             args_in=args_collections_in, args_out=args_collections_out,
             options=workflow_options,
             mapper=workflow_mapper, logger=logger)
+=======
+        workflow_map = mapper(data_collections_in, data_collections_out)
+>>>>>>> origin/itwater_hmc
 
         # iterate over the defined input variables and their process(es)
         workflow_configuration = workflow_mapper.get_rows_by_priority(priority_vars=priority, field='tag')
         for workflow_row in workflow_configuration:
 
+<<<<<<< HEAD
             # get workflow information by tag
             workflow_tag = workflow_row['tag']
             workflow_name = workflow_row['workflow']
+=======
+        for var_tag in list(data_collections_in.keys()):
+>>>>>>> origin/itwater_hmc
 
             # info workflow start
             logger.info_up(f'Configure workflow "{workflow_name}" ... ', tag='ow')
@@ -715,14 +758,21 @@ class OrchestratorHandler:
         if len(time_steps) == 0:
             return None
 
+<<<<<<< HEAD
         # check group tag in kwargs (by_time disables memory) --> da controllare con merge time
+=======
+        group_type = None
+>>>>>>> origin/itwater_hmc
         if 'group' in kwargs:
             group_type = kwargs['group']
             if group_type == 'by_time':
                 time_steps = [time_steps]
                 self.memory_active = False
 
+<<<<<<< HEAD
         # iterate over time steps
+=======
+>>>>>>> origin/itwater_hmc
         for ts in time_steps:
 
             # info time start
@@ -749,7 +799,10 @@ class OrchestratorHandler:
         elif isinstance(time, pd.Timestamp):
             pass
         else:
+<<<<<<< HEAD
             self.logger.error('Time must be a string or a DatetimeIndex.')
+=======
+>>>>>>> origin/itwater_hmc
             raise ValueError('Time must be a string or a DatetimeIndex.')
 
         # run all processes if no breakpoints
@@ -781,6 +834,13 @@ class OrchestratorHandler:
 
     # method to run processes (internal use)
     def _run_processes(self, processes, time: dt.datetime, **kwargs) -> None:
+<<<<<<< HEAD
+=======
+
+        # return if no processes
+        if len(processes) == 0:
+            return
+>>>>>>> origin/itwater_hmc
 
         # return if no processes
         if not processes: return None
@@ -862,11 +922,21 @@ class OrchestratorHandler:
                         # store process result
                         proc_return.append(proc_result)
 
+<<<<<<< HEAD
                         # DETAIL: if skipped / empty
                         if proc_result is None:
                             self.logger.warning(
                                 f'Process "{proc_obj.fx_name}" ... SKIPPED. Data not available'
                             )
+=======
+                kwargs['id'] = proc_id
+                kwargs['variable'] = tmp_var_name
+                kwargs['collections'] = proc_ws
+                kwargs['map_in'] = proc_map['in']
+                kwargs['map_out'] = proc_map['out']
+                kwargs['key'] = proc_var_key
+                kwargs['memory_active'] = self.memory_active
+>>>>>>> origin/itwater_hmc
 
                         # assign current workflow to workspace
                         proc_ws[proc_current] = proc_return[-1]

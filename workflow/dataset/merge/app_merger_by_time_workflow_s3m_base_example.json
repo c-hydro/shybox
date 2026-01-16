@@ -12,7 +12,11 @@
     "variables": {
       "lut": {
         "user": {
+<<<<<<< HEAD
           "path_geo": "/home/fabio/Desktop/shybox/dset/itwater/static/",
+=======
+          "path_geo": "/home/fabio/Desktop/shybox/dset/data_static/gridded/",
+>>>>>>> origin/itwater_hmc
           "time_source": null, "time_destination": null,
           "time_rounding": "D", "time_frequency": "D", "time_direction": "forward",
           "file_log": "{execution_name}_{domain_name}.log",
@@ -55,8 +59,13 @@
         "domain_name": ["italy"]
       },
       "time": {
+<<<<<<< HEAD
         "start": "{time_start}",
         "end": "{time_end}",
+=======
+        "start": "2025-01-24 00:00",
+        "end": "2025-01-28 00:00",
+>>>>>>> origin/itwater_hmc
         "period": 5,
         "frequency": "d",
         "format": "%Y-%m-%d %H:00"
@@ -64,6 +73,7 @@
       "geo": {
         "terrain": {
           "path": "{path_geo}",
+<<<<<<< HEAD
           "file_name": "mask_italy_500m_epsg4326.txt"
         }
       },
@@ -93,11 +103,34 @@
           "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
           "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
           "vars_data": {"snow_mask": "SNOW_MASK"}
+=======
+          "file_name": "marche.dem.txt"
+        }
+      },
+      "data_source": {
+        "dset": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
+          "file_name": "age.%Y%m%d%H%M.tiff"
+        }
+      },
+      "data_destination": {
+        "dset": {
+          "path": "/home/fabio/Desktop/shybox/dset/itwater/%Y/%m/%d/",
+          "file_name": "AGE_%Y%m%d.nc",
+          "format": "netcdf", "type": "itwater", "mode": "grid", "variable": "age",
+          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+          "vars_data": {"snow_age": "SNOW_AGE"}
+>>>>>>> origin/itwater_hmc
         }
       },
       "log": {
         "path": "{path_log}",
+<<<<<<< HEAD
         "file_name": "example_merger_time.txt"
+=======
+        "file_name": "example.txt"
+>>>>>>> origin/itwater_hmc
       },
       "tmp": {
         "path": "{path_tmp}",

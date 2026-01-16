@@ -36,6 +36,7 @@ import pandas as pd
 
 from shybox.generic_toolkit.lib_utils_args import get_args
 from shybox.generic_toolkit.lib_utils_logging import set_logging_stream
+<<<<<<< HEAD
 from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_format
 from shybox.generic_toolkit.lib_utils_string import fill_string
 
@@ -43,11 +44,27 @@ from shybox.default.lib_default_args import logger_name, logger_format, logger_a
 from shybox.default.lib_default_args import collector_data
 
 from shybox.runner_toolkit.old.settings.driver_app_settings import DrvSettings
+=======
+from shybox.generic_toolkit.lib_utils_time import select_time_range, select_time_format
+from shybox.generic_toolkit.lib_utils_string import fill_string
+
+from shybox.generic_toolkit.lib_default_args import logger_name, logger_format, logger_arrow
+from shybox.generic_toolkit.lib_default_args import collector_data
+
+from shybox.runner_toolkit.settings.driver_app_settings import DrvSettings
+from shybox.runner_toolkit.time.driver_app_time import DrvTime
+>>>>>>> origin/itwater_hmc
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorHandler as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
+<<<<<<< HEAD
+=======
+from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref, mask_data_by_limits
+from shybox.processing_toolkit.lib_proc_interp import interpolate_data
+from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
+>>>>>>> origin/itwater_hmc
 
 # set logger
 logger_stream = logging.getLogger(logger_name)
@@ -119,6 +136,7 @@ def main(alg_collectors_settings: dict = None):
                 "tmp_dir": alg_variables_settings['path_tmp']
             },
             "process_list": {
+<<<<<<< HEAD
                 "snow_mask": [
                     {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
                      "fill_value": np.nan, "var_no_data": 0},
@@ -127,11 +145,19 @@ def main(alg_collectors_settings: dict = None):
                 "rain_eff": [
                     {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
                      "fill_value": np.nan, "var_no_data": -9999},
+=======
+                "age": [
+                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan},
+>>>>>>> origin/itwater_hmc
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ],
                 "albedo": [
                     {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
+<<<<<<< HEAD
                      "fill_value": np.nan, "var_no_data": -9999},
+=======
+                     "fill_value": np.nan},
+>>>>>>> origin/itwater_hmc
                     {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
                 ]
             }
@@ -250,11 +276,19 @@ def create_src_dataset(file_name: str, file_path: str, file_time: pd.Timestamp) 
     data_obj = DataLocal(
         path=file_path,
         file_name=file_name,
+<<<<<<< HEAD
         file_format="netcdf", file_mode=None, file_variable=['snow_mask', 'rain_eff', 'albedo'],
         file_template={
             "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
             'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
             "vars_data": {"SnowMask": "snow_mask", "REff": "rain_eff", "AlbedoS": "snow_albedo"}
+=======
+        file_format="netcdf", file_mode=None, file_variable=['age', 'albedo'],
+        file_template={
+            "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
+            'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
+            "vars_data": {"AgeS": "snow_age", "AlbedoS": "snow_albedo"}
+>>>>>>> origin/itwater_hmc
         },
         time_signature='current',
         time_reference=file_time, time_period=1, time_freq='h', time_direction='forward',

@@ -3,6 +3,7 @@ Library Features:
 
 Name:          lib_dataset_generic
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+<<<<<<< HEAD
 Date:          '20251029'
 Version:       '1.1.0'
 """
@@ -10,6 +11,13 @@ Version:       '1.1.0'
 # libraries
 from __future__ import annotations
 
+=======
+Date:          '20250127'
+Version:       '1.0.0'
+"""
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
+>>>>>>> origin/itwater_hmc
 import logging
 logging.getLogger("findlibs").setLevel(logging.WARNING)
 logging.getLogger("gribapi.bindings").setLevel(logging.WARNING)
@@ -38,6 +46,7 @@ from typing import Optional, Dict
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc import write_file_nc_hmc, write_file_nc_s3m, write_file_nc_itwater
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
+<<<<<<< HEAD
 from shybox.time_toolkit.lib_utils_time import is_date
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
@@ -47,6 +56,9 @@ try:
 except Exception as e:
     from shybox.default.lib_default_log import logger_default
     logger_stream = logger_default(__name__)
+=======
+from shybox.generic_toolkit.lib_utils_time import is_date, convert_time_format
+>>>>>>> origin/itwater_hmc
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -96,6 +108,10 @@ def get_zip_from_path(path: str) -> (str, None):
     else:
         return None
 # ----------------------------------------------------------------------------------------------------------------------
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/itwater_hmc
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to get format from path
@@ -141,7 +157,11 @@ def get_format_from_path(path: str) -> str:
 # method to read from file
 def read_from_file(
         path, file_format: Optional[str] = None,
+<<<<<<< HEAD
         file_type: Optional[str] = None, file_variable: (str, list) = 'na') \
+=======
+        file_mode: Optional[str] = None, file_variable: (str, list) = None) \
+>>>>>>> origin/itwater_hmc
         -> (xr.DataArray, xr.Dataset, pd.DataFrame):
 
     # add suppress warnings
@@ -262,8 +282,13 @@ def read_from_file(
                     file_variable = file_variable[0]
                 data.name = file_variable
 
+<<<<<<< HEAD
     # read the data from a netcdf (and similar formats)
     elif file_format in ['netcdf', 'nc', 'nc4']:
+=======
+    # read the data from a netcdf
+    elif file_format == 'netcdf':
+>>>>>>> origin/itwater_hmc
 
         has_compression = has_compression_extension(path)
 
@@ -404,7 +429,11 @@ def write_to_file(data, path,
             write_file_nc_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['grid_s3m', 's3m', 'S3M']:
             write_file_nc_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
+<<<<<<< HEAD
         elif file_type in ['itwater', 'it_water']:
+=======
+        elif file_type == 'itwater':
+>>>>>>> origin/itwater_hmc
             write_file_nc_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         else:
             data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')

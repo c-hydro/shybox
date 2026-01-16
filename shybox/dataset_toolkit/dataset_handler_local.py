@@ -166,6 +166,7 @@ class DataLocal(Dataset):
         return self.get_key(time, **kwargs)
 
     ## INPUT/OUTPUT METHODS
+<<<<<<< HEAD
     def _read_data(self, path: str,
                    vars_data: dict = None, vars_geo: dict = None, dims_geo: dict = None,
                    **kwargs) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
@@ -185,6 +186,16 @@ class DataLocal(Dataset):
         self.logger.info_down(f"Read data from {path} ... DONE")
 
         return data
+=======
+    def _read_data(self, input_path, input_mapping: dict = None) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+
+        input_variable = None
+        if input_mapping is not None:
+            input_variable = list(input_mapping.keys())
+
+        return read_from_file(
+            input_path, file_format=self.file_format, file_mode=self.file_mode, file_variable=input_variable)
+>>>>>>> origin/itwater_hmc
     
     def _write_data(self, data: (xr.DataArray, pd.DataFrame), path: str, **kwargs) -> None:
         write_to_file(

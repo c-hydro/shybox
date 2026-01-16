@@ -2,6 +2,7 @@
 Changelog
 =========
 
+<<<<<<< HEAD
 Version 1.0.4 [2025-11-21]
 **************************
 PACKAGE:
@@ -36,6 +37,8 @@ APPS:
 	- converter and merger for s3m model;
 	- runner for s3m model
 
+=======
+>>>>>>> origin/itwater_hmc
 Version 1.0.0 [2024-12-02]
 **************************
 PACKAGE:

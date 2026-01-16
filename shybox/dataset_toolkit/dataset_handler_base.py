@@ -702,6 +702,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # get full location of file (based on time)
         full_location = self.get_key(time, **kwargs)
+<<<<<<< HEAD
+=======
+
+        # check memory active (if defined true or false)
+        if 'memory_active' in kwargs:
+            self.memory_active = kwargs.pop('memory_active')
+>>>>>>> origin/itwater_hmc
 
         # check memory active (if defined true or false)
         if 'memory_active' in kwargs:
@@ -814,8 +821,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # check if data is available
         if self.check_data(time, **kwargs):
 
+<<<<<<< HEAD
             # get data
             data = self._read_data(full_location, **self.variable_template)
+=======
+            data = self._read_data(full_location, input_mapping=mapping)
+>>>>>>> origin/itwater_hmc
 
             # return data as is (if specified)
             if as_is:
@@ -837,9 +848,21 @@ class Dataset(ABC, metaclass=DatasetMeta):
             if data is None: return None
 
             # map the data variables
+<<<<<<< HEAD
             data = map_vars(data, **self.variable_template)
             data = self._check_step(data, "map_vars")
             if data is None: return None
+=======
+            data = map_vars(data, **self.file_template)
+
+            if not self.file_template:
+                var_name = data.name
+                if var_name is not None:
+                    if var_name in list(mapping.keys()):
+                        var_id = list(mapping.keys()).index(var_name)
+                        var_upd = list(mapping.values())[var_id]
+                        data.name = var_upd
+>>>>>>> origin/itwater_hmc
 
             # ensure that the data has descending latitudes
             data = straighten_data(data)
@@ -873,20 +896,35 @@ class Dataset(ABC, metaclass=DatasetMeta):
             raise ValueError(f'Could not resolve data from {full_location}.')
 
         # if there is no template for the dataset, create it from the data
+<<<<<<< HEAD
         structure_template = self.get_structure_template(make_it=False, **kwargs)
         if structure_template is None:
             if self.memory_data is not None:
                 self.set_structure_template(template_array=self.memory_data, template_key=variable, **kwargs)
             else:
                 self.set_structure_template(template_array=data, template_key=variable, **kwargs)
+=======
+        template_dict = self.get_template_dict(make_it=False, **kwargs)
+        if template_dict is None:
+            if self.memory_data is not None:
+                self.set_template(template_array=self.memory_data, template_key=variable, **kwargs)
+            else:
+                self.set_template(template_array=data, template_key=variable, **kwargs)
+>>>>>>> origin/itwater_hmc
         else:
             # otherwise, update the data in the template
             # (this will make sure there is no errors in the coordinates due to minor rounding)
             attrs = data.attrs
             if self.memory_data is not None:
+<<<<<<< HEAD
                 data = self.set_data_to_structure_template(self.memory_data, template_dict)
             else:
                 data = self.set_data_to_structure_template(data, template_dict)
+=======
+                data = self.set_data_to_template(self.memory_data, template_dict)
+            else:
+                data = self.set_data_to_template(data, template_dict)
+>>>>>>> origin/itwater_hmc
             data.attrs.update(attrs)
 
         # set attributes
@@ -994,6 +1032,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.logger.error('Cannot write numpy array without a template.')
                 raise ValueError('Cannot write numpy array without a template.')
 
+<<<<<<< HEAD
         elif isinstance(data, xr.DataArray) or isinstance(data, xr.Dataset):
 
                 self.set_structure_template(data, template_key=variable, **kwargs)
@@ -1004,6 +1043,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # set the data to the structure template
         out_obj = self.set_data_to_structure_template(data, structure_template)
+=======
+        if isinstance(data, xr.Dataset):
+            pass
+
+        out_obj = self.set_data_to_template(data, default_template)
+>>>>>>> origin/itwater_hmc
         out_obj = set_type(out_obj, self.nan_value)
 
         # adjust the data orientation

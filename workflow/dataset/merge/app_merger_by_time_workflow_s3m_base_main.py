@@ -111,12 +111,17 @@ def main(alg_collectors_settings: dict = None):
     # ------------------------------------------------------------------------------------------------------------------
     # configuration workflow
     configuration= {
+<<<<<<< HEAD:workflow/dataset/merge/app_merger_by_time_workflow_s3m_base_main.py
         "WORKFLOW_DSET_01": {
+=======
+        "WORKFLOW": {
+>>>>>>> origin/itwater_hmc:workflow/dataset/merge/app_merger_workflow_s3m_base_main.py
             "options": {
                 "intermediate_output": "Tmp",
                 "tmp_dir": "tmp"
             },
             "process_list": {
+<<<<<<< HEAD:workflow/dataset/merge/app_merger_by_time_workflow_s3m_base_main.py
                 "rain_eff": [
                     {"function": "merge_data_by_time"}
                 ]
@@ -129,6 +134,9 @@ def main(alg_collectors_settings: dict = None):
             },
             "process_list": {
                 "snow_mask": [
+=======
+                "age": [
+>>>>>>> origin/itwater_hmc:workflow/dataset/merge/app_merger_workflow_s3m_base_main.py
                     {"function": "merge_data_by_time"}
                 ]
             }
@@ -167,7 +175,11 @@ def main(alg_collectors_settings: dict = None):
         # time source data
         alg_data_time = select_time_range(
             time_start=sim_time,
+<<<<<<< HEAD:workflow/dataset/merge/app_merger_by_time_workflow_s3m_base_main.py
             time_period=24,
+=======
+            time_period=5,
+>>>>>>> origin/itwater_hmc:workflow/dataset/merge/app_merger_workflow_s3m_base_main.py
             time_frequency='h')
         start_data_time, end_data_time = alg_data_time[0], alg_data_time[-1]
 
@@ -175,6 +187,7 @@ def main(alg_collectors_settings: dict = None):
         end_data_time = select_time_format(end_data_time, time_format='%Y-%m-%d %H:%M')
 
         # get data source settings
+<<<<<<< HEAD:workflow/dataset/merge/app_merger_by_time_workflow_s3m_base_main.py
         data_src_settings_01 = alg_variables_application['data_source']['dset_01']
         # organize data source obj
         data_src_obj_01 = DataLocal(
@@ -216,12 +229,25 @@ def main(alg_collectors_settings: dict = None):
                 "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
                 'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
                 "vars_data": {"snow_mask": "snow_mask"}
+=======
+        data_src_settings = alg_variables_application['data_source']['dset']
+        # organize data source obj
+        data_src_obj = DataLocal(
+            path=data_src_settings['path'],
+            file_name=data_src_settings['file_name'],
+            file_format="geotiff", file_mode=None, file_variable=['age'],
+            file_template={
+                "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
+                'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
+                "vars_data": {"snow_age": "snow_age"}
+>>>>>>> origin/itwater_hmc:workflow/dataset/merge/app_merger_workflow_s3m_base_main.py
             },
             time_signature='current',
             time_reference=start_data_time, time_period=1, time_freq='h', time_direction='forward',
         )
 
         # get data destination settings
+<<<<<<< HEAD:workflow/dataset/merge/app_merger_by_time_workflow_s3m_base_main.py
         data_dst_settings_02 = alg_variables_application['data_destination']['dset_02']
         # organize data destination obj
         data_dst_obj_02 = DataLocal(
@@ -250,12 +276,35 @@ def main(alg_collectors_settings: dict = None):
         # orchestrator multi time(s) settings
         orc_process_02 = Orchestrator.multi_time(
             data_package_in=[data_src_obj_02], data_package_out=[data_dst_obj_02],
+=======
+        data_dst_settings = alg_variables_application['data_destination']['dset']
+        # organize data destination obj
+        data_dst_obj = DataLocal(
+            path=data_dst_settings['path'],
+            file_name=data_dst_settings['file_name'], time_signature='start',
+            file_format='netcdf', file_type='itwater', file_mode='grid',
+            file_variable=data_dst_settings['variable'],
+            file_template={
+                "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+                "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+                "vars_data": data_dst_settings['vars_data']
+            },
+            time_period=5, time_format='%Y%m%d%H%M')
+
+        # orchestrator multi time(s) settings
+        orc_process = Orchestrator.multi_time(
+            data_package_in=[data_src_obj], data_package_out=[data_dst_obj],
+>>>>>>> origin/itwater_hmc:workflow/dataset/merge/app_merger_workflow_s3m_base_main.py
             data_ref=geo_data,
             configuration=configuration['WORKFLOW_DSET_02']
         )
 
         # orchestrator multi time(s) execution
+<<<<<<< HEAD:workflow/dataset/merge/app_merger_by_time_workflow_s3m_base_main.py
         orc_process_02.run(time=pd.date_range(start_data_time, end_data_time, freq='h'),
+=======
+        orc_process.run(time=pd.date_range(start_data_time, end_data_time, freq='h'),
+>>>>>>> origin/itwater_hmc:workflow/dataset/merge/app_merger_workflow_s3m_base_main.py
                         group='by_time')
 
     # ------------------------------------------------------------------------------------------------------------------
