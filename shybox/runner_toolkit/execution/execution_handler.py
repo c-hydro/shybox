@@ -2,6 +2,8 @@
 # libraries
 import os
 import subprocess
+import threading
+import queue
 import pandas as pd
 
 from typing import Optional, Tuple, List, Any, Dict
@@ -154,61 +156,61 @@ class ExecutionManager:
         return stdout, stderr, proc.returncode
 
     # ------------------------------------------------------------------
-    def _run_stream(
-        self,
-        log_tag: str,
-    ) -> Tuple[Optional[str], Optional[str], int]:
+
+    def _run_stream(self, log_tag: str) -> Tuple[Optional[str], Optional[str], int]:
         log = get_log()
-        if hasattr(log, "info_up"):
-            log.info_up("Run (streaming mode)", tag=log_tag)
-        else:
-            log.info("Run (streaming mode)")
+        (log.info_up if hasattr(log, "info_up") else log.info)("Run (streaming mode)", tag=log_tag)
+
+        # Ensure unbuffered/line-buffered behavior where possible
+        env = dict(self.env or {})
+        env.setdefault("PYTHONUNBUFFERED", "1")  # harmless if not python
 
         proc = subprocess.Popen(
             self.command,
             cwd=self.cwd,
-            env=self.env,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            text=True,  # IMPORTANT: enables real line buffering
+            bufsize=1,  # line buffered (only meaningful with text=True)
+            universal_newlines=True,
+            errors="replace",
         )
 
-        stdout_chunks: List[bytes] = []
-        stderr_chunks: List[bytes] = []
+        q: "queue.Queue[tuple[str, str]]" = queue.Queue()
+        stdout_lines: List[str] = []
+        stderr_lines: List[str] = []
 
+        t_out = threading.Thread(target=_pump_lines, args=(proc.stdout, "stdout", q), daemon=True)
+        t_err = threading.Thread(target=_pump_lines, args=(proc.stderr, "stderr", q), daemon=True)
+        t_out.start()
+        t_err.start()
+
+        # Consume lines until process exits and both pumps are done
         while True:
-            if proc.poll() is not None:
-                # drain remaining
-                rem_out = proc.stdout.read() if proc.stdout else b""
-                if rem_out:
-                    stdout_chunks.append(rem_out)
-                    log.info(convert_bytes2string(rem_out).rstrip())
+            try:
+                name, line = q.get(timeout=0.1)
+            except queue.Empty:
+                if proc.poll() is not None and not (t_out.is_alive() or t_err.is_alive()):
+                    break
+                continue
 
-                rem_err = proc.stderr.read() if proc.stderr else b""
-                if rem_err:
-                    stderr_chunks.append(rem_err)
-                    log.warning(convert_bytes2string(rem_err).rstrip())
-                break
+            line = line.rstrip("\n")
+            if name == "stdout":
+                stdout_lines.append(line)
+                log.info(line)
+            else:
+                stderr_lines.append(line)
+                log.warning(line)
 
-            line = proc.stdout.readline() if proc.stdout else b""
-            if line:
-                stdout_chunks.append(line)
-                log.info(convert_bytes2string(line).rstrip())
+        exit_code = proc.wait()
 
-            err = proc.stderr.readline() if proc.stderr else b""
-            if err:
-                stderr_chunks.append(err)
-                log.warning(convert_bytes2string(err).rstrip())
-
-        exit_code = proc.returncode
-        stdout = convert_bytes2string(b"".join(stdout_chunks)) if stdout_chunks else None
-        stderr = convert_bytes2string(b"".join(stderr_chunks)) if stderr_chunks else None
+        stdout = "\n".join(stdout_lines) if stdout_lines else None
+        stderr = "\n".join(stderr_lines) if stderr_lines else None
         stderr = clean_stderr(stderr)
 
         msg_exit = f"Exit code: {exit_code}"
-        if hasattr(log, "info_down"):
-            log.info_down(msg_exit, tag=log_tag)
-        else:
-            log.info(msg_exit)
+        (log.info_down if hasattr(log, "info_down") else log.info)(msg_exit, tag=log_tag)
 
         return stdout, stderr, exit_code
 
@@ -549,3 +551,14 @@ class ExecutionManager:
             f"stream_output={getattr(self, 'stream_output', None)!r}, "
             f"command={cmd_preview!r})"
         )
+
+# helpers
+def _pump_lines(stream, name: str, q: "queue.Queue[tuple[str, str]]"):
+    try:
+        for line in stream:
+            q.put((name, line))
+    finally:
+        try:
+            stream.close()
+        except Exception:
+            pass

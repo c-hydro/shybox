@@ -18,6 +18,9 @@ __pycache__/
 conda/
 old/
 dset/
+data/
+old*/
+old_work/
 example/
 tmp/
 */tmp/
@@ -38,6 +41,7 @@ tmp
 *OLD*.py
 *tmp*.py
 *TMP*.py
+*.py_OLD
 
 
 # Distribution / packaging

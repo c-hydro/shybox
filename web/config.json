@@ -1,0 +1,77 @@
+{
+  "data_root": "data",
+  "dynamic_root": "/home/fabio/Desktop/shybox/web/data/dynamic",
+  "basins": [
+    "Arzilla",
+    "Burano",
+    "Metauro"
+  ],
+  "default_basin": "Arzilla",
+  
+  "sections_csv": "/home/fabio/Desktop/shybox/web/data/static/point/sections_marche_FloodPROOFS.csv",
+  "dem_file": "/home/fabio/Desktop/shybox/web/data/static/gridded/marche.dem.txt",
+  "choice_file": "/home/fabio/Desktop/shybox/web/data/static/gridded/marche.choice.txt",
+  
+  "history_days": 3,
+  "debug_today": "2025-12-02",
+  "active_time_series": [
+    "run_type_1",
+    "run_type_2"
+  ],
+  "active_maps": [
+  	"run_type_1",
+  	"run_type_2"
+  ],
+  "runs": {
+    "run_time_series": {
+      "run_type_1": {
+        "type": "ts_deterministic",
+        "name": "Deterministic Weather Stations",
+        "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/time_series/deterministic_weather_stations/{date_path}/collections",
+        "format_of_date_path": "%Y/%m/%d/%H",
+        "file_glob": "hydrograph_*.json",
+        "format_of_date_file": "%Y%m%d%H%M",
+        "time_field": "time_period",
+        "obs_field": "time_series_discharge_observed",
+        "fcst_field": "time_series_discharge_simulated",
+        "missing_value": -9998.0,
+        "basin_field": "section_domain",
+        "section_field": "section_name"
+      },
+      "run_type_2": {
+        "type": "ts_deterministic",
+        "name": "Deterministic Radar",
+        "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/time_series/deterministic_weather_stations/{date_path}/collections",
+        "format_of_date_path": "%Y/%m/%d/%H",
+        "file_glob": "hydrograph_*.json",
+        "format_of_date_file": "%Y%m%d%H%M",
+        "time_field": "time_period",
+        "obs_field": "time_series_discharge_observed",
+        "fcst_field": "time_series_discharge_simulated",
+        "missing_value": -9998.0,
+        "basin_field": "section_domain",
+        "section_field": "section_name"
+      }
+    },
+    "run_maps": {
+      "run_type_1": {
+        "type": "maps_instantaneous",
+        "name": "ExpertForecast NWP Ecmwf0100",
+        "variable": "t2q max",
+        "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/maps/simulated_q2t/{date_path}/TQ_MAX/",
+        "format_of_date_path": "%Y/%m/",
+        "file_glob": "TQ_*.tif",
+        "format_of_date_file": "%Y%m%d%H0000"
+      },
+      "run_type_2": {
+        "type": "maps_instantaneous",
+        "name": "ExpertForecast NWP Ecmwf0100",
+        "variable": "t2q hourly",
+        "path_template": "/home/fabio/Desktop/shybox/web/data/dynamic/maps/simulated_q2t/{date_path}/TQ/",
+        "format_of_date_path": "%Y/%m/",
+        "file_glob": "TQ_*.tif",
+        "format_of_date_file": "%Y%m%d%H0000"
+      }
+    }
+  }
+}

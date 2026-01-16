@@ -6,6 +6,7 @@
     "variables": {
       "lut": {
         "user": {
+          "path_geo": "/home/fabio/Desktop/shybox/dset/case_study_itwater/case_study_hmc/data_static/",
           "time_run": "{time_run}", "time_restart": "{time_restart}",
           "time_start": null, "time_end": null,
           "time_period": 2, "time_rounding": "H", "time_frequency": "H",
@@ -26,7 +27,7 @@
         "time_run": "timestamp", "time_restart": "timestamp", "time_period": "int",
         "time_start": "string", "time_end": "string",
         "time_rounding": "string", "time_frequency": "string",
-        "path_app": "string",
+        "path_app": "string", "path_geo": "string",
         "path_log": "string", "file_log": "string",
         "path_namelist": "string", "file_namelist": "string",
         "execution_name": "string", "execution_mode": "string"
@@ -37,7 +38,7 @@
         "time_run": "%Y%m%d%H00", "time_restart": "%Y%m%d%H00", "time_period": "int",
         "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
         "time_rounding": "string", "time_frequency": "string",
-        "path_app": "string",
+        "path_app": "string", "path_geo": "string",
         "path_log": "string", "file_log": "string",
         "path_namelist": "string", "file_namelist": "string",
         "execution_name": "string", "execution_mode": "string"
@@ -69,13 +70,13 @@
         "iFlagCType" : 1,
         "a1dIntStep" : [1, 5, 25, 600],
         "sDomainName": "{domain_name}",
-        "sPathData_Static_Point": "{path_source}/data_geo/point/",
-        "sPathData_Static_Gridded": "{path_source}/data_geo/gridded/",
-        "sPathData_Forcing_Gridded": "{path_source}/data_forcing/gridded/$yyyy/$mm/$dd/",
-        "sPathData_Forcing_Point": "{path_source}/data_forcing/point/$yyyy/$mm/$dd/",
-        "sPathData_Forcing_TimeSeries": "{path_source}/data_forcing/time_series/",
-        "sPathData_Updating_Gridded": "{path_source}/data_forcing/gridded/$yyyy/$mm/$dd/",
-        "sPathData_Updating_Point": "{path_source}/data_forcing/point/$yyyy/$mm/$dd/",
+        "sPathData_Static_Point": "{path_geo}/point/",
+        "sPathData_Static_Gridded": "{path_geo}/gridded/",
+        "sPathData_Forcing_Gridded": "{path_source}/$yyyy/$mm/$dd/",
+        "sPathData_Forcing_Point": "{path_source}/$yyyy/$mm/$dd/",
+        "sPathData_Forcing_TimeSeries": "{path_source}/time_series/",
+        "sPathData_Updating_Gridded": "{path_source}/$yyyy/$mm/$dd/",
+        "sPathData_Updating_Point": "{path_source}/$yyyy/$mm/$dd/",
         "sPathData_Restart_Gridded": "{path_destination}/model_state/$yyyy/$mm/$dd/",
         "sPathData_Restart_Point": "{path_destination}/model_state/$yyyy/$mm/$dd/",
         "sPathData_Output_Point": "{path_destination}/model_results/point/$yyyy/$mm/$dd/",
@@ -83,10 +84,11 @@
         "sPathData_Output_TimeSeries": "{path_destination}/model_results/time_series/",
         "sPathData_State_Gridded": "{path_destination}/model_state/gridded/$yyyy/$mm/$dd/",
         "sPathData_State_Point": "{path_destination}/model_state/point/$yyyy/$mm/$dd/",
-        "sTimeStart": "{time_run}",
+        "sTimeStart": "{time_start}",
         "sTimeRestart": "{time_restart}",
         "iSimLength": "{time_period}",
         "iTcMax": 0,
+        "iFlagDynVeg": 0,
         "iTVeg": 800
       },
       "by_pattern": {

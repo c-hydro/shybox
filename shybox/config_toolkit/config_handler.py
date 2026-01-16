@@ -214,7 +214,9 @@ class ConfigManager:
                 log.error(f"JSON file not found: {src}", tag="config")
                 raise FileNotFoundError(f"JSON file not found: {src}")
             with open(src, "r") as f:
+                log.info_up(f"Read JSON json {src} ... ")
                 data = json.load(f)
+                log.info_down(f"JSON file not found: {src}")
 
         else:
             log.error(f"Unsupported source type: {type(src)}", tag="config")
