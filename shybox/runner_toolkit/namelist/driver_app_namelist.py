@@ -52,13 +52,13 @@ class DrvNamelist:
     # ------------------------------------------------------------------------------------------------------------------
     # Method class initialization
     def __init__(self, time_obj: dict, namelist_obj: dict,
-                 namelist_version: str = '3.1.6', namelist_type: str = 'hmc',
+                 namelist_version: str = '3.3.0', namelist_type: str = 'hmc',
                  namelist_template: str = 'template.namelist', namelist_application: str = 'application.namelist',
                  namelist_update: bool = True, **kwargs) -> None:
 
         self.time_obj = time_obj
         self.namelist_obj = namelist_obj
-
+        
         # get namelist fields
         if 'fields' in list(self.namelist_obj.keys()):
             self.namelist_fields_by_value = self.namelist_obj['fields']['by_value']
