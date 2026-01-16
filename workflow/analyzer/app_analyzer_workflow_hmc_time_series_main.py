@@ -241,37 +241,6 @@ def main(view_table: bool = False, dry_run : bool = False):
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    ## VARIABLE MANAGEMENT
-    # get lut section
-    alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
-    # view lut section
-    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=view_table)
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    ## APPLICATION MANAGEMENT
-    # get application execution
-    alg_app_exec = alg_cfg_obj.get_application("application", root_key=None)
-    # fill application execution
-    alg_app_exec = alg_app_exec.resolved(
-        time_values=None,  # no fill_section_with_times
-        when=None,  # no LUT time resolution
-        strict=False,
-        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
-        expand_env=True,  # BUT expand $HOME, $RUN, ...
-        env_extra=None,  # or {"RUN": "base"} etc
-        validate_result=False,  # or True + allow_placeholders=True if needed
-        validate_allow_placeholders=True,
-        validate_allow_none=False,
-    )
-    # view application execution section
-    alg_cfg_obj.view(section=alg_app_exec, table_name='application [cfg application]', table_print=view_table)
-    # ------------------------------------------------------------------------------------------------------------------
-
-
-
-
-    # ------------------------------------------------------------------------------------------------------------------
     ## INFO END
     # info algorithm (end)
     alg_time_elapsed = round(time.time() - start_time, 1)

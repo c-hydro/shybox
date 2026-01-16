@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 
 from datetime import datetime
-from netCDF4 import Dataset, date2num, num2date
+from netCDF4 import Dataset, date2num, num2date, stringtochar
 
 from shybox.default.lib_default_args import file_conventions, file_title, file_institution, file_source, \
     file_history, file_references, file_comment, file_email, file_web_site, file_project_info, file_algorithm
@@ -29,8 +29,8 @@ from shybox.generic_toolkit.lib_utils_debug import plot_data
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# registry default type(s)
-registry_default_attrs = {
+# info default type(s)
+info_default_attrs = {
     'tag': str,
     'id': int,
     'section_name': str,
@@ -70,14 +70,30 @@ crs_attrs_default = {
 }
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
+# helper to squeeze (N,1) arrays to (N,) arrays
+def squeeze_n1(a):
+    a = np.asarray(a)
+    if a.ndim == 2 and a.shape[1] == 1:
+        return a[:, 0]
+    return a
+
+# helper to write 1d string variable
+def write_string_1d(ds, name, data_1d, dim_n):
+    seq = ["" if x is None else str(x) for x in data_1d]
+    nchar = max((len(s) for s in seq), default=1)
+    dim_c = f"{name}_nchar"
+    if dim_c not in ds.dimensions:
+        ds.createDimension(dim_c, nchar)
+
+    v = ds.createVariable(name, "S1", (dim_n, dim_c))
+    v[:, :] = stringtochar(np.array(seq, dtype=f"S{nchar}"))
+
 # method to write time series in netcdf file
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
         file_name: str = None, file_format='NETCDF4',
-        ts : pd.DataFrame = None, time: pd.DatetimeIndex = None, attrs_data: dict = None,
-        registry_df : pd.DataFrame = None, registry_attrs : dict = registry_default_attrs,
+        ts : pd.DataFrame = None, info_attrs : dict = info_default_attrs,
         var_time_name : str = 'time',
         var_time_format: str = '%Y-%m-%d %H:%M', var_time_dim: str = 'time', var_time_type: str = 'float64',
         var_data_name : str = 'discharge',
@@ -109,21 +125,18 @@ def write_ts_hmc(
     # ------------------------------------------------------------------------------------------------------------------
     ## ATTRS PREPARATION
     attrs_data = ts.attrs
-    tags = attrs_data["tag"]
 
-    registry_data = {}
-    for i, tag in tags.items():
-        row = {}
-        for k, v in attrs_data.items():
+    info_data, info_dim = {}, None
+    for key, obj in attrs_data.items():
+        if isinstance(obj, pd.Series):
+            values = obj.values
+        else:
+            values = np.array(obj)
 
-            if isinstance(v, pd.Series):
-                row[k] = v.iloc[i]
-            elif isinstance(v, (list, tuple, np.ndarray)):
-                row[k] = v[i]
-            else:
-                row[k] = v
+        if info_dim is None:
+            info_dim = values.shape[0]
 
-        registry_data[tag] = row
+        info_data[key] = values
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -186,33 +199,33 @@ def write_ts_hmc(
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - REGISTRY OBJECT(S)
-    # create registry object(s) -- 1d format
-    if registry_data is not None:
+    # FILE NETCDF - INFO OBJECT(S)
+    if info_data is not None:
 
-        # set registry dimension (use the data dimension)
-        var_reg_dim = var_data_dim
+        # set info dimension (same as var_data dimension)
+        info_dim = var_data_dim
 
         # iterate over registry variable(s)
-        for var_reg_key, var_reg_data in registry_data.items():
+        for info_key, info_obj in info_data.items():
+
+            # convert from pandas series to numpy array (str, float or int)
+            if isinstance(info_obj, pd.Series):
+                info_values = info_obj.values
+            else:
+                info_values = np.array(info_obj)
 
             # set registry type
-            if var_reg_key in list(registry_attrs.keys()):
-                var_reg_type = registry_attrs[var_reg_key]
-
-                if var_reg_type is not None:
-
-                    var_reg_obj = file_handle.createVariable(
-                        varname=var_reg_key, dimensions=(var_reg_dim,), datatype=var_reg_type)
-
-                    var_reg_obj[:] = var_reg_data
+            if info_key in list(info_attrs.keys()):
+                info_type = info_attrs[info_key]
+                if info_type is not None:
+                    info_obj = file_handle.createVariable(
+                        varname=info_key, dimensions=(info_dim,), datatype=info_type)
+                    info_obj[:] = info_values
 
                 else:
-
-                    logger_stream.warning(f'Registry type for "{var_reg_key}" is defined by NoneType')
-
-            else:
-                logger_stream.warning(f'Registry format for "{var_reg_key}" not defined!')
+                    logger_stream.warning(f'Info type for "{info_key}" is defined by NoneType')
+    else:
+        logger_stream.warning('Info data object is defined by NoneType')
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -228,24 +241,6 @@ def write_ts_hmc(
     var_data_obj[:, :] = var_data
     # ------------------------------------------------------------------------------------------------------------------
 
-    '''
-     import matplotlib
-     matplotlib.use('TkAgg')
-     plt.figure()
-     plt.imshow(dset_data[variable_name].values[i, :, :])
-     plt.colorbar(); plt.clim(2, 20)
-     plt.figure()
-     plt.imshow(variable_data[i, :, :])
-     plt.colorbar(); plt.clim(2, 20)
-     plt.figure()
-     plt.imshow(tmp_data)
-     plt.colorbar(); plt.clim(2, 20)
-     plt.figure()
-     plt.imshow(variable_tmp[i, :, :])
-     plt.colorbar(); plt.clim(2, 20)
-     plt.show()
-     '''
-
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - CLOSE FILE
     # close file
@@ -253,6 +248,7 @@ def write_ts_hmc(
     # ------------------------------------------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (netcdf library for hmc dataset)

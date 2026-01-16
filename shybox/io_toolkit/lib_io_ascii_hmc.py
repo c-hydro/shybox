@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import numpy as np
 import pandas as pd
 
 from pathlib import Path
@@ -47,6 +48,30 @@ LUT_DB_DEFAULT = {
 }
 # columns for domain registry
 LUT_DOMAIN_DEFAULT = ['X', 'Y', 'catchment_name', 'section_name', 'extra']
+
+# data types for sections database
+TYPE_DB_DEFAULT = {
+    'tag': str,
+    'id': int,
+    'section_name': str,
+    'station_name': str,
+    'catchment_name': str,
+    'domain_name': str,
+    'municipality': str,
+    'province': str,
+    'region': str,
+    'basin': int,
+    'longitude': np.float64,
+    'latitude': np.float64,
+    'catchment_area_km2': float,
+    'correlation_time_hr': float,
+    'curve_number': float,
+    'threshold_level_1': float,
+    'threshold_level_2': float,
+    'threshold_level_3': float,
+    'alert_zone': int,
+    'is_calibrated': str
+}
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -88,13 +113,16 @@ def read_sections_db(
 
     if lut is None:
         lut = LUT_DB_DEFAULT
-        logger_stream.info("Using default LUT_DB_DEFAULT")
+        logger_stream.warning("Using default LUT_DB_DEFAULT")
 
+    # read the csv file (db sections)
     df = pd.read_csv(file_path, sep=sep, encoding=encoding)
 
+    # check reference column (according to which the 'tag' is created)
     if col_datafrom not in df.columns:
         logger_stream.error(f"Required column '{col_datafrom}' not found in CSV.")
 
+    # apply data types
     df_out = df.copy()
     if col_filter and filter_value is not None:
         if col_filter not in df_out.columns:
