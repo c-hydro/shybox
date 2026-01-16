@@ -17,7 +17,7 @@ import os
 log_name = 'shybox'
 log_file = 'shybox.log'
 log_folder = None
-log_handler = ['file', 'stream']  # 'file' and 'stream'
+log_handler = ['stream']  # ['file', 'stream']
 log_format = \
     '%(asctime)s %(name)-12s %(levelname)-8s ' \
     '%(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()] '
