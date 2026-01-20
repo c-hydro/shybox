@@ -76,6 +76,7 @@ TYPE_DB_DEFAULT = {
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to read sections database (csv format)
+@with_logger(var_name='logger_stream')
 def _parse_tag_from_data_from(text: str) -> str:
     """
     Parse 'Catchment, Section' → 'catchment:section_with_underscores'
@@ -90,10 +91,65 @@ def _parse_tag_from_data_from(text: str) -> str:
         return f"{left}:{right}"
     return s.lower()
 
+@with_logger(var_name='logger_stream')
+def _select_warn_and_cast(
+    df: pd.DataFrame,
+    type_map: dict,
+    keep_only_typed_cols: bool = True,
+    store_info: bool = True,
+) -> pd.DataFrame:
+
+    if type_map is None:
+        return df
+
+    wanted = list(type_map.keys())
+    missing = [c for c in wanted if c not in df.columns]
+    existing = [c for c in wanted if c in df.columns]
+
+    if missing:
+        logger_stream.warning(f"Missing expected columns (skipping): {missing}")
+
+    # store metadata in attributes
+    info = {}
+    if store_info:
+        info["fields_requested"] = wanted
+        info["fields_selected"] = existing
+        info["fields_missing"] = missing
+        info["fields_types"] = {k: str(v) for k, v in type_map.items()}
+
+    # select fields
+    if keep_only_typed_cols:
+        df = df[existing].copy()
+    else:
+        df = df.copy()
+
+    # cast fields
+    for col in existing:
+        t = type_map[col]
+
+        if t is int:
+            s = pd.to_numeric(df[col], errors="coerce")
+            df[col] = s.astype("Int64")
+
+        elif t in (float, np.float64, np.float32):
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("float64")
+
+        elif t is str:
+            df[col] = df[col].astype("string")
+
+        else:
+            try:
+                df[col] = df[col].astype(t)
+            except Exception as e:
+                logger_stream.warning(f"Could not cast column '{col}' to {t}: {e}")
+
+    return df, info
+
 # method to read sections database (csv format from fp chain)
 @with_logger(var_name='logger_stream')
 def read_sections_db(
     file_path: str,
+    name: str = 'sections_db',
     lut: dict = None,
     col_datafrom: str = "DATI_DA",
     col_filter: str = None,
@@ -145,8 +201,28 @@ def read_sections_db(
         cols = [out_col] + [c for c in df_out.columns if c != out_col]
         df_out = df_out[cols]
 
+    # select + warn + cast using TYPE_DB_DEFAULT (or provided type_map)
+    df_out, df_info = _select_warn_and_cast(
+        df_out,
+        type_map=TYPE_DB_DEFAULT,  # or `type_map` if you add it as an arg
+        keep_only_typed_cols=True,  # keep only these fields
+        store_info=True
+    )
+
+    # organize type info in attributes
+    info_type = {}
+    if df_info:
+        if 'fields_types' in list(df_info.keys()):
+            type_info = df_info['fields_types']
+            # assign info to dataframe series
+            for type_key, type_value in type_info.items():
+                if type_key in df_out.columns:
+                    info_type[type_key] =  type_value
+    df_out.attrs['type'] = info_type
+
     # add name to the dataframe (to recognize its type)
-    df_out.name = "sections_db"
+    if name is not None:
+        df_out.name = name
 
     return df_out
 
@@ -218,6 +294,7 @@ def read_sections_registry(
     strict: bool = False,
     out_col: str = "tag",
     out_first: bool = False,
+    name: str = "sections_hmc",
 ) -> pd.DataFrame:
     """
     Read a info_section-style TXT with flexible column naming and create a
@@ -315,7 +392,8 @@ def read_sections_registry(
     if out_first and out_col in df.columns:
         df = df[[out_col] + [c for c in df.columns if c != out_col]]
     # add name to the dataframe (to recognize its type)
-    df.name = "sections_hmc"
+    if name is not None:
+        df.name = name
 
     return df
 

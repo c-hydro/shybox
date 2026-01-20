@@ -3,36 +3,57 @@ Library Features:
 
 Name:          lib_utils_tmp
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251030'
-Version:       '1.0.0'
+Date:          '20260120'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 import os
 import tempfile
 from pathlib import Path
+
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to ensure temporary folder
-def ensure_folder_tmp(folder_tmp: str = None) -> Path:
+@with_logger(var_name='logger_stream')
+def ensure_folder_tmp(folder_tmp: str = None) -> str:
     """
     Ensure a temporary folder exists.
 
     Args:
-        folder_tmp (str, optional): Path to the temporary folder.
+        folder_tmp (str, optional): path to the temporary folder.
                                     If None, uses the system temp directory.
 
     Returns:
-        Path: Path to the ensured temporary folder.
+        folder_def: path to the ensured temporary folder.
     """
-    folder = Path(folder_tmp or tempfile.gettempdir())
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
+
+    folder_def = None
+    if folder_tmp is not None:
+        try:
+            os.makedirs(folder_tmp, exist_ok=True)
+            folder_def = tempfile.mkdtemp(dir=folder_tmp)
+        except Exception as exc:
+            logger_stream.warning(
+                f"Cannot use temp folder '{tmp_root}' ({exc}). Falling back to system temp folder."
+            )
+            folder_def = tempfile.mkdtemp()
+    else:
+        logger_stream.warning("Temp folder is None: using system temp folder instead of a custom temp folder.")
+        folder_def = tempfile.mkdtemp()
+
+    if folder_def is None:
+        logger_stream.error('Failed to create a temporary folder.')
+        raise RuntimeError("Failed to create a temporary folder.")
+
+    return folder_def
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to ensure temporary file
+@with_logger(var_name='logger_stream')
 def ensure_file_tmp(filename: str = None, folder_tmp: str = None, ext: str = ".tmp") -> Path:
     """
     Create and ensure a temporary file in a safe way.

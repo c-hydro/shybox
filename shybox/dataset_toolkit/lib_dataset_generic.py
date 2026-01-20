@@ -357,6 +357,7 @@ def read_from_file(
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write to file
+@with_logger(var_name="logger_stream")
 def write_to_file(data, path,
                   file_format: Optional[str] = None, file_type: Optional[str] = None,
                   append = False, **kwargs) -> None:
@@ -406,6 +407,7 @@ def write_to_file(data, path,
     elif file_format == 'shp':
         data.to_file(path)
 
+    # write the data to a txt file
     elif file_format == 'txt':
         if append:
             with open(path, 'a') as f:
@@ -430,12 +432,19 @@ def write_to_file(data, path,
             write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['itwater', 'it_water']:
             write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
+        elif file_type in ['default']:
+            data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
         else:
-            data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
+            logger_stream.error(f'File type not supported for netcdf writing: {file_type}')
+            raise ValueError(f'File type not supported for netcdf writing: {file_type}')
 
     # write the data to a png or pdf (i.e. move the file)
     elif file_format == 'file':
         os.rename(data, path)
+
+    else:
+        logger_stream.error(f'File format not supported: {file_format}')
+        raise ValueError(f'File format not supported: {file_format}')
 
 def rm_file(path) -> None:
     os.remove(path)

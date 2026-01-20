@@ -21,7 +21,7 @@ from shybox.default.lib_default_args import file_conventions, file_title, file_i
     file_history, file_references, file_comment, file_email, file_web_site, file_project_info, file_algorithm
 from shybox.default.lib_default_args import time_units, time_calendar
 from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
-from shybox.io_toolkit.lib_io_nc_generic import get_dims_by_object, da_to_dset
+from shybox.io_toolkit.lib_io_nc_generic import get_dims_by_object, da_to_dset, to_nc_dtype
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
@@ -29,30 +29,6 @@ from shybox.generic_toolkit.lib_utils_debug import plot_data
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# info default type(s)
-info_default_attrs = {
-    'tag': str,
-    'id': int,
-    'section_name': str,
-    'station_name': str,
-    'catchment_name': str,
-    'domain_name': str,
-    'municipality': str,
-    'province': str,
-    'region': str,
-    'basin': int,
-    'longitude': np.float64,
-    'latitude': np.float64,
-    'catchment_area_km2': float,
-    'correlation_time_hr': float,
-    'curve_number': float,
-    'threshold_level_1': float,
-    'threshold_level_2': float,
-    'threshold_level_3': float,
-    'alert_zone': int,
-    'is_calibrated': str
-}
-
 # time default type(s)
 time_default_type = {
     'time_type': 'GMT',  # 'GMT', 'local'
@@ -92,8 +68,8 @@ def write_string_1d(ds, name, data_1d, dim_n):
 # method to write time series in netcdf file
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
-        file_name: str = None, file_format='NETCDF4',
-        ts : pd.DataFrame = None, info_attrs : dict = info_default_attrs,
+        file_name: str = None, file_format='NETCDF4', file_update: bool = True,
+        ts : pd.DataFrame = None, info_attrs : dict = None,
         var_time_name : str = 'time',
         var_time_format: str = '%Y-%m-%d %H:%M', var_time_dim: str = 'time', var_time_type: str = 'float64',
         var_data_name : str = 'discharge',
@@ -102,6 +78,11 @@ def write_ts_hmc(
         var_name_crs: str = 'crs', crs_attrs: dict = crs_attrs_default,
         var_compression_flag : bool = True, var_compression_level: int = 5,
         debug_flag : bool = True, **kwargs)  -> None:
+    # ------------------------------------------------------------------------------------------------------------------
+    if file_update:
+        if os.path.exists(file_name):
+            os.remove(file_name)
+    # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## TIME PREPARATION
@@ -124,19 +105,29 @@ def write_ts_hmc(
 
     # ------------------------------------------------------------------------------------------------------------------
     ## ATTRS PREPARATION
-    attrs_data = ts.attrs
+    attrs_data, attrs_type = {}, {}
+    if 'data' in ts.attrs:
+        attrs_data = ts.attrs['data']
+    if 'type' in ts.attrs:
+        attrs_type = ts.attrs['type']
 
-    info_data, info_dim = {}, None
+    info_data, info_type, info_dim = {}, {}, None
     for key, obj in attrs_data.items():
         if isinstance(obj, pd.Series):
-            values = obj.values
+            data_values = obj.values
         else:
-            values = np.array(obj)
+            data_values = np.array(obj)
+
+        if key in list(attrs_type.keys()):
+            type_values = attrs_type[key]
+        else:
+            type_values = data_values.dtype
 
         if info_dim is None:
-            info_dim = values.shape[0]
+            info_dim = data_values.shape[0]
 
-        info_data[key] = values
+        info_type[key] = type_values
+        info_data[key] = data_values
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -206,24 +197,27 @@ def write_ts_hmc(
         info_dim = var_data_dim
 
         # iterate over registry variable(s)
-        for info_key, info_obj in info_data.items():
+        for field_key, field_obj in info_data.items():
 
             # convert from pandas series to numpy array (str, float or int)
-            if isinstance(info_obj, pd.Series):
-                info_values = info_obj.values
+            if isinstance(field_obj, pd.Series):
+                field_values = field_obj.values
             else:
-                info_values = np.array(info_obj)
+                field_values = np.array(field_obj)
 
             # set registry type
-            if info_key in list(info_attrs.keys()):
-                info_type = info_attrs[info_key]
-                if info_type is not None:
-                    info_obj = file_handle.createVariable(
-                        varname=info_key, dimensions=(info_dim,), datatype=info_type)
-                    info_obj[:] = info_values
+            if field_key in list(info_type.keys()):
+                field_type = info_type[field_key]
 
+                if field_type is not None:
+
+                    field_type = to_nc_dtype(field_type)
+
+                    info_obj = file_handle.createVariable(
+                        varname=field_key, dimensions=(info_dim,), datatype=field_type)
+                    info_obj[:] = field_values
                 else:
-                    logger_stream.warning(f'Info type for "{info_key}" is defined by NoneType')
+                    logger_stream.warning(f'Info type for "{field_type}" is defined by NoneType')
     else:
         logger_stream.warning('Info data object is defined by NoneType')
     # ------------------------------------------------------------------------------------------------------------------

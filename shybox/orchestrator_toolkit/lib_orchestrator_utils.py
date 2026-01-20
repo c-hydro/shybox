@@ -17,6 +17,11 @@ import rioxarray as rxr
 import tempfile
 import os
 
+try:
+    from osgeo import gdal  # optional
+except Exception:  # pragma: no cover
+    gdal = None
+
 from osgeo import gdal
 from typing import Iterable
 # ----------------------------------------------------------------------------------------------------------------------
@@ -27,18 +32,6 @@ global PROCESSES
 PROCESSES = {}
 # ----------------------------------------------------------------------------------------------------------------------
 
-
-try:
-    from osgeo import gdal  # optional
-except Exception:  # pragma: no cover
-    gdal = None
-
-# --- these helpers are assumed to exist in your codebase ---------------
-# xarray_to_gdal(xr_obj) -> gdal.Dataset or path
-# file_to_xarray(path) -> xr.DataArray or xr.Dataset
-# gdal_to_xarray(gdal_ds_or_path) -> xr.DataArray or xr.Dataset
-# xarray_to_file(xr_obj, path=None) -> path
-# remove(path) -> None
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to decorate processing functions

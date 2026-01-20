@@ -79,6 +79,7 @@ def group_process(proc_list, proc_tag="reference"):
 # method to check compatibility between data and fx dicts
 @with_logger(var_name='logger_stream')
 def ensure_variables(data_collections, fx_collections, mode='strict'):
+
     # Keys sets
     keys_data = set(data_collections.keys())
     keys_fx = set(fx_collections.keys())
@@ -179,11 +180,31 @@ class OrchestratorBase:
         self.tmp_dir = None
         if self.options["intermediate_output"] == "Tmp":
             tmp_root = self.options.get("tmp_dir", tempfile.gettempdir())
-            os.makedirs(tmp_root, exist_ok=True)
-            self.tmp_dir = tempfile.mkdtemp(dir=tmp_root)
+            self.tmp_dir = ensure_folder_tmp(tmp_root)
+            if tmp_root is not None:
+                os.makedirs(tmp_root, exist_ok=True)
+                self.tmp_dir = tempfile.mkdtemp(dir=tmp_root)
 
         self.memory_active = True
         self.mapper = mapper  # injected by builder (Grid/TS)
+
+    @staticmethod
+    @with_logger(var_name='logger_stream')
+    def manage_tmp(tmp_dir: str = None) -> None:
+
+        if tmp_dir is not None:
+            try:
+                os.makedirs(tmp_dir, exist_ok=True)
+                tmp_dir = tempfile.mkdtemp(dir=tmp_root)
+            except Exception as exc:
+                warnings.warn(
+                    f"Cannot use tmp_root='{tmp_root}' ({exc}). Falling back to system temp folder."
+                )
+                self.tmp_dir = tempfile.mkdtemp()
+        else:
+            warnings.warn("tmp_root is None: using system temp folder instead of a custom tmp folder.")
+            self.tmp_dir = tempfile.mkdtemp()
+
 
     # -------------------------------
     # Hooks (override in subclasses)

@@ -14,12 +14,14 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.orchestrator_toolkit.lib_orchestrator_utils import as_process
 # ----------------------------------------------------------------------------------------------------------------------
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
 @as_process(input_type='pandas', output_type='pandas')
 @with_logger(var_name='logger_stream')
 def join_time_series_by_registry(
         data, ref, sections_hmc: pd.DataFrame = None, sections_db: pd.DataFrame = None,
+        name: str = 'time_series_hmc',
         fill_value: float = -9999.0, no_data_value: float = -9999.0,
         **kwargs):
 
@@ -104,8 +106,16 @@ def join_time_series_by_registry(
     for c in names_data:
         ts[c] = pd.to_numeric(ts[c], errors="coerce")
 
-    ts.attrs = registry_db
-    ts.name = 'time_series_hmc'
+    # manage time series attributes
+    registry_type = {}
+    if 'type' in list(registry_db.attrs.keys()):
+        registry_type = registry_db.attrs['type']
+    # store time series attributes
+    ts.attrs['data'], ts.attrs['type'] = registry_db, registry_type
+
+    # manage time series name
+    if name is not None:
+        ts.name = name
 
     return ts
 
