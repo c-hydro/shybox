@@ -427,7 +427,9 @@ def write_to_file(data, path,
         if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
             write_dataset_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['time_series_hmc', 'ts_hmc']:
-            write_ts_hmc(file_name=path, ts=data, time=time, attrs_data=None, **kwargs)
+            write_ts_hmc(
+                file_name=path,
+                ts_sim=data, ts_obs=None, time=time, attrs_data=None, **kwargs)
         elif file_type in ['grid_s3m', 'forcing_s3m']:
             write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['itwater', 'it_water']:

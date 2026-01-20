@@ -16,6 +16,7 @@ __pycache__/
 
 # Project
 conda/
+repo/
 old/
 dset/
 data/

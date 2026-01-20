@@ -3,15 +3,19 @@ Library Features:
 
 Name:          lib_default_generic
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251202'
-Version:       '1.1.0'
+Date:          '20260120'
+Version:       '1.2.0'
 """
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
+from shybox import __version__, __build_date__
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # definition of algorithm information
-alg_version = '1.2.0'
 alg_name = 'shybox'
-alg_release = '2025-12-03'
+alg_version = __version__
+alg_release = __build_date__
 
 # definition of file information
 file_conventions = ""

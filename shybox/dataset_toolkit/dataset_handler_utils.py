@@ -64,62 +64,6 @@ class DatasetNamespace:
         items = ", ".join(f"{k}={v!r}" for k, v in self._forward.items())
         return f"DatasetNamespace({items})"
 
-
-
-
-class DatasetNamespace_OLD:
-    """
-    Bidirectional namespace:
-    - Add key/value pairs dynamically
-    - get(x): automatically returns the opposite side (key↔value)
-    - Supports attribute access: ns.variable, ns.workflow, etc.
-    """
-
-    __slots__ = ("_forward", "_reverse")
-
-    def __init__(self, **pairs):
-        object.__setattr__(self, "_forward", {})
-        object.__setattr__(self, "_reverse", {})
-        for k, v in pairs.items():
-            self.add(k, v)
-
-    def add(self, key, value):
-        if key in self._forward:
-            old_val = self._forward.pop(key)
-            self._reverse.pop(old_val, None)
-        if value in self._reverse:
-            old_key = self._reverse.pop(value)
-            self._forward.pop(old_key, None)
-        self._forward[key] = value
-        self._reverse[value] = key
-        return self
-
-    def get(self, x, default=None):
-        """Return the paired value (key→value or value→key)."""
-        if x in self._forward:
-            return self._forward[x]
-        if x in self._reverse:
-            return self._reverse[x]
-        if default is not None:
-            return default
-        raise KeyError(f"{x!r} not found")
-
-    def __getattr__(self, name):
-        if name in self._forward:
-            return self._forward[name]
-        raise AttributeError(f"{name} not found")
-
-    def __setattr__(self, name, value):
-        self.add(name, value)
-
-    def as_dict(self):
-        return dict(self._forward)
-
-    def __repr__(self):
-        items = ", ".join(f"{k}={v!r}" for k, v in self._forward.items())
-        return f"DatasetNamespace({items})"
-
-
 def make_namespaces(variables, workflows, left_label="variable", right_label="workflow"):
     """
     Create DatasetNamespace(s) from:

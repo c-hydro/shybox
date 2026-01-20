@@ -10,6 +10,7 @@ Version:       '1.1.0'
 # ----------------------------------------------------------------------------------------------------------------------
 import os
 import tempfile
+from copy import deepcopy
 from pathlib import Path
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -18,32 +19,36 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 # method to ensure temporary folder
 @with_logger(var_name='logger_stream')
-def ensure_folder_tmp(folder_tmp: str = None) -> str:
+def ensure_folder_tmp(folder_tmp: str = None, prefix_tmp: str = 'shybox_') -> str:
     """
     Ensure a temporary folder exists.
 
     Args:
         folder_tmp (str, optional): path to the temporary folder.
                                     If None, uses the system temp directory.
+        prefix_tmp (str, optional): prefix for the temp folder name when created.
 
     Returns:
         folder_def: path to the ensured temporary folder.
     """
 
-    folder_def = None
+    # manage custom temp folder
     if folder_tmp is not None:
         try:
             os.makedirs(folder_tmp, exist_ok=True)
-            folder_def = tempfile.mkdtemp(dir=folder_tmp)
+            folder_def = deepcopy(folder_tmp)
         except Exception as exc:
             logger_stream.warning(
-                f"Cannot use temp folder '{tmp_root}' ({exc}). Falling back to system temp folder."
+                f"Cannot use temp folder '{folder_tmp}' ({exc}). Falling back to system temp folder."
             )
-            folder_def = tempfile.mkdtemp()
+            folder_def = tempfile.mkdtemp(prefix=prefix_tmp)
     else:
-        logger_stream.warning("Temp folder is None: using system temp folder instead of a custom temp folder.")
-        folder_def = tempfile.mkdtemp()
+        folder_def = tempfile.mkdtemp(prefix=prefix_tmp)
+        logger_stream.warning(
+            f"Temp folder is None: using system temp folder '{folder_def}' instead of a custom temp folder."
+        )
 
+    # last check for folder existence (if something went wrong)
     if folder_def is None:
         logger_stream.error('Failed to create a temporary folder.')
         raise RuntimeError("Failed to create a temporary folder.")

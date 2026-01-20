@@ -17,33 +17,16 @@ import numpy as np
 from datetime import datetime
 from netCDF4 import Dataset, date2num, num2date, stringtochar
 
-from shybox.default.lib_default_args import file_conventions, file_title, file_institution, file_source, \
+from shybox.default.lib_default_info import file_conventions, file_title, file_institution, file_source, \
     file_history, file_references, file_comment, file_email, file_web_site, file_project_info, file_algorithm
-from shybox.default.lib_default_args import time_units, time_calendar
+from shybox.default.lib_default_time import time_units as time_default_units, time_calendar as time_default_calendar
+from shybox.default.lib_default_geo import crs_obj as crs_default
 from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
 from shybox.io_toolkit.lib_io_nc_generic import get_dims_by_object, da_to_dset, to_nc_dtype
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
 from shybox.generic_toolkit.lib_utils_debug import plot_data
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
-# time default type(s)
-time_default_type = {
-    'time_type': 'GMT',  # 'GMT', 'local'
-    'time_units': 'days since 1970-01-01 00:00:00',
-    'time_calendar': 'gregorian'
-}
-# crs default type(s)
-crs_attrs_default = {
-    'crs_epsg_code': 4326,
-    'crs_epsg_code_string': 'EPSG:4326',
-    'crs_grid_mapping_name': "latitude_longitude",
-    'crs_longitude_of_prime_meridian': 0.0,
-    'crs_semi_major_axis': 6378137.0,
-    'crs_inverse_flattening': 298.257223563
-}
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -69,73 +52,123 @@ def write_string_1d(ds, name, data_1d, dim_n):
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
         file_name: str = None, file_format='NETCDF4', file_update: bool = True,
-        ts : pd.DataFrame = None, info_attrs : dict = None,
-        var_time_name : str = 'time',
-        var_time_format: str = '%Y-%m-%d %H:%M', var_time_dim: str = 'time', var_time_type: str = 'float64',
-        var_data_name : str = 'discharge',
-        var_data_units : str = 'm3 s-1', var_data_dim: str = 'sections', var_data_type : str = 'float64',
-        var_data_fill_value: (float, int) = -9999.0,  var_data_no_value: (float, int) = -9999.0,
-        var_name_crs: str = 'crs', crs_attrs: dict = crs_attrs_default,
-        var_compression_flag : bool = True, var_compression_level: int = 5,
+        ts_sim : pd.DataFrame = None, ts_obs: pd.DataFrame = None,
+        time_name : str = 'time',
+        time_format: str = '%Y-%m-%d %H:%M', time_dim: str = 'time', time_type: str = 'float64',
+        time_calendar: str = time_default_calendar, time_units: str = time_default_units,
+        data_units: str = 'm3 s-1', data_dim : str = 'sections', data_type : str = 'float64',
+        data_fill_value: (float, int) = -9999.0,  data_no_value: (float, int) = -9999.0,
+        data_name_sim : str = 'simulated_discharge', data_name_obs: str = 'observed_discharge',
+        crs_name: str = 'crs', crs_attrs: dict = crs_default,
+        compression_flag : bool = True, compression_level: (None, int) = 5,
         debug_flag : bool = True, **kwargs)  -> None:
     # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # INFO START
+    logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... ')
+
+    # FILE PREPARATION
     if file_update:
         if os.path.exists(file_name):
             os.remove(file_name)
+    # check ts sim object
+    if ts_sim is None:
+        logger_stream.warning(
+            f'Time series simulated dataframe is None. Skip time-series writing process to {file_name}.')
+        # INFO END - SKIPPED
+        logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... SKIPPED')
+        return None
+    # check ts obs object
+    if ts_obs is None:
+        logger_stream.warning(
+            f'Time series observed dataframe is None')
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## TIME PREPARATION
     # define time data
-    time_data = ts[var_time_name].to_numpy()
+    time_data = ts_sim[time_name].to_numpy()
     time_list_string, time_list_numeric = [], []
     for time_step in time_data:
         time_numeric = pd.to_datetime(str(time_step))
-        time_string = time_numeric.strftime(var_time_format)
+        time_string = time_numeric.strftime(time_format)
 
         time_list_string.append(time_string)
         time_list_numeric.append(time_numeric)
 
     time_list_nc = date2num(
-        time_list_numeric, units=time_default_type['time_units'], calendar=time_default_type['time_calendar'])
+        time_list_numeric, units=time_units, calendar=time_calendar)
 
     # get time min and max
-    time_start, time_end = time_data.min().strftime(var_time_format), time_data.max().strftime(var_time_format)
+    time_start, time_end = time_data.min().strftime(time_format), time_data.max().strftime(time_format)
+    # get the data dimensions (time)
+    time_n = time_data.shape[0]
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## ATTRS PREPARATION
-    attrs_data, attrs_type = {}, {}
-    if 'data' in ts.attrs:
-        attrs_data = ts.attrs['data']
-    if 'type' in ts.attrs:
-        attrs_type = ts.attrs['type']
+    attrs_data_sim, attrs_type_sim = {}, {}
+    if 'data' in ts_sim.attrs:
+        attrs_data_sim = ts_sim.attrs['data']
+    if 'type' in ts_sim.attrs:
+        attrs_type_sim = ts_sim.attrs['type']
 
-    info_data, info_type, info_dim = {}, {}, None
-    for key, obj in attrs_data.items():
+    info_data_sim, info_type_sim, info_dim_sim = {}, {}, None
+    for key, obj in attrs_data_sim.items():
         if isinstance(obj, pd.Series):
-            data_values = obj.values
+            data_values_sim = obj.values
         else:
-            data_values = np.array(obj)
+            data_values_sim = np.array(obj)
 
-        if key in list(attrs_type.keys()):
-            type_values = attrs_type[key]
+        if key in list(attrs_type_sim.keys()):
+            type_values_sim = attrs_type_sim[key]
         else:
-            type_values = data_values.dtype
+            type_values_sim = data_values_sim.dtype
 
-        if info_dim is None:
-            info_dim = data_values.shape[0]
+        if info_dim_sim is None:
+            info_dim_sim = data_values_sim.shape[0]
 
-        info_type[key] = type_values
-        info_data[key] = data_values
+        info_type_sim[key] = type_values_sim
+        info_data_sim[key] = data_values_sim
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    ## DATA PREPARATION
+    ## SIM DATA PREPARATION
     # define ts data (in 2d dimensions: time, ts)
-    var_data = ts.drop(columns=var_time_name).to_numpy(dtype=float)
+    data_sim = ts_sim.drop(columns=time_name).to_numpy(dtype=float)
+    # replace NaNs with no_data
+    data_sim[np.isnan(data_sim)] = data_no_value
     # get the data dimensions (time and time-series)
-    time_n, var_n = var_data.shape
+    data_steps_sim, data_n_sim = data_sim.shape
+
+    ## OBS DATA PREPARATION
+    if ts_obs is None:
+        # create empty obs matrix with same dims as sim
+        data_obs = np.full((time_n, data_n_sim), data_no_value, dtype=float)
+    else:
+        # convert obs dataframe to numpy (same structure as sim)
+        data_obs = ts_obs.drop(columns=time_name).to_numpy(dtype=float)
+
+        # check dims consistency (optional but recommended)
+        if data_obs.shape != (time_n, data_n_sim):
+            raise ValueError(
+                f"OBS shape {data_obs.shape} does not match SIM shape {(time_n, data_n_sim)}"
+            )
+
+        # replace NaNs with no_data
+        data_obs[np.isnan(data_obs)] = data_no_value
+
+    # get the data dimensions (time and time-series)
+    data_steps_obs, data_n_obs = data_obs.shape
+
+    # check dims consistency
+    assert data_steps_sim == data_steps_obs == time_n, \
+        f"Simulations time steps {data_steps_sim} does not match observed time steps {data_steps_obs}"
+    assert data_n_sim == data_n_obs, \
+        f"Simulations sections number {data_n_sim} does not match observed sections number {data_n_obs}"
+
+    data_n = data_n_sim
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -149,41 +182,40 @@ def write_ts_hmc(
     file_handle.filedate = 'Created ' + tm.ctime(tm.time())
 
     # create dimensions
-    file_handle.createDimension(var_data_dim, var_n)
-    file_handle.createDimension(var_time_dim, time_n)
+    file_handle.createDimension(data_dim, data_n)
+    file_handle.createDimension(time_dim, time_n)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - TIME OBJECT
     # create time object
-    var_time_obj = file_handle.createVariable(
-        varname=var_time_name, dimensions=(var_time_dim,), datatype=var_time_type)
-    var_time_obj.calendar = time_default_type['time_calendar']
-    var_time_obj.units = time_default_type['time_units']
-    var_time_obj.time_start = time_start
-    var_time_obj.time_end = time_end
-    var_time_obj.time_dates = time_list_string
-    var_time_obj.axis = 'T'
-    var_time_obj[:] = time_list_nc
+    time_obj = file_handle.createVariable(
+        varname=time_name, dimensions=(time_dim,), datatype=time_type)
+    time_obj.calendar = time_calendar
+    time_obj.units = time_units
+    time_obj.time_start = time_start
+    time_obj.time_end = time_end
+    time_obj.time_dates = time_list_string
+    time_obj.axis = 'T'
+    time_obj[:] = time_list_nc
 
     # debug variable time object
     if debug_flag:
-        date_check = num2date(var_time_obj[:],
-                              units=time_default_type['time_units'], calendar=time_default_type['time_calendar'])
+        date_check = num2date(time_obj[:], units=time_units, calendar=time_calendar)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - CRS OBJECT
     # create crs object
-    variable_crs_obj = file_handle.createVariable(var_name_crs, 'i')
+    crs_obj = file_handle.createVariable(crs_name, 'i')
     if crs_attrs is not None:
         for crs_key, crs_value in crs_attrs.items():
             if isinstance(crs_value, str):
-                variable_crs_obj.setncattr(crs_key.lower(), str(crs_value))
+                crs_obj.setncattr(crs_key.lower(), str(crs_value))
             elif isinstance(crs_value, (int, np.integer)):
-                variable_crs_obj.setncattr(crs_key.lower(), int(crs_value))
+                crs_obj.setncattr(crs_key.lower(), int(crs_value))
             elif isinstance(crs_value, (float, np.floating)):
-                variable_crs_obj.setncattr(crs_key.lower(), float(crs_value))
+                crs_obj.setncattr(crs_key.lower(), float(crs_value))
             else:
                 logger_stream.warning(
                     f'Attribute CRS for "{crs_key}" is defined by NoneType or not supported')
@@ -191,54 +223,88 @@ def write_ts_hmc(
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - INFO OBJECT(S)
-    if info_data is not None:
-
-        # set info dimension (same as var_data dimension)
-        info_dim = var_data_dim
+    if info_data_sim is not None:
 
         # iterate over registry variable(s)
-        for field_key, field_obj in info_data.items():
+        for field_key_sim, field_obj_sim in info_data_sim.items():
 
             # convert from pandas series to numpy array (str, float or int)
-            if isinstance(field_obj, pd.Series):
-                field_values = field_obj.values
+            if isinstance(field_obj_sim, pd.Series):
+                field_values_sim = field_obj_sim.values
             else:
-                field_values = np.array(field_obj)
+                field_values_sim = np.array(field_obj_sim)
 
-            # set registry type
-            if field_key in list(info_type.keys()):
-                field_type = info_type[field_key]
+            # get field type safely
+            if (info_type_sim is not None) and isinstance(info_type_sim, dict):
+                field_type_sim = info_type_sim.get(field_key_sim, None)
 
-                if field_type is not None:
+                if field_key_sim not in info_type_sim:
+                    logger_stream.warning(
+                        f'Info type for "{field_key_sim}" is not defined in info_type dictionary. '
+                        f'Trying to infer dtype automatically (float -> string fallback).'
+                    )
+            else:
+                field_type_sim = None
+                logger_stream.warning(
+                    f'info_type dictionary is not defined (None or invalid type). '
+                    f'Trying to infer dtype for "{field_key_sim}" automatically (float -> string fallback).'
+                )
 
-                    field_type = to_nc_dtype(field_type)
+            # check / infer type
+            if field_type_sim is not None:
+                field_type_sim = to_nc_dtype(field_type_sim)
+            else:
+                try:
+                    np.asarray(field_values_sim, dtype=float)
+                    field_type_sim = to_nc_dtype(float)
+                    logger_stream.warning(f'Info type for "{field_key_sim}" inferred as float.')
+                except Exception:
+                    field_type_sim = to_nc_dtype(str)
+                    logger_stream.warning(
+                        f'Info type for "{field_key_sim}" inferred as string (fallback). Please verify values.'
+                    )
 
-                    info_obj = file_handle.createVariable(
-                        varname=field_key, dimensions=(info_dim,), datatype=field_type)
-                    info_obj[:] = field_values
-                else:
-                    logger_stream.warning(f'Info type for "{field_type}" is defined by NoneType')
+            # create variable object
+            info_obj = file_handle.createVariable(
+                varname=field_key_sim, dimensions=(data_dim,), datatype=field_type_sim
+            )
+            # assign variable values
+            info_obj[:] = field_values_sim
     else:
+        # warning for info_data defined by NoneType
         logger_stream.warning('Info data object is defined by NoneType')
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - DATA OBJECT
     # create data object - 2d format
-    var_data_obj = file_handle.createVariable(
-        varname=var_data_name, datatype=var_data_type, fill_value=var_data_fill_value,
-        dimensions=(var_time_dim, var_data_dim),
-        zlib=var_compression_flag, complevel=var_compression_level)
-    var_data_obj.units = var_data_units
-    var_data_obj.no_data = var_data_no_value
+    data_obj_sim = file_handle.createVariable(
+        varname=data_name_sim, datatype=data_type, fill_value=data_fill_value,
+        dimensions=(time_dim, data_dim),
+        zlib=compression_flag, complevel=compression_level)
+    data_obj_sim.units = data_units
+    data_obj_sim.missing_value = data_no_value
 
-    var_data_obj[:, :] = var_data
+    data_obj_sim[:, :] = data_sim
+
+    # create obs object - 2d format
+    data_obj_obs = file_handle.createVariable(
+        varname=data_name_obs, datatype=data_type, fill_value=data_fill_value,
+        dimensions=(time_dim, data_dim),
+        zlib=compression_flag, complevel=compression_level)
+    data_obj_obs.units = data_units
+    data_obj_obs.missing_value = data_no_value
+
+    data_obj_obs[:, :] = data_obs
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - CLOSE FILE
     # close file
     file_handle.close()
+
+    # INFO END - DONE
+    logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... DONE')
     # ------------------------------------------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------------------------------------------

@@ -181,9 +181,6 @@ class OrchestratorBase:
         if self.options["intermediate_output"] == "Tmp":
             tmp_root = self.options.get("tmp_dir", tempfile.gettempdir())
             self.tmp_dir = ensure_folder_tmp(tmp_root)
-            if tmp_root is not None:
-                os.makedirs(tmp_root, exist_ok=True)
-                self.tmp_dir = tempfile.mkdtemp(dir=tmp_root)
 
         self.memory_active = True
         self.mapper = mapper  # injected by builder (Grid/TS)

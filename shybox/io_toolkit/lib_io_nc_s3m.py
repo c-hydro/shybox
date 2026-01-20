@@ -16,9 +16,9 @@ import numpy as np
 from datetime import datetime
 from netCDF4 import Dataset, date2num
 
-from shybox.default.lib_default_args import file_conventions, file_title, file_institution, file_source, \
+from shybox.default.lib_default_info import file_conventions, file_title, file_institution, file_source, \
     file_history, file_references, file_comment, file_email, file_web_site, file_project_info, file_algorithm
-from shybox.default.lib_default_args import time_units, time_calendar
+from shybox.default.lib_default_time import time_units, time_calendar
 from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
