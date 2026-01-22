@@ -154,7 +154,7 @@ def merge_data_by_ref(
     # reference grid & mask
     dset_no_data = getattr(ref, "NODATA_value", var_no_data)
     if dset_no_data != ref_no_data:
-        warnings.warn(
+        logger_stream.warning(
             f"Reference DataArray NODATA value ({dset_no_data}) does not match the provided ref_no_data ({ref_no_data}). "
             "This may lead to unexpected results. Proceed with caution. Using the reference NODATA value."
         )

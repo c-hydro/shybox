@@ -3,7 +3,7 @@ Library Features:
 
 Name:          lib_dataset_generic
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251029'
+Date:          '20261022'
 Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
@@ -35,6 +35,7 @@ except ImportError:
 from decimal import Decimal
 from typing import Optional, Dict
 
+from shybox.generic_toolkit.lib_utils_file import fix_file_path
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_s3m import write_dataset_s3m
@@ -153,6 +154,9 @@ def read_from_file(
     rio_logger = logging.getLogger('rasterio')
     rio_logger.setLevel(logging.ERROR)
 
+    # check path (if blanks are present, remove them)
+    path = fix_file_path(path)
+    # get file format from path
     if file_format is None:
         file_format = get_format_from_path(path)
 
@@ -366,9 +370,14 @@ def write_to_file(data, path,
     if 'time' in kwargs:
         time = kwargs.pop('time')
 
+    # check path
+    path = fix_file_path(path)
+
+    # get file format from path
     if file_format is None:
         file_format = get_format_from_path(path)
 
+    # manage dir name
     dir = os.path.dirname(path)
     if len(dir) > 0:
         os.makedirs(os.path.dirname(path), exist_ok = True)

@@ -19,38 +19,49 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 # method to ensure temporary folder
 @with_logger(var_name='logger_stream')
-def ensure_folder_tmp(folder_tmp: str = None, prefix_tmp: str = 'shybox_') -> str:
+def ensure_folder_tmp(folder_tmp: str = None, prefix_tmp: str = "shybox_") -> str:
     """
     Ensure a temporary folder exists.
-
-    Args:
-        folder_tmp (str, optional): path to the temporary folder.
-                                    If None, uses the system temp directory.
-        prefix_tmp (str, optional): prefix for the temp folder name when created.
-
-    Returns:
-        folder_def: path to the ensured temporary folder.
+    If folder_tmp is None / empty / unresolved placeholder like "{dir_tmp}",
+    fallback to a system temporary folder and warn the user.
     """
 
-    # manage custom temp folder
+    # check unresolved placeholder patterns like "{dir_tmp}"
+    if folder_tmp is not None:
+        folder_tmp_str = str(folder_tmp).strip()
+
+        # empty -> invalid
+        if folder_tmp_str == "":
+            logger_stream.warning("Temp folder is empty/undefined: using system temp folder.")
+            folder_tmp = None
+
+        # placeholder not resolved -> invalid
+        elif folder_tmp_str.startswith("{") and folder_tmp_str.endswith("}"):
+            logger_stream.warning(
+                f"Temp folder '{folder_tmp_str}' looks like an unresolved placeholder: "
+                f"using system temp folder instead."
+            )
+            folder_tmp = None
+
+    # try to use custom folder
     if folder_tmp is not None:
         try:
             os.makedirs(folder_tmp, exist_ok=True)
             folder_def = deepcopy(folder_tmp)
         except Exception as exc:
-            logger_stream.warning(
-                f"Cannot use temp folder '{folder_tmp}' ({exc}). Falling back to system temp folder."
-            )
             folder_def = tempfile.mkdtemp(prefix=prefix_tmp)
+            logger_stream.warning(
+                f"Temp folder '{folder_tmp}' cannot be created/used ({exc}). "
+                f"Using system temp folder '{folder_def}'."
+            )
     else:
         folder_def = tempfile.mkdtemp(prefix=prefix_tmp)
         logger_stream.warning(
-            f"Temp folder is None: using system temp folder '{folder_def}' instead of a custom temp folder."
+            f"Using system temp folder '{folder_def}'."
         )
 
-    # last check for folder existence (if something went wrong)
     if folder_def is None:
-        logger_stream.error('Failed to create a temporary folder.')
+        logger_stream.error("Failed to create a temporary folder.")
         raise RuntimeError("Failed to create a temporary folder.")
 
     return folder_def

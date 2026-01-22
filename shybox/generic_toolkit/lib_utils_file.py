@@ -3,14 +3,15 @@ Library Features:
 
 Name:          lib_utils_file
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251202'
-Version:       '1.1.0'
+Date:          '20260122'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
 import sys
+import re
 import shutil
 import errno, os
 
@@ -24,6 +25,7 @@ ERROR_INVALID_NAME = 123
 
 # ----------------------------------------------------------------------------------------------------------------------
 # check if file has a compression extension
+@with_logger(var_name="logger_stream")
 def has_compression_extension(filename):
     compression_extensions = ['.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar']
     _, ext = os.path.splitext(filename)
@@ -32,6 +34,7 @@ def has_compression_extension(filename):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to expand file path
+@with_logger(var_name="logger_stream")
 def expand_file_path(file_path: str, home_string: str = '$HOME') -> str:
     if home_string in file_path:
         home_path = os.path.expanduser('~')
@@ -41,6 +44,7 @@ def expand_file_path(file_path: str, home_string: str = '$HOME') -> str:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to sanitize file path
+@with_logger(var_name="logger_stream")
 def sanitize_file_path(file_path: str, remove_sep_repetition: bool = True) -> str:
     file_path = os.path.normpath(file_path)
     if remove_sep_repetition:
@@ -50,10 +54,27 @@ def sanitize_file_path(file_path: str, remove_sep_repetition: bool = True) -> st
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to split file path
+@with_logger(var_name="logger_stream")
 def split_file_path(file_path: str) -> (str, str):
     file_name = os.path.basename(file_path)
     folder_name = os.path.dirname(file_path)
     return file_name, folder_name
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to join file path
+@with_logger(var_name="logger_stream")
+def fix_file_path(path: str) -> str:
+    if re.search(r"\s", path):
+        logger_stream.warning(f"Path contains blanks: '{path}'")
+
+    # replace multiple whitespace (spaces/tabs) with a single space
+    path_fixed = re.sub(r"\s+", " ", path).strip()
+
+    if path_fixed != path:
+        logger_stream.warning(f"Path normalized to: '{path_fixed}'")
+
+    return path_fixed
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

@@ -101,7 +101,7 @@ class ConfigManager:
         self._application_key = application_key
 
         # Mandatory sections
-        self._init_mandatory_sections(settings, application_key=application_key)
+        self._blocks_of_mandatory = self._init_mandatory_sections(settings, application_key=application_key)
 
         # 1) merge LUT (combine user/environment into a single LUT)
         if self._auto_merge_lut:
@@ -145,32 +145,66 @@ class ConfigManager:
             * if application_key is None -> no mandatory application
             * else                        -> that key must exist in settings
         """
+
+        # search in the structure recursively (keys and nested dicts/lists)
+        def find_block(obj, required, path=None):
+
+            if path is None:
+                path = []
+
+            if isinstance(obj, dict):
+                if all(k in obj for k in required):
+                    return obj, path
+
+                for k, v in obj.items():
+                    found_block, found_path = find_block(v, required, path + [k])
+                    if found_block is not None:
+                        return found_block, found_path
+
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    found_block, found_path = find_block(item, required, path + [i])
+                    if found_block is not None:
+                        return found_block, found_path
+
+            return None, None
+
         required_base = ("priority", "flags", "variables")
-        missing_base = [k for k in required_base if k not in settings]
+        if application_key is not None:
+            base = settings
+            blocks_of_mandatory = []
+            missing_base = [k for k in required_base if k not in base]
+        else:
+            base, blocks_of_mandatory = find_block(settings, required_base)
+            missing_base = list(required_base) if base is None else []
+
         if missing_base:
             raise KeyError(f"Missing mandatory settings section(s): {', '.join(missing_base)}")
 
-        self.priority = settings["priority"]
-        self.flags = settings["flags"]
-        self.variables = settings["variables"]
+        self.priority = base["priority"]
+        self.flags = base["flags"]
+        self.variables = base["variables"]
 
         if application_key is None:
             # No mandatory application section; expose empty dict
             self.application = {}
         else:
-            if application_key not in settings:
+            if application_key not in base:
                 raise KeyError(
                     f"Missing mandatory application section '{application_key}' in settings."
                 )
             # Expose it as generic attribute 'application'
-            self.application = settings[application_key]
+            self.application = base[application_key]
+
+        return blocks_of_mandatory
 
     # CLASS METHOD: load from dict / JSON string / file
     @classmethod
     def from_source(
         cls,
         src,
-        root_key: str = "settings",
+        root_key: (str, None) = "settings",
+        other_keys: (list, None) = None, add_other_keys_to_mandatory: bool = False,
         auto_merge_lut: bool = True,
         auto_env_override: bool = True,
         env_warn_missing: bool = True,
@@ -213,17 +247,23 @@ class ConfigManager:
             with open(src, "r") as f:
                 log.info_up(f"Read JSON json {src} ... ")
                 data = json.load(f)
-                log.info_down(f"JSON file not found: {src}")
+                log.info_down(f"Read JSON json {src} ... DONE")
 
         else:
             log.error(f"Unsupported source type: {type(src)}", tag="config")
             raise TypeError(f"Unsupported source type: {type(src)}")
 
-        if root_key not in data:
-            log.error(f"Root key '{root_key}' not found in configuration.", tag="config")
-            raise KeyError(f"Root key '{root_key}' not found in configuration.")
+        if root_key is not None:
+            if root_key not in data:
+                log.error(f"Root key '{root_key}' not found in configuration.", tag="config")
+                raise KeyError(f"Root key '{root_key}' not found in configuration.")
+        else:
+            log.warning(f"Root key not declare in configuration. Try to perform actions by default", tag="config")
 
-        settings_section = data[root_key]
+        if root_key is not None:
+            settings_section = data[root_key]
+        else:
+            settings_section = data
 
         obj = cls(
             settings_section,
@@ -244,6 +284,19 @@ class ConfigManager:
         )
         obj._raw_config = data
         obj._root_key = root_key
+
+        if add_other_keys_to_mandatory:
+            removed_mandatory = obj._blocks_of_mandatory
+            if removed_mandatory:
+                for key in removed_mandatory:
+                    if key in settings_section:
+                        settings_section.pop(key)
+
+            if other_keys is None:
+                other_keys = list(settings_section.keys())
+
+            for key in other_keys:
+                setattr(obj, key, settings_section[key])
 
         # info end
         log.info_down("Configuration ... DONE", tag="config")
@@ -1352,6 +1405,7 @@ class ConfigManager:
     def fill_obj_from_lut(
             self,
             section,
+            lut: dict | None = None,
             extra_tags: dict | None = None,
             strict: bool = False,
             in_place: bool = True,
@@ -1365,7 +1419,10 @@ class ConfigManager:
         """
 
         # base LUT
-        base_lut = self.lut if hasattr(self, "lut") else self.variables["lut"]
+        if lut is None:
+            base_lut = self.lut if hasattr(self, "lut") else self.variables["lut"]
+        else:
+            base_lut = lut
 
         # all time-like keys detected from config
         detected_time_keys = self._collect_time_keys()

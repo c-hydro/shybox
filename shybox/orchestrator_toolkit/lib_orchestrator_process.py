@@ -143,7 +143,7 @@ class ProcessorContainer:
 
         # adjust data (if deps are available)
         id_deps, in_deps, names_deps = 0, [], []
-        str_vars_raw, str_deps_raw = [], []
+        obj_vars_raw, obj_deps_raw = None, None
         if (self.in_deps is not None) and (len(self.in_deps) > 0):
 
             if isinstance(self.in_deps, dict):
@@ -194,25 +194,59 @@ class ProcessorContainer:
 
                 var_tag = ':'.join([str_variable, str_workflow])
 
-                str_vars_raw.append(var_tag)
-                str_deps_raw.append(str_variable)
+                # initialize objects to list
+                if obj_vars_raw is None: obj_vars_raw = []
+                if obj_deps_raw is None: obj_deps_raw = []
+
+                obj_vars_raw.append(var_tag)
+                obj_deps_raw.append(str_variable)
 
         else:
             # normalize data to list of DataLocal (if needed)
             id_deps = None
+            # iterate over data objects
             data_list = _normalize_local_data(data_raw)
-            for data_tmp in data_list:
+
+            # store variable names (as found in the data objects)
+            dict_vars_raw = {}
+            for data_id, data_tmp in enumerate(data_list):
                 if not isinstance(data_tmp, DataLocal):
                     self.logger.error(
                         f'Data object {type(data_tmp)} is not a DataLocal instance'
                     )
                     raise TypeError('Data object in the list is not a DataLocal instance')
 
-                str_variable = data_tmp.file_namespace.get('variable')
-                str_workflow = data_tmp.file_namespace.get('workflow')
+                # check file namespace (variable or list of variables)
+                if isinstance(data_tmp.file_namespace, list):
 
-                var_tag = ':'.join([str_variable, str_workflow])
-                str_vars_raw.append(var_tag)
+                    # initialize objects to dict
+                    if obj_vars_raw is None: obj_vars_raw = {}
+                    if obj_deps_raw is None: obj_deps_raw = {}
+
+                    # multiple variables case
+                    str_vars_raw = []
+                    for file_ns in data_tmp.file_namespace:
+
+                        str_variable = file_ns.get('variable')
+                        str_workflow = file_ns.get('workflow')
+
+                        var_tag = ':'.join([str_variable, str_workflow])
+                        str_vars_raw.append(var_tag)
+                    # store the list of variables for the data object
+                    obj_vars_raw[data_id] = str_vars_raw.copy()
+
+                else:
+
+                    # initialize objects to list
+                    if obj_vars_raw is None: obj_vars_raw = []
+                    if obj_deps_raw is None: obj_deps_raw = []
+
+                    # single variable case
+                    str_variable = data_tmp.file_namespace.get('variable')
+                    str_workflow = data_tmp.file_namespace.get('workflow')
+                    # store the variable for the data object
+                    var_tag = ':'.join([str_variable, str_workflow])
+                    obj_vars_raw.append(var_tag)
 
         # manage time if data_raw is a list or single object
         if isinstance(time, list):
@@ -260,8 +294,22 @@ class ProcessorContainer:
             # iterate over the list of data objects
             fx_data, fx_metadata, fx_deps = [], {}, []
             fx_other = {}
-            for data_id, (data_tmp, data_name, str_var_tmp, time_tmp) in enumerate(
-                    zip(data_list, data_names, str_vars_raw, time)):
+            for data_id, (data_tmp, data_name, time_tmp) in enumerate(zip(data_list, data_names, time)):
+
+                # define the variable name to read
+                if isinstance(obj_vars_raw, list):
+                    str_var_tmp = obj_vars_raw[data_id]
+                elif isinstance(obj_vars_raw, dict):
+                    list_var_tmp = obj_vars_raw.get(data_id)
+                    if fx_variable_trace in list_var_tmp:
+                        str_var_tmp = fx_variable_trace
+                    else:
+                        self.logger.error(f'Variable trace {fx_variable_trace} does not exist in the data object')
+                        raise ValueError(f'Variable trace {fx_variable_trace} does not exist in the data object')
+
+                else:
+                    self.logger.error('obj_vars_raw must be a list or a dict')
+                    raise TypeError('obj_vars_raw must be a list or a dict')
 
                 # check nested list
                 if isinstance(data_tmp, list):

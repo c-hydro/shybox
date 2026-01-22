@@ -2,7 +2,7 @@
 """
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN
 
-__date__ = '20251216'
+__date__ = '20260122'
 __version__ = '1.1.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
@@ -10,7 +10,7 @@ __author__ =
 __library__ = 'shybox'
 
 General command line:
-python app_converter_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
+python app_merger_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Examples of environment variables declarations:
 DOMAIN_NAME='italy';
@@ -22,7 +22,7 @@ PATH_LOG=$HOME/dataset_base/log/;
 PATH_TMP=$HOME/dataset_base/tmp/
 
 Version(s):
-20251216 (1.1.0) --> Refactor using class methods in shybox package
+20260122 (1.1.0) --> Refactor using class methods in shybox package
 20250403 (1.0.0) --> Beta release for shybox package
 """
 
@@ -38,7 +38,7 @@ import pandas as pd
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base_OLD import OrchestratorHandler as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorHandler as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
@@ -71,7 +71,7 @@ project_name = 'shybox'
 alg_name = 'Application for processing datasets - Merger by Domain'
 alg_type = 'Package'
 alg_version = '1.1.0'
-alg_release = '2025-12-03'
+alg_release = '2026-01-22'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -86,55 +86,58 @@ def main(view_table: bool = False):
     alg_args_file, alg_args_time = alg_args_obj.get()
 
     # crete configuration object
-    alg_cfg_obj = ConfigManager.from_source(
-        src=alg_args_file,
-        root_key="configuration",
-        application_key=None
-    )
+    alg_cfg_obj = ConfigManager.from_source(src=alg_args_file, add_other_keys_to_mandatory=True,
+                                            root_key=None, application_key=None)
 
     # view lut section
-    alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
-    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=view_table)
+    alg_cfg_lut = alg_cfg_obj.get_section(section='lut', root_key=None, raise_if_missing=True)
+    alg_cfg_obj.view(section=alg_cfg_lut, table_name='variables [cfg info]', table_print=view_table)
 
     # get application section
-    alg_cfg_application = alg_cfg_obj.get_section(section='application')
+    alg_cfg_application = alg_cfg_obj.get_section(section='application', root_key=None, raise_if_missing=True)
     # fill application section
     alg_cfg_application = alg_cfg_obj.fill_obj_from_lut(
         section=alg_cfg_application,
         resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
-        template_keys=('path_destination_time', 'time_destination',)
+        template_keys=('path_destination', 'time_destination')
     )
     # view application section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=view_table)
 
     # get workflow section
-    alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow')
+    alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow', root_key=None, raise_if_missing=True)
     # view workflow section
-    alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=view_table)
+    alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow [cfg info]', table_print=view_table)
+
+    # get tmp section
+    alg_cfg_tmp = alg_cfg_obj.get_section(section='tmp', root_key=None, raise_if_missing=True)
+    # fill tmp section
+    alg_cfg_tmp = alg_cfg_obj.fill_obj_from_lut(
+        section=alg_cfg_tmp, lut=alg_cfg_lut,
+        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
+        template_keys=()
+    )
+
+    # view tmp section
+    alg_cfg_obj.view(section=alg_cfg_tmp, table_name='tmp [cfg info]', table_print=view_table)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## LOGGING MANAGEMENT
-    # get application logging
-    alg_app_log = alg_cfg_obj.get_application("log", root_key=None)
-    # fill application logging
-    alg_app_log = alg_app_log.resolved(
-        time_values=None,  # no fill_section_with_times
-        when=None,  # no LUT time resolution
-        strict=False,
-        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
-        expand_env=True,  # BUT expand $HOME, $RUN, ...
-        env_extra=None,  # or {"RUN": "base"} etc
-        validate_result=False,  # or True + allow_placeholders=True if needed
-        validate_allow_placeholders=True,
-        validate_allow_none=False,
+    # get logging section
+    alg_cfg_log = alg_cfg_obj.get_section("log", root_key=None, raise_if_missing=True)
+    # fill logging section
+    alg_cfg_log = alg_cfg_obj.fill_obj_from_lut(
+        section=alg_cfg_log, lut=alg_cfg_lut,
+        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
+        template_keys=()
     )
-    # view application logging
-    alg_cfg_obj.view(section=alg_app_log, table_name='application [cfg application logging]', table_print=view_table)
+    # view log section
+    alg_cfg_obj.view(section=alg_cfg_log, table_name='log [cfg info]', table_print=view_table)
 
     # set logging instance
     LoggingManager.setup(
-        logger_folder=alg_app_log['path'], logger_file=alg_app_log['file_name'],
+        logger_folder=alg_cfg_log['path'], logger_file=alg_cfg_log['file_name'],
         logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
         handlers=['file', 'stream'],
         force_reconfigure=True,
@@ -164,7 +167,7 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## TIME MANAGEMENT (GLOBAL)
     # Time generic configuration
-    alg_reference_time = select_time_range(
+    alg_time_generic = select_time_range(
         time_start=alg_cfg_application['time']['start'],
         time_end=alg_cfg_application['time']['end'],
         time_frequency=alg_cfg_application['time']['frequency'],
@@ -187,56 +190,13 @@ def main(view_table: bool = False):
     )
     # ------------------------------------------------------------------------------------------------------------------
 
-
     # ------------------------------------------------------------------------------------------------------------------
-    # get file settings
-    alg_file_settings, alg_time_settings = get_args(settings_folder=os.path.dirname(os.path.realpath(__file__)))
-
-    # method to initialize settings class
-    driver_settings = DrvSettings(file_name=alg_file_settings, file_time=alg_time_settings,
-                                  file_key='settings', settings_collectors=alg_collectors_settings)
-
-    # method to configure variable settings
-    (alg_variables_settings,
-     alg_variables_collector, alg_variables_system) = driver_settings.configure_variable_by_settings()
-    # method to organize variable settings
-    alg_variables_settings = driver_settings.organize_variable_settings(
-        alg_variables_settings, alg_variables_collector)
-    # method to view variable settings
-    driver_settings.view_variable_settings(data=alg_variables_settings, mode=True)
-
-    # get variables application
-    alg_variables_application = driver_settings.get_variable_by_tag('application')
-    alg_variables_application = driver_settings.fill_variable_by_dict(alg_variables_application, alg_variables_settings)
-
-    # collector data
-    collector_data.view(table_print=False)
-
-    # set logging stream
-    set_logging_stream(
-        logger_name=logger_name, logger_format=logger_format,
-        logger_folder=alg_variables_settings['path_log'], logger_file=alg_variables_settings['file_log'])
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # info algorithm (start)
-    logger_stream.info(logger_arrow.arrow_main_break)
-    logger_stream.info(
-        logger_arrow.main + alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
-    logger_stream.info(logger_arrow.main + 'START ... ')
-    logger_stream.info(logger_arrow.arrow_main_blank)
-
-    # time algorithm
-    start_time = time.time()
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # configuration workflow
+    ## CONFIGURATION MANAGEMENT
     configuration = {
         "WORKFLOW": {
             "options": {
                 "intermediate_output": "Tmp",
-                "tmp_dir": alg_variables_settings['path_tmp']
+                "tmp_dir": alg_cfg_tmp['path']
             },
             "process_list": {
                 "snow_mask": [
@@ -260,31 +220,104 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    # method to organize time information
-    alg_sim_time = select_time_range(
-        time_start=alg_variables_application['time']['start'],
-        time_end=alg_variables_application['time']['end'],
-        time_frequency=alg_variables_application['time']['frequency'])
-    alg_sim_time = select_time_format(alg_sim_time, time_format=alg_variables_application['time']['format'])
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # define geo obj
-    geo_data = DataLocal(
-        path=alg_variables_application['geo']['terrain']['path'],
-        file_name=alg_variables_application['geo']['terrain']['file_name'],
-        file_mode='grid', file_variable='terrain',
-        file_template={
-            "dims_geo": {"x": "longitude", "y": "latitude"},
-            "vars_geo": {"x": "longitude", "y": "latitude"}
-        },
-        time_signature=None
-    )
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
     # time iteration(s)
-    for sim_time in alg_sim_time:
+    for time_step in alg_time_generic:
+
+        # ------------------------------------------------------------------------------------------------------------------
+        ## TIME MANAGEMENT (STEP)
+        # time data
+        time_data_length = int(alg_cfg_application['time'].get('dataset', 24))
+        time_data_reference = select_time_format(time_step, time_format=alg_cfg_application['time']['format'])
+
+        # time analysis
+        time_anls_length = int(alg_cfg_application['time'].get('dataset', 24))
+        time_anls_period = select_time_range(time_start=time_step, time_period=time_anls_length, time_frequency='h')
+        time_anls_start = select_time_format(time_anls_period[0], time_format='%Y-%m-%d %H:%M')
+        time_anls_end = select_time_format(time_anls_period[-1], time_format='%Y-%m-%d %H:%M')
+        # ------------------------------------------------------------------------------------------------------------------
+
+        # ------------------------------------------------------------------------------------------------------------------
+        ## SOURCE DATA MANAGEMENT
+        alg_cfg_step = alg_cfg_obj.fill_obj_from_lut(
+            resolve_time_placeholders=True, when=time_step,
+            time_keys=('file_time_source', 'path_time_source'),
+            extra_tags={
+                'file_time_source': time_step, "path_time_source": time_step},
+            section=alg_cfg_application, in_place=False,
+            template_keys=('file_time_destination','path_time_destination')
+        )
+        # view application section
+        alg_cfg_obj.view(section=alg_cfg_step, table_name='application [cfg step]', table_print=view_table)
+
+        # iterate over src datasets
+        dset_src_handler_list = []
+        for alg_data_src_key, alg_data_src_settings in alg_cfg_step['data_source'].items():
+
+            # dataset handler
+            dset_src_handler_obj = DataLocal(
+                path=alg_data_src_settings['path'],
+                file_name=alg_data_src_settings['file_name'],
+                file_type='grid_3d', file_format='netcdf', file_mode='local',
+                file_variable='rain', file_io='input',
+                variable_template={
+                    "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                    "vars_data": {"RAIN_EFF": "rain"}
+                },
+                time_signature='period',
+                time_reference=time_data_reference, time_period=time_data_length,
+                time_freq='h', time_direction='forward',
+            )
+
+            data_src_obj = create_src_dataset(
+                file_name=data_src_settings['file_name'], file_path=data_src_settings['path'],
+                file_time=time_step)
+
+            dset_src_handler_list.append(dset_src_handler_obj)
+
+        # iterate over dst datasets
+        data_dst_list = []
+        for data_dst_key, data_dst_settings in alg_variables_application['data_destination'].items():
+
+            data_dst_obj = create_dst_dataset(
+                file_name=data_dst_settings['file_name'], file_path=data_dst_settings['path'],
+                file_time=sim_time, file_variable=data_dst_settings['variable'],
+                vars_data=data_dst_settings['vars_data'],
+                vars_geo=data_dst_settings['vars_geo'], dims_geo=data_dst_settings['dims_geo'])
+
+            data_dst_list.append(data_dst_obj)
+
+        # ------------------------------------------------------------------------------------------------------------------
+        # ## SETTINGS MANAGEMENT (STEP)
+        # fill application section
+        step_cfg_application = alg_cfg_obj.fill_obj_from_lut(
+            resolve_time_placeholders=True, when=time_step, time_keys=('time_source', 'path_source_time'),
+            extra_tags={
+                'time_source': time_step, "path_source_time": time_step},
+            section=alg_cfg_application, in_place=False,
+            template_keys=('file_time_destination',)
+        )
+        # view application section
+        alg_cfg_obj.view(section=step_cfg_application, table_name='application [cfg step]', table_print=True)
+        # ------------------------------------------------------------------------------------------------------------------
+
+        # ------------------------------------------------------------------------------------------------------------------
+        ## DATASETS MANAGEMENT
+        # Rain handler
+        rain_handler = DataLocal(
+            path=step_cfg_application['data_source']['rain']['path'],
+            file_name=step_cfg_application['data_source']['rain']['file_name'],
+            file_type='grid_3d', file_format='netcdf', file_mode='local',
+            file_variable='rain', file_io='input',
+            variable_template={
+                "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
+                "vars_data": {"RAIN_EFF": "rain"}
+            },
+            time_signature='period',
+            time_reference=time_data_reference, time_period=time_data_length,
+            time_freq='h', time_direction='forward',
+        )
+
+
 
         # iterate over src datasets
         data_src_list = []
@@ -389,6 +422,3 @@ if __name__ == "__main__":
     # run script
     main(view_table=True)
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-

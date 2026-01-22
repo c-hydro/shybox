@@ -1,6 +1,6 @@
 {
   "__comment__" : "configuration file for the datasets information",
-  "settings": {
+  "configuration": {
     "priority": {
       "reference": "environment",
       "other": "user"
@@ -12,108 +12,139 @@
     "variables": {
       "lut": {
         "user": {
-          "path_geo": "/home/fabio/Desktop/shybox/dset/itwater/static/",
-          "time_source": null, "time_destination": null,
-          "time_rounding": "D", "time_frequency": "D", "time_direction": "forward",
+          "file_source_time": null, "file_destination_time": null,
+          "path_source_time": null, "path_destination_time": null,
+          "time_source": null,  "time_destination": null,
+          "time_rounding": "D", "time_frequency": "D",  "time_direction": "forward",
           "file_log": "{execution_name}_{domain_name}.log",
-          "execution_name": "dataset_base", "execution_mode": "history"
+          "execution_name": "merger_dataset_by_domain_s3m",
+          "execution_mode": "history"
         },
         "environment": {
           "domain_name": "DOMAIN_NAME",
           "time_start": "TIME_START", "time_end": "TIME_END",
-          "path_source": "PATH_SRC", "path_destination": "PATH_DST",
-          "path_app": "PATH_APP", "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
+          "path_geo": "PATH_GEO",
+          "path_source_root": "PATH_SRC", "path_destination_root": "PATH_DST",
+          "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
         }
       },
       "format": {
         "domain_name": "string",
         "path_geo": "string",
-        "path_source": "string", "path_destination": "string",
-        "time_source": "string", "time_destination": "string", "time_direction": "string",
-        "time_start": "string", "time_end": "string",
-        "time_rounding": "string", "time_frequency": "string",
-        "path_app": "string",
-        "path_log": "string", "file_log": "string",
+        "file_source_time": "time", "file_destination_time": "time",
+        "path_source_time": "time", "path_destination_time": "time",
+        "path_source_root": "string",  "path_destination_root": "string",
+        "time_source": "string",
+        "time_destination": "string",
+        "time_direction": "string",
+        "time_start": "string",
+        "time_end": "string",
+        "time_rounding": "string",
+        "time_frequency": "string",
+        "path_log": "string",
+        "file_log": "string",
         "path_tmp": "string",
-        "execution_name": "string", "execution_mode": "string"
+        "execution_name": "string",
+        "execution_mode": "string"
       },
       "template": {
         "domain_name": "string",
         "path_geo": "string",
-        "path_source": "string", "path_destination": "string",
-        "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M", "time_direction": "string",
+        "path_source_root": "string",  "path_destination_root": "string",
+        "file_source_time": "%Y%m%d%H%M", "file_destination_time": "%Y%m%d%H%M",
+        "path_source_time": "%Y/%m/%d/", "path_destination_time": "%Y/%m/%d/",
+        "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M",
         "time_start": "%Y%m%d", "time_end": "%Y%m%d",
-        "time_rounding": "string", "time_frequency": "string",
-        "path_app": "string",
+        "time_direction": "string", "time_rounding": "string", "time_frequency": "string",
         "path_log": "string", "file_log": "string",
         "path_tmp": "string",
         "execution_name": "string", "execution_mode": "string"
       }
+    }
+  },
+  "application": {
+    "info": {
+      "domain_name": ["liguria", "emilia_romagna", "toscana"]
     },
-    "application": {
-      "info": {
-        "domain_name": ["marche", "emilia_romagna", "toscana"]
+    "time": {
+      "start": "{time_start}",
+      "end": "{time_end}",
+      "frequency": "h",
+      "format": "%Y-%m-%d %H:00"
+    },
+    "geo": {
+      "terrain": {
+        "path": "{path_geo}",
+        "file_name": "Mask_Italy_500m_WSG84geog.txt"
+      }
+    },
+    "data_source": {
+      "dset_01": {
+        "path": "{path_source_root}/Liguria/{path_source_time}",
+        "file_name": "S3M_{file_source_time}.nc.gz"
       },
-      "time": {
-        "start": "2025-01-24 00:00",
-        "end": "{time_end}",
-        "frequency": "h",
-        "format": "%Y-%m-%d %H:00"
+      "dset_02": {
+        "path": "{path_source_root}/Valle_Aosta/{path_source_time}",
+        "file_name": "S3M_{file_source_time}.nc.gz"
       },
-      "geo": {
-        "terrain": {
-          "path": "{path_geo}",
-          "file_name": "mask_italy_500m_epsg4326.txt"
-        }
+      "dset_03": {
+        "path": "{path_source_root}/Piemonte/{path_source_time}",
+        "file_name": "S3M_{file_source_time}.nc.gz"
+      }
+    },
+    "data_destination": {
+      "dset_01": {
+        "path": "{path_destination_root}/{path_destination_time}",
+        "file_name": "snow_mask.{file_destination_time}.tiff",
+        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "WF_SNOW_MASK",
+        "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+        "vars_data": {"snow_mask": "SNOW_MASK_OUT"}
       },
-      "data_source": {
-        "dset_01": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/%Y/%m/%d/",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
-        },
-        "dset_02": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/emilia_romagna/%Y/%m/%d",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
-        },
-        "dset_03": {
-          "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/toscana/%Y/%m/%d",
-          "file_name": "S3M_%Y%m%d%H00.nc.gz"
-        }
+      "dset_02": {
+        "path": "{path_destination_root}/{path_destination_time}",
+        "file_name": "rain_eff.{file_destination_time}.tiff",
+        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "WF_RAIN_EFF",
+        "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+        "vars_data": {"rain_eff": "RAIN_EFF_OUT"}
       },
-      "data_destination": {
-        "dset_01": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-          "file_name": "snow_mask.%Y%m%d%H%M.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "snow_mask",
-          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-          "vars_data": {"snow_mask": "SNOW_MASK"}
-        },
-        "dset_02": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-          "file_name": "rain_eff.%Y%m%d%H%M.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "rain_eff",
-          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-          "vars_data": {"rain_eff": "RAIN_EFF"}
-        },
-        "dset_03": {
-          "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-          "file_name": "albedo.%Y%m%d%H%M.tiff",
-          "format": "geotiff", "type": null, "mode": "grid", "variable": "albedo",
-          "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-          "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-          "vars_data": {"snow_albedo": "SNOW_ALBEDO"}
-        }
-      },
-      "log": {
-        "path": "{path_log}",
-        "file_name": "example_merger_spatial.txt"
-      },
-      "tmp": {
-        "path": "{path_tmp}",
-        "file_name": null
+      "dset_03": {
+        "path": "{path_destination_root}/{path_destination_time}",
+        "file_name": "albedo.{file_destination_time}.tiff",
+        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "WF_SNOW_ALBEDO",
+        "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+        "vars_data": {"snow_albedo": "SNOW_ALBEDO_OUT"}
       }
     }
+  },
+  "workflow": {
+    "options": {
+        "intermediate_output": "Tmp",
+        "tmp_dir": "{path_tmp}"
+    },
+    "process_list": {
+        "WF_SNOW_MASK": [
+            {"function": "merge_data_by_ref", "method": "nn", "max_distance": 25000, "neighbours": 7,
+             "fill_value": null, "var_no_data": 0},
+            {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+        ],
+        "WF_RAIN_EFF": [
+            {"function": "merge_data_by_ref", "method": "nn", "max_distance": 25000, "neighbours": 7,
+             "fill_value": null, "var_no_data": -9999},
+            {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+        ],
+        "WF_SNOW_ALBEDO": [
+            {"function": "merge_data_by_ref", "method": "nn", "max_distance": 25000, "neighbours": 7,
+             "fill_value": null, "var_no_data": -9999},
+            {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+        ]
+    }
+  },
+  "log": {
+    "path": "{path_log}",
+    "file_name": "merger_by_domain_s3m.txt"
+  },
+  "tmp": {
+    "path": "{path_tmp}",
+    "file_name": null
   }
 }

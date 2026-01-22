@@ -13,8 +13,9 @@
       "lut": {
         "user": {
           "path_geo": "/home/fabio/Desktop/shybox/dset/itwater/static/",
-          "time_source": null,
-          "time_destination": null,
+          "file_time_source": null, "file_time_destination": null,
+          "path_time_source": null, "path_time_destination": null,
+          "time_source": null, "time_destination": null,
           "time_rounding": "D",
           "time_frequency": "D",
           "time_direction": "forward",
@@ -36,6 +37,8 @@
       "format": {
         "domain_name": "string",
         "path_geo": "string",
+        "file_time_source": "time", "file_time_destination": "time",
+        "path_time_source": "time", "path_time_destination": "time",
         "path_source": "string",
         "path_destination": "string",
         "time_source": "string",
@@ -55,9 +58,11 @@
       "template": {
         "domain_name": "string",
         "path_geo": "string",
+        "file_time_source": "%Y%m%d%H%M", "file_time_destination": "%Y%m%d%H%M",
+        "path_time_source": "%Y/%m/%d/", "path_time_destination": "%Y/%m/%d/",
         "path_source": "string",
         "path_destination": "string",
-        "time_source": "%Y%m%d",
+        "time_source": "%Y%m%d%H%M",
         "time_destination": "%Y%m%d%H%M",
         "time_direction": "string",
         "time_start": "%Y%m%d",
@@ -95,22 +100,22 @@
     },
     "data_source": {
       "dset_01": {
-        "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/%Y/%m/%d/",
-        "file_name": "S3M_%Y%m%d%H00.nc.gz"
+        "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/marche/{path_time_source}",
+        "file_name": "S3M_{file_time_source}.nc.gz"
       },
       "dset_02": {
-        "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/emilia_romagna/%Y/%m/%d/",
-        "file_name": "S3M_%Y%m%d%H00.nc.gz"
+        "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/emilia_romagna/{path_time_source}",
+        "file_name": "S3M_{file_time_source}.nc.gz"
       },
       "dset_03": {
-        "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/toscana/%Y/%m/%d/",
-        "file_name": "S3M_%Y%m%d%H00.nc.gz"
+        "path": "/home/fabio/Desktop/shybox/dset/data_source/s3m/toscana/{path_time_source}",
+        "file_name": "S3M_{file_time_source}.nc.gz"
       }
     },
     "data_destination": {
       "dset_01": {
-        "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-        "file_name": "discharge.%Y%m%d%H%M.tiff",
+        "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/{path_time_destination}",
+        "file_name": "discharge.{file_time_destination}.tiff",
         "format": "geotiff",
         "type": null,
         "mode": "grid",
@@ -128,8 +133,8 @@
         }
       },
       "dset_02": {
-        "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/%Y/%m/%d/",
-        "file_name": "sm.%Y%m%d%H%M.tiff",
+        "path": "/home/fabio/Desktop/shybox/dset/itwater/dynamic/merger_spatial/{path_time_destination}",
+        "file_name": "sm.{file_time_destination}.tiff",
         "format": "geotiff",
         "type": null,
         "mode": "grid",
