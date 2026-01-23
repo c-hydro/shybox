@@ -21,8 +21,7 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 def match_coords_to_reference(
     da: xr.DataArray, ref: xr.DataArray,
     lat_name: str = "latitude", lon_name: str = "longitude",
-    raise_on_bbox: bool = False,
-) -> xr.DataArray:
+    raise_on_bbox: bool = False,) -> xr.DataArray:
     """
     Return a copy of `da` whose latitude/longitude coordinates are replaced
     by those from `ref` (no interpolation, just relabelling) **only if**:

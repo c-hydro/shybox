@@ -15,7 +15,6 @@ import re
 import shutil
 import errno, os
 
-# logging (with decoretor: @with_logger(var_name="logger_stream") )
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
 # Sadly, Python fails to provide the following magic number for us.
