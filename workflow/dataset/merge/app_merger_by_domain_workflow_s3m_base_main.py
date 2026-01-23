@@ -33,9 +33,6 @@ import logging
 import os
 import time
 
-import numpy as np
-import pandas as pd
-
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
@@ -47,8 +44,7 @@ from shybox.logging_toolkit.logging_handler import LoggingManager
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
 from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
 
-from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_format
-from shybox.generic_toolkit.lib_utils_string import fill_string
+from shybox.time_toolkit.lib_utils_time import select_time_range
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -56,8 +52,8 @@ from shybox.generic_toolkit.lib_utils_string import fill_string
 project_name = 'shybox'
 alg_name = 'Workflow for datasets merger by domain base configuration'
 alg_type = 'Package'
-alg_version = '1.0.0'
-alg_release = '2025-04-03'
+alg_version = '1.1.0'
+alg_release = '2026-01-22'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
