@@ -172,7 +172,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # method to check readability
         self.readable_settings(active_warnings=self.message)
         # set debug state
-        self.debug_state = True
+        self.debug_state = False
 
         # info dataset initialization end
         if self.message:
@@ -842,37 +842,26 @@ class Dataset(ABC, metaclass=DatasetMeta):
             data = straighten_dims(data)
             data = self._check_step(data, "straighten_dims")
             if data is None: return None
-            # debug data
-            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # map the data dimensions
             data = map_dims(data, **self.variable_template)
             data = self._check_step(data, "map_dims")
             if data is None: return None
-            # debug data
-            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # map the data coords
             data = map_coords(data, **self.variable_template)
             data = self._check_step(data, "map_coords")
             if data is None: return None
-            # debug data
-            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # map the data variables
             data = map_vars(data, **self.variable_template)
             data = self._check_step(data, "map_vars")
             if data is None: return None
-            # debug data
-            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # ensure that the data has descending latitudes
             data = straighten_data(data)
             data = self._check_step(data, "straighten_data")
             if data is None: return None
-
-            # debug data
-            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # ensure that the data dimensions are flat
             data = flat_dims(data)
@@ -882,6 +871,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 data, time_file=self.time_reference, time_freq=self.time_freq, time_direction=self.time_direction)
             data = self._check_step(data, "straighten_time")
             if data is None: return None
+
+            # debug data
+            if self.debug_state: plot_data(data)
 
             # make sure the nodata value is set to np.nan for floats and to the max int for integers
             data = set_type(data, self.nan_value)
