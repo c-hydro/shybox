@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_io_nc_s3m
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20250127'
-Version:       '1.0.0'
+Date:          '20260126'
+Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -12,6 +12,7 @@ import os.path
 import time as tm
 import pandas as pd
 import numpy as np
+import xarray as xr
 
 from datetime import datetime
 from netCDF4 import Dataset, date2num
@@ -27,6 +28,101 @@ from shybox.generic_toolkit.lib_utils_debug import plot_data
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to read nc file (xarray library for s3m dataset)
+@with_logger(var_name='logger_stream')
+def read_datasets_s3m(
+        path: str,
+        lon_name=("lon", "longitude", "Longitude", "nav_lon"),
+        lat_name=("lat", "latitude", "Latitude", "nav_lat"),
+        make_1d_if_regular=True,
+        south_to_north=True) -> xr.Dataset:
+
+    ds = xr.open_dataset(path, decode_times=True)
+
+    def _find_var(cands):
+        for c in cands:
+            if c in ds.variables:
+                return c
+        low = {v.lower(): v for v in ds.variables}
+        for c in cands:
+            if c.lower() in low:
+                return low[c.lower()]
+        return None
+
+    latv = _find_var(lat_name)
+    lonv = _find_var(lon_name)
+
+    if latv is None or lonv is None:
+        logger_stream.error(f"Could not find lat/lon variables. Found lat={latv}, lon={lonv} in {list(ds.variables)}")
+        raise KeyError(f"Could not find lat/lon variables. Found lat={latv}, lon={lonv} in {list(ds.variables)}")
+
+    lat = ds[latv]
+    lon = ds[lonv]
+
+    if lat.ndim != 2 or lon.ndim != 2:
+        logger_stream.error(f"Expected 2D lat/lon variables. Got lat.ndim={lat.ndim}, lon.ndim={lon.ndim}")
+        raise ValueError(f"Expected 2D lat/lon variables. Got lat.ndim={lat.ndim}, lon.ndim={lon.ndim}")
+
+    # original dims of lat/lon
+    ydim, xdim = lat.dims   # ex: ('Y','X') or ('y','x')
+
+    # Rename dims to canonical 'Y','X'
+    rename_dims = {}
+    if ydim != "Y":
+        rename_dims[ydim] = "Y"
+    if xdim != "X":
+        rename_dims[xdim] = "X"
+    ds = ds.rename(rename_dims)
+
+    # Reload after renaming
+    lat = ds[latv]
+    lon = ds[lonv]
+    ydim, xdim = "Y", "X"
+
+    def _is_regular(lat2d, lon2d, tol=1e-8):
+        lon_row0 = lon2d.isel({ydim: 0}).values
+        lat_col0 = lat2d.isel({xdim: 0}).values
+        lon_ok = np.nanmax(np.abs(lon2d.values - lon_row0[None, :])) < tol
+        lat_ok = np.nanmax(np.abs(lat2d.values - lat_col0[:, None])) < tol
+        return bool(lon_ok and lat_ok)
+
+    if make_1d_if_regular and _is_regular(lat, lon):
+        # Extract 1D coordinates
+        lon_1d = lon.isel({ydim: 0}).values
+        lat_1d = lat.isel({xdim: 0}).values
+
+        ds = ds.assign_coords(
+            longitude=("X", lon_1d),
+            latitude=("Y", lat_1d),
+        )
+
+        # Ensure latitude is South -> North (ascending)
+        if south_to_north and np.isfinite(ds["latitude"].values[[0, -1]]).all():
+            if ds["latitude"].values[0] > ds["latitude"].values[-1]:
+                ds = ds.isel(Y=slice(None, None, -1))
+
+        # Keep original 2D fields as aux variables (optional)
+        ds = ds.assign(
+            Longitude_2d=(("Y", "X"), lon.values),
+            Latitude_2d=(("Y", "X"), lat.values),
+        )
+
+    else:
+        # Curvilinear grid: keep 2D coordinates
+        ds = ds.assign_coords(
+            Longitude=(("Y", "X"), lon.values),
+            Latitude=(("Y", "X"), lat.values),
+        )
+
+        if south_to_north:
+            row_mean = np.nanmean(ds["Latitude"].values, axis=1)
+            if row_mean[0] > row_mean[-1]:
+                ds = ds.isel(Y=slice(None, None, -1))
+
+    return ds
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (netcdf library for s3m dataset)
 @with_logger(var_name='logger_stream')
 def write_dataset_s3m(
@@ -34,12 +130,17 @@ def write_dataset_s3m(
         attrs_data: dict = None, attrs_system: dict = None, attrs_x: dict = None, attrs_y: dict = None,
         file_format: str = 'NETCDF4', time_format: str ='%Y%m%d%H%M',
         file_compression: bool = True, file_update: bool = True,
-        compression_flag: bool = True, compression_level: int = 5,
+        compression_flag: (bool, None) = True, compression_level: int = 5,
         var_system: str = 'crs',
         var_time: str = 'time', var_x: str = 'X', var_y: str = 'Y',
         dim_time: str = 'time', dim_x: str = 'X', dim_y: str = 'Y',
         type_time: str = 'float64',
         type_terrain: str = 'float64', type_x: str = 'float64', type_y: str = 'float64', **kwargs):
+
+    # check file format
+    if not isinstance(file_format, str):
+        logger_stream.warning(' ===> File format is not defined as string type! Using default format NETCDF4')
+        file_format = 'NETCDF4'
 
     # manage file path
     path_unzip = path

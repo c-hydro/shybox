@@ -325,6 +325,11 @@ def write_dataset_hmc(
         type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64',
         debug_geo: bool = False, debug_data: bool = False, **kwargs):
 
+    # check file format
+    if not isinstance(file_format, str):
+        logger_stream.warning(' ===> File format is not defined as string type! Using default format NETCDF4')
+        file_format = 'NETCDF4'
+
     # manage file path
     path_unzip = path
     path_zip = define_compress_filename(path, remove_ext=False, uncompress_ext='.nc', compress_ext='.gz')
