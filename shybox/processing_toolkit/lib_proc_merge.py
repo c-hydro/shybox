@@ -20,7 +20,7 @@ from pyresample.kd_tree import resample_nearest, resample_gauss, resample_custom
 from repurpose.resample import resample_to_grid
 
 from shybox.io_toolkit.lib_io_utils import create_darray
-from shybox.orchestrator_toolkit.lib_orchestrator_utils import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.generic_toolkit.lib_utils_debug import plot_data, dump_data2nc
 # ----------------------------------------------------------------------------------------------------------------------

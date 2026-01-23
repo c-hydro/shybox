@@ -11,7 +11,7 @@ Version:       '1.0.0'
 import pandas as pd
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
-from shybox.orchestrator_toolkit.lib_orchestrator_utils import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 # ----------------------------------------------------------------------------------------------------------------------
 
 
