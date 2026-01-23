@@ -209,11 +209,11 @@ def main(view_table: bool = False):
         dset_src_handler_list = []
         for alg_data_src_key, alg_data_src_settings in alg_cfg_step['data_source'].items():
 
-            # dataset handler 'grid_s3m' or grid_3d
+            # dataset handler
             dset_src_handler_obj = DataLocal(
                 path=alg_data_src_settings['path'],
                 file_name=alg_data_src_settings['file_name'],
-                file_type='grid_3d', file_format='netcdf', file_mode='local',
+                file_type='grid_s3m', file_format='netcdf', file_mode='local',
                 file_variable=alg_data_vars, file_io='input',
                 variable_template={
                     "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
