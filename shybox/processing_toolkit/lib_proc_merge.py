@@ -126,7 +126,7 @@ def merge_data_by_ref(
         max_distance: int = 18000,
         neighbours: int = 8,
         fill_value = np.nan,
-        debug: bool = True,
+        debug: bool = False,
         **kwargs):
 
     # check data type and normalize to list of Datasets
