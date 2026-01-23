@@ -172,19 +172,20 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # method to check readability
         self.readable_settings(active_warnings=self.message)
         # set debug state
-        self.debug_state = False
+        self.debug_state = True
 
         # info dataset initialization end
         if self.message:
             self.logger.info(f'Dataset obj {self.__str__()} ... INITIALIZED')
 
-    # method to return a string representation
+    # method to return information as a string representation
     def __repr__(self):
         return (f"{self.__class__.__name__}("
                 f"{self.file_name!r}, {self.file_mode!r}, {self.data_layout!r}, {self.file_type!r}, "
                 f"{self.file_format!r}, {self.file_variable!r}, {self.file_namespace!r},"
                 f"status={self.status!r})")
 
+    # method to extract information from string representation
     def __str__(self):
 
         file_name = getattr(self, "file_name", "<unknown>")
@@ -224,6 +225,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     "netcdf", "nc", "netcdf4", "nc4",
                     "csv", "json",
                     "txt", "ascii"),
+            allowed_compressions: Tuple[str, ...] = ("gz",),
             temp_markers: Tuple[str, ...] = ("tmp", "temp"),
             min_size_bytes: int = 1,
             expected_mode: Optional[str] = "local",
@@ -291,7 +293,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # 6) Extension vs declared format
         ext = p.suffix.lower().lstrip(".")
         if ext and (ext not in allowed_formats):
-            self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
+            if ext not in allowed_compressions:
+                self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
 
         # 7) Expected mode
         if expected_mode and (self.file_mode != expected_mode):
@@ -306,15 +309,20 @@ class Dataset(ABC, metaclass=DatasetMeta):
             if self.warnings:
                 self.logger.warning("\n".join(self.warnings))
 
+        # define readable or not
         self.readable = bool(readable)
+        # set the status
         self.status = "ok" if self.readable else "nio"
+
         return self.readable
-    # Convenience: human summary
+
+    # method to get readable summary in human format
     def readable_summary(self) -> str:
         if self.readable:
             return "readable: yes"
         return "readable: no → " + "; ".join(self.warnings)
 
+    # method to check if readable
     def is_readable(self) -> bool:
         """
         Check if this instance is readable.
@@ -324,6 +332,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.readable_settings()
         return self.status == "ok"
 
+    # method to update data object
     def update(self, in_place = False, **kwargs):
 
         new_file_name = substitute_string(self.file_name, kwargs)
@@ -487,7 +496,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
     @property
     def available_keys(self):
         return self.get_available_keys()
-    
+
+    # method to get available keys
     def get_available_keys(self, time: (dt.datetime, pd.date_range) = None, **kwargs):
         
         prefix = self.get_prefix(time, **kwargs)
@@ -832,21 +842,29 @@ class Dataset(ABC, metaclass=DatasetMeta):
             data = straighten_dims(data)
             data = self._check_step(data, "straighten_dims")
             if data is None: return None
+            # debug data
+            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # map the data dimensions
             data = map_dims(data, **self.variable_template)
             data = self._check_step(data, "map_dims")
             if data is None: return None
+            # debug data
+            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # map the data coords
             data = map_coords(data, **self.variable_template)
             data = self._check_step(data, "map_coords")
             if data is None: return None
+            # debug data
+            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # map the data variables
             data = map_vars(data, **self.variable_template)
             data = self._check_step(data, "map_vars")
             if data is None: return None
+            # debug data
+            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # ensure that the data has descending latitudes
             data = straighten_data(data)
@@ -854,7 +872,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             if data is None: return None
 
             # debug data
-            if self.debug_state: plot_data(data)
+            if self.debug_state: plot_data(data, var_name='SnowMask')
 
             # ensure that the data dimensions are flat
             data = flat_dims(data)
@@ -1090,6 +1108,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         key = self.get_key(time, **kwargs)
         self._rm_data(key)
 
+    # method to move data (and remove the original)
     def move_data(self, new_loc_pattern, time: Union[dt.datetime, pd.Timestamp] = None, **kwargs):
         self.copy_data(new_loc_pattern, time, **kwargs)
         self.rm_data(time, **kwargs)
@@ -1332,14 +1351,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return data
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # helpers
+# print logging message
 @with_logger(var_name="logger_stream")
-# print logg message
 def log_data(stage, name=None, time=None, from_memory=False, reference=None):
 
+    # determine tag
     tag = "memory" if from_memory else "source"
-
-    # Build the base message
+    # build the base message
     if name is not None:
         if time is not None:
             base = f'Get data for variable "{name}" at time "{time}"'
@@ -1367,3 +1387,4 @@ def log_data(stage, name=None, time=None, from_memory=False, reference=None):
         logger_stream.info_down(
             f'[{tag}] {base} ... SKIPPED. Variables are not available'
         )
+# ----------------------------------------------------------------------------------------------------------------------

@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_utils_debug
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251110'
-Version:       '1.0.0'
+Date:          '20260123'
+Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -77,10 +77,60 @@ def read_workspace_vars(file_name):
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# helpers to filter variables to plot
+@with_logger(var_name="logger_stream")
+def _filter_vars(vars_to_plot: list, var_id: (None, int, list) = None)  -> (list, list):
+
+    # check vars_to_plot
+    if vars_to_plot is None or not vars_to_plot:
+        return [], []
+    # check var_id
+    if var_id is None:
+        return vars_to_plot, list(range(len(vars_to_plot)))
+
+    # normalize to list of indices
+    if isinstance(var_id, int):
+        var_id_list = [var_id]
+    elif isinstance(var_id, (list, tuple)):
+        var_id_list = list(var_id)
+    else:
+        logger_stream.error("var_id must be None, int, or list/tuple of int")
+        raise TypeError("var_id must be None, int, or list/tuple of int")
+
+    filtered_ids = []
+    for vid in var_id_list:
+
+        if not isinstance(vid, int):
+            logger_stream.error(f"Invalid var_id element {vid} (type={type(vid)}), must be int")
+            raise TypeError(f"Invalid var_id element {vid} (type={type(vid)}), must be int")
+
+        # clip negative values
+        if vid < 0:
+            if logger_stream is not None:
+                logger_stream.warning(f"Negative var_id={vid} provided; interpreting as zero.")
+            vid = 0
+
+        # bounds check
+        if vid < 0 or vid >= len(vars_to_plot):
+            if logger_stream is not None:
+                logger_stream.error(
+                    f"var_id {vid} is out of range (0 to {len(vars_to_plot)-1})."
+                )
+            raise IndexError(f"var_id {vid} is out of range (0 to {len(vars_to_plot)-1}).")
+
+        filtered_ids.append(vid)
+
+    # remove duplicates but preserve order
+    filtered_ids = list(dict.fromkeys(filtered_ids))
+
+    filtered_vars = [vars_to_plot[i] for i in filtered_ids]
+    return filtered_vars, filtered_ids
+
 # method to plot xarray.Dataset variables for debugging
 @with_logger(var_name="logger_stream")
-def plot_data(data, var_name=None, cmap="viridis", title=None):
-    # --- Handle NumPy ndarray case ---
+def plot_data(data, var_name=None, var_id: (int, list, None) = None, strict_name: bool = False, cmap="viridis", title=None):
+
+    # numpy array case
     if isinstance(data, np.ndarray):
         if data.ndim != 2:
             logger_stream.error("NumPy array must be 2D.")
@@ -95,7 +145,7 @@ def plot_data(data, var_name=None, cmap="viridis", title=None):
         plt.show(block=True)
         return
 
-    # --- Handle xarray.DataArray case ---
+    # xarray.DataArray case
     if isinstance(data, xr.DataArray):
         var_label = data.name or "DataArray"
         plt.figure()
@@ -106,27 +156,56 @@ def plot_data(data, var_name=None, cmap="viridis", title=None):
         plt.show(block=True)
         return
 
-    # --- Handle xarray.Dataset or dict-like case ---
+    # xarray.Dataset or dict-like case
     if not hasattr(data, "items"):
         logger_stream.error("Data must be an xarray.Dataset, xarray.DataArray, dict-like, or a 2D NumPy array.")
         raise TypeError(f"Unsupported data type: {type(data)}")
 
-    # Select which variables to plot
+    # handle var_id precedence
+    if var_id is not None:
+        if var_name is not None:
+            logger_stream.warning("Both var_name and var_id provided; var_id will take precedence.")
+            var_name = None
+
+    # select which variables to plot
     if var_name:
+        # defined name variable to plot
         if var_name not in data:
-            logger_stream.info(f"Variable '{var_name}' not found in dataset.")
-            raise KeyError(f"Variable '{var_name}' not found in dataset.")
-        vars_to_plot = [var_name]
+
+            # check strict_name flag
+            if strict_name:
+                # raise error if var_name not found and strict_name is True
+                logger_stream.error(f"Variable '{var_name}' not found in dataset.")
+                raise KeyError(f"Variable '{var_name}' not found in dataset.")
+            else:
+                # search for all 2D variables to plot (if var_name not found but strict_name is False)
+                logger_stream.warning(f"Variable '{var_name}' not found in dataset. Try to available variables.")
+                vars_to_plot = [
+                    name for name, da in data.items()
+                    if hasattr(da, "ndim") and da.ndim == 2
+                ]
+
+                vars_to_print = ', '.join(vars_to_plot) if vars_to_plot else 'none'
+                logger_stream.warning(f"Variable '{var_name}' not found in dataset. "
+                                      f"Try to available variables {vars_to_print}.")
+        else:
+            # consider only the specified variable
+            vars_to_plot = [var_name]
     else:
+        # search for all 2D variables to plot
         vars_to_plot = [
             name for name, da in data.items()
             if hasattr(da, "ndim") and da.ndim == 2
         ]
+        # check if any variable found
         if not vars_to_plot:
             logger_stream.warning("No 2D variables found to plot.")
             return
 
-    # Plot each selected variable
+    # filter by var_id if provided
+    vars_to_plot, id_to_plot = _filter_vars(vars_to_plot, var_id)
+
+    # plot each selected variable
     for name in vars_to_plot:
         da = data[name]
         plt.figure()
@@ -135,7 +214,7 @@ def plot_data(data, var_name=None, cmap="viridis", title=None):
         cbar = plt.colorbar(im)
         cbar.set_label(name)
         plt.show(block=True)
-
+    return
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

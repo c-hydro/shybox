@@ -182,43 +182,12 @@ def main(view_table: bool = False):
     )
     # ------------------------------------------------------------------------------------------------------------------
 
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # configuration workflow
-    configuration_OLD = {
-        "WORKFLOW": {
-            "options": {
-                "intermediate_output": "Tmp",
-                "tmp_dir": 'tmp'
-            },
-            "process_list": {
-                "snow_mask": [
-                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan, "var_no_data": 0},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "rain_eff": [
-                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan, "var_no_data": -9999},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ],
-                "albedo": [
-                    {"function": "merge_data_by_ref", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan, "var_no_data": -9999},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
-                ]
-            }
-        }
-    }
-    # ------------------------------------------------------------------------------------------------------------------
-
     # ------------------------------------------------------------------------------------------------------------------
     # time iteration(s)
     for time_step in alg_time_generic:
 
         # ------------------------------------------------------------------------------------------------------------------
         ## ANCILLARY DATA MANAGEMENT
-
         # get workflow variable list
         alg_data_vars = get_workflow_variable(alg_cfg_workflow)
         # ------------------------------------------------------------------------------------------------------------------
@@ -252,6 +221,7 @@ def main(view_table: bool = False):
                 },
                 time_signature='current',
                 time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
+                logger=logging_handle
             )
 
             dset_src_handler_list.append(dset_src_handler_obj)
@@ -310,8 +280,12 @@ def main(view_table: bool = False):
 
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# HELPERS
+# method to get workflow variable list
 def get_workflow_variable(cfg_wf: dict) -> list:
     return list(cfg_wf.get("process_list", {}).keys())
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # call script from external library

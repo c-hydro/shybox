@@ -44,6 +44,7 @@ from shybox.io_toolkit.lib_io_nc_other import write_dataset_itwater
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.time_toolkit.lib_utils_time import is_date
 from shybox.logging_toolkit.lib_logging_utils import with_logger
+from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 # manage logger
 try:
@@ -55,6 +56,7 @@ except Exception as e:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check data format
+@with_logger(var_name="logger_stream")
 def check_data_format(data, file_format: str) -> None:
     """"
     Ensures that the data is compatible with the format of the dataset.
@@ -90,6 +92,7 @@ def check_data_format(data, file_format: str) -> None:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to get zip from path
+@with_logger(var_name="logger_stream")
 def get_zip_from_path(path: str) -> (str, None):
     # get the zip extension
     extension = path.split('.')[-1]
@@ -103,6 +106,7 @@ def get_zip_from_path(path: str) -> (str, None):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to get format from path
+@with_logger(var_name="logger_stream")
 def get_format_from_path(path: str) -> str:
     # get the file extension
     extension = path.split('.')[-1]
@@ -143,6 +147,7 @@ def get_format_from_path(path: str) -> str:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to read from file
+@with_logger(var_name="logger_stream")
 def read_from_file(
         path, file_format: Optional[str] = None,
         file_type: Optional[str] = None, file_variable: (str, list) = 'na') \
@@ -174,6 +179,8 @@ def read_from_file(
 
     # read the data from a txt file
     elif file_format in ['txt', 'ascii']:
+
+        # manage different file types
         if file_type in ['grid', 'grid_2d']:
 
             # get header
@@ -246,9 +253,9 @@ def read_from_file(
 
         # data = rxr.open_rasterio(path) # if no epsg are provided ... we have to set a geo template
         with rio.open(path) as src:
+
             # Read band with mask
             tmp = src.read(1, masked=True)
-
             # Extract transform
             transform = src.transform
 
@@ -290,22 +297,28 @@ def read_from_file(
     # read the data from a netcdf (and similar formats)
     elif file_format in ['netcdf', 'nc', 'nc4']:
 
+        # check if the file is compressed
         has_compression = has_compression_extension(path)
 
+        # uncompress the file if needed
         if has_compression:
             file = uncompress_and_remove(path)
         else:
             file = path
 
+        # read the netcdf file
         data = xr.open_dataset(file)
+
         # check if there is a single variable in the dataset
         if len(data.data_vars) == 1:
             data = data[list(data.data_vars)[0]]
 
+        # remove the uncompressed file if needed
         if has_compression:
             if os.path.exists(file):
                 os.remove(file)
 
+    # read the data from a grib (and similar formats)
     elif file_format == 'grib':
 
         has_compression = has_compression_extension(path)
@@ -326,6 +339,7 @@ def read_from_file(
 
         # 2) Sanity check
         if "step" not in data.coords and "step" not in data.dims:
+            logger_stream.error("Dataset has no 'step' coordinate/dimension from cfgrib.")
             raise ValueError("Dataset has no 'step' coordinate/dimension from cfgrib.")
 
         # 3) Compute valid timestamps and assign them back onto the 'step' coordinate
@@ -342,6 +356,7 @@ def read_from_file(
         if len(data.data_vars) == 1:
             data = data[list(data.data_vars)[0]]
 
+        # remove the uncompressed file if needed
         if has_compression:
             if os.path.exists(file):
                 os.remove(file)
@@ -350,10 +365,12 @@ def read_from_file(
     elif file_format == 'file':
         data = path
 
+    # read the data from a tmp
     elif file_format == 'tmp':
         data = path
 
     else:
+        logger_stream.error(f'File format not supported: {file_format}')
         raise ValueError(f'File format not supported: {file_format}')
 
     return data
@@ -465,6 +482,7 @@ def rm_file(path) -> None:
 # DECORATOR TO MAKE THE FUNCTION BELOW WORK WITH XR.DATASET
 def withxrds(func):
     def wrapper(*args, **kwargs):
+
         if isinstance(args[0], xr.Dataset):
             obj_fx = None
             for var in args[0]:

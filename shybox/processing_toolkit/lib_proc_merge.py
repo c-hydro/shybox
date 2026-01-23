@@ -3,14 +3,12 @@ Library Features:
 
 Name:          lib_proc_merge
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251110'
-Version:       '1.1.0'
+Date:          '20260123'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-import logging
-import warnings
 import os.path
 
 import xarray as xr
@@ -43,7 +41,7 @@ def merge_data_by_time(
         debug: bool = False,
         **kwargs):
 
-    # get geoghraphical data from reference
+    # get geographical data from reference
     geo_data = ref.values
     geo_x, geo_y = ref[var_geo_x].values, ref[var_geo_y].values
     # reshape geo_x and geo_y if 2D
@@ -128,18 +126,10 @@ def merge_data_by_ref(
         max_distance: int = 18000,
         neighbours: int = 8,
         fill_value = np.nan,
-        debug: bool = False,
+        debug: bool = True,
         **kwargs):
 
-    # normalize `data` to a list of Datasets
-    def _to_dataset(obj: xr.DataArray | xr.Dataset) -> xr.Dataset:
-        if isinstance(obj, xr.Dataset):
-            return obj
-        if isinstance(obj, xr.DataArray):
-            name = obj.name or 'var'
-            return obj.rename(name).to_dataset(name=name)
-        raise TypeError(f"Unsupported element in data: {type(obj)}")
-
+    # check data type and normalize to list of Datasets
     if isinstance(data, (xr.DataArray, xr.Dataset)):
         ds_list = [_to_dataset(data)]
     elif isinstance(data, (list, tuple)):
@@ -172,17 +162,21 @@ def merge_data_by_ref(
     # merge/resample per variable
     var_obj = []
     for var_name in var_list:
+
+        # initialize merge array
         var_attrs = None
         var_merge = np.full_like(ref_data, np.nan, dtype=np.float64)
 
+        # iterate over datasets to resample and merge
         for ds in ds_list:
             if var_name not in ds.data_vars:
                 continue
-
+            # get dataarray
             da_in = ds[var_name]
             if var_attrs is None:
                 var_attrs = dict(da_in.attrs)
 
+            # prepare data for resampling
             var_data = da_in.values.astype(np.float64)
             var_data[var_data == var_no_data] = np.nan  # mask source nodata before resampling
 
@@ -191,6 +185,7 @@ def merge_data_by_ref(
             var_x_2d, var_y_2d = np.meshgrid(var_x_1d, var_y_1d)
             var_grid = GridDefinition(lons=var_x_2d, lats=var_y_2d)
 
+            # resample data to reference grid
             if method == 'nn':
                 var_resample = resample_nearest(
                     var_grid, var_data, ref_grid,
@@ -247,14 +242,31 @@ def merge_data_by_ref(
             coord_name_x=coord_name_x, coord_name_y=coord_name_y,
             dim_name_x=dim_name_x, dim_name_y=dim_name_y
         )
+        # add attrinutes if defined
         if var_attrs:
             var_da.attrs = var_attrs
-
+        # store variable DataArray
         var_obj.append(var_da)
 
     # keep your original return style: single DA or list of DAs
     if len(var_obj) == 1:
         return var_obj[0]
-    return var_obj
+    else:
+        return var_obj
 
 # ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# HELPERS
+# normalize `data` to a list of Datasets
+@with_logger(var_name='logger_stream')
+def _to_dataset(obj: xr.DataArray | xr.Dataset) -> xr.Dataset:
+    if isinstance(obj, xr.Dataset):
+        return obj
+    if isinstance(obj, xr.DataArray):
+        name = obj.name or 'var'
+        return obj.rename(name).to_dataset(name=name)
+    logger_stream.error(f"Unsupported element in data: {type(obj)}")
+    raise TypeError(f"Unsupported element in data: {type(obj)}")
+# ----------------------------------------------------------------------------------------------------------------------
+
