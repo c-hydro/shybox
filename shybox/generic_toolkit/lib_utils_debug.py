@@ -179,7 +179,6 @@ def plot_data(data, var_name=None, var_id: (int, list, None) = None, strict_name
                 raise KeyError(f"Variable '{var_name}' not found in dataset.")
             else:
                 # search for all 2D variables to plot (if var_name not found but strict_name is False)
-                logger_stream.warning(f"Variable '{var_name}' not found in dataset. Try to available variables.")
                 vars_to_plot = [
                     name for name, da in data.items()
                     if hasattr(da, "ndim") and da.ndim == 2
