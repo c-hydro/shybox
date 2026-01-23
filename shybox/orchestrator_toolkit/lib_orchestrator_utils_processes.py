@@ -1,10 +1,10 @@
 """
 Library Features:
 
-Name:          lib_orchestrator_utils
+Name:          lib_orchestrator_utils_processes
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20250127'
-Version:       '1.0.0'
+Date:          '20260123'
+Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -30,8 +30,15 @@ from typing import Iterable
 # globals variables
 global PROCESSES
 PROCESSES = {}
-# ----------------------------------------------------------------------------------------------------------------------
 
+# map the declared output_type to a sensible file extension
+_ext_map = {
+    'tif': 'tif', 'tiff': 'tif', 'gdal': 'tif', 'xarray': 'tif', 'file': 'tif',
+    'table': 'csv', 'csv': 'csv', 'pandas': 'csv',
+    'shape': 'json', 'dict': 'json', 'geojson': 'json',
+    'text': 'txt', 'txt': 'txt'
+}
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to decorate processing functions
@@ -52,7 +59,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
         def wrapper(data, *args, **kwargs):
             created_temp_paths = []
 
-            # ------------- normalize & convert INPUT ------------------------
+            # normalize and convert input data
             def _to_gdal(obj):
                 # Convert DataArray/Dataset → GDAL (or path to file that GDAL can open)
                 if isinstance(obj, (xr.DataArray, xr.Dataset)):
@@ -91,7 +98,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
             else:
                 normalized_data = _convert_single(data)
 
-            # ------------- CALL the wrapped function ------------------------
+            # call the wrapped function with normalized data
             try:
                 if isinstance(normalized_data, dict):
 
@@ -109,10 +116,8 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                 elif isinstance(normalized_data, pd.Series):
                     result = func(normalized_data, *args, **kwargs)
 
-                elif (
-                    isinstance(normalized_data, (xr.DataArray, xr.Dataset))
-                    or (gdal and isinstance(normalized_data, gdal.Dataset))
-                ):
+                elif (isinstance(normalized_data, (xr.DataArray, xr.Dataset))
+                      or (gdal and isinstance(normalized_data, gdal.Dataset))):
                     result = func(normalized_data, *args, **kwargs)
                 else:
                     raise TypeError(f'Unsupported data type: {type(normalized_data)}')
@@ -126,7 +131,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                     except Exception:
                         pass  # best-effort cleanup
 
-            # ------------- convert OUTPUT to the requested type -------------
+            # convert the result according to output_type
             # Keep naming consistent: we interpret output_type as the format you WANT to return.
             if output_type == 'xarray':
                 # If result is GDAL/path, bring it back to xarray
@@ -152,14 +157,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
 
             return result
 
-        # ------------- output_ext attribute ---------------------------------
-        # Map the declared output_type to a sensible file extension
-        _ext_map = {
-            'tif': 'tif', 'tiff': 'tif', 'gdal': 'tif', 'xarray': 'tif', 'file': 'tif',
-            'table': 'csv', 'csv': 'csv', 'pandas': 'csv',
-            'shape': 'json', 'dict': 'json', 'geojson': 'json',
-            'text': 'txt', 'txt': 'txt'
-        }
+        # add the output_ext attribute
         setattr(wrapper, 'output_ext', _ext_map.get(output_type, 'txt'))
 
         # attach extra attributes
@@ -168,6 +166,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
 
         # register the process
         PROCESSES[func.__name__] = wrapper
+
         return wrapper
 
     return decorator
@@ -189,7 +188,7 @@ def with_list_input(func):
 # method to remove file
 @with_list_input
 def remove(filename: str):
-    os.remove(filename)
+    if os.path.exists(filename): os.remove(filename)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -205,6 +204,20 @@ def xarray_to_file(data_array: xr.DataArray) -> str:
 
     # Move the temporary file to the desired filename
     return temp_file.name
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read data from file to xarray
+@with_list_input
+def file_to_xarray(file_path: str) -> xr.DataArray:
+    # Open the raster as xarray DataArray
+    da = rxr.open_rasterio(file_path)
+
+    # If it's single-band, squeeze the band dimension
+    if "band" in da.dims and da.sizes.get("band", 1) == 1:
+        da = da.squeeze("band", drop=True)
+
+    return da
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -225,6 +238,7 @@ def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:
 # method to convert data to file (xarray)
 @with_list_input
 def gdal_to_xarray(dataset: gdal.Dataset) -> xr.DataArray:
+
     # Create a temporary file
     temp_file = tempfile.NamedTemporaryFile(suffix='.tif', delete=False)
     temp_file.close()

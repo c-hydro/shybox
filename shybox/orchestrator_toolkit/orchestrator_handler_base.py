@@ -1,15 +1,20 @@
 """
-OrchestratorBase: shared execution engine for Grid and TimeSeries orchestrators.
+Class Features
 
-Those belong to dedicated modules (e.g. mapper_handler.py, orchestrator_utils.py)
-and are used by the builder classes (Grid/TimeSeries).
+Name:          orchestrator_handler_base
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20260114'
+Version:       '1.0.0'
 """
+
 # ----------------------------------------------------------------------------------------------------------------------
+# libraries
 from __future__ import annotations
 
 import os
 import shutil
 import tempfile
+
 from copy import deepcopy
 from collections import defaultdict
 from typing import Any, Dict, List, Union
@@ -22,7 +27,8 @@ from shybox.generic_toolkit.lib_utils_string import get_filename_components
 from shybox.generic_toolkit.lib_utils_tmp import ensure_folder_tmp
 from shybox.time_toolkit.lib_utils_time import convert_time_format, normalize_to_datetime_index
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import group_process
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
 
 from shybox.dataset_toolkit.dataset_handler_mem import DataMem
@@ -33,109 +39,6 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to normalise deps (args or dataset)
-@with_logger(var_name='logger_stream')
-def normalize_deps(deps):
-    if deps is None:
-        return {}
-    elif isinstance(deps, dict):
-        return deps
-    elif isinstance(deps, (list, tuple)):
-        return {i + 1: v for i, v in enumerate(deps)}
-    else:
-        logger_stream.error(f"Unsupported deps type: {type(deps)}")
-
-# method to ensure list
-def as_list(maybe_seq):
-    if isinstance(maybe_seq, (list, tuple)):
-        return list(maybe_seq), True
-    return [maybe_seq], False
-
-# method to remove none values from a list
-def remove_none(lst):
-    return [x for x in lst if x is not None]
-
-# method to group processes by attribute
-@with_logger(var_name='logger_stream')
-def group_process(proc_list, proc_tag="reference"):
-    proc_group = defaultdict(list)
-    for proc in proc_list:
-        if proc_tag == "reference":
-            if not hasattr(proc, "reference") or proc.reference is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'reference' attribute.")
-            proc_group[proc.reference].append(proc)
-        elif proc_tag == "workflow":
-            if not hasattr(proc, "workflow") or proc.workflow is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'workflow' attribute.")
-            proc_group[proc.workflow].append(proc)
-        elif proc_tag == "tag":
-            if not hasattr(proc, "tag") or proc.tag is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'tag' attribute.")
-            proc_group[proc.tag].append(proc)
-        else:
-            logger_stream.error(f"Invalid proc_tag '{proc_tag}'. Must be 'reference', 'workflow' or 'tag'.")
-    return dict(proc_group)
-
-# method to check compatibility between data and fx dicts
-@with_logger(var_name='logger_stream')
-def ensure_variables(data_collections, fx_collections, mode='strict'):
-
-    # Keys sets
-    keys_data = set(data_collections.keys())
-    keys_fx = set(fx_collections.keys())
-
-    # Differences
-    only_in_data = keys_data - keys_fx
-    only_in_fx = keys_fx - keys_data
-    common = keys_data & keys_fx
-
-    # Mode checks
-    if mode == 'strict':
-        logger_stream.info(f"[strict] Keys in BOTH: {sorted(common)}")
-        logger_stream.info(f"[strict] Only in DATA: {sorted(only_in_data)}")
-        logger_stream.info(f"[strict] Only in FX:  {sorted(only_in_fx)}")
-
-        if keys_data != keys_fx:
-            logger_stream.error("Strict mode failed: key mismatch.")
-            raise AssertionError("Strict mode failed: key mismatch.")
-
-    elif mode == 'less_from_data':
-        logger_stream.info(f"[less_from_out] DATA keys: {sorted(keys_data)}")
-        logger_stream.info(f"[less_from_out] FX keys:  {sorted(keys_fx)}")
-        logger_stream.info(f"[less_from_out] Missing in FX (problem): {sorted(only_in_data)}")
-
-        if only_in_data:
-            logger_stream.error("less_from_out failed: some DATA keys are not in FX.")
-            raise AssertionError("less_from_out failed: some DATA keys are not in FX.")
-
-    elif mode == 'less_from_fx':
-
-        logger_stream.info(f"[less_from_fx] FX keys: {sorted(keys_fx)}")
-        logger_stream.info(f"[less_from_fx] DATA keys: {sorted(keys_data)}")
-        logger_stream.info(f"[less_from_fx] Missing in OUT (problem): {sorted(only_in_fx)}")
-
-        if only_in_fx:
-            logger_stream.error("less_from_fx failed: some FX keys are not in DATA.")
-            raise AssertionError("less_from_fx failed: some FX keys are not in DATA.")
-
-    elif mode == 'lazy':
-
-        logger_stream.info(f"[lazy] Keys in DATA: {sorted(keys_data)}")
-        logger_stream.info(f"[lazy] Keys in FX:  {sorted(keys_fx)}")
-        logger_stream.info(f"[lazy] Common keys: {sorted(common)}")
-
-        if not common:
-            logger_stream.error("lazy failed: no common keys.")
-            raise AssertionError("lazy failed: no common keys.")
-
-    else:
-        logger_stream.error(f"Unknown mode '{mode}'")
-        raise ValueError(f"Unknown mode '{mode}'")
-
-    return True
-# ----------------------------------------------------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------------------
 # OrchestratorBase (engine)
 class OrchestratorBase:
 
@@ -185,27 +88,7 @@ class OrchestratorBase:
         self.memory_active = True
         self.mapper = mapper  # injected by builder (Grid/TS)
 
-    @staticmethod
-    @with_logger(var_name='logger_stream')
-    def manage_tmp(tmp_dir: str = None) -> None:
-
-        if tmp_dir is not None:
-            try:
-                os.makedirs(tmp_dir, exist_ok=True)
-                tmp_dir = tempfile.mkdtemp(dir=tmp_root)
-            except Exception as exc:
-                warnings.warn(
-                    f"Cannot use tmp_root='{tmp_root}' ({exc}). Falling back to system temp folder."
-                )
-                self.tmp_dir = tempfile.mkdtemp()
-        else:
-            warnings.warn("tmp_root is None: using system temp folder instead of a custom tmp folder.")
-            self.tmp_dir = tempfile.mkdtemp()
-
-
-    # -------------------------------
     # Hooks (override in subclasses)
-    # -------------------------------
     def grouping_tag(self) -> str:
         """Attribute used by group_process(). Default matches your current behavior."""
         return "reference"
@@ -231,8 +114,7 @@ class OrchestratorBase:
             raise RuntimeError("Input deps must be a dict or None.")
         return self.deps_in.get(reference_key, None)
 
-    # -------------------------------
-
+    # properties
     @property
     def has_variables(self):
         if isinstance(self.data_in, dict):
@@ -346,12 +228,14 @@ class OrchestratorBase:
 
         return out_obj
 
+    # method to add a process to the orchestrator
     def add_process(self, function, process_n: [int, None] = None, process_output: Union[DataLocal, xr.Dataset, dict] = None, **kwargs) -> None:
 
         # get process var tag
         if 'workflow' in kwargs:
             process_wf = kwargs['workflow']
         else:
+            self.logger.error('Process variable "workflow" must be provided in the process arguments.')
             raise RuntimeError('Process variable "workflow" must be provided in the process arguments.')
 
         # get process map
@@ -428,6 +312,7 @@ class OrchestratorBase:
         # append this process to the list of process
         self.processes.append(this_process)
 
+    # method to wrap the run of the orchestrator
     def run(self, time: Union[pd.Timestamp, str, pd.DatetimeIndex], **kwargs) -> None:
 
         # info orchestrator start
@@ -670,3 +555,4 @@ class OrchestratorBase:
             proc_wf_current = proc_wf_tmp
             #proc_ws[proc_wf_current] = proc_return[-1]
             #proc_ws[proc_current] = proc_return[-1]
+# ----------------------------------------------------------------------------------------------------------------------

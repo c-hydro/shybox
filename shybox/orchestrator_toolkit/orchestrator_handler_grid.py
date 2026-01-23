@@ -13,11 +13,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase, as_list, remove_none, ensure_variables
+from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
+    as_list, remove_none, ensure_variables, ensure_workflows)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -53,6 +55,9 @@ class OrchestratorGrid(OrchestratorBase):
         # get workflow functions and options
         workflow_fx = configuration.get('process_list', None)
         workflow_options = configuration.get('options', [])
+
+        # get and ensure workflow functions (chech data package in and out and workflows fx)
+        ensure_workflows(data_package_in, data_package_out, workflow_fx)
 
         # check workflow functions
         if workflow_fx is None:
