@@ -2,12 +2,10 @@
   "__comment__" : "configuration file for the datasets information",
   "configuration": {
     "priority": {
-      "reference": "environment",
-      "other": "user"
+      "reference": "environment", "other": "user"
     },
     "flags": {
-      "update_namelist": true,
-      "update_execution": true
+      "update_namelist": true, "update_execution": true
     },
     "variables": {
       "lut": {
@@ -34,18 +32,11 @@
         "file_source_time": "time", "file_destination_time": "time",
         "path_source_time": "time", "path_destination_time": "time",
         "path_source_root": "string",  "path_destination_root": "string",
-        "time_source": "string",
-        "time_destination": "string",
-        "time_direction": "string",
-        "time_start": "string",
-        "time_end": "string",
-        "time_rounding": "string",
-        "time_frequency": "string",
-        "path_log": "string",
-        "file_log": "string",
-        "path_tmp": "string",
-        "execution_name": "string",
-        "execution_mode": "string"
+        "time_source": "string", "time_destination": "string",
+        "time_start": "string", "time_end": "string",
+        "time_direction": "string", "time_rounding": "string", "time_frequency": "string",
+        "path_log": "string", "file_log": "string", "path_tmp": "string",
+        "execution_name": "string", "execution_mode": "string"
       },
       "template": {
         "domain_name": "string",
@@ -56,8 +47,7 @@
         "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M",
         "time_start": "%Y%m%d", "time_end": "%Y%m%d",
         "time_direction": "string", "time_rounding": "string", "time_frequency": "string",
-        "path_log": "string", "file_log": "string",
-        "path_tmp": "string",
+        "path_log": "string", "file_log": "string", "path_tmp": "string",
         "execution_name": "string", "execution_mode": "string"
       }
     }

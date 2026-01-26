@@ -53,7 +53,7 @@ from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_f
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Application for processing datasets'
+alg_name = 'Application for processing datasets - Converter'
 alg_type = 'Package'
 alg_version = '1.2.0'
 alg_release = '2025-11-18'
