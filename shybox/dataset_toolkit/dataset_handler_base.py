@@ -329,8 +329,20 @@ class Dataset(ABC, metaclass=DatasetMeta):
         Returns True if status is 'ok', False otherwise.
         Automatically updates readability before returning.
         """
+
+        # call readable settings to update status
         self.readable_settings()
-        return self.status == "ok"
+
+        # return based on status
+        if self.status == "template":
+            return self.status, False
+        elif self.status == "nio":
+            return self.status, False
+        elif self.status == "ok":
+            return self.status, True
+        else:
+            self.logger.error(f"Unknown status '{self.status}' encountered.")
+            raise NotImplemented('Case not implemented.')
 
     # method to update data object
     def update(self, in_place = False, **kwargs):

@@ -137,7 +137,7 @@ class ProcessorContainer:
 
         # check data names (list or single)
         if isinstance(data_raw, list):
-            data_names = ['data'] * len(data_raw)
+            data_names = [f"data_{i}" for i, _ in enumerate(data_raw)]
         else:
             data_names = 'data'
 
@@ -254,11 +254,29 @@ class ProcessorContainer:
                 data_raw = data_raw * len(time)
             elif isinstance(data_raw, DataLocal):
                 data_raw = [data_raw] * len(time)
+            else:
+                self.logger.error('Data object is not compatible with time list')
+                raise TypeError('Data object is not compatible with time list')
+
+            # create data names (overwrite the previous obj to match time length)
+            data_names, obj_vars_raw = [], []
+            for t, data_step in zip(time, data_raw):
+
+                # manage variable and data names
+                step_variable = data_step.file_namespace.get('variable')
+                step_workflow = data_step.file_namespace.get('workflow')
+                # store the variable for the data object
+                step_tag = ':'.join([step_variable, step_workflow])
+                obj_vars_raw.append(step_tag)
+
+                data_names.append(f"data_{t.strftime('%Y%m%d%H%M')}" if hasattr(t, "strftime") else f"data_{str(t)}")
+
 
         # check if data_raw is a list and adapt time accordingly
         if isinstance(data_raw, list):
             if not isinstance(time, list):
                 time = [time] * len(data_raw)
+
             elif isinstance(time, list):
                 if len(data_raw) != len(time):
                     time = time[0] * len(data_raw)
@@ -331,15 +349,26 @@ class ProcessorContainer:
                         # skip to next variable if time does not match
                         continue
 
-                # read data only if readable (condition of data object)
-                if not data_tmp.is_readable():
-                    continue  # skip unreadable data
+                # update logger (for messages consistency)
+                data_tmp.logger = self.logger.compare(data_tmp.logger)
+
+                # read data only if readable (ok or template) --> condition of data object
+                self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... ")
+                status_tag_tmp, status_readable_tmp =  data_tmp.is_readable()
+                if not status_readable_tmp:
+                    if not status_tag_tmp == 'template':
+                        self.logger.warning(f"Object {data_name} is not readable. File is not available.")
+                        self.logger.info(f"Control obj '{data_name}' variable '{str_var_tmp}' is readable ... SKIP")
+                        continue  # skip unreadable data
+                    else:
+                        self.logger.info(f"Object {data_name} is a template. The template will be filled by the times.")
+                        self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... PASS")
+                else:
+                    self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... PASS")
 
                 # manage variable mapping
                 kwargs['variable'] = str_var_tmp
 
-                # update logger (for messages consistency)
-                data_tmp.logger = self.logger.compare(data_tmp.logger)
                 # read data
                 fx_tmp = data_tmp.get_data(time=time_tmp, name=str_var_tmp, **kwargs)
                 fx_deps.append(str_var_tmp)

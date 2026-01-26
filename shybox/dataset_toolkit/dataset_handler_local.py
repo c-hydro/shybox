@@ -257,11 +257,17 @@ class DataLocal(Dataset):
     # method to write data
     def _write_data(self, data: (xr.DataArray, pd.DataFrame), path: str, **kwargs) -> None:
 
+        # message info start
+        self.logger.info_up(f"Write data to {path} ... ")
+
         # method to write data to file
         write_to_file(
             data,
             path, file_format=self.file_format, file_type=self.file_type, file_mode=self.file_mode,
             **kwargs)
+
+        # message info end
+        self.logger.info_down(f"Write data to {path} ... DONE")
 
     # method to remove data
     def _rm_data(self, path) -> None:

@@ -66,17 +66,17 @@ def merge_data_by_time(
         var_obj[step_id, :, :] = var_data
 
     # create Dataset object
-    dset_obj = xr.Dataset(coords={coord_name_time: ([dim_name_time], time)})
-    dset_obj.coords[coord_name_time] = dset_obj.coords[coord_name_time].astype('datetime64[ns]')
+    #dset_obj = xr.Dataset(coords={coord_name_time: ([dim_name_time], time)})
+    #dset_obj.coords[coord_name_time] = dset_obj.coords[coord_name_time].astype('datetime64[ns]')
 
     # add reference dataarray
-    if ref_add_data:
-        geo_data[np.isnan(geo_data)] = ref_no_data
-        var_da_terrain = xr.DataArray(geo_data,  name=ref_name,
-                                      dims=[dim_name_y, dim_name_x],
-                                      coords={coord_name_x: ([dim_name_x], geo_x),
-                                              coord_name_y: ([dim_name_y], geo_y)})
-        dset_obj[ref_name] = var_da_terrain
+    #if ref_add_data:
+    #    geo_data[np.isnan(geo_data)] = ref_no_data
+    #    var_da_terrain = xr.DataArray(geo_data,  name=ref_name,
+    #                                  dims=[dim_name_y, dim_name_x],
+    #                                  coords={coord_name_x: ([dim_name_x], geo_x),
+    #                                          coord_name_y: ([dim_name_y], geo_y)})
+    #    dset_obj[ref_name] = var_da_terrain
 
 
     # create DataArray (2D or 3D)
@@ -95,15 +95,15 @@ def merge_data_by_time(
         logger_stream.error('Data obj dimensions not supported.')
         raise NotImplemented
 
-    dset_obj[var_name] = da_obj
+    #dset_obj[var_name] = da_obj
 
     # debug (dump to netcdf)
     if debug:
         file_nc = 'merger_time.nc'
         if os.path.exists(file_nc): os.remove(file_nc)
-        dump_data2nc(dset_obj, path='test.nc', var_name=var_name)
+        dump_data2nc(da_obj, path='test.nc', var_name=var_name)
 
-    return dset_obj
+    return da_obj
 
 # ----------------------------------------------------------------------------------------------------------------------
 

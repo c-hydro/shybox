@@ -40,7 +40,7 @@ from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_d
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
 from shybox.io_toolkit.lib_io_nc_hmc import write_dataset_hmc, write_ts_hmc
-from shybox.io_toolkit.lib_io_nc_other import write_dataset_itwater
+from shybox.io_toolkit.lib_io_nc_other import read_dataset_itwater, write_dataset_itwater
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.time_toolkit.lib_utils_time import is_date
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -312,6 +312,11 @@ def read_from_file(
             data = xr.open_dataset(file)
         elif file_type == 'grid_s3m' or file_type == 'forcing_s3m':
             data = read_datasets_s3m(path=file)
+        elif file_type == 'grid_hmc' or file_type == 'forcing_hmc':
+            logger_stream.error('HMC netcdf reading not implemented yet.')
+            raise NotImplemented(Error('HMC netcdf reading not implemented yet.'))
+        elif file_type == 'grid_itwater': # it_water project
+            data = read_dataset_itwater(path=file)
         else:
             logger_stream.warning(f'File type not defined for netcdf reading: {file_type}. Using default reader.')
             data = xr.open_dataset(file)
@@ -465,7 +470,7 @@ def write_to_file(data, path,
                 ts_sim=data, ts_obs=None, time=time, attrs_data=None, **kwargs)
         elif file_type in ['grid_s3m', 'forcing_s3m']:
             write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
-        elif file_type in ['itwater', 'it_water']:
+        elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
             write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['default']:
             data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
@@ -574,25 +579,37 @@ def map_dims_OLD(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataA
     return data
 
 @withxrds
-def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray:
-    if not dims_geo: return data
+def map_dims(data: xr.DataArray,
+             dims_geo: dict | None = None, *, create_dim_coords: bool = True,
+             **kwargs) -> xr.DataArray:
+    if not dims_geo:
+        return data
 
-    # build rename dict only for existing dims
-    rename_dict = {k: v for k, v in dims_geo.items() if k in data.dims}
-    if rename_dict:
+    # rename dims that exist
+    rename_dims = {k: v for k, v in dims_geo.items() if k in data.dims}
+    # rename coords/variables that exist (important if time coord isn't the dim name)
+    rename_coords = {k: v for k, v in dims_geo.items() if k in data.coords}
 
+    rename_all = {**rename_dims, **rename_coords}
+    if rename_all:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
                 message="rename .* does not create an index anymore.*",
                 category=UserWarning,
             )
-            data = data.rename(rename_dict)
+            data = data.rename(rename_all)
 
-        # re-create indexes for renamed dims (silences warning + restores behavior)
-        for _, dim_out in rename_dict.items():
-            if dim_out in data.dims:
-                data = data.set_index({dim_out: dim_out})
+    # ensure each renamed dim has a coordinate with same name (optional but often needed)
+    for dim_out in rename_dims.values():
+        if dim_out in data.dims and dim_out not in data.coords:
+            if not create_dim_coords:
+                continue
+            data = data.assign_coords({dim_out: np.arange(data.sizes[dim_out])})
+
+        # only set_index when the coordinate exists and is 1D along that dim
+        if dim_out in data.coords and data[dim_out].dims == (dim_out,):
+            data = data.set_index({dim_out: dim_out})
 
     return data
 
