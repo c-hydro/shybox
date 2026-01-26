@@ -215,9 +215,10 @@ class OrchestratorBase:
             if 'file_variable' not in kwargs:
                 kwargs['file_variable'] = kwargs['workflow']
 
-            # create the temporary output object
+            # create the temporary output object (for making tmp files in a list of processes)
             out_obj = DataLocal(
-                path=self.tmp_dir, file_name=file_name_tmp, message=message, **kwargs)
+                path=self.tmp_dir, file_name=file_name_tmp,
+                message=message, logger=self.logger, **kwargs)
 
         else:
             self.logger.error('Orchestrator output type must be "Mem" or "Tmp".')
@@ -329,11 +330,14 @@ class OrchestratorBase:
             raise ValueError('No processes have been added to the workflow.')
 
         elif isinstance(self.processes[-1].out_obj, DataMem) or \
-            (isinstance(self.processes[-1].out_obj, DataLocal) and hasattr(self, 'tmp_dir') and
-             self.tmp_dir in self.processes[-1].out_obj.dir_name):
+            (isinstance(self.processes[-1].out_obj, DataLocal) and hasattr(self, 'tmp_dir')):
+
+            # path normalization check
+            tmp_dir = os.path.normpath(self.tmp_dir)
+            out_dir = os.path.normpath(self.processes[-1].out_obj.dir_name)
 
             # check the output datasets
-            if self.data_out is not None:
+            if (tmp_dir in out_dir) and self.data_out is not None:
 
                 # get the output element(s)
                 proc_elements = list(self.data_out.values())
@@ -351,6 +355,7 @@ class OrchestratorBase:
                 # assign the output element(s)
                 if len(proc_bucket) == 1:
 
+                    # set the output object and dump state (to use the selected output format)
                     self.processes[-1].out_obj = proc_bucket[0].copy()
                     self.processes[-1].dump_state = True
 
@@ -382,6 +387,8 @@ class OrchestratorBase:
         if 'group' in kwargs:
             group_type = kwargs['group']
             if group_type == 'by_time':
+                # if group by time the algorithm will pass a list of time steps to each process (memory disabled)
+                # merger by time requires all time steps at once
                 time_steps = [time_steps]
                 self.memory_active = False
 

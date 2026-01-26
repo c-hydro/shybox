@@ -28,41 +28,55 @@ from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_p
 class OrchestratorGrid(OrchestratorBase):
 
     # ------------------------------------------------------------------------------------------------------------------
-    # class method multi time
+    # class method multi times
     @classmethod
     def multi_time(cls,
                    data_package_in: (dict, list), data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
                    priority: list = None,
                    configuration: dict = None, logger: LoggingManager = None ) -> 'Orchestrator':
 
-        return cls.multi_tile(
+        # initialize multi-tile orchestrator
+        class_obj = cls.multi_tile(
             data_package_in=data_package_in, data_package_out=data_package_out,
-            data_ref=data_ref, configuration=configuration)
+            data_ref=data_ref, configuration=configuration,
+            priority=priority, logger=logger, description='multi_time')
+
+        return class_obj
 
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    # class method multi tile
+    # class method multi tiles
     @classmethod
     def multi_tile(cls,
                    data_package_in: (dict, list), data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
                    priority: list = None,
-                   configuration: dict = None, logger: LoggingManager = None ) -> 'Orchestrator':
+                   configuration: dict = None, logger: LoggingManager = None,
+                   description: str = 'multi_tile') -> 'Orchestrator':
+
+        # define logger (local or external)
+        logger = logger or LoggingManager(name="OrchestratorGrid")
 
         # info orchestrator start
-        logger.info_up(f'Organize orchestrator [multi-tile] ...', tag='ow')
+        logger.info_up(f'Organize orchestrator [{description}] ...', tag='ow')
 
         # get workflow functions and options
         workflow_fx = configuration.get('process_list', None)
         workflow_options = configuration.get('options', [])
 
-        # get and ensure workflow functions (chech data package in and out and workflows fx)
-        ensure_workflows(data_package_in, data_package_out, workflow_fx)
-
         # check workflow functions
         if workflow_fx is None:
             logger.error('Workflow functions must be provided in the configuration.')
             raise RuntimeError('Workflow functions must be provided in the configuration.')
+
+        # normalize input/output data packages
+        if not isinstance(data_package_in, list):
+            data_package_in = [data_package_in]
+        if not isinstance(data_package_out, list):
+            data_package_out = [data_package_out]
+
+        # get and ensure workflow functions (check data package in and out and workflows fx)
+        ensure_workflows(data_package_in, data_package_out, workflow_fx)
 
         # ensure data collections in
         if isinstance(data_package_in, list):
@@ -178,7 +192,7 @@ class OrchestratorGrid(OrchestratorBase):
             logger.info_down(f'Configure workflow "{workflow_name}" ... DONE', tag='ow')
 
         # info orchestrator end
-        logger.info_down(f'Organize orchestrator [multi-tile] ... DONE', tag='ow')
+        logger.info_down(f'Organize orchestrator [{description}] ... DONE', tag='ow')
 
         return workflow_common
     # ------------------------------------------------------------------------------------------------------------------
@@ -189,13 +203,14 @@ class OrchestratorGrid(OrchestratorBase):
     def multi_variable(cls,
                        data_package_in: (dict, list), data_package_out: DataLocal = None, data_ref: DataLocal = None,
                        priority: list = None,
-                       configuration: dict = None, logger: LoggingManager = None ) -> 'Orchestrator':
+                       configuration: dict = None, logger: LoggingManager = None,
+                       description: str = 'multi_variable') -> 'Orchestrator':
 
         # define logger (local or external)
         logger = logger or LoggingManager(name="OrchestratorGrid")
 
         # info orchestrator start
-        logger.info_up(f'Organize orchestrator [multi-variable] ...', tag='ow')
+        logger.info_up(f'Organize orchestrator [{description}] ...', tag='ow')
 
         # get workflow functions and options
         workflow_fx = configuration.get('process_list', [])
@@ -211,6 +226,9 @@ class OrchestratorGrid(OrchestratorBase):
             data_package_in = [data_package_in]
         if not isinstance(data_package_out, list):
             data_package_out = [data_package_out]
+
+        # get and ensure workflow functions (check data package in and out and workflows fx)
+        workflows_checks = ensure_workflows(data_package_in, data_package_out, workflow_fx, show_report=True)
 
         # ensure data collections in
         fx_collections = {}
@@ -316,7 +334,7 @@ class OrchestratorGrid(OrchestratorBase):
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
 
         # method to remap variable tags, in and out
-        workflow_mapper = Mapper(data_collections_in, data_collections_out)
+        workflow_mapper = Mapper(data_collections_in, data_collections_out, logger=logger)
 
         # organize deps collections in
         deps_collections_in, args_collections_in = {}, {}
@@ -403,7 +421,7 @@ class OrchestratorGrid(OrchestratorBase):
             logger.info_down(f'Configure workflow "{workflow_name}" ... DONE', tag='ow')
 
         # info orchestrator end
-        logger.info_down(f'Organize orchestrator [multi-variable] ... DONE', tag='ow')
+        logger.info_down(f'Organize orchestrator [{description}] ... DONE', tag='ow')
 
         return workflow_common
     # ------------------------------------------------------------------------------------------------------------------

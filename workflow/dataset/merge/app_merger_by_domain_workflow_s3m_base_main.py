@@ -16,11 +16,11 @@ Examples of environment variables declarations:
 DOMAIN_NAME='italy';
 TIME_START="'2024-01-06 10:00'";
 TIME_END="'2024-01-06 12:00'";
-PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_itwater/case_study_merger_s3m/geo/';
-PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_itwater/case_study_merger_s3m/data/';
-PATH_DST='/home/fabio/Desktop/shybox/execution/case_study_itwater/case_study_merger_s3m/data/';
-PATH_LOG=$HOME/Desktop/shybox/exec/case_study_itwater/case_study_merger_s3m/log/;
-PATH_TMP=$HOME/Desktop/shybox/exec/case_study_itwater/case_study_merger_s3m/tmp/
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_itwater/merger_s3m_by_domain/geo/';
+PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_itwater/merger_s3m_by_domain/data/';
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_itwater/merger_s3m_by_domain/data/';
+PATH_LOG=$HOME/Desktop/shybox/exec/case_study_itwater/merger_s3m_by_domain/log/;
+PATH_TMP=$HOME/Desktop/shybox/exec/case_study_itwater/merger_s3m_by_domain/tmp/
 
 Version(s):
 20260122 (1.1.0) --> Refactor using class methods in shybox package

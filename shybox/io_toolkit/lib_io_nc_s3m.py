@@ -130,7 +130,7 @@ def write_dataset_s3m(
         attrs_data: dict = None, attrs_system: dict = None, attrs_x: dict = None, attrs_y: dict = None,
         file_format: str = 'NETCDF4', time_format: str ='%Y%m%d%H%M',
         file_compression: bool = True, file_update: bool = True,
-        compression_flag: (bool, None) = True, compression_level: int = 5,
+        compression_flag: (bool, None) = True, compression_level: (int, None) = 5,
         var_system: str = 'crs',
         var_time: str = 'time', var_x: str = 'X', var_y: str = 'Y',
         dim_time: str = 'time', dim_x: str = 'X', dim_y: str = 'Y',
@@ -139,7 +139,7 @@ def write_dataset_s3m(
 
     # check file format
     if not isinstance(file_format, str):
-        logger_stream.warning(' ===> File format is not defined as string type! Using default format NETCDF4')
+        logger_stream.warning('File format is not defined as string type! Using default format NETCDF4')
         file_format = 'NETCDF4'
 
     # manage file path
@@ -161,11 +161,12 @@ def write_dataset_s3m(
     if 'ref' in kwargs: ref = kwargs['ref']
 
     # get dimensions
-    dset_dims = data.dims
-    if dim_time in list(dset_dims.keys()):
-        n_cols, n_rows, n_time = dset_dims[dim_x], dset_dims[dim_y], dset_dims[dim_time]
+    dset_sizes = data.sizes
+    if dim_time in dset_sizes:
+        n_cols, n_rows, n_time = dset_sizes[dim_x], dset_sizes[dim_y], dset_sizes[dim_time]
     else:
-        n_cols, n_rows, n_time = dset_dims[dim_x], dset_dims[dim_y], 1
+        n_cols, n_rows, n_time = dset_sizes[dim_x], dset_sizes[dim_y], 1
+
     # get geographical coordinates
     try:
         x, y = data[var_x].values, data[var_y].values
@@ -177,6 +178,7 @@ def write_dataset_s3m(
     elif len(x.shape) == 2 and len(y.shape) == 2:
         pass
     else:
+        logger_stream.error('Geographical coordinates dimensions are not correctly defined!')
         raise NotImplementedError('Case not implemented yet')
 
     # Define time dimension
@@ -383,6 +385,7 @@ def write_dataset_s3m(
         plt.show()
         '''
 
+        # check variable dimensions and create variable
         if variable_dims == 3:
             var_handle = handle.createVariable(
                 varname=variable_name, datatype=variable_format, fill_value=fill_value,
@@ -394,6 +397,7 @@ def write_dataset_s3m(
                 dimensions=(dim_y, dim_x),
                 zlib=compression_flag, complevel=compression_level)
         else:
+            logger_stream.error('Variable dimensions are not correctly defined!')
             raise NotImplementedError('Case not implemented yet')
 
         set_scale_factor = False
@@ -446,6 +450,7 @@ def write_dataset_s3m(
             variable_tmp[np.isnan(variable_tmp)] = fill_value
             var_handle[:, :] = variable_tmp
         else:
+            logger_stream.error('Variable dimensions are not correctly defined!')
             raise NotImplementedError('Case not implemented yet')
 
     # close file
