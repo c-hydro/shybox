@@ -566,7 +566,7 @@ def flat_dims(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = 'latitu
     return data
 
 # method to map dims
-@deprecated(use="map_dims", since="2024-10-22", use_new=False)
+@deprecated(use="map_dims", since="2026-01-27", use_new=False)
 @withxrds
 def map_dims_OLD(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray:
     # check if dims mapping is required
@@ -614,8 +614,9 @@ def map_dims(data: xr.DataArray,
     return data
 
 # method to map coords
+@deprecated(use="map_coords", since="2026-01-30", use_new=False)
 @withxrds
-def map_coords(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.DataArray:
+def map_coords_OLD(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.DataArray:
 
     if coords_geo is not None:
         for coords_in, coords_out in coords_geo.items():
@@ -640,6 +641,64 @@ def map_coords(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.Data
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     data = data.rename({'var_tmp': coords_out})
+
+    return data
+
+@withxrds
+@with_logger(var_name="logger_stream")
+def map_coords(data: xr.DataArray, coords_geo: dict = None, *, drop_in: bool = False, **kwargs) -> xr.DataArray:
+
+    if coords_geo is None:
+        return data
+
+    for coords_in, coords_out in coords_geo.items():
+        if coords_in not in data.coords:
+            continue
+
+        crd = data.coords[coords_in]
+
+        # If the incoming coord is actually a dimension name, xarray can rename cleanly
+        if coords_in in data.dims and coords_in == crd.dims[0] and crd.ndim == 1:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                data = data.rename({coords_in: coords_out})
+            continue
+
+        # Otherwise, assign a new coordinate safely
+        if crd.ndim == 2:
+            d0, d1 = crd.dims  # e.g. ('latitude','longitude')
+
+            ax1 = crd.isel({d0: 0}).values      # varies along d1
+            ax2 = crd.isel({d1: 0}).values      # varies along d0
+
+            # checks: is axis constant?
+            check_ax1 = np.unique(ax1).size == 1
+            check_ax2 = np.unique(ax2).size == 1
+
+            if (not check_ax1) and check_ax2:
+                # use ax1 along d1
+                new_dim = d1
+                new_vals = ax1
+            elif check_ax1 and (not check_ax2):
+                # use ax2 along d0
+                new_dim = d0
+                new_vals = ax2
+            else:
+                logger_stream.error(f"Cannot map 2D coordinate {coords_in} to 1D {coords_out} unambiguously.")
+                raise ValueError(f"Cannot map 2D coordinate {coords_in} to 1D {coords_out} unambiguously.")
+
+            data = data.assign_coords({coords_out: (new_dim, new_vals)})
+
+        elif crd.ndim == 1:
+            (new_dim,) = crd.dims
+            data = data.assign_coords({coords_out: (new_dim, crd.values)})
+
+        else:
+            logger_stream.error(f"Unsupported coord ndim={crd.ndim} for {coords_in}")
+            raise ValueError(f"Unsupported coord ndim={crd.ndim} for {coords_in}")
+
+        if drop_in and coords_in != coords_out:
+            data = data.drop_vars(coords_in)
 
     return data
 
