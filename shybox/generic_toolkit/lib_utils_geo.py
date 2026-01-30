@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_utils_geo
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251120'
-Version:       '1.0.0'
+Date:          '20260130'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -14,6 +14,125 @@ import xarray as xr
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to create rasterio-style grid from lower-left corner
+@with_logger(var_name="logger_stream")
+def create_grid_from_corners(
+        y_ll, x_ll, rows, cols,res, grid_value: (float, int, np.nan) = 0.0,
+        grid_check: bool=True, grid_format: str ='data_array', grid_name="grid"):
+
+    """
+    Create a rasterio-style grid from LOWER-LEFT corner.
+
+    Returns:
+    --------
+    - If grid_format == 'data_array'  -> xarray.DataArray
+    - If grid_format == 'dictionary'  -> structured dict with lon/lat/x/y arrays
+    """
+    # check grid value (if is defined by NoneType)
+    if grid_value is None:
+        grid_value = np.nan
+
+    # build 1D coordinates (cell centers)
+    # Longitude: west → east
+    x_coords = x_ll + (np.arange(cols) + 0.5) * res
+
+    # latitude: south → north, then flipped (north at top)
+    y_coords_sn = y_ll + (np.arange(rows) + 0.5) * res
+    y_coords = y_coords_sn[::-1]
+
+    # build 2D meshgrid
+    lon2d, lat2d = np.meshgrid(x_coords, y_coords)
+
+    # check geographical information
+    if grid_check:
+
+        # check info start
+        logger_stream.info("================ GRID CHECKS ================")
+
+        # Grid shape
+        logger_stream.info(f"Grid shape: {lon2d.shape}")
+        # Corner coordinates
+        logger_stream.info(f"Corner coordinates (lon, lat):")
+        logger_stream.info(f" Top-left     : {lon2d[0, 0]} {lat2d[0, 0]}")
+        logger_stream.info(f" Top-right    : {lon2d[0, -1], lat2d[0, -1]}")
+        logger_stream.info(f" Bottom-left  : {lon2d[-1, 0], lat2d[-1, 0]}")
+        logger_stream.info(f" Bottom-right : {lon2d[-1, -1], lat2d[-1, -1]}")
+
+        # Orientation checks
+        lat_ok = lat2d[0, 0] > lat2d[-1, 0]
+        lon_ok = lon2d[0, 0] < lon2d[0, -1]
+
+        logger_stream.info(f"Orientation:")
+        logger_stream.info(f" Latitude decreases downward? {lat_ok}")
+        logger_stream.info(f" Longitude increases rightward? {lon_ok}")
+
+        # exit on orientation mismatch
+        if not lat_ok:
+            logger_stream.error("Latitude orientation incorrect")
+            raise ValueError("Latitude orientation incorrect")
+        if not lon_ok:
+            logger_stream.error("Longitude orientation incorrect")
+            raise ValueError("Longitude orientation incorrect")
+
+        # Resolution checks
+        dx = lon2d[0, 1] - lon2d[0, 0]
+        dy = lat2d[0, 0] - lat2d[1, 0]
+
+        logger_stream.info(f"Resolution:")
+        logger_stream.info(f" dx {dx} expected {res}")
+        logger_stream.info(f" dy {dy} expected {res}")
+
+        # exit on resolution mismatch
+        if not np.isclose(dx, res, atol=1e-8):
+            logger_stream.error("Longitude resolution mismatch")
+            raise ValueError("Longitude resolution mismatch")
+        if not np.isclose(dy, res, atol=1e-8):
+            logger_stream.error("Latitude resolution mismatch")
+            raise ValueError("Latitude resolution mismatch")
+
+        logger_stream.info(f"Grid checks passed successfully.")
+        logger_stream.info(f"===========================================")
+
+    # Return DataArray (default)
+    if grid_format == 'data_array':
+
+        # define empty data array
+        data = np.full((rows, cols), grid_value)
+        # create data array
+        da = xr.DataArray(
+            data,
+            dims=("latitude", "longitude"),
+            coords={
+                "longitude": (("latitude", "longitude"), lon2d),
+                "latitude": (("latitude", "longitude"), lat2d),
+            },
+            name=grid_name
+        )
+
+        return da
+
+    # Return structured dictionary
+    elif grid_format == 'dictionary':
+
+        return {
+            "lon2d": lon2d,
+            "lat2d": lat2d,
+            "x_coords": x_coords,
+            "y_coords": y_coords,
+            "shape": lon2d.shape,
+            "resolution": res,
+            "lower_left": (x_ll, y_ll),
+        }
+
+    else:
+        # exit with error
+        logger_stream.error(f"Unsupported format in grid creation from corners'{format}'.")
+        raise ValueError(f"Unsupported format in grid creation from corner '{format}'.")
+
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to help geo coordinates decreasing/increasing check
