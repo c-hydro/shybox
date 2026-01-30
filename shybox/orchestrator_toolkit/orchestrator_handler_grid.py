@@ -15,6 +15,8 @@ from copy import deepcopy
 
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
@@ -49,7 +51,8 @@ class OrchestratorGrid(OrchestratorBase):
     # class method multi tiles
     @classmethod
     def multi_tile(cls,
-                   data_package_in: (dict, list), data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
+                   data_package_in: (dict, list), data_package_out: (DataLocal, dict, list) = None,
+                   data_ref: (DataLocal, DataOnDemand) = None,
                    priority: list = None,
                    configuration: dict = None, logger: LoggingManager = None,
                    description: str = 'multi_tile') -> 'Orchestrator':
@@ -167,7 +170,8 @@ class OrchestratorGrid(OrchestratorBase):
             mapper=workflow_mapper, logger=logger)
 
         # iterate over the defined input variables and their process(es)
-        for workflow_row in workflow_mapper.get_rows_by_priority(priority_vars=priority):
+        workflow_configuration = workflow_mapper.get_rows_by_priority(priority_vars=priority, field='tag')
+        for workflow_row in workflow_configuration:
 
             # get workflow information by tag
             workflow_tag, workflow_name = workflow_row['tag'], workflow_row['workflow']

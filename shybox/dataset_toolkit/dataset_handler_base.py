@@ -84,7 +84,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self.logger.info(f'Dataset obj {self.__str__()} ... ')
 
         # define loc_pattern BEFORE using it
-        self.loc_pattern = kwargs.pop('loc_pattern', None)
+        self.loc_pattern = None
+        if 'loc_pattern' in kwargs:
+            self.loc_pattern = kwargs.pop('loc_pattern', None)
 
         # substitute "now" with the current time
         if self.loc_pattern is not None:
@@ -535,7 +537,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
     @property
     def is_static(self):
-        return not '{' in self.loc_pattern and not self.has_time
+        if self.loc_pattern is None: # add for DataOnDemand case
+            return True
+        if not '{' in self.loc_pattern and not self.has_time:  # previous case (DataLocal)
+            return True
+        #return not '{' in self.loc_pattern and not self.has_time
 
     @property
     def has_time(self):
@@ -991,6 +997,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def _read_data(self, input_key:str):
         raise NotImplementedError
 
+    @abstractmethod
+    def _create_data(self, input_obj:dict):
+        raise NotImplementedError
+
     # method to write date
     def write_data(self, data,
                    time: Union[dt.datetime, pd.Timestamp] = None,
@@ -1106,6 +1116,32 @@ class Dataset(ABC, metaclass=DatasetMeta):
         else:
             new_key = timestamp.strftime(substitute_string(new_loc_pattern, kwargs))
         self._write_data(data, new_key)
+
+    # method to create data
+    def create_data(self, mapping, name: str='variable'):
+
+
+        # get information from classes
+        obj_info = self.info
+
+        # create data
+        data = self._create_data(obj=obj_info, variable=name)
+
+        # map the data dimensions
+        data = map_dims(data, **self.variable_template)
+        data = self._check_step(data, "map_dims")
+        if data is None: return None
+
+        # map the data coords
+        data = map_coords(data, **self.variable_template)
+        data = self._check_step(data, "map_coords")
+        if data is None: return None
+
+        # store in memory (if active)
+        if self.memory_active:
+            self.memory_data = deepcopy(data)
+
+        return data
 
     # method to remove data
     def rm_data(self, time: Union[dt.datetime, pd.Timestamp] = None, **kwargs):

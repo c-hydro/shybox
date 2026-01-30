@@ -22,6 +22,7 @@ from shybox.generic_toolkit.lib_utils_geo import match_coords_to_reference
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -48,7 +49,7 @@ class ProcessorContainer:
         # get static and dynamic arguments
         fx_args, fx_static = {}, {}
         for arg_name, arg_value in args.items():
-            if isinstance(arg_value, DataLocal):
+            if isinstance(arg_value, DataLocal) or isinstance(arg_value, DataOnDemand):
                 if not arg_value.is_static:
                     fx_args[arg_name] = arg_value
                 else:
@@ -60,7 +61,14 @@ class ProcessorContainer:
                     # update logger (for messages consistency)
                     arg_value.logger = self.logger.compare(arg_value.logger)
                     # get static data
-                    fx_static[arg_name] = arg_value.get_data(mapping=variable_template, name=arg_name)
+                    if isinstance(arg_value, DataLocal):
+                        fx_static[arg_name] = arg_value.get_data(mapping=variable_template, name=arg_name)
+                    elif isinstance(arg_value, DataOnDemand):
+                        fx_static[arg_name] = arg_value.create_data(mapping=variable_template, name=arg_name)
+                    else:
+                        self.logger.error('Argument data object is not DataLocal or DataOnDemand instance')
+                        raise TypeError('Argument data object is not DataLocal or DataOnDemand instance')
+
             else:
                 fx_static[arg_name] = arg_value
 

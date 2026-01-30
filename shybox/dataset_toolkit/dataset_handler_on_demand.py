@@ -1,7 +1,7 @@
 """
 Class Features
 
-Name:          dataset_handler_local
+Name:          dataset_handler_on_demand
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20260123'
 Version:       '1.1.0'
@@ -16,6 +16,8 @@ import pandas as pd
 from datetime import datetime
 
 from shybox.dataset_toolkit.dataset_handler_base import Dataset
+
+from shybox.dataset_toolkit.lib_dataset_ondemand import create_object
 from shybox.dataset_toolkit.lib_dataset_generic import write_to_file, read_from_file, rm_file
 from shybox.generic_toolkit.lib_utils_tmp import ensure_folder_tmp, ensure_file_tmp
 from shybox.logging_toolkit.logging_handler import LoggingManager
@@ -25,9 +27,9 @@ from typing import Optional
 
 # ----------------------------------------------------------------------------------------------------------------------
 # class to handle local dataset
-class DataLocal(Dataset):
+class DataOnDemand(Dataset):
 
-    type = 'local_dataset'
+    type = 'on_demand_dataset'
 
     # Backward-compatible layout templates (defaults used only if user doesn't provide them)
     _layout_templates = {
@@ -69,7 +71,7 @@ class DataLocal(Dataset):
     _default_vars_wf = ["variable"]
 
     def __init__(self,
-                 path: Optional[str] = None, file_name: Optional[str] = None,
+                 info: dict = None,
                  logger: Optional[LoggingManager] = None, file_io: str = None,
                  message: bool = True,
                  **kwargs):
@@ -77,8 +79,8 @@ class DataLocal(Dataset):
         # set data local logger
         self.logger = logger or LoggingManager(name="DataLocal")
 
-        # store path
-        self.path = path
+        # store info (to define the object pattern and type)
+        self.info = info or {}
 
         # check file dependencies
         if 'file_deps' in kwargs:
@@ -91,33 +93,9 @@ class DataLocal(Dataset):
         else:
             self.data_layout = 'geo'
 
-        # determine directory name
-        if path is not None:
-            self.dir_name = path
-        elif 'dir_name' in kwargs:
-            self.dir_name = kwargs.pop('dir_name')
-        elif 'loc_pattern' in kwargs:
-            self.dir_name = os.path.dirname(kwargs.get('loc_pattern'))
-        elif 'tmp_pattern' in kwargs:
-            self.dir_name = ensure_folder_tmp()
-        else:
-            self.dir_name = ensure_folder_tmp()
-
         self._file_io = None  # internal storage
         if file_io is not None:
             self.file_io = file_io  # triggers the setter
-
-        # define file name (different options)
-        if file_name is not None:
-            self.file_name = file_name
-        elif 'file_name' in kwargs:
-            self.file_name = kwargs.pop('file_name')
-        elif 'loc_pattern' in kwargs:
-            self.file_name = os.path.basename(kwargs.get('loc_pattern'))
-        elif 'tmp_pattern' in kwargs:
-            self.file_name = ensure_file_tmp()
-        else:
-            self.file_name = ensure_file_tmp()
 
         # handle file_template normalization
         file_variable = kwargs.get('file_variable', 'variable')
@@ -189,7 +167,8 @@ class DataLocal(Dataset):
 
         # update kwargs for parent class
         kwargs.update({
-            'loc_pattern': self.loc_pattern,
+            'obj_pattern': self.obj_pattern,
+            'obj_type': self.obj_type,
             'logger': self.logger,
             'message': message,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
@@ -201,19 +180,51 @@ class DataLocal(Dataset):
         # initialize parent class
         super().__init__(**kwargs)
 
+    # property obj pattern
+    @property
+    def obj_pattern(self):
+        if self.info is None or not self.info:
+            return None
+        return self.info
+    @obj_pattern.setter
+    def obj_pattern(self, info: dict):
+        self.info = info if info is not None else None
+
+    # back compatibility (to remove in future)
     @property
     def loc_pattern(self):
-        if self.dir_name is None or self.file_name is None:
-            return None
-        return os.path.join(self.dir_name, self.file_name)
-
+        return None
     @loc_pattern.setter
-    def loc_pattern(self, path):
+    def loc_pattern(self, path: str=None):
         if path is not None:
             self.dir_name  = os.path.dirname(path)
             self.file_name = os.path.basename(path)
         else:
             self.dir_name, self.file_name = None, None
+
+    # property obj type
+    @property
+    def obj_type(self):
+
+        # check info structure is not None
+        if self.info is None:
+            return None
+        keys = set(self.info.keys())
+
+        # Raster grid definition (your case)
+        raster_keys = {"x_ll", "y_ll", "rows", "cols", "res"}
+        if raster_keys.issubset(keys):
+            return "raster_grid"
+        # Bounding box definition
+        bbox_keys = {"xmin", "ymin", "xmax", "ymax"}
+        if bbox_keys.issubset(keys):
+            return "bbox"
+        # Single point definition
+        point_keys = {"lon", "lat"}
+        if point_keys.issubset(keys):
+            return "point"
+        #  Unknown format
+        return "unknown"
 
     @property
     def file_io(self):
@@ -254,6 +265,26 @@ class DataLocal(Dataset):
 
         return data
 
+    # method to create data
+    def _create_data(self, obj: dict=None, variable: (str, None) = 'variable',
+                     **kwargs) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+
+        # message info start
+        self.logger.info_up(f"Create data ... ")
+
+        # manage variables to create
+        if variable is None:
+            variable = 'variable'
+
+        # method to create obj from info
+        data = create_object(
+            obj, obj_format=self.file_format, obj_type=self.file_type, obj_variable=variable,)
+
+        # message info start
+        self.logger.info_down(f"Create data ... DONE")
+
+        return data
+
     # method to write data
     def _write_data(self, data: (xr.DataArray, pd.DataFrame), path: str, **kwargs) -> None:
 
@@ -272,11 +303,6 @@ class DataLocal(Dataset):
     # method to remove data
     def _rm_data(self, path) -> None:
         rm_file(path)
-
-    # method to create data (not used - just to initialize the abstract method in the base)
-    def _create_data(self, input_obj: dict):
-        self.data = None  # or some neutral placeholder
-        return None
 
     ## METHODS TO CHECK DATA AVAILABILITY
     def _check_data(self, path) -> bool:
