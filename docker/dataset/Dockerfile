@@ -23,7 +23,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # repository and branch (use your desired tag or branch)
 ARG SHYBOX_REPO=https://github.com/c-hydro/shybox.git
-ARG SHYBOX_REF=destine/1.2.4
+ARG SHYBOX_REF=destine/1.4.0
 
 # set geographical area
 ENV TZ=Europe/Rome 
