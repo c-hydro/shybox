@@ -39,7 +39,7 @@ from shybox.generic_toolkit.lib_utils_file import fix_file_path
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
-from shybox.io_toolkit.lib_io_nc_hmc import write_dataset_hmc, write_ts_hmc
+from shybox.io_toolkit.lib_io_nc_hmc import read_datasets_hmc, write_dataset_hmc, write_ts_hmc
 from shybox.io_toolkit.lib_io_nc_other import read_dataset_itwater, write_dataset_itwater
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.time_toolkit.lib_utils_time import is_date
@@ -313,8 +313,7 @@ def read_from_file(
         elif file_type == 'grid_s3m' or file_type == 'forcing_s3m':
             data = read_datasets_s3m(path=file)
         elif file_type == 'grid_hmc' or file_type == 'forcing_hmc':
-            logger_stream.error('HMC netcdf reading not implemented yet.')
-            raise NotImplemented(Error('HMC netcdf reading not implemented yet.'))
+            data = read_datasets_hmc(path=file)
         elif file_type == 'grid_itwater': # it_water project
             data = read_dataset_itwater(path=file)
         else:
@@ -543,10 +542,26 @@ def with_dict(func):
 # ----------------------------------------------------------------------------------------------------------------------
 ## FUNCTIONS TO CLEAN DATA
 @withxrds
-def straighten_dims(data: xr.DataArray) -> (xr.DataArray, None):
+@with_logger(var_name="logger_stream")
+def straighten_dims(data: xr.DataArray, default_name: str='variable') -> xr.DataArray | None:
+
+    # get variable name (fallback if missing)
+    if data.name:
+        var_name = data.name
+    else:
+        var_name = default_name
+
+    # check info
+    logger_stream.info(f"Check DataArray: {var_name} ... ")
+
+    # If scalar (no dimensions), return None
     if data.dims == ():
+        logger_stream.warning(f"DataArray {var_name} has no dimensions. Returning None.")
+        logger_stream.info(f"Check DataArray: {var_name} ... FAILED.")
         return None
     else:
+        # Otherwise return the DataArray
+        logger_stream.info(f"Check DataArray: {var_name} ... DONE.")
         return data
 
 # flat dims
@@ -861,6 +876,7 @@ def straighten_data(
     coord_x: str = "longitude", coord_y: str = "latitude"
 ) -> xr.DataArray:
 
+    # copy data
     da = data
 
     # Pick spatial dims if generic 'x'/'y' exist

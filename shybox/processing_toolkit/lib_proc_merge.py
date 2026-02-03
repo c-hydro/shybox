@@ -108,6 +108,229 @@ def merge_data_by_time(
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# helper to merge data by watermark
+def _map_1d_to_ref_indices(ref_1d, sub_1d):
+    """
+    ref_1d must be monotonic. Returns indices into ref_1d for each sub_1d (nearest).
+    """
+    ref_1d = np.asarray(ref_1d)
+    sub_1d = np.asarray(sub_1d)
+
+    asc = ref_1d[0] < ref_1d[-1]
+    if not asc:
+        ref_1d = ref_1d[::-1]
+
+    pos = np.searchsorted(ref_1d, sub_1d)
+    pos = np.clip(pos, 1, ref_1d.size - 1)
+
+    left = ref_1d[pos - 1]
+    right = ref_1d[pos]
+    choose_right = (np.abs(right - sub_1d) < np.abs(sub_1d - left))
+    idx = pos.copy()
+    idx[~choose_right] = pos[~choose_right] - 1
+
+    if not asc:
+        idx = (ref_1d.size - 1) - idx
+    return idx
+
+
+def burn_sub_on_ref_interp(da_sub, ref_x_1d, ref_y_1d, ref_nan=None,
+                           var_no_data=None, method="nearest"):
+    """
+    da_sub: DataArray with 1D coords (latitude, longitude) (+ optional time length 1)
+    ref_x_1d/ref_y_1d: reference 1D lon/lat
+    ref_nan: 2D boolean mask on ref (True = do not write)
+    method: "nearest" or "linear"
+    """
+
+    # ---- take 2D slice if time exists ----
+    if "time" in da_sub.dims:
+        if da_sub.sizes["time"] != 1:
+            raise NotImplementedError("Only time length = 1 supported.")
+        da2 = da_sub.isel(time=0)
+    else:
+        da2 = da_sub
+
+    # ---- clean nodata ----
+    if var_no_data is not None:
+        da2 = da2.where(da2 != var_no_data)
+
+    # ---- bbox mask: keep only where ref coords are within sub extent ----
+    sub_x = da2["longitude"].values
+    sub_y = da2["latitude"].values
+
+    x_min, x_max = float(np.min(sub_x)), float(np.max(sub_x))
+    y_min, y_max = float(np.min(sub_y)), float(np.max(sub_y))
+
+    # ---- interpolate sub -> ref grid ----
+    da_on_ref = da2.interp(
+        longitude=xr.DataArray(ref_x_1d, dims=("longitude",)),
+        latitude=xr.DataArray(ref_y_1d, dims=("latitude",)),
+        method=method
+    )
+
+    # ---- apply bbox mask on ref grid (avoid extrapolated fill outside sub box) ----
+    inside_x = (ref_x_1d >= x_min) & (ref_x_1d <= x_max)
+    inside_y = (ref_y_1d >= y_min) & (ref_y_1d <= y_max)
+    inside_2d = inside_y[:, None] & inside_x[None, :]
+
+    out = da_on_ref.values.astype(np.float64)
+    out[~inside_2d] = np.nan
+
+    # ---- apply ref nodata mask ----
+    if ref_nan is not None:
+        out[np.asarray(ref_nan, dtype=bool)] = np.nan
+
+    return out
+
+# method to merge data
+@as_process(input_type='xarray', output_type='xarray')
+@with_logger(var_name='logger_stream')
+def merge_data_by_watermark(
+        data,
+        ref: xr.DataArray, watermark: (list, xr.DataArray) = None,
+        ref_no_data=-9999.0, var_no_data=-9999.0,
+        coord_name_x='longitude', coord_name_y='latitude',
+        dim_name_x='longitude', dim_name_y='latitude',
+        interpolation_mode: bool = True, interpolation_method: str= 'nearest',
+        debug: bool=False, **kwargs):
+
+    # normalize to list of Datasets
+    if isinstance(data, (xr.DataArray, xr.Dataset)):
+        ds_list = [_to_dataset(data)]
+    elif isinstance(data, (list, tuple)):
+        ds_list = [_to_dataset(it) for it in data]
+    else:
+        raise TypeError(f"`data` must be a DataArray, Dataset, or list/tuple. Got {type(data)}")
+
+    # normalize watermark to list aligned to ds_list (KEEP list behavior)
+    if watermark is None:
+        wm_list = [None] * len(ds_list)
+    elif isinstance(watermark, (xr.DataArray, xr.Dataset)):
+        # same watermark for all datasets (your previous behavior)
+        wm_list = [watermark] * len(ds_list)
+    elif isinstance(watermark, (list, tuple)):
+        if len(watermark) != len(ds_list):
+            raise ValueError("If `watermark` is a list/tuple, it must have the same length as `data`.")
+        wm_list = list(watermark)
+    else:
+        raise TypeError(f"`watermark` must be DataArray/Dataset or list/tuple. Got {type(watermark)}")
+
+    # define the variable list
+    var_list = sorted({vn for ds in ds_list for vn in ds.data_vars})
+
+    # prepare reference mask
+    ref_data = ref.values.astype(np.float64)
+    ref_data[ref_data == ref_no_data] = np.nan
+    ref_nan = np.isnan(ref_data)
+
+    # reference coords
+    ref_x_1d = ref[coord_name_x].values
+    ref_y_1d = ref[coord_name_y].values
+    ref_x_2d, ref_y_2d = np.meshgrid(ref_x_1d, ref_y_1d)
+    nrows_ref, ncols_ref = ref_data.shape
+
+    # iterate over variables
+    out_list = []
+    for var_name in var_list:
+
+        # initialize merge array
+        var_attrs = None
+        var_merge = np.full((nrows_ref, ncols_ref), np.nan, dtype=np.float64)
+
+        # iterate over datasets to merge
+        for ds_vars, da_wm in zip(ds_list, wm_list):
+            if var_name not in ds_vars.data_vars:
+                continue
+
+            # get data
+            da_in = ds_vars[var_name]
+            if var_attrs is None:
+                var_attrs = dict(da_in.attrs)
+            # mask nodata
+            da_in = da_in.where(da_in != var_no_data, np.nan)
+
+            # apply watermark mask on input data (if provided)
+            if da_wm is not None:
+                values_wm = da_wm.values
+                da_in = da_in.where(values_wm <= 0, np.nan)
+
+            # clean sub data
+            sub_x_1d = da_in[coord_name_x].values
+            sub_y_1d = da_in[coord_name_y].values
+
+            # debug geo limits
+            if debug:
+                logger_stream.debug("=== REFERENCE GRID ===")
+                logger_stream.debug(f"ref_x: size={ref_x_1d.size}, min={ref_x_1d.min():.6f}, max={ref_x_1d.max():.6f}")
+                logger_stream.debug(f"ref_y: size={ref_y_1d.size}, min={ref_y_1d.min():.6f}, max={ref_y_1d.max():.6f}")
+
+                logger_stream.debug("\n=== SUBDOMAIN GRID ===")
+                logger_stream.debug(f"sub_x: size={sub_x_1d.size}, min={sub_x_1d.min():.6f}, max={sub_x_1d.max():.6f}")
+                logger_stream.debug(f"sub_y: size={sub_y_1d.size}, min={sub_y_1d.min():.6f}, max={sub_y_1d.max():.6f}")
+
+            # activate interpolation mode if sub grid is not perfectly aligned with ref grid
+            if interpolation_mode:
+                sub_out = burn_sub_on_ref_interp(
+                    da_sub=da_in,  # DataArray of your variable in subdomain
+                    ref_x_1d=ref_x_1d,
+                    ref_y_1d=ref_y_1d,
+                    ref_nan=ref_nan,
+                    var_no_data=var_no_data,
+                    method=interpolation_method # "nearest" or "linear"
+                )
+
+                # now update merge (if you want overwrite only where sub has values)
+                mask = ~np.isnan(sub_out)
+                var_merge[mask] = sub_out[mask]
+
+            else:
+
+                # get sub data
+                sub_data = da_in.values.astype(np.float64)
+                sub_data[sub_data == var_no_data] = np.nan
+
+                # indices of each sub coord in ref grid
+                i_ref = _map_1d_to_ref_indices(ref_x_1d, sub_x_1d)  # length 559
+                j_ref = _map_1d_to_ref_indices(ref_y_1d, sub_y_1d)  # length 167
+
+                # build 2D index grids
+                jj, ii = np.meshgrid(j_ref, i_ref, indexing="ij")  # shape (167, 559)
+                # update only where sub valid and ref is valid
+                mask = (~np.isnan(sub_data)) & (~ref_nan[jj, ii])
+                var_merge[jj[mask], ii[mask]] = sub_data[mask]
+
+            # debug
+            if debug:
+                plot_data(da_in.values, title=f"input data step: {var_name}")
+                plot_data(var_merge, title=f"Merged data step: {var_name}")
+
+        # keep ref NaNs
+        var_merge[ref_nan] = np.nan
+
+        # check results
+        if debug:
+            plot_data(var_merge, title=f"Final merged: {var_name}")
+
+        # define output DataArray
+        var_da = create_darray(
+            var_merge, ref_x_2d[0, :], ref_y_2d[:, 0],
+            name=var_name,
+            coord_name_x=coord_name_x, coord_name_y=coord_name_y,
+            dim_name_x=dim_name_x, dim_name_y=dim_name_y
+        )
+        if var_attrs:
+            var_da.attrs = var_attrs
+
+        # append
+        out_list.append(var_da)
+
+    return out_list[0] if len(out_list) == 1 else out_list
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 # method to merge data
 @as_process(input_type='xarray', output_type='xarray')
 @with_logger(var_name='logger_stream')

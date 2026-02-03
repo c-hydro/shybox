@@ -162,10 +162,68 @@ class OrchestratorGrid(OrchestratorBase):
         # method to remap variable tags, in and out
         workflow_mapper = Mapper(data_collections_in, data_collections_out)
 
+        # organize deps collections in
+        deps_collections_in, args_collections_in = {}, {}
+        for data_key, data_config in data_collections_in.items():
+
+            # normalize: always iterate a list, remember if originally a seq
+            configs, is_sequence = as_list(data_config)
+
+            deps_list, args_list = [], []
+            for idx, cfg in enumerate(configs):
+                # your original logic, but on `cfg`
+                data_deps = getattr(cfg, 'file_deps', [])
+                args_deps = getattr(cfg, 'args_deps', [])
+
+                deps_list.append(remove_none(data_deps))
+                args_list.append(args_deps)
+
+            # if original was a single object → store single element
+            if is_sequence:
+
+                if len(deps_list) == 1:
+                    deps_collections_in[data_key] = deps_list[0]
+                    args_collections_in[data_key] = args_list[0]
+                elif len(deps_list) > 1:
+                    deps_collections_in[data_key] = deps_list
+                    args_collections_in[data_key] = args_list
+            else:
+                deps_collections_in[data_key] = deps_list
+                args_collections_in[data_key] = args_list
+
+        # organize deps collections out
+        deps_collections_out, args_collections_out = {}, {}
+        for data_key, data_config in data_collections_out.items():
+
+            # normalize: always iterate a list, remember if originally a seq
+            configs, is_sequence = as_list(data_config)
+
+            deps_list, args_list = [], []
+            for idx, cfg in enumerate(configs):
+                # your original logic, but on `cfg`
+                data_deps = getattr(cfg, 'file_deps', [])
+                args_deps = getattr(cfg, 'args_deps', [])
+
+                deps_list.append(remove_none(data_deps))
+                args_list.append(args_deps)
+
+            # if original was a single object → store single element
+            if is_sequence:
+                if len(deps_list) == 1:
+                    deps_collections_out[data_key] = deps_list[0]
+                    args_collections_out[data_key] = args_list[0]
+                elif len(deps_list) > 1:
+                    deps_collections_out[data_key] = deps_list
+                    args_collections_out[data_key] = args_list
+            else:
+                deps_collections_out[data_key] = deps_list
+                args_collections_out[data_key] = args_list
+
         # class to create workflow based using the orchestrator
         workflow_common = OrchestratorBase(
             data_in=data_collections_in, data_out=data_collections_out,
-            deps_in=None, deps_out=None, args_in=None, args_out=None,
+            deps_in = deps_collections_in, deps_out = None,
+            args_in=None, args_out=None,
             options=workflow_options,
             mapper=workflow_mapper, logger=logger)
 
@@ -365,7 +423,6 @@ class OrchestratorGrid(OrchestratorBase):
                 args_collections_in[data_key] = args_list
 
         # organize deps collections out
-        # organize deps collections in
         deps_collections_out, args_collections_out = {}, {}
         for data_key, data_config in data_collections_out.items():
 

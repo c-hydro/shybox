@@ -91,6 +91,12 @@ class DataLocal(Dataset):
         else:
             self.data_layout = 'geo'
 
+        # check data_id (to link data to ancillary info if needed)
+        if 'data_id' in kwargs:
+            self.data_id = kwargs.pop('data_id')
+        else:
+            self.data_id = -1
+
         # determine directory name
         if path is not None:
             self.dir_name = path
@@ -194,6 +200,7 @@ class DataLocal(Dataset):
             'message': message,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
             "data_layout": layout_norm,
+            "data_id": self.data_id,
             'file_variable': file_variable,
             'file_workflow': file_workflow
         })

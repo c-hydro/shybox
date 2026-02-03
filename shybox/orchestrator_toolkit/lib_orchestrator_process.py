@@ -168,7 +168,12 @@ class ProcessorContainer:
                 if in_deps and isinstance(in_deps[0], (list, tuple)):
                     in_deps = [x for sub in in_deps for x in sub]
                 # get names
-                names_deps = [f"dep_{i}" for i in range(len(in_deps))]
+                if isinstance(in_deps[0], dict):
+                    for tmp_deps in in_deps:
+                        for dep_key, dep_value in tmp_deps.items():
+                            names_deps.append(dep_key)
+                else:
+                    names_deps = [f"dep_{i}" for i in range(len(in_deps))]
 
             else:
                 # get deps and names type mismatch
@@ -190,24 +195,48 @@ class ProcessorContainer:
 
             # normalize data to list of DataLocal (if needed)
             data_list = _normalize_local_data(data_raw)
-            for data_tmp in data_list:
-                if not isinstance(data_tmp, DataLocal):
-                    self.logger.error(
-                        f'Data object {type(data_tmp)} is not a DataLocal instance'
-                    )
-                    raise TypeError('Data object in the list is not a DataLocal instance')
+            for tmp_parser in data_list:
 
-                str_variable = data_tmp.file_namespace.get('variable')
-                str_workflow = data_tmp.file_namespace.get('workflow')
+                data_parser, name_parser = [], []
+                if isinstance(tmp_parser, dict):
+                    for key, value in tmp_parser.items():
+                        data_parser.append(value)
+                        name_parser.append(key)
+                elif isinstance(tmp_parser, DataLocal):
+                    data_parser = [tmp_parser]
 
-                var_tag = ':'.join([str_variable, str_workflow])
+                    # append data (in list format)
+                    tmp_variable = tmp_parser.file_namespace.get('variable')
+                    tmp_workflow = tmp_parser.file_namespace.get('workflow')
+                    tmp_tag = ':'.join([tmp_variable, tmp_workflow])
 
-                # initialize objects to list
-                if obj_vars_raw is None: obj_vars_raw = []
-                if obj_deps_raw is None: obj_deps_raw = []
+                    name_parser.append(tmp_tag)
+                elif isinstance(tmp_parser, list):
+                    data_parser = tmp_parser
+                else:
+                    self.logger.error('Data object in the list is not a dict, list or DataLocal instance')
+                    raise TypeError('Data object in the list is not a dict, list or DataLocal instance')
 
-                obj_vars_raw.append(var_tag)
-                obj_deps_raw.append(str_variable)
+                for id_tmp, (name_tmp, data_tmp) in enumerate(zip(name_parser, data_parser)):
+
+                    if not isinstance(data_tmp, DataLocal):
+                        self.logger.error(
+                            f'Data object {type(data_tmp)} is not a DataLocal instance'
+                        )
+                        raise TypeError('Data object in the list is not a DataLocal instance')
+
+                    # append data (in list format)
+                    str_variable = data_tmp.file_namespace.get('variable')
+                    str_workflow = data_tmp.file_namespace.get('workflow')
+
+                    var_tag = ':'.join([str_variable, str_workflow])
+
+                    # initialize objects to list
+                    if obj_vars_raw is None: obj_vars_raw = []
+                    if obj_deps_raw is None: obj_deps_raw = []
+
+                    obj_vars_raw.append(var_tag)
+                    obj_deps_raw.append(str_variable)
 
         else:
             # normalize data to list of DataLocal (if needed)
@@ -319,7 +348,7 @@ class ProcessorContainer:
 
             # iterate over the list of data objects
             fx_data, fx_metadata, fx_deps = [], {}, []
-            fx_other = {}
+            fx_other, fx_varid, fx_check = {}, [], []
             for data_id, (data_tmp, data_name, time_tmp) in enumerate(zip(data_list, data_names, time)):
 
                 # define the variable name to read
@@ -344,6 +373,20 @@ class ProcessorContainer:
                     else:
                         self.logger.error('Nested lists of data objects are not supported')
                         raise ValueError('Nested lists of data objects are not supported')
+                elif isinstance(data_tmp,  dict):
+                    tmp_obj = []
+                    for tmp_key, tmp_value in data_tmp.items():
+                        tmp_obj.append(tmp_value)
+                    if len(tmp_obj) == 1:
+                        data_tmp = tmp_obj[0]
+                    else:
+                        self.logger.error('Multiple keys dictionary of data objects are not supported')
+                        raise ValueError('Multiple keys dictionar of data objects are not supported')
+                elif isinstance(data_tmp, DataLocal):
+                    pass
+                else:
+                    self.logger.error('data_tmp must be a DataLocal, list or a dict')
+                    raise TypeError('data_tmp must be a DataLocal, list or a dict')
 
                 # check data object type
                 if not isinstance(data_tmp, DataLocal):
@@ -362,38 +405,65 @@ class ProcessorContainer:
 
                 # read data only if readable (ok or template) --> condition of data object
                 self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... ")
+
                 status_tag_tmp, status_readable_tmp =  data_tmp.is_readable()
                 if not status_readable_tmp:
                     if not status_tag_tmp == 'template':
                         self.logger.warning(f"Object {data_name} is not readable. File is not available.")
                         self.logger.info(f"Control obj '{data_name}' variable '{str_var_tmp}' is readable ... SKIP")
-                        continue  # skip unreadable data
+                        fx_check.append(False)
                     else:
                         self.logger.info(f"Object {data_name} is a template. The template will be filled by the times.")
                         self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... PASS")
+                        fx_check.append(True)
                 else:
                     self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... PASS")
+                    fx_check.append(True)
 
                 # manage variable mapping
                 kwargs['variable'] = str_var_tmp
 
-                # read data
-                fx_tmp = data_tmp.get_data(time=time_tmp, name=str_var_tmp, **kwargs)
-                fx_deps.append(str_var_tmp)
+                # variable definition (variable, workflow and tag)
+                step_variable = data_tmp.file_namespace.get('variable')
+                step_workflow = data_tmp.file_namespace.get('workflow')
+                step_tag = ':'.join([step_variable, step_workflow])
 
-                # convert to DataArray if single variable
-                fx_tmp = _to_dataarray_if_single_var(fx_tmp)
-                # get variable name(s) from data
-                fx_vars = _get_variable_name(fx_tmp)
+                # variable id
+                var_id = data_tmp.data_id
 
-                # debug data in
-                if self.debug_state_in: plot_data(fx_tmp)
+                # read data (check if data is readable or not)
+                if fx_check[data_id]:
+
+                    # save data and deps
+                    fx_tmp = data_tmp.get_data(time=time_tmp, name=step_tag, **kwargs)
+                    fx_deps.append(step_tag)
+
+                    # convert to DataArray if single variable
+                    fx_tmp = _to_dataarray_if_single_var(fx_tmp)
+                    # get variable name(s) from data
+                    fx_vars = _get_variable_name(fx_tmp)
+                    # store variable id
+                    fx_varid.append(var_id)
+
+                    # debug data in
+                    if self.debug_state_in: plot_data(fx_tmp)
+                else:
+                    # data is not readable (default)
+                    fx_tmp = None
+                    fx_vars = data_name
 
                 # append data (in list format)
                 if (id_deps is None) or (data_id < id_deps):
                     fx_data.append(fx_tmp)
                 else:
-                    fx_other[data_name] = fx_tmp
+                    if not data_name in list(fx_other.keys()):
+                        fx_other[data_name] = fx_tmp
+                    else:
+                        tmp_other = fx_other[data_name]
+                        if not isinstance(tmp_other, list):
+                            tmp_other = [tmp_other]
+                        tmp_other.append(fx_tmp)
+                        fx_other = {data_name: tmp_other}
 
                 # create metadata
                 if 'fx_variable' not in fx_metadata:
@@ -417,6 +487,11 @@ class ProcessorContainer:
 
             # update logger (for messages consistency)
             data_raw.logger = self.logger.compare(data_raw.logger)
+
+            # variable id
+            var_id = data_raw.data_id
+            fx_varid = []
+
             # get data
             fx_data = data_raw.get_data(time=time, name=var_name, **kwargs)
             fx_deps = []

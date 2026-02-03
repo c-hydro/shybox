@@ -122,6 +122,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'nan_value' in kwargs:
             self.nan_value = kwargs.pop('nan_value')
 
+        self.data_id = -1
+        if 'data_id' in kwargs:
+            self.data_id = kwargs.pop('data_id')
+
         self.data_layout = None
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
@@ -185,7 +189,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return (f"{self.__class__.__name__}("
                 f"{self.file_name!r}, {self.file_mode!r}, {self.data_layout!r}, {self.file_type!r}, "
                 f"{self.file_format!r}, {self.file_variable!r}, {self.file_namespace!r},"
-                f"status={self.status!r})")
+                f"status={self.status!r}, id={self.data_id!r})")
 
     # method to extract information from string representation
     def __str__(self):
@@ -1025,6 +1029,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
             append = kwargs.pop('append', False)
             self._write_data(data, out_file, append = append)
             return
+
+        # update variable from metadata (if available)
+        if 'variables' in list(metadata.keys()):
+            variable = metadata.pop('variables')
 
         # case of pandas DataFrame
         if isinstance(data, pd.DataFrame):

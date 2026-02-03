@@ -30,6 +30,129 @@ from shybox.generic_toolkit.lib_utils_debug import plot_data
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# helper ro
+def _build_geo_from_attrs(ds: xr.Dataset,
+                         y_dim: str = "south_north",
+                         x_dim: str = "west_east",
+                         lon_name: str = "Longitude",
+                         lat_name: str = "Latitude") -> tuple[xr.DataArray, xr.DataArray]:
+
+    # get attributes
+    attrs = ds.attrs
+
+    # check required attributes
+    required = ["xllcorner", "yllcorner", "xcellsize", "ycellsize", "ncols", "nrows"]
+    missing = [k for k in required if k not in attrs]
+    if missing:
+        raise ValueError(
+            f"Cannot rebuild {lat_name}/{lon_name}: missing attributes {missing}. "
+            f"Available attrs: {list(attrs.keys())}"
+        )
+
+    # get values from attributes
+    xll = float(attrs["xllcorner"])
+    yll = float(attrs["yllcorner"])
+    dx = float(attrs["xcellsize"])
+    dy = float(attrs["ycellsize"])
+    ncols = int(attrs["ncols"])
+    nrows = int(attrs["nrows"])
+
+    # create 1D coordinate vectors (assumes yllcorner is minimum latitude, xllcorner is minimum longitude)
+    lon_1d = xll + np.arange(ncols, dtype=np.float64) * dx
+    lat_1d = yll + np.arange(nrows, dtype=np.float64) * dy
+
+    # define 2D meshgrid with (y, x) indexing
+    lon2d, lat2d = np.meshgrid(lon_1d, lat_1d)
+    lon_da = xr.DataArray(lon2d.astype(np.float32), dims=(y_dim, x_dim), name=lon_name)
+    lat_da = xr.DataArray(lat2d.astype(np.float32), dims=(y_dim, x_dim), name=lat_name)
+
+    # Add standard-ish attributes
+    lon_da.attrs.update({"standard_name": "longitude", "units": "degrees_east"})
+    lat_da.attrs.update({"standard_name": "latitude", "units": "degrees_north"})
+
+    return lon_da, lat_da
+
+# helper to check if geo is complete
+def _geo_is_complete(ds: xr.Dataset,
+                    y_dim: str = "south_north",
+                    x_dim: str = "west_east",
+                    lon_name: str = "Longitude",
+                    lat_name: str = "Latitude") -> bool:
+
+    # return False if lon/lat variables are missing
+    if lon_name not in ds or lat_name not in ds:
+        return False
+
+    # get values
+    lon = ds[lon_name].values
+    lat = ds[lat_name].values
+
+    # apply limits
+    lon = np.where((lon < -180) | (lon > 180), np.nan, lon)
+    lat = np.where((lat < -90) | (lat > 90), np.nan, lat)
+
+    # consider "not complete" if any NaNs
+    if np.isnan(lon).any() or np.isnan(lat).any():
+        return False
+
+    return True
+
+# method to read hmc dataset from netcdf file
+def read_datasets_hmc(
+        path: str, debug: bool = False,
+        y_dim: str = "south_north", x_dim: str = "west_east",
+        lon_name: str = "Longitude", lat_name: str = "Latitude",) -> xr.Dataset:
+
+    # read dataset
+    ds = xr.open_dataset(path)
+
+    # check if geo is complete
+    if _geo_is_complete(ds, y_dim=y_dim, x_dim=x_dim, lon_name=lon_name, lat_name=lat_name):
+        lon_da, lat_da = ds[lon_name], ds[lat_name]
+    else:
+        lon_da, lat_da = _build_geo_from_attrs(ds, y_dim=y_dim, x_dim=x_dim, lon_name=lon_name, lat_name=lat_name)
+
+    # get time
+    time = ds['time'].values
+
+    # compute geo arrays from data
+    lat_1d = lat_da.isel({x_dim: 0}).values  # take first column -> varies along y
+    lon_1d = lon_da.isel({y_dim: 0}).values  # take first row    -> varies along x
+
+    # ensure increasing order
+    if lat_1d[0] > lat_1d[-1]:
+        lat_1d = lat_1d[::-1]
+    if lon_1d[0] > lon_1d[-1]:
+        lon_1d = lon_1d[::-1]
+
+    # create the update datasets
+    ds_new = xr.Dataset(
+        coords={
+            "time": ("time", time),
+            "latitude": ("south_north", lat_1d),
+            "longitude": ("west_east", lon_1d),
+        }
+    )
+    # store all variables in the new dataset
+    for var in ds.data_vars:
+        ds_new[var] = ds[var]
+    ds_new['Latitude'] = lat_da
+    ds_new['Longitude'] = lon_da
+
+    # Flip dataset along latitude dimension
+    ds_new = ds_new.isel(south_north=slice(None, None, -1))
+
+    # debug testing variable(s)
+    if debug:
+        plot_data(ds_new['Latitude'].values)
+        plot_data(ds_new['SM'].values)
+
+    return ds_new
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
 # helper to squeeze (N,1) arrays to (N,) arrays
 def squeeze_n1(a):
     a = np.asarray(a)

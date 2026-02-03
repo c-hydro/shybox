@@ -41,8 +41,22 @@ def as_list(maybe_seq):
 # ----------------------------------------------------------------------------------------------------------------------
 # method to remove none values from a list
 @with_logger(var_name='logger_stream')
-def remove_none(lst):
-    return [x for x in lst if x is not None]
+def remove_none(obj: (list, dict) = None) -> (list, dict):
+
+    # check None object
+    if obj is None:
+        return obj
+
+    # check object type
+    if isinstance(obj, (list, tuple)):
+        obj = [x for x in obj if x is not None]
+        return obj
+    elif isinstance(obj, dict):
+        obj = {k: v for k, v in obj.items() if v is not None}
+        return obj
+    else:
+        logger_stream.error(f"Unsupported object type: {type(obj)}")
+        raise TypeError(f"Unsupported object type: {type(obj)}")
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

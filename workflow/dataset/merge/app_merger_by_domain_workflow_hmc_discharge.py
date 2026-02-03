@@ -45,6 +45,7 @@ from shybox.logging_toolkit.logging_handler import LoggingManager
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
 from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
+from shybox.processing_toolkit.lib_proc_merge import merge_data_by_watermark
 
 from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_format
 # ----------------------------------------------------------------------------------------------------------------------
@@ -199,7 +200,7 @@ def main(view_table: bool = False):
 
         # iterate over src datasets
         dset_src_handler_list = []
-        for alg_data_src_key, alg_data_src_settings in alg_cfg_step['data_source'].items():
+        for alg_data_id, (alg_data_src_key, alg_data_src_settings) in enumerate(alg_cfg_step['data_source'].items()):
 
             # deps handler
             dset_src_handler_deps = DataLocal(
@@ -207,6 +208,7 @@ def main(view_table: bool = False):
                 file_name=alg_data_src_settings['file_watermark']['file_name'],
                 file_type='grid_2d', file_format='ascii', file_mode='local',
                 file_variable=['WATERMARK'], file_io='input',
+                data_id=alg_data_id,
                 variable_template={
                     "dims_geo": {"x": "longitude", "y": "latitude"},
                     "vars_data": {"watermark": "deps_watermark"}
@@ -221,10 +223,11 @@ def main(view_table: bool = False):
                 file_name=alg_data_src_settings['file_data']['file_name'],
                 file_type='grid_hmc', file_format='netcdf', file_mode='local',
                 file_variable=['DISCHARGE'], file_io='input',
-                file_deps=[dset_src_handler_deps],
+                file_deps={'watermark': dset_src_handler_deps},
+                data_id=alg_data_id,
                 variable_template={
                     "dims_geo": {"west_east": "longitude", "south_north": "latitude", "time": "time"},
-                    "vars_data": {"discharge": "simulated_discharge"}
+                    "vars_data": {"SM": "simulated_discharge"}
                 },
                 time_signature='current',
                 time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
