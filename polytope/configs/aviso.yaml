@@ -1,0 +1,23 @@
+# Listener configuration for Extremes-DT
+notification_engine:
+  host: "aviso.lumi.apps.dte.destination-earth.eu"
+  port: 443
+  https: true
+configuration_engine:
+  host: "aviso.lumi.apps.dte.destination-earth.eu"
+  port: 443
+  https: true
+schema_parser: "generic"
+remote_schema: true
+auth_type: "none"
+
+# Expected notifications
+from_date: "2025-11-04"
+event: "data"
+listener_request:
+  class: "d1"
+  expver: "0001"
+  stream: "oper"
+  step: [0]
+  levtype: "sfc"
+  type: "fc"
