@@ -2,8 +2,8 @@
 """
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN
 
-__date__ = '20251118'
-__version__ = '1.2.0'
+__date__ = '20260223'
+__version__ = '1.3.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -17,12 +17,14 @@ DOMAIN_NAME='marche';
 TIME_PERIOD=5;
 TIME_START='2025-11-17 00:00';
 TIME_END='2025-11-17 00:00';
-PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_static/gridded/';
-PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/source/ifs/';
-PATH_DST='/home/fabio/Desktop/shybox/dset/case_study_destine/data/data_dynamic/destination/ifs/';
-PATH_LOG=/home/fabio/Desktop/shybox/dset/case_study_destine/log/
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc/geo/';
+PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc/data/ifs/';
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc/data/ifs_nc/'';
+PATH_LOG='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc/log/';
+PATH_TMP='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc//tmp/';
 
 Version(s):
+20260203 (1.3.0) --> Update of codes to classes structure
 20251116 (1.2.0) --> Release for shybox package (hmc datasets converter base configuration)
 """
 
@@ -57,13 +59,13 @@ from shybox.logging_toolkit.logging_handler import LoggingManager
 project_name = 'shybox'
 alg_name = 'Application for processing datasets'
 alg_type = 'Package'
-alg_version = '1.2.0'
-alg_release = '2025-11-18'
+alg_version = '1.3.0'
+alg_release = '2026-02-03'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # main function
-def main(alg_collectors_settings: dict = None):
+def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## SETTINGS MANAGEMENT
@@ -79,7 +81,7 @@ def main(alg_collectors_settings: dict = None):
         flat_variables=True, flat_key_mode='value')
     # view lut section
     alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
-    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=True)
+    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=view_table)
 
     # get application section
     alg_cfg_application = alg_cfg_obj.get_section(section='application')
@@ -90,12 +92,12 @@ def main(alg_collectors_settings: dict = None):
         template_keys=('file_time_destination',)
     )
     # view application section
-    alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)
+    alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=view_table)
 
     # get workflow section
     alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow')
     # view workflow section
-    alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=True)
+    alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=view_table)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -420,7 +422,8 @@ def update_time_reference(
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# call entrypoint
-if __name__ == '__main__':
-    main()
+# call script from external library
+if __name__ == "__main__":
+    # run script
+    main(view_table=True)
 # ----------------------------------------------------------------------------------------------------------------------

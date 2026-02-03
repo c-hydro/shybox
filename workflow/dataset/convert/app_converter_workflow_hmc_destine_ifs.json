@@ -2,12 +2,10 @@
   "__comment__": "configuration file for the datasets information",
   "configuration": {
     "priority": {
-      "reference": "environment",
-      "other": "user"
+      "reference": "environment", "other": "user"
     },
     "flags": {
-      "update_namelist": true,
-      "update_execution": true
+      "update_namelist": true, "update_execution": true
     },
     "variables": {
       "lut": {
@@ -63,7 +61,7 @@
         "path_geo": "string",
         "path_root_source": "string",
         "path_time_source": "%Y%m%d",
-        "file_time_source": "%Y%m%d%H00",
+        "file_time_source": "%Y%m%d",
         "path_root_destination": "string",
         "path_time_destination": "%Y/%m/%d/",
         "file_time_destination": "%Y%m%d%H%M",
@@ -134,8 +132,8 @@
         }
       },
       "data_destination": {
-        "__comment_": "{path_root_destination}/{path_time_destination}/{path_time_run}/",
-        "path": "{path_root_destination}/{path_time_destination}/",
+        "__comment_": "{path_root_destination}/{path_time_destination}/{path_time_run}/{domain_name}",
+        "path": "{path_root_destination}/{path_time_destination}/{domain_name}/",
         "file_name": "hmc.forcing-grid.{file_time_destination}.nc",
         "format": "netcdf",
         "type": "hmc",
@@ -154,7 +152,7 @@
   "workflow": {
     "options": {
       "intermediate_output": "Tmp",
-      "tmp_dir": "tmp"
+      "tmp_dir": "{path_tmp}"
     },
     "process_list": {
       "AIR_T": [

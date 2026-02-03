@@ -128,6 +128,12 @@ class ProcessorContainer:
         if isinstance(time, list):
             if len(time) == 1: time = time[0]
 
+        time_tmp = f"{time}"
+        if time_tmp == '2025-11-17 00:00:00':
+            print()
+        if time_tmp == '2025-11-17 01:00:00':
+            print()
+
         # get information about id and variable(s)
         fx_id = kwargs['id']
         fx_variable_name, fx_variable_wf = kwargs['reference'].split(':')
@@ -163,7 +169,15 @@ class ProcessorContainer:
             elif isinstance(self.in_deps, list):
 
                 # get deps
-                in_deps = self.in_deps
+                list_deps = self.in_deps
+
+                # re-organize deps for the steps before the first one (basically for file with multiple times)
+                in_deps = []
+                for tmp_deps in list_deps:
+                    if tmp_deps in data_raw:
+                        data_raw.remove(tmp_deps)
+                    in_deps.append(tmp_deps)
+
                 # flatten only if it's a list of lists
                 if in_deps and isinstance(in_deps[0], (list, tuple)):
                     in_deps = [x for sub in in_deps for x in sub]
@@ -555,8 +569,14 @@ class ProcessorContainer:
                 if not isinstance(tmp_data, list):
                     tmp_data = [tmp_data]
 
+                # get deps elements (from the data list)
+                tmp_deps = []
+                if id_deps > 0:
+                    tmp_deps = tmp_data[id_deps:]
+
+                # save the data elements using the deps_vars mapping
                 fx_data = {}
-                for fx_dep, tmp_values in zip(fx_deps, tmp_data):
+                for fx_dep, tmp_values in zip(fx_deps, tmp_deps):
                     fx_var, fx_wf = fx_dep.split(':')
                     if fx_var in deps_vars.values():
                         # find the key corresponding to this value
