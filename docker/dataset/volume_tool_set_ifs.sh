@@ -5,16 +5,16 @@ echo "============================================"
 echo " Managing Docker Volumes for DESTINE - CONVERTER IFS 2 HMC"
 echo "============================================"
 
-BASE_DSET="/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc"
-BASE_HPC="/home/fabio/Desktop/shybox/hpc/destine"
+BASE_SRC="/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc"
+BASE_DST="/home/fabio/Desktop/shybox/hpc/destine"
 
 # Define volumes
 declare -A VOLUMES=(
-  ["case_study_destine_ifs_geo"]="$BASE_DSET/geo"
-  ["case_study_destine_ifs_in"]="$BASE_DSET/data/ifs"
-  ["case_study_destine_ifs_out"]="$BASE_HPC/data/converter_hmc/ifs"
-  ["case_study_destine_ifs_log"]="$BASE_HPC/log/converter_hmc/ifs"
-  ["case_study_destine_ifs_tmp"]="$BASE_HPC/tmp/converter_hmc/ifs"
+  ["case_study_destine_ifs_geo"]="$BASE_SRC/geo"
+  ["case_study_destine_ifs_in"]="$BASE_SRC/data/ifs"
+  ["case_study_destine_ifs_out"]="$BASE_DST/data/forcings/ifs"
+  ["case_study_destine_ifs_log"]="$BASE_DST/log/forcings/ifs"
+  ["case_study_destine_ifs_tmp"]="$BASE_DST/tmp/forcings/ifs"
 )
 
 # Step 1: Create folders with permissions

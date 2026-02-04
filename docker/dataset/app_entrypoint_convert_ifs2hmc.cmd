@@ -116,7 +116,7 @@ docker run -it \
   -e TIME_START='2025-11-17 00:00' \
   -e TIME_END='2025-11-17 00:00'\
   -e TIME_PERIOD=5 \
-  -e DOMAIN_NAME='MarcheDomain' \
+  -e DOMAIN_NAME='marche' \
   --env-file app_entrypoint_converter_ifs2hmc.env \
   -v /home/fabio/Desktop/shybox/docker/dataset/app_converter_workflow_hmc_destine_ifs.json:/app/execution/app_converter_workflow_hmc_destine_ifs.json \
   -v case_study_destine_ifs_geo:/app/mnt_geo/:rw \
