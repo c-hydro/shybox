@@ -18,7 +18,6 @@
 # ------------------------------------------------------------
 # settings generic
 FROM ubuntu:24.04 AS app-builder-shybox
-#FROM ubuntu:24.04 AS app-builder-shybox
 ARG DEBIAN_FRONTEND=noninteractive
 
 # repository and branch (use your desired tag or branch)
@@ -44,11 +43,14 @@ ENV	SYSTEM_ENV_FILE=fp_env_system
 # prepare share folder(s) to mount external repositories
 ENV	INPUT_DIR=/app/mnt_in/ 
 ENV	OUTPUT_DIR=/app/mnt_out/ 
-ENV	INPUT_STATIC_DIR=/app/mnt_in/data_static/ 
-ENV	INPUT_DYNAMIC_DIR=/app/mnt_in/data_dynamic/ 
-ENV	INPUT_MODEL_RESTART_DIR=/app/mnt_in/model_restart/ 
-ENV	OUTPUT_MODEL_RESULTS_DIR=/app/mnt_out/model_results/ 
-ENV	OUTPUT_MODEL_STATE_DIR=/app/mnt_out/model_state/
+#ENV	INPUT_STATIC_DIR=/app/mnt_in/data_static/ 
+#ENV	INPUT_DYNAMIC_DIR=/app/mnt_in/data_dynamic/ 
+#ENV	INPUT_MODEL_RESTART_DIR=/app/mnt_in/model_restart/ 
+#ENV	OUTPUT_MODEL_RESULTS_DIR=/app/mnt_out/model_results/ 
+#ENV	OUTPUT_MODEL_STATE_DIR=/app/mnt_out/model_state
+ENV GEO_DIR=/app/mnt_geo/
+ENV	LOG_DIR=/app/mnt_log/
+ENV	TMP_DIR=/app/mnt_tmp/  
 
 # install system-wide deps 
 RUN apt-get update && apt-get install -y \
@@ -88,13 +90,16 @@ RUN mkdir -p ${LIBS_INSTALLER_DIR} \
 	&& mkdir -p ${LIBS_TMP_DIR} \
 	&& mkdir -p ${PACKAGE_HMC_DIR} \
 	&& mkdir -p ${ENTRYPOINT_DIR} \
+    && mkdir -p ${GEO_DIR} \
 	&& mkdir -p ${INPUT_DIR} \
 	&& mkdir -p ${OUTPUT_DIR} \
-	&& mkdir -p ${INPUT_STATIC_DIR} \
-	&& mkdir -p ${INPUT_DYNAMIC_DIR} \
-	&& mkdir -p ${INPUT_MODEL_RESTART_DIR} \
-	&& mkdir -p ${OUTPUT_MODEL_RESULTS_DIR} \
-	&& mkdir -p ${OUTPUT_MODEL_STATE_DIR}
+	&& mkdir -p ${LOG_DIR} \
+	&& mkdir -p ${TMP_DIR} 
+	#&& mkdir -p ${INPUT_STATIC_DIR} \
+	#&& mkdir -p ${INPUT_DYNAMIC_DIR} \
+	#&& mkdir -p ${INPUT_MODEL_RESTART_DIR} \
+	#&& mkdir -p ${OUTPUT_MODEL_RESULTS_DIR} \
+	#&& mkdir -p ${OUTPUT_MODEL_STATE_DIR}
 
 # change default shell (from sh to bash)
 SHELL ["/bin/bash", "-c"]
@@ -113,7 +118,7 @@ ENV PATH="${CONDA_SHYBOX_DIR}/bin:${PATH}" \
 
 # use bash for consistent conda behavior
 SHELL ["/bin/bash", "-lc"]
-ARG SHYBOX_REF=destine/1.2.6
+
 # base OS deps (only what builder needs)
 USER root
 RUN --mount=type=cache,target=/var/cache/apt \
