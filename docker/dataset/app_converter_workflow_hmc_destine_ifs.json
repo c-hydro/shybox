@@ -2,12 +2,10 @@
   "__comment__": "configuration file for the datasets information",
   "configuration": {
     "priority": {
-      "reference": "environment",
-      "other": "user"
+      "reference": "environment", "other": "user"
     },
     "flags": {
-      "update_namelist": true,
-      "update_execution": true
+      "update_namelist": true, "update_execution": true
     },
     "variables": {
       "lut": {
@@ -95,7 +93,7 @@
       },
       "geo": {
         "terrain": {
-          "path": "{path_geo}",
+          "path": "{path_geo}/{domain_name}/gridded/",
           "file_name": "{domain_name}.dem.txt"
         }
       },
@@ -135,18 +133,18 @@
       },
       "data_destination": {
         "__comment_": "{path_root_destination}/{path_time_destination}/{path_time_run}/",
-        "path": "{path_root_destination}/{path_time_destination}/",
+        "path": "{path_root_destination}/{path_time_destination}/{domain_name}",
         "file_name": "hmc.forcing-grid.{file_time_destination}.nc",
         "format": "netcdf",
         "type": "hmc",
         "mode": "grid"
       },
       "log": {
-        "path": "{path_log}",
+        "path": "{path_log}/{domain_name}",
         "file_name": "converter_hmc_forcing_destine_ifs.txt"
       },
       "tmp": {
-        "path": "{path_tmp}",
+        "path": "{path_tmp}/{domain_name}",
         "file_name": null
       }
     }
@@ -154,7 +152,7 @@
   "workflow": {
     "options": {
       "intermediate_output": "Tmp",
-      "tmp_dir": "tmp"
+      "tmp_dir": "{path_tmp}/{domain_name}"
     },
     "process_list": {
       "AIR_T": [

@@ -93,7 +93,7 @@
       },
       "geo": {
         "terrain": {
-          "path": "{path_geo}",
+          "path": "{path_geo}/{domain_name}/gridded/",
           "file_name": "{domain_name}.dem.txt"
         }
       },

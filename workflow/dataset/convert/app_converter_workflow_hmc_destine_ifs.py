@@ -13,15 +13,15 @@ General command line:
 python app_converter_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Examples of environment variables declarations:
-DOMAIN_NAME='marche';
+DOMAIN_NAME='MarcheDomain';
 TIME_PERIOD=5;
 TIME_START='2025-11-17 00:00';
 TIME_END='2025-11-17 00:00';
 PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc/geo/';
 PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc/data/ifs/';
-PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc/data/ifs_nc/'';
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc/data/ifs_nc/';
 PATH_LOG='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc/log/';
-PATH_TMP='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc//tmp/';
+PATH_TMP='/home/fabio/Desktop/shybox/exec/case_study_destine/converter_hmc/tmp/';
 
 Version(s):
 20260203 (1.3.0) --> Update of codes to classes structure

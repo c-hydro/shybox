@@ -1320,9 +1320,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 start = this_dim_values[0]
                 end = this_dim_values[-1]
                 length = len(this_dim_values)
-                self._structure_template[step_key]['dims_starts'][dim] = float(start)
-                self._structure_template[step_key]['dims_ends'][dim] = float(end)
+                self._structure_template[step_key]['dims_starts'][dim] = self._safe_dim(start)
+                self._structure_template[step_key]['dims_ends'][dim] = self._safe_dim(end)
                 self._structure_template[step_key]['dims_lengths'][dim] = length
+
+    # method to safely convert dimension values (particularly based on time objects e.g., datetime) to float
+    @staticmethod
+    def _safe_dim(value):
+        if isinstance(value, np.datetime64):
+            return value.astype("datetime64[s]").astype(int)
+        if isinstance(value, dt.datetime):
+            return value.timestamp()
+        return float(value)
 
     @staticmethod
     def build_structure_template_array(template_dict: dict, data = None) -> (xr.DataArray,xr.Dataset):

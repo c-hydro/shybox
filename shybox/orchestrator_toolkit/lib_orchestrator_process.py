@@ -362,7 +362,7 @@ class ProcessorContainer:
 
             # iterate over the list of data objects
             fx_data, fx_metadata, fx_deps = [], {}, []
-            fx_other, fx_varid, fx_check = {}, [], []
+            fx_other, fx_varid, fx_check = {}, [], []; print(data_list, data_names, time)
             for data_id, (data_tmp, data_name, time_tmp) in enumerate(zip(data_list, data_names, time)):
 
                 # define the variable name to read

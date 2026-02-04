@@ -109,7 +109,7 @@
   "workflow": {
     "options": {
         "intermediate_output": "Tmp",
-        "tmp_dir": "tmp"
+        "tmp_dir": "{path_tmp}"
     },
     "process_list": {
         "DISCHARGE": [

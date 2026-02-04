@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW ANALYZER TIME-SERIES - HMC
 
-__date__ = '20260107'
-__version__ = '1.0.0'
+__date__ = '20260204'
+__version__ = '1.1.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -21,6 +21,7 @@ PATH_DYNAMIC_DST='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/dy
 PATH_DYNAMIC_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/dynamic/';
 
 Version(s):
+20260204 (1.1.0) --> Update to latest classes structure
 20260107 (1.0.0) --> Beta release for shybox package
 """
 
@@ -47,13 +48,13 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 project_name = 'shybox'
 alg_name = 'Workflow for analyzer time-series configuration'
 alg_type = 'Package'
-alg_version = '1.0.0'
-alg_release = '2026-01-07'
+alg_version = '1.1.0'
+alg_release = '2026-02-04'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # script main
-def main(view_table: bool = False, dry_run : bool = False):
+def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## CONFIGURATION MANAGEMENT
