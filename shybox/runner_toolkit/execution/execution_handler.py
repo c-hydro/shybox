@@ -610,13 +610,21 @@ class ExecutionAnalyzer:
 
         resp = execution_info.get("exec_response", [None, None, None])
         if isinstance(resp, (list, tuple)) and len(resp) == 3:
-            execution_msg = ['SIMULATION COMPLETED - RUN OK [NO ERRORS]', None, None]
-            execution_info['exec_response'] = execution_msg
+            # get dry_run condition from checks
+            dry_run = checks.get("dry_run", None)
+            if dry_run is not None:
+                if not dry_run:
+                    execution_msg = ['SIMULATION COMPLETED - RUN OK [NO ERRORS]', None, None]
+                    execution_info['exec_response'] = execution_msg
+                else:
+                    execution_msg = ['SIMULATION COMPLETED - DRY RUN [SETTINGS TEST]', None, None]
+                    execution_info['exec_response'] = execution_msg
+            else:
+                execution_msg = ['SIMULATION COMPLETED - UNKNOWN RUN TYPE', None, None]
+                execution_info['exec_response'] = execution_msg
             self._response = execution_msg
         else:
-            execution_msg = ['SIMULATION COMPLETED - DRY RUN', None, None]
-            execution_info['exec_response'] = execution_msg
-            self._response = execution_msg
+            self._response = resp
 
         # update information
         self.manager = manager

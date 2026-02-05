@@ -15,10 +15,10 @@ import re
 
 import numpy as np
 
-from shybox.default.lib_default_args_OLD import logger_name
+#from shybox.default.lib_default_args_OLD import logger_name
 
 # logging
-log_stream = logging.getLogger(logger_name)
+#log_stream = logging.getLogger(logger_name)
 
 # debugging
 # import matplotlib.pylab as plt
