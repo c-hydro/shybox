@@ -104,7 +104,6 @@ RUN mkdir -p ${LIBS_INSTALLER_DIR} \
 # change default shell (from sh to bash)
 SHELL ["/bin/bash", "-c"]
 
-
 # environment variable(s)
 ENV PACKAGE_SHYBOX_DIR="/app/library/package_shybox/" 
 ENV CONDA_SHYBOX_NAME="shybox_base" 

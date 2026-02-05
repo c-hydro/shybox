@@ -33,15 +33,6 @@ ENV	PACKAGE_HMC_DIR=/app/library/package_hmc/
 # set environment filename(s)
 ENV	SYSTEM_ENV_FILE=fp_env_system 
 
-# prepare share folder(s) to mount external repositories
-ENV	INPUT_DIR=/app/mnt_in/ 
-ENV	OUTPUT_DIR=/app/mnt_out/ 
-ENV	INPUT_STATIC_DIR=/app/mnt_in/data_static/ 
-ENV	INPUT_DYNAMIC_DIR=/app/mnt_in/data_dynamic/ 
-ENV	INPUT_MODEL_RESTART_DIR=/app/mnt_in/model_restart/ 
-ENV	OUTPUT_MODEL_RESULTS_DIR=/app/mnt_out/model_results/ 
-ENV	OUTPUT_MODEL_STATE_DIR=/app/mnt_out/model_state/
-
 # install system-wide deps 
 RUN apt-get update && apt-get install -y \
 	git \
@@ -79,14 +70,7 @@ USER app
 RUN mkdir -p ${LIBS_INSTALLER_DIR} \
 	&& mkdir -p ${LIBS_TMP_DIR} \
 	&& mkdir -p ${PACKAGE_HMC_DIR} \
-	&& mkdir -p ${ENTRYPOINT_DIR} \
-	&& mkdir -p ${INPUT_DIR} \
-	&& mkdir -p ${OUTPUT_DIR} \
-	&& mkdir -p ${INPUT_STATIC_DIR} \
-	&& mkdir -p ${INPUT_DYNAMIC_DIR} \
-	&& mkdir -p ${INPUT_MODEL_RESTART_DIR} \
-	&& mkdir -p ${OUTPUT_MODEL_RESULTS_DIR} \
-	&& mkdir -p ${OUTPUT_MODEL_STATE_DIR}
+	&& mkdir -p ${ENTRYPOINT_DIR}
 
 # change default shell (from sh to bash)
 SHELL ["/bin/bash", "-c"]
@@ -177,9 +161,9 @@ FROM app-builder-libs AS app-builder-shybox
 #FROM ubuntu:24.04 AS app-builder-shybox
 ARG DEBIAN_FRONTEND=noninteractive
 
-# repository and branch
+# repository and branch (use your desired tag or branch)
 ARG SHYBOX_REPO=https://github.com/c-hydro/shybox.git
-ARG SHYBOX_REF=destine
+ARG SHYBOX_REF=destine/1.4.2
 
 # UID of the non-root user 'app'
 ENV APP_UID=1456
@@ -190,6 +174,10 @@ ENV CONDA_SHYBOX_NAME="shybox_base"
 ENV CONDA_SHYBOX_LIBS="shybox_base_libraries" 
 ENV CONDA_SHYBOX_DIR="/app/library/conda_shybox/" 
 ENV PYTHONUNBUFFERED=1
+
+# environment conda
+ENV PATH="${CONDA_SHYBOX_DIR}/bin:${PATH}" \
+    PYTHONPATH="${PACKAGE_SHYBOX_DIR}:${PYTHONPATH}"
 
 # environment conda
 ENV PATH="${CONDA_SHYBOX_DIR}/bin:${PATH}" \
@@ -211,16 +199,16 @@ USER app
 RUN mkdir -p "${PACKAGE_SHYBOX_DIR}" "${CONDA_SHYBOX_DIR}"
 WORKDIR "${PACKAGE_SHYBOX_DIR}"
 
-# fetch shybox (shallow + submodules)
+# fetch shybox (shallow + submodules), supports tags
 RUN git init . && \
     git remote add origin "${SHYBOX_REPO}" && \
-    git fetch --depth 1 origin "${SHYBOX_REF}" && \
+    git fetch --depth 1 origin "${SHYBOX_REF}" --tags && \
     git checkout -q FETCH_HEAD && \
     git submodule update --init --depth 1
 
 # install conda environment
 # Expects script at: ${PACKAGE_SHYBOX_DIR}/setup_conda_shybox_base.sh
-RUN "${PACKAGE_SHYBOX_DIR}/setup_conda_shybox_base.sh" \
+RUN "${PACKAGE_SHYBOX_DIR}/setup_shybox_base.sh" \
       "${CONDA_SHYBOX_NAME}" \
       "${CONDA_SHYBOX_DIR}" \
       "${CONDA_SHYBOX_LIBS}"
@@ -288,9 +276,18 @@ FROM app-builder-shybox AS app-runner
 ARG DEBIAN_FRONTEND=noninteractive
 
 # environmental variable(s)
-ENV VAR='ciao'
 ENV	EXECUTION_DIR=/app/execution/ 
-ENV	DATA_DIR=/app/mnt_data/ 
+# prepare share folder(s) to mount external repositories
+ENV GEO_DIR=/app/mnt_geo/
+ENV	INPUT_DIR=/app/mnt_in/ 
+ENV RESTART_DIR=/app/mnt_restart/
+ENV	OUTPUT_DIR=/app/mnt_out/ 
+ENV	OUTPUT_MODEL_RESULTS_DIR=/app/mnt_out/model_results/ 
+ENV	OUTPUT_MODEL_STATE_DIR=/app/mnt_out/model_state/
+ENV	LOG_DIR=/app/mnt_log/
+ENV	TMP_DIR=/app/mnt_tmp/  
+ENV	INFO_DIR=/app/mnt_info/  
+
 ARG APP_UID=1456
 ARG APP_GID=1456
 USER root
@@ -301,33 +298,39 @@ USER app
 # copy libs, variables from images
 COPY --from=app-builder-libs ${LIBS_SYSTEM_DIR} ${LIBS_SYSTEM_DIR}
 COPY --from=app-builder-libs ${PACKAGE_HMC_DIR} ${PACKAGE_HMC_DIR}
-COPY --from=app-builder-libs ${ENTRYPOINT_DIR} ${ENTRYPOINT_DIR} 
-COPY --from=app-builder-libs ${INPUT_STATIC_DIR} ${INPUT_STATIC_DIR} 
-COPY --from=app-builder-libs ${INPUT_DYNAMIC_DIR} ${INPUT_DYNAMIC_DIR} 
+COPY --from=app-builder-shybox ${ENTRYPOINT_DIR} ${ENTRYPOINT_DIR} 
+COPY --from=app-builder-shybox ${CONDA_SHYBOX_DIR} ${CONDA_SHYBOX_LIBS} 
 
 # Minimal OS deps you actually need at runtime
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-	 ca-certificates bash tini \
+	 ca-certificates bash tini nano \
     && rm -rf /var/lib/apt/lists/*
 # change default shell (from sh to bash)
 SHELL ["/bin/bash", "-c"]
 
-RUN rm -rf ${INPUT_DYNAMIC_DIR}
-RUN rm -rf ${INPUT_STATIC_DIR}
+# Make bash shells automatically have conda and the shybox env active
+RUN echo "source \"${CONDA_SHYBOX_DIR}/etc/profile.d/conda.sh\" 2>/dev/null || true" \
+      >> /etc/bash.bashrc && \
+    echo "conda activate ${CONDA_SHYBOX_LIBS} 2>/dev/null || true" \
+      >> /etc/bash.bashrc
 
-#RUN set -eux; \
-#  groupmod -g "${APP_GID}" app || true; \
-#  usermod  -u "${APP_UID}" -g "${APP_GID}" app || true
-    
+ENV PATH="${CONDA_SHYBOX_DIR}/envs/${CONDA_SHYBOX_LIBS}/bin:${PATH}"
+
 # change user (rootless)
 USER app
-
-# create folder 
-RUN mkdir -p ${EXECUTION_DIR}
-RUN mkdir -p ${DATA_DIR}
-RUN mkdir -p ${INPUT_STATIC_DIR}
-RUN mkdir -p ${INPUT_DYNAMIC_DIR}
+ 
+# create the required folders
+RUN mkdir -p ${EXECUTION_DIR} \
+    && mkdir -p ${GEO_DIR} \
+	&& mkdir -p ${INPUT_DIR} \
+	&& mkdir -p ${RESTART_DIR} \
+	&& mkdir -p ${OUTPUT_DIR} \
+	&& mkdir -p ${OUTPUT_MODEL_RESULTS_DIR} \
+	&& mkdir -p ${OUTPUT_MODEL_STATE_DIR} \
+	&& mkdir -p ${LOG_DIR} \
+	&& mkdir -p ${TMP_DIR} \
+	&& mkdir -p ${INFO_DIR}
 
 # Friendly working dir for exploration
 WORKDIR /app
@@ -338,7 +341,6 @@ RUN chmod +x app_entrypoint.sh
 
 # required for point netcdf libs
 ENV LD_LIBRARY_PATH="/app/library/libs_system:/app/library/libs_system/source/nc4_fortran/fortran/.libs/"
-
 # set environmental variable(s) appending in .bashrc
 RUN echo "source ${LIBS_SYSTEM_DIR}/${SYSTEM_ENV_FILE}" >> /home/app/.bashrc
 # set environmental variable(s) appending in .profile

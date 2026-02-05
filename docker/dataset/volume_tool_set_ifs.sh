@@ -10,11 +10,11 @@ BASE_DST="/home/fabio/Desktop/shybox/hpc/destine"
 
 # Define volumes
 declare -A VOLUMES=(
-  ["case_study_destine_ifs_geo"]="$BASE_SRC/geo"
-  ["case_study_destine_ifs_in"]="$BASE_SRC/data/ifs"
-  ["case_study_destine_ifs_out"]="$BASE_DST/data/forcings/ifs"
-  ["case_study_destine_ifs_log"]="$BASE_DST/log/forcings/ifs"
-  ["case_study_destine_ifs_tmp"]="$BASE_DST/tmp/forcings/ifs"
+  ["case_study_destine_converter_ifs_geo"]="$BASE_SRC/geo/"
+  ["case_study_destine_converter_ifs_in"]="$BASE_SRC/data/ifs/"
+  ["case_study_destine_converter_ifs_out"]="$BASE_DST/hmc/ifs/"
+  ["case_study_destine_converter_ifs_log"]="$BASE_DST/log/converter/ifs/"
+  ["case_study_destine_converter_ifs_tmp"]="$BASE_DST/tmp/converter/ifs/"
 )
 
 # Step 1: Create folders with permissions

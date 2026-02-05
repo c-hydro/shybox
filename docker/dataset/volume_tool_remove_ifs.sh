@@ -1,8 +1,8 @@
-for VOL in case_study_destine_ifs_geo \
-           case_study_destine_ifs_in \
-           case_study_destine_ifs_out \
-           case_study_destine_ifs_log \
-           case_study_destine_ifs_tmp
+for VOL in case_study_destine_converter_ifs_geo \
+           case_study_destine_converter_ifs_in \
+           case_study_destine_converter_ifs_out \
+           case_study_destine_converter_ifs_log \
+           case_study_destine_converter_ifs_tmp
 do
   echo "-----------------------------------"
   echo "Cleaning volume: $VOL"
