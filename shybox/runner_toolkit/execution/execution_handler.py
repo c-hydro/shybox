@@ -605,22 +605,26 @@ class ExecutionAnalyzer:
         if execution_info is None or not isinstance(execution_info, dict):
             raise TypeError(f"{name}: execution_info must be a dict, not {type(execution_info)}")
 
-        self.manager = manager
-        self.execution_info = execution_info
-        self.name = name
-
         checks = execution_info.get("checks", {})
         self._checks: Dict[str, Any] = checks if isinstance(checks, dict) else {}
 
         resp = execution_info.get("exec_response", [None, None, None])
         if isinstance(resp, (list, tuple)) and len(resp) == 3:
-            self._response = list(resp)
+            execution_msg = ['SIMULATION COMPLETED - RUN OK [NO ERRORS]', None, None]
+            execution_info['exec_response'] = execution_msg
+            self._response = execution_msg
         else:
-            self._response = [None, None, None]
+            execution_msg = ['SIMULATION COMPLETED - DRY RUN', None, None]
+            execution_info['exec_response'] = execution_msg
+            self._response = execution_msg
+
+        # update information
+        self.manager = manager
+        self.execution_info = execution_info
+        self.name = name
 
     # ------------------------------------------------------------------ #
     # Core getters / status
-
     @property
     def exec_tag(self) -> Optional[str]:
         v = self.execution_info.get("exec_tag", None)

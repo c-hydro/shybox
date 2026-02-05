@@ -14,12 +14,15 @@ python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD 
 
 Examples of environment variables declarations:
 TIME_RUN="2021-11-27 01:23";
-TIME_PERIOD=12;
-PATH_LOG=$HOME/run_base/log/;
-PATH_SRC=$HOME/run_base_hmc/;
-PATH_DST=$HOME/run_base;
+TIME_PERIOD=5;
 DOMAIN_NAME='marche';
-PATH_APP=$HOME/run_base/exec/
+PATH_APP=$HOME/run_base_hmc/exec/;
+PATH_GEO=/home/fabio/Desktop/shybox/dset/case_study_destine/runner_hmc/geo/;
+PATH_SRC=$HOME/Desktop/shybox/dset/case_study_destine/runner_hmc/data/ifs_nc/;
+PATH_DST=$HOME/Desktop/shybox/exec/case_study_destine/runner_hmc/ifs/results/;
+PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/runner_hmc/ifs/tmp/;
+PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/runner_hmc/ifs/log/;
+PATH_INFO=$HOME/Desktop/shybox/exec/case_study_destine/runner_hmc/ifs/info/;
 
 Version(s):
 20251203 (1.2.0) --> Refactor using class methods in shybox package
@@ -110,7 +113,7 @@ def main(view_table: bool = False, dry_run : bool = False):
     LoggingManager.setup(
         logger_folder=alg_app_log['path'], logger_file=alg_app_log['file_name'],
         logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
-        handlers=['stream'],
+        handlers=alg_app_log.get('handlers', ['stream']),
         force_reconfigure=True,
         arrow_base_len=3, arrow_prefix='-', arrow_suffix='>',
         warning_dynamic=False, error_dynamic=False, warning_fixed_prefix="===> ", error_fixed_prefix="===> ",
@@ -191,7 +194,7 @@ def main(view_table: bool = False, dry_run : bool = False):
     )
 
     # view application namelist section
-    alg_cfg_obj.view(section=alg_app_nml, table_name='application [cfg application namelist]', table_print=True)
+    alg_cfg_obj.view(section=alg_app_nml, table_name='application [cfg application namelist]', table_print=view_table)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -214,7 +217,7 @@ def main(view_table: bool = False, dry_run : bool = False):
         as_object=True,
     )
     # view namelist structure
-    app_nml_struct.view(table_name='application [file application namelist]', table_print=True)
+    app_nml_struct.view(table_name='application [file application namelist]', table_print=view_table)
     # write namelist to file
     app_nml_struct.write_to_ascii(
         filename=alg_app_nml['file']['location'],
@@ -234,22 +237,20 @@ def main(view_table: bool = False, dry_run : bool = False):
         stream_output=True,  # live Fortran logs
         timeout=None,  # or int seconds
     )
+    # view execution info
+    app_execution_obj.view(table_name='execution_info', table_print=view_table)
     # run execution obj
     app_execution_info = app_execution_obj.run(dry_run=dry_run)
-    # view execution info
-    app_execution_obj.view(table_name='execution_info', table_print=True)
 
-    """
     # analyze execution obj
     app_analyzer_obj = app_execution_obj.analyze(app_execution_info)
 
     # view execution info
-    app_analyzer_obj.view(table_name='execution_info', table_print=True)
+    app_analyzer_obj.view(table_name='execution_info', table_print=view_table)
     # dump execution info ['ascii', 'json', 'env']
     app_analyzer_obj.write_to(
         path=alg_app_info['path'], file_name=alg_app_info['file_name'],
         objects=alg_cfg_time, fmt=alg_app_info['format'])
-    """
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

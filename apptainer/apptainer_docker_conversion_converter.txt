@@ -6,6 +6,8 @@ docker save converter:dev -o converter_nwp2hmc.tar
 # 2) convert tar → SIF
 apptainer build converter_nwp2hmc.sif docker-archive://converter_nwp2hmc.tar
 
+# 3) copy to leonardo
+scp /home/fabio/Desktop/shybox/docker/dataset/converter_nwp2hmc.sif fdelogu0@login.leonardo.cineca.it:/leonardo_work/DE374_lot1/fdelogu0/container/converter
 
 # 3a) give the right permission to results fgolder
 	
@@ -100,7 +102,7 @@ scp /home/fabio/Desktop/shybox/docker/app_entrypoint.py   fdelogu0@login.leonard
   --env TIME_START='2024-10-17 06:00' \
   --env TIME_END='2024-10-17 06:00' \
   --env TIME_PERIOD=5 \
-  --env DOMAIN_NAME="marche" \
+  --env DOMAIN_NAME="MarcheDomain" \
   --env APP_CONFIG="/app/execution/app_converter_workflow_hmc_destine_icon.json" \
   --env-file /leonardo_work/DE374_lot1/fdelogu0/container/converter/app_entrypoint_converter_icon2hmc.env \
   --bind /leonardo_work/DE374_lot1/fdelogu0/config/app_converter_workflow_hmc_destine_icon.json:/app/execution/app_converter_workflow_hmc_destine_icon.json \
