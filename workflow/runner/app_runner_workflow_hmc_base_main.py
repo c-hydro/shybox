@@ -82,6 +82,7 @@ def main(view_table: bool = False, dry_run : bool = False):
         time_values=None,  # no fill_section_with_times
         when=None,  # no LUT time resolution
         strict=False,
+        time_keys=("time_start", "time_restart", "time_period", "time_tag"),  # <- keep these in LUT
         resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
         expand_env=True,  # BUT expand $HOME, $RUN, ...
         env_extra=None,  # or {"RUN": "base"} etc
@@ -100,6 +101,7 @@ def main(view_table: bool = False, dry_run : bool = False):
         time_values=None,  # no fill_section_with_times
         when=None,  # no LUT time resolution
         strict=False,
+        time_keys=("time_start", "time_restart", "time_period", "time_tag"),
         resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
         expand_env=True,  # BUT expand $HOME, $RUN, ...
         env_extra=None,  # or {"RUN": "base"} etc
@@ -241,7 +243,8 @@ def main(view_table: bool = False, dry_run : bool = False):
     # view execution info
     app_execution_obj.view(table_name='execution_info', table_print=view_table)
     # run execution obj
-    app_execution_info = app_execution_obj.run(dry_run=dry_run)
+    app_execution_info = app_execution_obj.run(
+        dry_run = alg_app_exec.get("description", {}).get("dry_run", dry_run))
 
     # analyze execution obj
     app_analyzer_obj = app_execution_obj.analyze(app_execution_info)
@@ -272,5 +275,5 @@ def main(view_table: bool = False, dry_run : bool = False):
 # ----------------------------------------------------------------------------------------------------------------------
 # call script from external library
 if __name__ == "__main__":
-    main(view_table=True, dry_run=False)
+    main(view_table=True, dry_run=True)
 # ----------------------------------------------------------------------------------------------------------------------

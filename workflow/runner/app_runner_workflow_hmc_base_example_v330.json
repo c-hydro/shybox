@@ -102,7 +102,8 @@
   },
   "application_execution": {
     "description": {
-      "execution_name": "{execution_name}", "execution_mode": "{execution_mode}"
+      "execution_name": "{execution_name}", "execution_mode": "{execution_mode}",
+      "dry_run": false
     },
     "executable": {
       "location": "{path_app}/HMC_Model_V3_{execution_name}.x",

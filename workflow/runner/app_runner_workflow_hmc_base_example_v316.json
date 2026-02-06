@@ -19,7 +19,7 @@
           "path_source" : "PATH_SRC", "path_destination" : "PATH_DST",
           "time_run" : "TIME_RUN", "time_restart": "TIME_RESTART", "time_period" : "TIME_PERIOD",
           "path_app": "PATH_APP", "path_namelist": "PATH_NAMELIST",
-          "path_info": "PATH_INFO",
+          "path_info": "PATH_INFO", "time_tag": "TIME_RUN",
           "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
         }
       },
@@ -33,14 +33,14 @@
         "path_tmp": "string",
         "path_log": "string", "file_log": "string",
         "path_namelist": "string", "file_namelist": "string",
-        "path_info": "string",
+        "path_info": "string",  "time_tag": "timestamp",
         "execution_name": "string", "execution_mode": "string"
       },
       "template": {
         "domain_name": "string",
         "path_source": "string", "path_destination": "string",
         "time_run": "%Y%m%d%H00", "time_restart": "%Y%m%d%H00", "time_period": "int",
-        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
+        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00", "time_tag": "%Y/%m/%d",
         "time_rounding": "string", "time_frequency": "string",
         "path_tmp": "string",
         "path_app": "string", "path_geo": "string", "path_restart": "string",
@@ -109,7 +109,8 @@
   },
   "application_execution": {
     "description": {
-      "execution_name": "{execution_name}", "execution_mode": "{execution_mode}"
+      "execution_name": "{execution_name}", "execution_mode": "{execution_mode}",
+      "dry_run": false
     },
     "executable": {
       "location": "{path_app}/HMC_Model_V3_{execution_name}.x",
@@ -124,10 +125,10 @@
     }
   },
   "info": {
-    "path": "{path_info}/{domain_name}/", "file_name": "hmc_runner.env", "format": "env"
+    "path": "{path_info}/{domain_name}/{time_tag}", "file_name": "runner_hmc.env", "format": "env"
   },
   "log": {
-      "path": "{path_log}/{domain_name}/",  "file_name": "runner_hmc.txt",
+      "path": "{path_log}/{domain_name}/{time_tag}",  "file_name": "runner_hmc.txt",
       "handlers": ["file","stream"]
   },
   "tmp": {

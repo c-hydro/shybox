@@ -16,6 +16,7 @@ import re
 import copy
 import numpy as np
 import pandas as pd
+import datetime as dt
 
 from typing import Iterable
 from tabulate import tabulate
@@ -771,8 +772,39 @@ class ConfigManager:
 
         return time_keys
 
-    # --------------------------------------------------------------
-    # Override LUT values from system environment variables
+    # method to normalize datetime values (if template is detected) to a standard format (e.g. ISO 8601) for easier processing
+    @staticmethod
+    def _normalize_datetime(value, input_fmt=None, output_fmt=None):
+        if not value:
+            return None
+
+        # remove not useful extra ' or "
+        value = value.strip().strip('"').strip("'")
+
+        # if no output format requested, just return cleaned value
+        if not output_fmt:
+            return value
+
+        # formats to try if input_fmt is not provided
+        input_formats = (
+            [input_fmt] if input_fmt else [
+                "%Y-%m-%d %H:%M",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%dT%H:%M",
+                "%Y-%m-%dT%H:%M:%S",
+            ]
+        )
+
+        for fmt in input_formats:
+            try:
+                return dt.datetime.strptime(value, fmt).strftime(output_fmt)
+            except ValueError:
+                continue
+
+        # parsing failed → return cleaned value
+        return value
+
+    # method to override LUT values from system environment variables
     def update_lut_from_env(
         self,
         keys: list[str] | None = None,
@@ -822,6 +854,12 @@ class ConfigManager:
         else:
             fmt = self.variables.get("format", {})
 
+        # choose template container
+        if hasattr(self, "template") and isinstance(getattr(self, "template"), dict):
+            tmpl = self.template
+        else:
+            tmpl = self.variables.get("template", {})
+
         # decide which keys to check
         if keys is not None:
             keys_to_check = list(keys)
@@ -852,6 +890,7 @@ class ConfigManager:
 
                 if cast_types:
                     type_decl = fmt.get(cfg_key, "string")
+                    tmpl_decl = tmpl.get(cfg_key, "string")
                     if isinstance(type_decl, str):
                         t = type_decl.strip().lower()
                     else:
@@ -864,6 +903,11 @@ class ConfigManager:
                             new_val = float(raw_val)
                         elif t in ("time", "datetime"):
                             new_val = raw_val
+                        elif t in ("timestamp", "time_stamp"):
+                            if tmpl_decl != "string":
+                                new_val = self._normalize_datetime(raw_val, output_fmt=tmpl_decl)
+                            else:
+                                new_val = raw_val
                         else:
                             new_val = raw_val
                     except Exception:
@@ -896,8 +940,7 @@ class ConfigManager:
 
         return {"updated": updated, "missing": missing, "cast_failed": cast_failed}
 
-    # --------------------------------------------------------------
-    # Optional section search
+    # method to search optional sections
     def search_optional_section(
         self,
         section_key: str,
@@ -941,8 +984,7 @@ class ConfigManager:
 
         return root_dict[section_key]
 
-    # --------------------------------------------------------------
-    # FLATTEN nested dict (ANY number of levels) with key modes
+    # method to flat objects to nested structure dict (ANY number of levels) with key modes
     def flatten_obj(
         self,
         obj: dict,
@@ -992,8 +1034,7 @@ class ConfigManager:
 
         return flat
 
-    # --------------------------------------------------------------
-    # UNFLATTEN dict back to nested structure
+    # method to unflatten dict back to nested structure
     def unflatten_obj(self, flat: dict, sep: str = ":") -> dict:
         result = {}
         for composite_key, value in flat.items():
@@ -1004,8 +1045,7 @@ class ConfigManager:
             d[keys[-1]] = value
         return result
 
-    # --------------------------------------------------------------
-    # Flatten selected variables dicts and lift them out of variables
+    # method to flat the variables in rows format and lift them out of variables
     def flatten_variables(
         self,
         which=("lut", "format", "template"),
@@ -1039,8 +1079,7 @@ class ConfigManager:
         if hasattr(self, "variables") and all(n in moved for n in which):
             del self.variables
 
-    # --------------------------------------------------------------
-    # Unflatten selected variables dicts and (re)build self.variables
+    # method to return the variables in dicts format and (re)build self.variables
     def unflatten_variables(
         self,
         which=("lut", "format", "template"),
@@ -1072,7 +1111,7 @@ class ConfigManager:
             vars_dict[name] = nested
             setattr(self, name, nested)
 
-    # --------------------------------------------------------------
+    # helper: convert None to np.nan recursively
     def _convert_none_to_nan_recursive(self, obj):
         """
         Recursively convert None → np.nan inside obj.
@@ -1137,8 +1176,7 @@ class ConfigManager:
 
         return obj_dict
 
-    # --------------------------------------------------------------
-    # PUBLIC: generic view for LUT or any dict (e.g. application)
+    # method to view the objects
     def view(
             self,
             section: dict | str | None = None,
@@ -1234,11 +1272,9 @@ class ConfigManager:
 
         return final_table
 
-    # --------------------------------------------------------------
+    # method to fill lut for nested placeholders
     def autofill_lut(self, extra_tags=None, max_iter=3, strict=False):
-        """
-        Autofill nested placeholders in the LUT using autofill_mapping.
-        """
+
         # determine LUT container
         if hasattr(self, "lut") and isinstance(self.lut, dict):
             lut = self.lut
@@ -1400,8 +1436,7 @@ class ConfigManager:
 
         return lut
 
-
-    # --------------------------------------------------------------
+    # method to fill object using the LUT declared in the json config
     def fill_obj_from_lut(
             self,
             section,
