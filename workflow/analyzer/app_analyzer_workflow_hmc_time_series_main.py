@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW ANALYZER TIME-SERIES - HMC
 
-__date__ = '20260204'
-__version__ = '1.1.0'
+__date__ = '20260208'
+__version__ = '1.2.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -16,11 +16,14 @@ Examples of environment variables declarations:
 TIME_RUN="2025-09-10 07:34";
 TIME_PERIOD=1;
 DOMAIN_NAME='LiguriaDomain';
-PATH_STATIC='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/static/';
-PATH_DYNAMIC_DST='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/dynamic/';
-PATH_DYNAMIC_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/dynamic/';
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/geo/';
+PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/data/';
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/analyzer_hmc/data/';
+PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/analyzer_hmc/tmp/;
+PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/analyzer_hmc/log/;
 
 Version(s):
+20260207 (1.2.0) --> Update to operational version for shybox package
 20260204 (1.1.0) --> Update to latest classes structure
 20260107 (1.0.0) --> Beta release for shybox package
 """
@@ -48,8 +51,8 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 project_name = 'shybox'
 alg_name = 'Workflow for analyzer time-series configuration'
 alg_type = 'Package'
-alg_version = '1.1.0'
-alg_release = '2026-02-04'
+alg_version = '1.2.0'
+alg_release = '2026-02-08'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -111,7 +114,7 @@ def main(view_table: bool = False):
     LoggingManager.setup(
         logger_folder=alg_app_log['path'], logger_file=alg_app_log['file_name'],
         logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
-        handlers=['file', 'stream'],
+        handlers=alg_app_log.get('handlers', ['stream']),
         force_reconfigure=True,
         arrow_base_len=3, arrow_prefix='-', arrow_suffix='>',
         warning_dynamic=False, error_dynamic=False, warning_fixed_prefix="===> ", error_fixed_prefix="===> ",
@@ -259,5 +262,5 @@ def main(view_table: bool = False):
 # ----------------------------------------------------------------------------------------------------------------------
 # call script from external library
 if __name__ == "__main__":
-    main(view_table=True, dry_run=True)
+    main(view_table=True)
 # ----------------------------------------------------------------------------------------------------------------------

@@ -19,17 +19,15 @@ from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESS
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base import (
-    OrchestratorBase, as_list, remove_none, ensure_variables, normalize_deps)
+from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
+    as_list, remove_none, ensure_variables, normalize_deps)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # class orchestrator grid
 class OrchestratorTimeSeries(OrchestratorBase):
-
-    #def grouping_tag(self) -> str:
-    #    return "reference"
 
     # ------------------------------------------------------------------------------------------------------------------
     # class method ts discharge

@@ -265,6 +265,18 @@ def write_ts_hmc(
     # get the data dimensions (time and time-series)
     data_steps_sim, data_n_sim = data_sim.shape
 
+    # check if data is empty or not (rows or columns)
+    if data_sim.ndim < 2 or data_sim.shape[0] == 0 or data_sim.shape[1] == 0:
+        # INFO END - FAILED
+        logger_stream.warning(
+            f"Sections datasets for simulations is empty. "
+            f"Skip time-series writing process to {file_name}."
+        )
+        logger_stream.info(
+            f'Writing time series data to netCDF file "{file_name}" ... FAILED'
+        )
+        return None
+
     ## OBS DATA PREPARATION
     if ts_obs is None:
         # create empty obs matrix with same dims as sim
