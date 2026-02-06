@@ -163,7 +163,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # repository and branch (use your desired tag or branch)
 ARG SHYBOX_REPO=https://github.com/c-hydro/shybox.git
-ARG SHYBOX_REF=destine/1.4.2
+ARG SHYBOX_REF=destine/1.4.3
 
 # UID of the non-root user 'app'
 ENV APP_UID=1456
@@ -282,8 +282,8 @@ ENV GEO_DIR=/app/mnt_geo/
 ENV	INPUT_DIR=/app/mnt_in/ 
 ENV RESTART_DIR=/app/mnt_restart/
 ENV	OUTPUT_DIR=/app/mnt_out/ 
-ENV	OUTPUT_MODEL_RESULTS_DIR=/app/mnt_out/model_results/ 
-ENV	OUTPUT_MODEL_STATE_DIR=/app/mnt_out/model_state/
+#ENV	OUTPUT_MODEL_RESULTS_DIR=/app/mnt_out/model_results/ 
+#ENV	OUTPUT_MODEL_STATE_DIR=/app/mnt_out/model_state/
 ENV	LOG_DIR=/app/mnt_log/
 ENV	TMP_DIR=/app/mnt_tmp/  
 ENV	INFO_DIR=/app/mnt_info/  
@@ -326,8 +326,8 @@ RUN mkdir -p ${EXECUTION_DIR} \
 	&& mkdir -p ${INPUT_DIR} \
 	&& mkdir -p ${RESTART_DIR} \
 	&& mkdir -p ${OUTPUT_DIR} \
-	&& mkdir -p ${OUTPUT_MODEL_RESULTS_DIR} \
-	&& mkdir -p ${OUTPUT_MODEL_STATE_DIR} \
+	#&& mkdir -p ${OUTPUT_MODEL_RESULTS_DIR} \
+	#&& mkdir -p ${OUTPUT_MODEL_STATE_DIR} \
 	&& mkdir -p ${LOG_DIR} \
 	&& mkdir -p ${TMP_DIR} \
 	&& mkdir -p ${INFO_DIR}
