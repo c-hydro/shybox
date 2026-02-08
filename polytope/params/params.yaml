@@ -1,0 +1,50 @@
+# params/params.yaml
+
+2t:
+  param:    "167"
+  levtype:  "sfc"
+  step:     "1/to/72/by/1"
+  type:     "instant"
+
+2d:
+  param:    "168"
+  levtype:  "sfc"
+  step:     "1/to/72/by/1"
+  type:     "instant"
+
+q:
+  param:    "133"
+  levtype:  "pl"
+  levelist: "1000"
+  step:     "1/to/72/by/1"
+  type:     "instant"
+
+10u:
+  param:    "165"
+  levtype:  "sfc"
+  step:     "1/to/72/by/1"
+  type:     "instant"
+
+10v:
+  param:    "166"
+  levtype:  "sfc"
+  step:     "1/to/72/by/1"
+  type:     "instant"
+
+strd:
+  param:    "175"
+  levtype:  "sfc"
+  step:     "0-1/to/71-72/by/1"
+  type:     "accum"
+
+ssrd:
+  param:    "169"
+  levtype:  "sfc"
+  step:     "0-1/to/71-72/by/1"
+  type:     "accum"
+
+tp:
+  param:    "228"
+  levtype:  "sfc"
+  step:     "0-1/to/71-72/by/1"
+  type:     "accum"

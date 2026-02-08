@@ -1,0 +1,9 @@
+earthkit-data>=0.10
+xarray>=2023.0
+PyYAML>=6.0
+h5netcdf>=1.0
+cftime>=1.6
+polytope-client
+pyaviso
+lxml
+conflator

@@ -1,0 +1,13 @@
+# configs/default.yaml
+address: "polytope.lumi.apps.dte.destination-earth.eu"
+
+base_request:
+  class: "d1"
+  expver: "0001"
+  stream: "oper"
+  dataset: "extremes-dt"
+  date: "0"
+  time: "0000"
+  type: "fc"
+  grid: "0.05/0.05"
+  area: "50.0/2.0/34.0/20.0"
