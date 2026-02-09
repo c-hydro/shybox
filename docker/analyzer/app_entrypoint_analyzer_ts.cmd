@@ -50,30 +50,32 @@ docker run -it \
   --entrypoint /bin/bash \
   -e TIME_START='2025-09-10 07:34' \
   -e TIME_END='2025-09-10 07:34'\
+  -e TIME_RUN='2025-09-10 07:34'\
   -e TIME_PERIOD=1 \
   -e DOMAIN_NAME='LiguriaDomain' \
   --env-file app_entrypoint_analyzer_ts.env \
-  -v /home/fabio/Desktop/shybox/docker/dataset/app_analyzer_workflow_hmc_time_series_discharge.json:/app/execution/app_analyzer_workflow_hmc_time_series.json \
-  -v case_study_analyzer_ts_geo:/app/mnt_geo/:rw \
-  -v case_study_analyzer_ts_in:/app/mnt_in/:rw \
-  -v case_study_analyzer_ts_out:/app/mnt_out/:rw \
-  -v case_study_analyzer_ts_log:/app/mnt_log/:rw \
-  -v case_study_analyzer_ts_tmp:/app/mnt_tmp/:rw \
+  -v /home/fabio/Desktop/shybox/docker/analyzer/app_analyzer_workflow_hmc_time_series_discharge.json:/app/execution/app_analyzer_workflow_ts.json \
+  -v case_study_destine_analyzer_ts_geo:/app/mnt_geo/:rw \
+  -v case_study_destine_analyzer_ts_in:/app/mnt_in/:rw \
+  -v case_study_destine_analyzer_ts_out:/app/mnt_out/:rw \
+  -v case_study_destine_analyzer_ts_log:/app/mnt_log/:rw \
+  -v case_study_destine_analyzer_ts_tmp:/app/mnt_tmp/:rw \
   analyzer:dev
 
 # docker run using entrypoint
 docker run -it \
   -e TIME_START='2025-09-10 07:34' \
   -e TIME_END='2025-09-10 07:34'\
+  -e TIME_RUN='2025-09-10 07:34'\
   -e TIME_PERIOD=1 \
   -e DOMAIN_NAME='LiguriaDomain' \
   --env-file app_entrypoint_analyzer_ts.env \
-  -v /home/fabio/Desktop/shybox/docker/dataset/app_analyzer_workflow_hmc_time_series_discharge.json:/app/execution/app_analyzer_workflow_hmc_time_series.json \
-  -v case_study_analyzer_ts_geo:/app/mnt_geo/:rw \
-  -v case_study_analyzer_ts_in:/app/mnt_in/:rw \
-  -v case_study_analyzer_ts_out:/app/mnt_out/:rw \
-  -v case_study_analyzer_ts_log:/app/mnt_log/:rw \
-  -v case_study_analyzer_ts_tmp:/app/mnt_tmp/:rw \
+  -v /home/fabio/Desktop/shybox/docker/analyzer/app_analyzer_workflow_hmc_time_series_discharge.json:/app/execution/app_analyzer_workflow_ts.json \
+  -v case_study_destine_analyzer_ts_geo:/app/mnt_geo/:rw \
+  -v case_study_destine_analyzer_ts_in:/app/mnt_in/:rw \
+  -v case_study_destine_analyzer_ts_out:/app/mnt_out/:rw \
+  -v case_study_destine_analyzer_ts_log:/app/mnt_log/:rw \
+  -v case_study_destine_analyzer_ts_tmp:/app/mnt_tmp/:rw \
   analyzer:dev
 ## --------------------------------------------------------------------------------------------------
 

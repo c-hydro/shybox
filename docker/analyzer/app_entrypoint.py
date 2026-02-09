@@ -31,7 +31,7 @@ logger.info(" ---> Defined required environment variables ... ")
 
 required_vars = [
     "APP_MAIN", "APP_CONFIG",
-    "TIME_PERIOD", "TIME_START", "TIME_END",
+    "TIME_PERIOD", "TIME_START", "TIME_END", "TIME_RUN",
     "PATH_GEO",
     "PATH_SRC", "PATH_DST", "DOMAIN_NAME",
     "PATH_TMP", "PATH_LOG"
