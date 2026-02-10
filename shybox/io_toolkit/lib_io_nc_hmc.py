@@ -403,6 +403,7 @@ def write_ts_hmc(
             info_obj = file_handle.createVariable(
                 varname=field_key_sim, dimensions=(data_dim,), datatype=field_type_sim
             )
+
             # assign variable values
             info_obj[:] = field_values_sim
     else:

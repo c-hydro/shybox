@@ -152,7 +152,22 @@ def check_section_tags(df_ref: pd.DataFrame, df_target: pd.DataFrame, col: str =
         logger_stream.error(f"Column '{col}' not found in target DataFrame.")
 
     # --- Extract unique tags (preserving order) ---
+    tmp_tags = list(df_ref[col].values)
     ref_tags = [t for t in pd.unique(df_ref[col].dropna())]
+
+    if ref_tags.__len__() != tmp_tags.__len__():
+
+        tmp_unique = []
+        for step_tags in tmp_tags:
+            if step_tags not in ref_tags:
+                logger_stream.warning(f"Tag '{step_tags}' appears multiple times in reference DataFrame.")
+
+            if step_tags not in tmp_unique:
+                tmp_unique.append(step_tags)
+            else:
+                logger_stream.error(f"Tag '{step_tags}' appears multiple times in reference DataFrame.")
+                raise ValueError(f"Tag '{step_tags}' appears multiple times in reference DataFrame.")
+
     target_tags = [t for t in pd.unique(df_target[col].dropna())]
 
     # --- Compute missing tags (in order of appearance in df_ref) ---

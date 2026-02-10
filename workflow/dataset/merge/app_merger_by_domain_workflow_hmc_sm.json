@@ -103,14 +103,14 @@
     },
     "data_destination": {
       "path": "{path_destination_root}/{path_destination_time}",
-      "file_name": "hmc.discharge.{file_destination_time}.tiff",
+      "file_name": "hmc.sm.{file_destination_time}.tiff",
       "format": "geotiff",
       "type": null,
       "mode": "grid",
-      "variable": "discharge",
+      "variable": "soil_moisture",
       "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
       "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-      "vars_data": {"simulated_discharge": "discharge"}
+      "vars_data": {"soil_moisture": "soil_moisture"}
     }
   },
   "workflow": {
@@ -119,7 +119,7 @@
         "tmp_dir": "{path_tmp}"
     },
     "process_list": {
-        "DISCHARGE": [
+        "SM": [
             {"function": "merge_data_by_watermark", "method": "nn", "max_distance": 25000, "neighbours": 7,
              "fill_value": null, "var_no_data": -9999}
         ]
@@ -127,7 +127,7 @@
   },
   "log": {
     "path": "{path_log}",
-    "file_name": "merger_by_domain_hmc_discharge.txt"
+    "file_name": "merger_by_domain_hmc_sm.txt"
   },
   "tmp": {
     "path": "{path_tmp}",

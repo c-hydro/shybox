@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 """
-SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN - DISCHARGE
+SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN - SOIL MOISTURE
 
 __date__ = '20260209'
-__version__ = '1.3.0'
+__version__ = '1.2.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
@@ -56,8 +56,8 @@ from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_fo
 project_name = 'shybox'
 alg_name = 'Application for processing datasets - Merger by Domain - Discharge'
 alg_type = 'Package'
-alg_version = '1.3.0'
-alg_release = '2026-02-09'
+alg_version = '1.1.0'
+alg_release = '2026-01-22'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -223,12 +223,12 @@ def main(view_table: bool = False):
                 path=alg_data_src_settings['file_data']['path'],
                 file_name=alg_data_src_settings['file_data']['file_name'],
                 file_type='grid_hmc', file_format='netcdf', file_mode='local',
-                file_variable=['DISCHARGE'], file_io='input',
+                file_variable=['SM'], file_io='input',
                 file_deps={'watermark': dset_src_handler_deps},
                 data_id=alg_data_id,
                 variable_template={
                     "dims_geo": {"west_east": "longitude", "south_north": "latitude", "time": "time"},
-                    "vars_data": {"SM": "simulated_discharge"}
+                    "vars_data": {"SM": "soil_moisture"}
                 },
                 time_signature='current',
                 time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
@@ -244,7 +244,7 @@ def main(view_table: bool = False):
             path=alg_cfg_step['data_destination']['path'],
             file_name=alg_cfg_step['data_destination']['file_name'],
             file_type='grid_2d', file_format='geotiff', file_mode='local',
-            file_variable=['DISCHARGE'], file_io='output',
+            file_variable=['SM'], file_io='output',
             variable_template={
                 "dims_geo": alg_cfg_step['data_destination']['dims_geo'],
                 "vars_data": alg_cfg_step['data_destination']['vars_data']
@@ -261,7 +261,7 @@ def main(view_table: bool = False):
             data_package_in=dset_src_handler_list,
             data_package_out=dset_dst_handler_obj,
             data_ref=ref_data,
-            priority=['simulated_discharge'],
+            priority=['soil_moisture'],
             configuration=alg_cfg_workflow,
             logger=logging_handle
         )
