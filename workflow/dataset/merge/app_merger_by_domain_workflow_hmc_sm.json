@@ -70,36 +70,195 @@
       "grid" : {"y_ll": 36.3, "x_ll": 6.5, "cols": 2500, "rows": 2280, "res": 0.005002, "value": 1}
     },
     "data_source": {
+
       "dset_01": {
         "file_data": {
-          "path": "{path_source_root}/LiguriaDomain/",
+          "path": "{path_source_root}/AdigeDomain/model_results/gridded/",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
-          "path": "{path_geo}",
-          "file_name": "LiguriaDomain.WaterMarkQ.txt"
+          "path": "{path_geo}/",
+          "file_name": "AdigeDomain.WaterMarkQ.txt"
         }
       },
+
       "dset_02": {
         "file_data": {
-          "path": "{path_source_root}/LazioDomain/",
+          "path": "{path_source_root}/BasilicataDomain/model_results/gridded/",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
-          "path": "{path_geo}",
+          "path": "{path_geo}/",
+          "file_name": "BasilicataDomain.WaterMarkQ.txt"
+        }
+      },
+
+      "dset_03": {
+        "file_data": {
+          "path": "{path_source_root}/CalabriaDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "CalabriaDomain.WaterMark.txt"
+        }
+      },
+
+	  "dset_04": {
+        "file_data": {
+          "path": "{path_source_root}/FriuliDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "FriuliDomain.WaterMarkQ.txt"
+        }
+      },
+
+  	  "dset_05": {
+        "file_data": {
+          "path": "{path_source_root}/GarganoDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "GarganoDomain.WaterMarkQ.txt"
+        }
+      },
+
+      "dset_06": {
+        "file_data": {
+          "path": "{path_source_root}/LazioDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
           "file_name": "LazioDomain.WaterMark.txt"
         }
       },
-      "dset_03": {
+
+      "dset_07": {
+        "file_data": {
+          "path": "{path_source_root}/LiguriaDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "LiguriaDomain.WaterMarkQ.txt"
+        }
+      },
+
+
+	  "dset_08": {
+        "file_data": {
+          "path": "{path_source_root}/LiriDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "LiriDomain.WaterMarkQ.txt"
+        }
+      },
+
+      "dset_09": {
+        "file_data": {
+          "path": "{path_source_root}/MarcheDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "MarcheDomain.WaterMarkQ.txt"
+        }
+      },
+
+	  "dset_10": {
+        "file_data": {
+          "path": "{path_source_root}/PoBasin/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "PoBasin.WaterMarkQ.txt"
+        }
+      },
+
+	  "dset_11": {
+        "file_data": {
+          "path": "{path_source_root}/PugliaDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "PugliaDomain.WaterMarkQ.txt"
+        }
+      },
+
+  	  "dset_12": {
+        "file_data": {
+          "path": "{path_source_root}/RomagnaDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "RomagnaDomain.WaterMarkQ.txt"
+        }
+      },
+
+	  "dset_13": {
+        "file_data": {
+          "path": "{path_source_root}/SardegnaDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "SardegnaDomain.WaterMark.txt"
+        }
+      },
+
+	  "dset_14": {
+        "file_data": {
+          "path": "{path_source_root}/SiciliaDomain/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "SiciliaDomain.WaterMark.txt"
+        }
+      },
+
+	  "dset_15": {
+        "file_data": {
+          "path": "{path_source_root}/TevereBasin/model_results/gridded/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/",
+          "file_name": "TevereBasin.WaterMark.txt"
+        }
+      },
+
+      "dset_16": {
          "file_data": {
-           "path": "{path_source_root}/ToscanaDomain/",
+           "path": "{path_source_root}/ToscanaDomain/model_results/gridded/",
            "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
          },
          "file_watermark": {
-            "path": "{path_geo}",
+            "path": "{path_geo}/",
             "file_name": "ToscanaDomain.WaterMark.txt"
          }
+      },
+
+      "dset_17": {
+         "file_data": {
+           "path": "{path_source_root}/VolturnoDomain/model_results/gridded/",
+           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+         },
+         "file_watermark": {
+            "path": "{path_geo}/",
+            "file_name": "VolturnoDomain.WaterMark.txt"
+         }
       }
+
     },
     "data_destination": {
       "path": "{path_destination_root}/{path_destination_time}",

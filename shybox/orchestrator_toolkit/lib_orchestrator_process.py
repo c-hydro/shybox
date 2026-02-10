@@ -128,12 +128,6 @@ class ProcessorContainer:
         if isinstance(time, list):
             if len(time) == 1: time = time[0]
 
-        time_tmp = f"{time}"
-        if time_tmp == '2025-11-17 00:00:00':
-            print()
-        if time_tmp == '2025-11-17 01:00:00':
-            print()
-
         # get information about id and variable(s)
         fx_id = kwargs['id']
         fx_variable_name, fx_variable_wf = kwargs['reference'].split(':')

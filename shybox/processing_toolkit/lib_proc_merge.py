@@ -195,6 +195,9 @@ def merge_data_by_watermark(
         interpolation_mode: bool = True, interpolation_method: str= 'nearest',
         debug: bool=False, **kwargs):
 
+    # algorithm info start
+    logger_stream.info_up("Merge data by watermark ... ")
+
     # normalize to list of Datasets
     if isinstance(data, (xr.DataArray, xr.Dataset)):
         ds_list = [_to_dataset(data)]
@@ -234,14 +237,20 @@ def merge_data_by_watermark(
     out_list = []
     for var_name in var_list:
 
+        # info start variable
+        logger_stream.info_up(f"Variable {var_name} ... ")
+
         # initialize merge array
         var_attrs = None
         var_merge = np.full((nrows_ref, ncols_ref), np.nan, dtype=np.float64)
 
         # iterate over datasets to merge
-        for ds_vars, da_wm in zip(ds_list, wm_list):
+        for ds_id, (ds_vars, da_wm) in enumerate(zip(ds_list, wm_list)):
             if var_name not in ds_vars.data_vars:
                 continue
+
+            # info start dataset
+            logger_stream.info_up(f"Dataset {ds_id} ... ")
 
             # get data
             da_in = ds_vars[var_name]
@@ -251,59 +260,93 @@ def merge_data_by_watermark(
             da_in = da_in.where(da_in != var_no_data, np.nan)
 
             # apply watermark mask on input data (if provided)
+            wm_x_1d, wm_y_1d = None, None
             if da_wm is not None:
                 values_wm = da_wm.values
                 da_in = da_in.where(values_wm <= 0, np.nan)
+                wm_x_1d = da_wm[coord_name_x].values
+                wm_y_1d = da_wm[coord_name_y].values
 
             # clean sub data
             sub_x_1d = da_in[coord_name_x].values
             sub_y_1d = da_in[coord_name_y].values
 
-            # debug geo limits
-            if debug:
-                logger_stream.debug("=== REFERENCE GRID ===")
-                logger_stream.debug(f"ref_x: size={ref_x_1d.size}, min={ref_x_1d.min():.6f}, max={ref_x_1d.max():.6f}")
-                logger_stream.debug(f"ref_y: size={ref_y_1d.size}, min={ref_y_1d.min():.6f}, max={ref_y_1d.max():.6f}")
+            # check if sub grid is all zeros (or empty) to skip resampling and merging
+            x_is_all_zeros, y_is_all_zeros = np.all(sub_x_1d == 0), np.all(sub_y_1d == 0)
 
-                logger_stream.debug("\n=== SUBDOMAIN GRID ===")
-                logger_stream.debug(f"sub_x: size={sub_x_1d.size}, min={sub_x_1d.min():.6f}, max={sub_x_1d.max():.6f}")
-                logger_stream.debug(f"sub_y: size={sub_y_1d.size}, min={sub_y_1d.min():.6f}, max={sub_y_1d.max():.6f}")
-
-            # activate interpolation mode if sub grid is not perfectly aligned with ref grid
-            if interpolation_mode:
-                sub_out = burn_sub_on_ref_interp(
-                    da_sub=da_in,  # DataArray of your variable in subdomain
-                    ref_x_1d=ref_x_1d,
-                    ref_y_1d=ref_y_1d,
-                    ref_nan=ref_nan,
-                    var_no_data=var_no_data,
-                    method=interpolation_method # "nearest" or "linear"
+            # check if sub grid is all zeros (or empty) to skip resampling and merging, or activate interpolation mode
+            if x_is_all_zeros or y_is_all_zeros:
+                logger_stream.warning(
+                    f"Dataset {ds_id} variable '{var_name}' has sub grid with all zeros in x or y. "
+                    f"Try to use the ancillary datasets if available."
                 )
+                if wm_x_1d is not None and wm_y_1d is not None:
+                    da_in.coords[coord_name_x] = wm_x_1d
+                    da_in.coords[coord_name_y] = wm_y_1d
 
-                # now update merge (if you want overwrite only where sub has values)
-                mask = ~np.isnan(sub_out)
-                var_merge[mask] = sub_out[mask]
+                    sub_x_1d, sub_y_1d = da_in[coord_name_x].values, da_in[coord_name_y].values
+
+            # check if sub grid is all zeros (or empty) to skip resampling and merging
+            x_is_all_zeros, y_is_all_zeros = np.all(sub_x_1d == 0), np.all(sub_y_1d == 0)
+
+            # check if sub grid is all zeros (or empty) to skip resampling and merging, or activate interpolation mode
+            if not x_is_all_zeros and not y_is_all_zeros:
+
+                # debug geo limits
+                if debug:
+                    logger_stream.debug("=== REFERENCE GRID ===")
+                    logger_stream.debug(f"ref_x: size={ref_x_1d.size}, min={ref_x_1d.min():.6f}, max={ref_x_1d.max():.6f}")
+                    logger_stream.debug(f"ref_y: size={ref_y_1d.size}, min={ref_y_1d.min():.6f}, max={ref_y_1d.max():.6f}")
+
+                    logger_stream.debug("\n=== SUBDOMAIN GRID ===")
+                    logger_stream.debug(f"sub_x: size={sub_x_1d.size}, min={sub_x_1d.min():.6f}, max={sub_x_1d.max():.6f}")
+                    logger_stream.debug(f"sub_y: size={sub_y_1d.size}, min={sub_y_1d.min():.6f}, max={sub_y_1d.max():.6f}")
+
+                # activate interpolation mode if sub grid is not perfectly aligned with ref grid
+                if interpolation_mode:
+                    sub_out = burn_sub_on_ref_interp(
+                        da_sub=da_in,  # DataArray of your variable in subdomain
+                        ref_x_1d=ref_x_1d,
+                        ref_y_1d=ref_y_1d,
+                        ref_nan=ref_nan,
+                        var_no_data=var_no_data,
+                        method=interpolation_method # "nearest" or "linear"
+                    )
+
+                    # now update merge (if you want overwrite only where sub has values)
+                    mask = ~np.isnan(sub_out)
+                    var_merge[mask] = sub_out[mask]
+
+                else:
+
+                    # get sub data
+                    sub_data = da_in.values.astype(np.float64)
+                    sub_data[sub_data == var_no_data] = np.nan
+
+                    # indices of each sub coord in ref grid
+                    i_ref = _map_1d_to_ref_indices(ref_x_1d, sub_x_1d)  # length 559
+                    j_ref = _map_1d_to_ref_indices(ref_y_1d, sub_y_1d)  # length 167
+
+                    # build 2D index grids
+                    jj, ii = np.meshgrid(j_ref, i_ref, indexing="ij")  # shape (167, 559)
+                    # update only where sub valid and ref is valid
+                    mask = (~np.isnan(sub_data)) & (~ref_nan[jj, ii])
+                    var_merge[jj[mask], ii[mask]] = sub_data[mask]
 
             else:
-
-                # get sub data
-                sub_data = da_in.values.astype(np.float64)
-                sub_data[sub_data == var_no_data] = np.nan
-
-                # indices of each sub coord in ref grid
-                i_ref = _map_1d_to_ref_indices(ref_x_1d, sub_x_1d)  # length 559
-                j_ref = _map_1d_to_ref_indices(ref_y_1d, sub_y_1d)  # length 167
-
-                # build 2D index grids
-                jj, ii = np.meshgrid(j_ref, i_ref, indexing="ij")  # shape (167, 559)
-                # update only where sub valid and ref is valid
-                mask = (~np.isnan(sub_data)) & (~ref_nan[jj, ii])
-                var_merge[jj[mask], ii[mask]] = sub_data[mask]
+                # message for not interpolating when sub grid is all zeros
+                logger_stream.warning(
+                    f"Dataset {ds_id} variable '{var_name}' has sub grid with all zeros in x or y, and interpolation_mode is False. "
+                    f"Skipping this dataset for merging."
+                )
 
             # debug
             if debug:
                 plot_data(da_in.values, title=f"input data step: {var_name}")
                 plot_data(var_merge, title=f"Merged data step: {var_name}")
+
+            # info end dataset
+            logger_stream.info_down(f"Dataset {ds_id} ... DONE")
 
         # keep ref NaNs
         var_merge[ref_nan] = np.nan
@@ -324,6 +367,12 @@ def merge_data_by_watermark(
 
         # append
         out_list.append(var_da)
+
+        # info end variable
+        logger_stream.info_down(f"Variable {var_name} ... DONE")
+
+    # algorithm info end
+    logger_stream.info_down("Merge data by watermark ... DONE")
 
     return out_list[0] if len(out_list) == 1 else out_list
 
