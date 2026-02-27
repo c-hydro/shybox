@@ -1,0 +1,30 @@
+
+## LOCAL MACHINE
+# 1) save your Docker image to a tar
+docker save analyzer:dev -o analyzer_ts.tar
+
+# 2) convert tar → SIF
+apptainer build analyzer_ts.sif docker-archive://analyzer_ts.tar
+
+# 3) copy to leonardo
+scp /home/fabio/Desktop/shybox/docker/analyzer/analyzer_ts.sif fdelogu0@login.leonardo.cineca.it:/leonardo_work/DE374_lot1/fdelogu0/container/analyzer/analyzer_ts.sif
+
+# example of apptainer/singularity application
+apptainer exec \
+  --env TIME_START='2025-09-10 07:34' \
+  --env TIME_END='2025-09-10 07:34' \
+  --env TIME_RUN='2025-09-10 07:34' \
+  --env TIME_PERIOD=1 \
+  --env DOMAIN_NAME="LiguriaDomain" \
+  --env APP_CONFIG="/app/execution/app_analyzer_workflow_ts.json" \
+  --env-file app_entrypoint_analyzer_ts.env \
+  --bind /home/fabio/Desktop/shybox/docker/analyzer/app_analyzer_workflow_hmc_time_series_discharge.json:/app/execution/app_analyzer_workflow_ts.json" \
+  --bind case_study_destine_analyzer_ts_geo:/app/mnt_geo/ \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/data/:/app/mnt_in/ \
+  --bind /home/fabio/Desktop/shybox/dset/case_study_destine/results/:/app/mnt_out/ \
+  --bind case_study_destine_analyzer_ts_log:/app/mnt_log/ \
+  --bind case_study_destine_analyzer_ts_tmp:/app/mnt_tmp/ \
+  analyzer_ts.sif \
+  python app_entrypoint.py
+  
+
