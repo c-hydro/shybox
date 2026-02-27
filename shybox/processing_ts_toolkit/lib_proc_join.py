@@ -27,8 +27,17 @@ def join_time_series_by_registry(
 
     ## GENERIC CHECK
     var_time_name = 'time'
-    if data is None or data.empty:
-        logger_stream.error("'data' must be a non-empty DataFrame.")
+
+    if data is None:
+        logger_stream.warning("time-series datasets is None.")
+        return None  # or raise ValueError
+    if not isinstance(data, pd.DataFrame):
+        logger_stream.warning(f"time-series datasets ' must be a pandas DataFrame, got {type(data)}.")
+        return None  # or raise TypeError
+    if data.empty:
+        logger_stream.warning("time-series datasets  must be a non-empty DataFrame.")
+        return None
+
     if sections_hmc is None or sections_hmc.empty:
         logger_stream.warning("'sections_hmc' should be a non-empty DataFrame.")
     if sections_db is None or sections_db.empty:

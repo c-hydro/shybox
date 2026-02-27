@@ -258,12 +258,26 @@ def write_ts_hmc(
 
     # ------------------------------------------------------------------------------------------------------------------
     ## SIM DATA PREPARATION
-    # define ts data (in 2d dimensions: time, ts)
-    data_sim = ts_sim.drop(columns=time_name).to_numpy(dtype=float)
+    # define ts data (expected: 2d dimensions: time, ts)
+    data_sim = ts_sim.drop(columns=time_name).to_numpy(dtype=float, copy=True)  # <- force writable
+
+    # if in some edge case it is 1D, make it 2D (time, 1)
+    if data_sim.ndim == 1:
+        data_sim = data_sim.reshape(-1, 1)
+
     # replace NaNs with no_data
     data_sim[np.isnan(data_sim)] = data_no_value
+
     # get the data dimensions (time and time-series)
     data_steps_sim, data_n_sim = data_sim.shape
+
+    # OLD CODE
+    # define ts data (in 2d dimensions: time, ts)
+    #data_sim = ts_sim.drop(columns=time_name).to_numpy(dtype=float)
+    # replace NaNs with no_data
+    #data_sim[np.isnan(data_sim)] = data_no_value
+    # get the data dimensions (time and time-series)
+    #data_steps_sim, data_n_sim = data_sim.shape
 
     # check if data is empty or not (rows or columns)
     if data_sim.ndim < 2 or data_sim.shape[0] == 0 or data_sim.shape[1] == 0:
@@ -283,7 +297,11 @@ def write_ts_hmc(
         data_obs = np.full((time_n, data_n_sim), data_no_value, dtype=float)
     else:
         # convert obs dataframe to numpy (same structure as sim)
-        data_obs = ts_obs.drop(columns=time_name).to_numpy(dtype=float)
+        data_obs = ts_obs.drop(columns=time_name).to_numpy(dtype=float, copy=True)
+        #data_obs = ts_obs.drop(columns=time_name).to_numpy(dtype=float)
+
+        if data_obs.ndim == 1:
+            data_obs = data_obs.reshape(-1, 1)
 
         # check dims consistency (optional but recommended)
         if data_obs.shape != (time_n, data_n_sim):

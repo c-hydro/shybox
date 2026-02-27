@@ -594,8 +594,11 @@ class ProcessorContainer:
             fx_variable_data = list(fx_save.data_vars)
         elif isinstance(fx_save, pd.DataFrame):
             fx_variable_data = fx_save.name
+        elif fx_save is None:
+            self.logger.warning('Output datasets are defined NoneType. No output will be saved.')
+            return None, fx_memory
         else:
-            self.logger.error('Unknown fx output type')
+            self.logger.error('Output datasets are defined by unknown type')
             raise ValueError('Unknown fx output type')
 
         # check variable data
@@ -871,6 +874,9 @@ def _sync_variable_name(data, vars):
         else:
             logger_stream.error(f"Object fx_data DataFrame has no attribute 'name' or it is None.")
             raise TypeError("Object fx_data DataFrame has no attribute 'name' or it is None.")
+    elif data is None:
+        logger_stream.warning(f"Object fx_data DataFrame is None. Datasets are not available.")
+        data_vars = []
     else:
         logger_stream.error("Object fx_data must be an xarray [DataArray, Dataset] or pandas [DataFrame].")
         raise NotImplementedError('Case not implemented yet')

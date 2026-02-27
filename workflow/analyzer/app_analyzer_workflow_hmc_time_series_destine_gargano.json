@@ -73,7 +73,7 @@
       }
     },
     "dynamic_data_src": {
-      "path": "{path_dynamic_source}/{domain_name}/{path_time_source}/time_series/",
+      "path": "{path_dynamic_source}/{domain_name}/{path_time_source}/time_series/e",
       "file_name": "hmc.hydrograph.txt"
     },
     "dynamic_data_dst": {
