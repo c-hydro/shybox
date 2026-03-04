@@ -56,6 +56,7 @@ TYPE_DB_DEFAULT = {
     'section_name': str,
     'station_name': str,
     'catchment_name': str,
+    'data_from': str,
     'domain_name': str,
     'municipality': str,
     'province': str,

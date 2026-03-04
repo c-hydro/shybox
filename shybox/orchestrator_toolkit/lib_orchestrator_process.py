@@ -296,7 +296,11 @@ class ProcessorContainer:
         # manage time if data_raw is a list or single object
         if isinstance(time, list):
             if isinstance(data_raw, list):
+
+                data_n = len(data_raw)
                 data_raw = data_raw * len(time)
+                time = [t for t in time for _ in range(data_n)]
+
             elif isinstance(data_raw, DataLocal):
                 data_raw = [data_raw] * len(time)
             else:
@@ -354,6 +358,12 @@ class ProcessorContainer:
             # normalize data to list of DataLocal (if needed)
             data_list = _normalize_local_data(data_raw)
 
+            # check if time step have some groups (repeated time steps) and group data and time accordingly
+            has_group, time_group, data_group, names_group = _group_by_time(time, data_list, data_names)
+
+            if has_group:
+                time, data_list, data_names = time_group, data_group, names_group
+
             # iterate over the list of data objects
             fx_data, fx_metadata, fx_deps = [], {}, []
             fx_other, fx_varid, fx_check = {}, [], []; print(data_list, data_names, time)
@@ -389,7 +399,7 @@ class ProcessorContainer:
                         data_tmp = tmp_obj[0]
                     else:
                         self.logger.error('Multiple keys dictionary of data objects are not supported')
-                        raise ValueError('Multiple keys dictionar of data objects are not supported')
+                        raise ValueError('Multiple keys dictionary of data objects are not supported')
                 elif isinstance(data_tmp, DataLocal):
                     pass
                 else:
@@ -833,6 +843,42 @@ class ProcessorContainer:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
+from collections import OrderedDict
+
+def _group_by_time(time_list, data_list, data_names):
+    if not (len(time_list) == len(data_list) == len(data_names)):
+        raise ValueError("time_list, data_list, data_names must have same length")
+
+    # time -> name -> list_of_data (preserves insertion order)
+    grouped = OrderedDict()
+
+    for t, d, n in zip(time_list, data_list, data_names):
+        if t not in grouped:
+            grouped[t] = OrderedDict()
+        if n not in grouped[t]:
+            grouped[t][n] = []
+        grouped[t][n].append(d)
+
+    time_unique = list(grouped.keys())
+
+    # For each time: list of names (stable order) and corresponding list of data-lists
+    names_grouped = []
+    data_grouped = []
+    has_repeats = False
+
+    for t in time_unique:
+        names_t = list(grouped[t].keys())                 # stable order of first appearance
+        data_t = [grouped[t][n] for n in names_t]         # each is a list (may have repeats)
+
+        # repeats exist if any (time, name) has >1 data
+        if any(len(v) > 1 for v in data_t):
+            has_repeats = True
+
+        names_grouped.append(names_t)
+        data_grouped.append(data_t)
+
+    return has_repeats, time_unique, data_grouped, names_grouped
+
 def _get_memory_data(obj):
     if hasattr(obj, "memory_data"):
         return obj.memory_data
