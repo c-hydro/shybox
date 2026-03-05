@@ -36,7 +36,8 @@ from decimal import Decimal
 from typing import Optional, Dict
 
 from shybox.generic_toolkit.lib_utils_file import fix_file_path
-from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry
+from shybox.io_toolkit.lib_io_ascii_points import read_points_1d
+from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
 from shybox.io_toolkit.lib_io_nc_hmc import read_datasets_hmc, write_dataset_hmc, write_ts_hmc
@@ -84,7 +85,7 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write a geopandas dataframe to a {file_format} file.')
                 
     elif 'pd' in globals() and isinstance(data, pd.DataFrame):
-        if file_format not in ['csv', 'netcdf']:
+        if file_format not in ['csv', 'netcdf', 'ascii', 'txt']:
             raise ValueError(f'Cannot write a pandas dataframe to a {file_format} file.')
     
     elif format not in 'file':
@@ -215,6 +216,10 @@ def read_from_file(
             squeeze_dims = [dim for dim in data.dims if data[dim].size == 1]
             if len(squeeze_dims) > 0:
                 data = data.squeeze(squeeze_dims)
+
+        elif file_type == 'points_1d':
+
+            data = read_points_1d(file_path=path, header=True, delimiter=';')
 
         elif file_type == 'points_section_db':
 
@@ -412,8 +417,16 @@ def write_to_file(data, path,
     if not os.path.exists(path):
         append = False
 
+    # write the data to a ascii
+    if file_format == 'ascii':
+        if file_type == 'hydrograph_hmc':
+            write_sections_data(path=path, df=data)
+        else:
+            logger_stream.error(f'File type {file_type} not supported for format ascii writing.')
+            raise NotImplemented(f'File type {file_type} not supported for format ascii writing.')
+
     # write the data to a csv
-    if file_format == 'csv':
+    elif file_format == 'csv':
         if append:
             data.to_csv(path, mode = 'a', header = False)
         else:

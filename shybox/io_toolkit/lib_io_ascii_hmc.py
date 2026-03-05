@@ -1,3 +1,12 @@
+"""
+Library Features:
+
+Name:          lib_io_ascii_hmc
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20260305'
+Version:       '1.0.0'
+"""
+
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from __future__ import annotations
@@ -226,6 +235,75 @@ def read_sections_db(
         df_out.name = name
 
     return df_out
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to write sections data hmc (txt format)
+@with_logger(var_name='logger_stream')
+def write_sections_data(
+    path,
+    df,
+    sep=" ",
+    header=False,
+    index=False,
+    float_format="%.2f",
+    fill_nan=-9999.0,
+    create_dir=True,
+    overwrite=True,
+    inplace_fill=False,   # if True, fill NaNs in df itself; else work on a copy
+):
+    path = Path(path)
+
+    if create_dir:
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not overwrite and path.exists():
+        raise FileExistsError(f"File already exists: {path}")
+
+    # Fill NaNs only for numeric part (all columns except the first = time)
+    if inplace_fill:
+        df_num = df.iloc[:, 1:]
+        df_num[:] = df_num.fillna(fill_nan)
+        df_work = df
+    else:
+        df_work = df.copy()
+        df_work.iloc[:, 1:] = df_work.iloc[:, 1:].fillna(fill_nan)
+
+    with open(path, "w") as f:
+
+        # header line (optional)
+        if header:
+            cols = []
+            if index:
+                cols.append("index")
+            cols.extend(df_work.columns.tolist())
+            f.write(sep.join(map(str, cols)) + "\n")
+
+        # rows
+        for i in range(len(df_work)):
+            row = df_work.iloc[i]
+
+            parts = []
+            if index:
+                parts.append(str(df_work.index[i]))
+
+            # time (first col) as string
+            parts.append(str(row.iloc[0]))
+
+            # values: cast to float and format at write time
+            for v in row.iloc[1:]:
+                vf = float(v)  # now NaNs already replaced
+
+                if pd.isna(vf):
+                    vf = fill_nan
+
+                if float_format is None:
+                    parts.append(str(vf))
+                else:
+                    parts.append(float_format % vf)
+
+            f.write(sep.join(parts) + "\n")
 
 # ----------------------------------------------------------------------------------------------------------------------
 

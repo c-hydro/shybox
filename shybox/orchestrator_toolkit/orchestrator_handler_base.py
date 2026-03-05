@@ -395,12 +395,15 @@ class OrchestratorBase:
         # iterate over time steps
         for ts in time_steps:
 
+            # format ts only for logging
+            pretty_ts = pretty_time(ts)
+
             # info time start
-            self.logger.info_up(f'Time "{ts}" ...')
+            self.logger.info_up(f'Time "{pretty_ts}" ...')
             # run time step
             self.run_single_ts(time=ts, **kwargs)
             # info time end
-            self.logger.info_down(f'Time "{ts}" ... DONE')
+            self.logger.info_down(f'Time "{pretty_ts}" ... DONE')
 
         # info orchestrator end
         self.logger.info_down('Run orchestrator ... DONE')
@@ -562,4 +565,23 @@ class OrchestratorBase:
             proc_wf_current = proc_wf_tmp
             #proc_ws[proc_wf_current] = proc_return[-1]
             #proc_ws[proc_current] = proc_return[-1]
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to format time for logging
+def pretty_time(ts):
+
+    if isinstance(ts, pd.DatetimeIndex):
+        if len(ts) == 1:
+            return ts[0].strftime("%Y-%m-%d %H:%M")
+        else:
+            start = ts[0].strftime("%Y-%m-%d %H:%M")
+            end = ts[-1].strftime("%Y-%m-%d %H:%M")
+            return f"{start} :: {end} ({len(ts)} steps)"
+
+    elif isinstance(ts, pd.Timestamp):
+        return ts.strftime("%Y-%m-%d %H:%M")
+
+    else:
+        return str(ts)
 # ----------------------------------------------------------------------------------------------------------------------

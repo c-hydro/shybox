@@ -297,18 +297,52 @@ class ProcessorContainer:
         if isinstance(time, list):
             if isinstance(data_raw, list):
 
+                # compute data length (before expansion)
                 data_n = len(data_raw)
-                data_raw = data_raw * len(time)
-                time = [t for t in time for _ in range(data_n)]
+
+                # type_raw (as you already do)
+                type_raw = ['data'] * data_n
+                if id_deps is not None:
+                    type_raw[id_deps:] = ['deps'] * (data_n - id_deps)
+
+                # partial id inside each repeated block: 0..data_n-1, repeated for each time
+                id_partial = list(range(data_n)) * len(time)
+                # global id over the expanded vectors: 0..(data_n*len(time)-1)
+                id_global = list(range(data_n * len(time)))
+
+                # expand everything consistently ---
+                type_raw = type_raw * len(time)
+                data_raw_expanded = data_raw * len(time)
+                time_expanded = [t for t in time for _ in range(data_n)]
+
+                # overwrite originals if you want
+                data_raw = data_raw_expanded
+                time = time_expanded
 
             elif isinstance(data_raw, DataLocal):
+
+                # compute data length (before expansion)
+                data_n = len(data_raw)
+
+                type_raw = ['data'] * len(time)
                 data_raw = [data_raw] * len(time)
+
+                # partial id (inside each data_raw block)
+                id_partial = [list(range(data_n)) for _ in time]
+
+                # global id across the flattened structure
+                id_global = []
+                gid = 0
+                for _ in time:
+                    id_global.append(list(range(gid, gid + data_n)))
+                    gid += data_n
+
             else:
                 self.logger.error('Data object is not compatible with time list')
                 raise TypeError('Data object is not compatible with time list')
 
             # create data names (overwrite the previous obj to match time length)
-            data_names, obj_vars_raw = [], []
+            times_raw, obj_vars_raw = [], []
             for t, data_step in zip(time, data_raw):
 
                 # manage variable and data names
@@ -318,8 +352,23 @@ class ProcessorContainer:
                 step_tag = ':'.join([step_variable, step_workflow])
                 obj_vars_raw.append(step_tag)
 
-                data_names.append(f"data_{t.strftime('%Y%m%d%H%M')}" if hasattr(t, "strftime") else f"data_{str(t)}")
+                times_raw.append(f"{t.strftime('%Y%m%d%H%M')}" if hasattr(t, "strftime") else f"{str(t)}")
 
+        else:
+
+            # compute data length (before expansion)
+            data_n = len(data_raw)
+
+            type_raw = ['data'] * data_n
+            if id_deps is not None:
+                type_raw[id_deps:] = ['deps'] * (data_n - id_deps)
+            type_raw = type_raw * 1
+
+            # ids
+            id_partial = list(range(data_n))
+            id_global = list(range(data_n))
+
+            times_raw = [f"{str(time)}"]
 
         # check if data_raw is a list and adapt time accordingly
         if isinstance(data_raw, list):
@@ -357,17 +406,31 @@ class ProcessorContainer:
 
             # normalize data to list of DataLocal (if needed)
             data_list = _normalize_local_data(data_raw)
+            type_list = _normalize_local_data(type_raw)
+            time_list = _normalize_local_data(times_raw)
 
+            '''
             # check if time step have some groups (repeated time steps) and group data and time accordingly
-            has_group, time_group, data_group, names_group = _group_by_time(time, data_list, data_names)
+            data_has_group, data_time_group, data_obj_group, data_names_group = _group_by_time(time, data_list, data_names)
+            type_has_group, type_time_group, type_obj_group, type_names_group = _group_by_time(time, type_list, data_names)
 
-            if has_group:
-                time, data_list, data_names = time_group, data_group, names_group
+            if data_has_group:
+                time, data_list, data_names = data_time_group, data_obj_group, data_names_group
+            if type_has_group:
+                type_list = type_obj_group
+            '''
 
             # iterate over the list of data objects
             fx_data, fx_metadata, fx_deps = [], {}, []
             fx_other, fx_varid, fx_check = {}, [], []; print(data_list, data_names, time)
-            for data_id, (data_tmp, data_name, time_tmp) in enumerate(zip(data_list, data_names, time)):
+            for data_partial_id, data_global_id, data_tmp, type_tmp, time_tmp, time_step in (
+                    zip(id_partial, id_global, data_list, type_list, time_list, time)):
+
+                # assing id to data object (partial id for the repeated time steps, global id for the whole list)
+                if data_partial_id == data_global_id:
+                    data_id = data_global_id
+                else:
+                    data_id = data_partial_id
 
                 # define the variable name to read
                 if isinstance(obj_vars_raw, list):
@@ -414,7 +477,7 @@ class ProcessorContainer:
                 # check time reference uniqueness and match
                 if data_tmp.time_direction == 'single':
                     time_ref = pd.Timestamp(data_tmp.time_reference)
-                    if time_ref != time_tmp:
+                    if time_ref != time_step:
                         # skip to next variable if time does not match
                         continue
 
@@ -422,20 +485,20 @@ class ProcessorContainer:
                 data_tmp.logger = self.logger.compare(data_tmp.logger)
 
                 # read data only if readable (ok or template) --> condition of data object
-                self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... ")
+                self.logger.info(f"Check object '{time_step}' and variable '{str_var_tmp}' ... ")
 
                 status_tag_tmp, status_readable_tmp =  data_tmp.is_readable()
                 if not status_readable_tmp:
                     if not status_tag_tmp == 'template':
-                        self.logger.warning(f"Object {data_name} is not readable. File is not available.")
-                        self.logger.info(f"Control obj '{data_name}' variable '{str_var_tmp}' is readable ... SKIP")
+                        self.logger.warning(f"Object {time_tmp} is not readable. File is not available.")
+                        self.logger.info(f"Control obj '{time_tmp}' variable '{str_var_tmp}' is readable ... SKIP")
                         fx_check.append(False)
                     else:
-                        self.logger.info(f"Object {data_name} is a template. The template will be filled by the times.")
-                        self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... PASS")
+                        self.logger.info(f"Object {time_tmp} is a template. The template will be filled by the times.")
+                        self.logger.info(f"Check object '{time_tmp}' and variable '{str_var_tmp}' ... PASS")
                         fx_check.append(True)
                 else:
-                    self.logger.info(f"Check object '{data_name}' and variable '{str_var_tmp}' ... PASS")
+                    self.logger.info(f"Check object '{time_tmp}' and variable '{str_var_tmp}' ... PASS")
                     fx_check.append(True)
 
                 # manage variable mapping
@@ -453,7 +516,7 @@ class ProcessorContainer:
                 if fx_check[data_id]:
 
                     # save data and deps
-                    fx_tmp = data_tmp.get_data(time=time_tmp, name=step_tag, **kwargs)
+                    fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, **kwargs)
                     fx_deps.append(step_tag)
 
                     # convert to DataArray if single variable
@@ -468,20 +531,20 @@ class ProcessorContainer:
                 else:
                     # data is not readable (default)
                     fx_tmp = None
-                    fx_vars = data_name
+                    fx_vars = time_tmp
 
                 # append data (in list format)
                 if (id_deps is None) or (data_id < id_deps):
                     fx_data.append(fx_tmp)
                 else:
-                    if not data_name in list(fx_other.keys()):
-                        fx_other[data_name] = fx_tmp
+                    if not time_tmp in list(fx_other.keys()):
+                        fx_other[time_tmp] = fx_tmp
                     else:
-                        tmp_other = fx_other[data_name]
+                        tmp_other = fx_other[time_tmp]
                         if not isinstance(tmp_other, list):
                             tmp_other = [tmp_other]
                         tmp_other.append(fx_tmp)
-                        fx_other = {data_name: tmp_other}
+                        fx_other = {time_tmp: tmp_other}
 
                 # create metadata
                 if 'fx_variable' not in fx_metadata:
@@ -815,6 +878,23 @@ class ProcessorContainer:
                 # save the data
                 if not len(collections_variables) == 0:
 
+                    # get signature to use in write_data (if time signature is defined in the output object)
+                    time_signature = self.out_obj.time_signature
+
+                    if time_signature == 'step':
+                        pass
+                    elif time_signature == 'range' or time_signature == 'start/end':
+                        time = (time[0], time[-1])
+                    elif time_signature == 'end':
+                        time = time[-1]
+                    elif time_signature == 'start':
+                        time = time[0]
+                    elif time_signature == 'period':
+                        time = (time[0], time[-1])
+                    else:
+                        self.logger.error(f"Unknown time signature '{time_signature}' in output object")
+                        raise ValueError(f"Unknown time signature '{time_signature}' in output object")
+
                     # write collections
                     self.out_obj.write_data(
                         collections_obj, time,
@@ -844,6 +924,17 @@ class ProcessorContainer:
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
 from collections import OrderedDict
+
+def _check_list_of_list(x):
+    return (
+        isinstance(x, list) and
+        all(
+            isinstance(i, list) and
+            all(isinstance(j, list) for j in i) or isinstance(i, list)
+            for i in x
+        )
+    )
+
 
 def _group_by_time(time_list, data_list, data_names):
     if not (len(time_list) == len(data_list) == len(data_names)):
