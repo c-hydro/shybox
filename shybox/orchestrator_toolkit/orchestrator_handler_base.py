@@ -391,9 +391,6 @@ class OrchestratorBase:
                 # merger by time requires all time steps at once
                 time_steps = _merge_by_time(time_steps)
                 self.memory_active = False
-            elif group_type == 'by_process':
-
-                print()
 
         # iterate over time steps
         for ts in time_steps:

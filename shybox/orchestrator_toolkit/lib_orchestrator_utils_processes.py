@@ -124,17 +124,26 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
 
                     # get the function signature to determine parameter names
                     signature = inspect.signature(func)
+
                     # consider only positional parameters (positional-only and positional-or-keyword)
                     params = [
-                        p for p in signature.parameters.values()
-                        if p.kind in (
+                        p for i, p in enumerate(signature.parameters.values())
+                        if (
+                                p.kind in (
                             inspect.Parameter.POSITIONAL_ONLY,
                             inspect.Parameter.POSITIONAL_OR_KEYWORD
+                        )
+                                and i >= len(args)
+                                and p.name not in kwargs
+                                and p.default is inspect._empty
                         )
                     ]
 
                     # map the normalized_data items to the function parameters by position
-                    normalized_dict = {p.name: v for p, v in zip(params, normalized_data)}
+                    if len(params) == 1:
+                        normalized_dict = {params[0].name: normalized_data}
+                    else:
+                        normalized_dict = dict(zip((p.name for p in params), normalized_data))
 
                     # check for missing required parameters (those that are not in normalized_dict and have no default)
                     missing = [p.name for p in params if p.name not in normalized_dict and p.default is inspect._empty]

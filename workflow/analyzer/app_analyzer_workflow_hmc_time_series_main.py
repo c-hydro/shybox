@@ -282,7 +282,7 @@ def main(view_table: bool = False):
         logger=logging_handle
     )
     # orchestrator exec
-    orc_process.run(time=alg_reference_time, group='by_variable')
+    orc_process.run(time=alg_reference_time)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
