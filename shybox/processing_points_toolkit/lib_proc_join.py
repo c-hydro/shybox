@@ -81,7 +81,16 @@ def join_points_to_time_series(data, ref, time, name='points_time_series',
                 if v is None or (isinstance(v, float) and np.isnan(v)):
                     vals.append(fill_missing_tag)
                 else:
+
+                    if isinstance(v, np.ndarray):
+                        if v.size == 1:
+                            v = v.item()
+                        else:
+                            logger_stream.warning(f"Array with shape {v.shape}, using first element")
+                            v = v.flat[0]
+
                     vals.append(float(v))
+                    print(type(v), v.shape)
             else:
                 logger_stream.warning(f"Missing point '{tag}' at time '{ts}'. Using {fill_missing_tag}.")
                 vals.append(fill_missing_tag)
