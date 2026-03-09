@@ -18,7 +18,8 @@
         "environment": {
           "domain_name": "DOMAIN_NAME",
           "path_geo": "PATH_GEO",
-          "path_dynamic_source": "PATH_SRC", "path_dynamic_destination": "PATH_DST",
+          "path_dynamic_source_hmc": "PATH_SRC_HMC", "path_dynamic_source_obs": "PATH_SRC_OBS",
+          "path_dynamic_destination": "PATH_DST",
           "file_time_source": "TIME_RUN", "file_time_destination": "TIME_RUN",
           "time_run": "TIME_RUN", "time_period" : "TIME_PERIOD",
           "path_app": "PATH_APP",
@@ -28,7 +29,8 @@
       "format": {
         "domain_name": "string",
         "path_geo": "string",
-        "path_dynamic_source": "string", "path_dynamic_destination": "string",
+        "path_dynamic_source_hmc": "string", "path_dynamic_source_obs": "string",
+        "path_dynamic_destination": "string",
         "path_time_source": "string", "path_time_destination": "string",
         "file_time_source": "timestamp", "file_time_destination": "timestamp",
         "time_direction": "string", "time_run": "string",
@@ -41,7 +43,8 @@
       "template": {
         "domain_name": "string",
         "path_geo": "string",
-        "path_dynamic_source": "string", "path_dynamic_destination": "string",
+        "path_dynamic_source_hmc": "string", "path_dynamic_source_obs": "string",
+        "path_dynamic_destination": "string",
         "path_time_source": "%Y/%m/%d", "path_time_destination": "%Y/%m/%d",
         "file_time_source": "%Y%m%d%H00", "file_time_destination": "%Y%m%d%H00",
         "time_direction": "string", "time_run": "%Y%m%d%H00",
@@ -73,8 +76,14 @@
       }
     },
     "dynamic_data_src": {
-      "path": "{path_dynamic_source}/{domain_name}/{path_time_source}/time_series/",
-      "file_name": "hmc.hydrograph.txt"
+      "hmc":{
+        "path": "{path_dynamic_source_hmc}/{domain_name}/{path_time_source}/time_series/",
+        "file_name": "hmc.hydrograph.txt"
+      },
+      "obs": {
+        "path": "{path_dynamic_source_obs}/{domain_name}/",
+        "file_name": "obs.hydrograph.period_lt_hmc.txt"
+      }
     },
     "dynamic_data_dst": {
       "path": "{path_dynamic_destination}/{domain_name}/{path_time_destination}/time_series/",
@@ -93,7 +102,10 @@
         "tmp_dir": "{path_tmp}"
     },
     "process_list": {
-        "DISCHARGE": [
+        "DISCHARGE_TS": [
+            {"function": "join_time_series_by_registry", "fill_value": -9999, "no_data_value": -9999}
+        ],
+        "DISCHARGE_OBS": [
             {"function": "join_time_series_by_registry", "fill_value": -9999, "no_data_value": -9999}
         ]
     }

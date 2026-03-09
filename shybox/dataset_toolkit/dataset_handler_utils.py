@@ -64,28 +64,74 @@ class DatasetNamespace:
         items = ", ".join(f"{k}={v!r}" for k, v in self._forward.items())
         return f"DatasetNamespace({items})"
 
-def make_namespaces(variables, workflows, left_label="variable", right_label="workflow"):
+def make_namespaces(
+    variables,
+    workflows,
+    left_label="variable",
+    right_label="workflow",
+    delimiter="|",
+):
     """
-    Create DatasetNamespace(s) from:
-      - str, str  → single BiNamespace
-      - list[str], list[str]  → list[BiNamespace]
-    Returns a DatasetNamespace or a list thereof.
+    Build DatasetNamespace object(s).
+
+    Cases:
+    - str, str -> DatasetNamespace
+    - str, list[str] -> merged workflows
+    - list[str], list[str] -> pairwise namespaces
     """
-    # Normalize to lists
 
-    if isinstance(variables, list):
-        if len(variables) == 1:
-            variables = variables[0]
-    if isinstance(workflows, list):
-        if len(workflows) == 1:
-            workflows = workflows[0]
+    # normalize single-item lists
+    if isinstance(variables, list) and len(variables) == 1:
+        variables = variables[0]
 
+    if isinstance(workflows, list) and len(workflows) == 1:
+        workflows = workflows[0]
+
+    # single variable + single workflow
     if isinstance(variables, str) and isinstance(workflows, str):
         return DatasetNamespace(**{left_label: variables, right_label: workflows})
 
+    # single variable + multiple workflows → merge
+    if isinstance(variables, str) and isinstance(workflows, (list, tuple)):
+        merged = delimiter.join(workflows)
+        return DatasetNamespace(**{left_label: variables, right_label: merged})
+
+    # pairwise case
     if isinstance(variables, (list, tuple)) and isinstance(workflows, (list, tuple)):
         if len(variables) != len(workflows):
-            raise ValueError("variables and workflows must have the same length")
-        return [DatasetNamespace(**{left_label: v, right_label: w}) for v, w in zip(variables, workflows)]
+            raise ValueError("variables and workflows must have same length")
 
-    raise TypeError("Expected (str, str) or (list[str], list[str]) for variables/workflows")
+        return [
+            DatasetNamespace(**{left_label: v, right_label: w})
+            for v, w in zip(variables, workflows)
+        ]
+
+    raise TypeError("Invalid variables/workflows format")
+
+def expand_namespaces(
+    namespaces,
+    right_label="workflow",
+    delimiter="|",
+):
+    """
+    Expand namespaces containing merged workflows.
+    """
+
+    if not isinstance(namespaces, (list, tuple)):
+        namespaces = [namespaces]
+
+    expanded = []
+    for ns in namespaces:
+        workflow_value = getattr(ns, right_label)
+
+        workflows = workflow_value.split(delimiter)
+
+        if len(workflows) == 1:
+            expanded.append(ns)
+        else:
+            for w in workflows:
+                new_ns = DatasetNamespace(**vars(ns))
+                setattr(new_ns, right_label, w)
+                expanded.append(new_ns)
+
+    return expanded

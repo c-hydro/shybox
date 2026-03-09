@@ -310,7 +310,7 @@ class OrchestratorBase:
         if this_process.break_point:
             self.break_points.append(len(self.processes))
 
-        # append this process to the list of process
+        # executed only if loop did NOT break
         self.processes.append(this_process)
 
     # method to wrap the run of the orchestrator
@@ -389,8 +389,11 @@ class OrchestratorBase:
             if group_type == 'by_time':
                 # if group by time the algorithm will pass a list of time steps to each process (memory disabled)
                 # merger by time requires all time steps at once
-                time_steps = [time_steps]
+                time_steps = _merge_by_time(time_steps)
                 self.memory_active = False
+            elif group_type == 'by_process':
+
+                print()
 
         # iterate over time steps
         for ts in time_steps:
@@ -566,6 +569,37 @@ class OrchestratorBase:
             #proc_ws[proc_wf_current] = proc_return[-1]
             #proc_ws[proc_current] = proc_return[-1]
 # ----------------------------------------------------------------------------------------------------------------------
+
+def _merge_by_time(times):
+    return [times]
+
+def _merge_by_process(containers):
+    merged = {}
+
+    for pc in containers:
+        process, key, variable, sources = pc.args  # adapt if attribute name differs
+
+        base_key = (process, variable)
+
+        # split existing sources
+        src_list = sources.split(',')
+
+        if base_key not in merged:
+            merged[base_key] = set(src_list)
+        else:
+            merged[base_key].update(src_list)
+
+    result = []
+    for (process, variable), src_set in merged.items():
+        src_str = ",".join(sorted(src_set))
+        key = f"{variable}:{src_str}"
+
+        result.append(
+            ProcessorContainer((process, key, variable, src_str))
+        )
+
+    return result
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to format time for logging

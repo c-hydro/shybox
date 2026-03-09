@@ -35,7 +35,7 @@ class OrchestratorTimeSeries(OrchestratorBase):
     def time_series_discharge(
             cls,
             data_package_in: Union[DataLocal, dict, list], data_package_out: Union[DataLocal, dict, list] = None,
-            data_ref: DataLocal = None,
+            data_ref: (dict, DataLocal) = None,
             priority: list = None,
             configuration: dict = None, logger: LoggingManager = None) -> "Orchestrator":
 
@@ -162,7 +162,6 @@ class OrchestratorTimeSeries(OrchestratorBase):
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
             raise RuntimeError(
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
-
 
         # method to remap variable tags, in and out
         workflow_mapper = Mapper(data_collections_in, data_collections_out, logger=logger)

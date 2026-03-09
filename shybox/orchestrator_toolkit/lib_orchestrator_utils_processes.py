@@ -10,6 +10,7 @@ Version:       '1.1.0'
 # libraries
 import functools
 import warnings
+import inspect
 import pandas as pd
 import xarray as xr
 
@@ -94,7 +95,20 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                 # Defer conversion of individual values to the function (dict can contain multiple fields)
                 normalized_data = {k: _convert_single(v) for k, v in data.items()}
             elif isinstance(data, (list, tuple)):
-                normalized_data = type(data)(_convert_single(v) for v in data)
+
+                normalized_data = []
+                for v in data:
+                    value = _convert_single(v)
+                    if value is None:
+                        continue
+                    if isinstance(value, (list, tuple)):
+                        for item in value:
+                            if item is not None:
+                                normalized_data.append(item)
+                    else:
+                        normalized_data.append(value)
+
+                #normalized_data = type(data)(_convert_single(v) for v in data)
             else:
                 normalized_data = _convert_single(data)
 
@@ -107,8 +121,29 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                     result = func(*args, **merged_kwargs)
 
                 elif isinstance(normalized_data, (list, tuple)):
-                    # IMPORTANT: pass list/tuple as ONE arg (do not splat)
-                    result = func(normalized_data, *args, **kwargs)
+
+                    # get the function signature to determine parameter names
+                    signature = inspect.signature(func)
+                    # consider only positional parameters (positional-only and positional-or-keyword)
+                    params = [
+                        p for p in signature.parameters.values()
+                        if p.kind in (
+                            inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD
+                        )
+                    ]
+
+                    # map the normalized_data items to the function parameters by position
+                    normalized_dict = {p.name: v for p, v in zip(params, normalized_data)}
+
+                    # check for missing required parameters (those that are not in normalized_dict and have no default)
+                    missing = [p.name for p in params if p.name not in normalized_dict and p.default is inspect._empty]
+                    if missing:
+                        raise TypeError(f"Function '{func.__name__}' missing required arguments: {missing}")
+
+                    # organize the call kwargs: normalized_dict takes precedence over kwargs
+                    extended_kwargs = {**normalized_dict, **kwargs}
+                    result = func(*args, **extended_kwargs)
 
                 elif isinstance(normalized_data, pd.DataFrame):
                     result = func(normalized_data, *args, **kwargs)

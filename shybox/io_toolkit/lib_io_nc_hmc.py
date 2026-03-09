@@ -175,8 +175,9 @@ def write_string_1d(ds, name, data_1d, dim_n):
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
         file_name: str = None, file_format='NETCDF4', file_update: bool = True,
-        ts_sim : pd.DataFrame = None, ts_obs: pd.DataFrame = None,
-        time_name : str = 'time',
+        data : pd.DataFrame = None,
+        variable_name_sim: str = 'sim', variable_name_obs: str = 'obs',
+        time_name: str = 'time',
         time_format: str = '%Y-%m-%d %H:%M', time_dim: str = 'time', time_type: str = 'float64',
         time_calendar: str = time_default_calendar, time_units: str = time_default_units,
         data_units: str = 'm3 s-1', data_dim : str = 'sections', data_type : str = 'float64',
@@ -191,27 +192,42 @@ def write_ts_hmc(
     # INFO START
     logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... ')
 
+    test = kwargs
+
     # FILE PREPARATION
     if file_update:
         if os.path.exists(file_name):
             os.remove(file_name)
     # check ts sim object
-    if ts_sim is None:
-        logger_stream.warning(
-            f'Time series simulated dataframe is None. Skip time-series writing process to {file_name}.')
+    if data is None:
+        logger_stream.warning(f'Time series dataframe is None. Skip time-series writing process to {file_name}.')
         # INFO END - SKIPPED
         logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... SKIPPED')
         return None
-    # check ts obs object
-    if ts_obs is None:
-        logger_stream.warning(
-            f'Time series observed dataframe is None')
+
+    # get sim and obs dataframes
+    if variable_name_sim in data.columns:
+        ts_sim = data[variable_name_sim]
+    else:
+        logger_stream.warning(f'Simulated time series is None. Skip time-series writing process to {file_name}.')
+        return None
+
+    # get sim and obs dataframes
+    if variable_name_obs in data.columns:
+        ts_obs = data[variable_name_obs]
+    else:
+        logger_stream.warning(f'Simulated time series is None. Datasets will not available in {file_name}.')
+        ts_obs = None
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## TIME PREPARATION
+    # check names of time index (not mandatory, just to notify potential mismatches)
+    if data.index.name != time_name:
+        logger_stream.warning(f'Time series index name mismatch: expected "{time_name}", found "{data.index.name}".')
+
     # define time data
-    time_data = ts_sim[time_name].to_numpy()
+    time_data = data.index.to_numpy()
     time_list_string, time_list_numeric = [], []
     for time_step in time_data:
         time_numeric = pd.to_datetime(str(time_step))
@@ -231,35 +247,35 @@ def write_ts_hmc(
 
     # ------------------------------------------------------------------------------------------------------------------
     ## ATTRS PREPARATION
-    attrs_data_sim, attrs_type_sim = {}, {}
-    if 'data' in ts_sim.attrs:
-        attrs_data_sim = ts_sim.attrs['data']
-    if 'type' in ts_sim.attrs:
-        attrs_type_sim = ts_sim.attrs['type']
+    attrs_data, attrs_type = {}, {}
+    if 'data' in data.attrs:
+        attrs_data = data.attrs['data']
+    if 'type' in data.attrs:
+        attrs_type = data.attrs['type']
 
-    info_data_sim, info_type_sim, info_dim_sim = {}, {}, None
-    for key, obj in attrs_data_sim.items():
+    info_data, info_type, info_dim = {}, {}, None
+    for key, obj in attrs_data.items():
         if isinstance(obj, pd.Series):
-            data_values_sim = obj.values
+            data_values = obj.values
         else:
-            data_values_sim = np.array(obj)
+            data_values = np.array(obj)
 
-        if key in list(attrs_type_sim.keys()):
-            type_values_sim = attrs_type_sim[key]
+        if key in list(attrs_type.keys()):
+            type_values = attrs_type[key]
         else:
-            type_values_sim = data_values_sim.dtype
+            type_values = data_values.dtype
 
-        if info_dim_sim is None:
-            info_dim_sim = data_values_sim.shape[0]
+        if info_dim is None:
+            info_dim = data_values.shape[0]
 
-        info_type_sim[key] = type_values_sim
-        info_data_sim[key] = data_values_sim
+        info_type[key] = type_values
+        info_data[key] = data_values
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## SIM DATA PREPARATION
-    # define ts data (expected: 2d dimensions: time, ts)
-    data_sim = ts_sim.drop(columns=time_name).to_numpy(dtype=float, copy=True)  # <- force writable
+    # define ts data (expected: data 2d dimensions and times as index)
+    data_sim = ts_sim.to_numpy(dtype=float, copy=True)
 
     # if in some edge case it is 1D, make it 2D (time, 1)
     if data_sim.ndim == 1:
@@ -296,10 +312,10 @@ def write_ts_hmc(
         # create empty obs matrix with same dims as sim
         data_obs = np.full((time_n, data_n_sim), data_no_value, dtype=float)
     else:
-        # convert obs dataframe to numpy (same structure as sim)
-        data_obs = ts_obs.drop(columns=time_name).to_numpy(dtype=float, copy=True)
-        #data_obs = ts_obs.drop(columns=time_name).to_numpy(dtype=float)
+        # convert obs dataframe to numpy (expected: data 2d dimensions and times as index)
+        data_obs = ts_obs.to_numpy(dtype=float, copy=True)
 
+        # if in some edge case it is 1D, make it 2D (time, 1)
         if data_obs.ndim == 1:
             data_obs = data_obs.reshape(-1, 1)
 
@@ -376,54 +392,52 @@ def write_ts_hmc(
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - INFO OBJECT(S)
-    if info_data_sim is not None:
+    if info_data is not None:
 
         # iterate over registry variable(s)
-        for field_key_sim, field_obj_sim in info_data_sim.items():
+        for field_key, field_obj in info_data.items():
 
             # convert from pandas series to numpy array (str, float or int)
-            if isinstance(field_obj_sim, pd.Series):
-                field_values_sim = field_obj_sim.values
+            if isinstance(field_obj, pd.Series):
+                field_values = field_obj.values
             else:
-                field_values_sim = np.array(field_obj_sim)
+                field_values = np.array(field_obj)
 
             # get field type safely
-            if (info_type_sim is not None) and isinstance(info_type_sim, dict):
-                field_type_sim = info_type_sim.get(field_key_sim, None)
+            if (info_type is not None) and isinstance(info_type, dict):
+                field_type = info_type.get(field_key, None)
 
-                if field_key_sim not in info_type_sim:
+                if field_key not in info_type:
                     logger_stream.warning(
-                        f'Info type for "{field_key_sim}" is not defined in info_type dictionary. '
+                        f'Info type for "{field_key}" is not defined in info_type dictionary. '
                         f'Trying to infer dtype automatically (float -> string fallback).'
                     )
             else:
-                field_type_sim = None
+                field_type = None
                 logger_stream.warning(
                     f'info_type dictionary is not defined (None or invalid type). '
-                    f'Trying to infer dtype for "{field_key_sim}" automatically (float -> string fallback).'
+                    f'Trying to infer dtype for "{field_key}" automatically (float -> string fallback).'
                 )
 
             # check / infer type
-            if field_type_sim is not None:
-                field_type_sim = to_nc_dtype(field_type_sim)
+            if field_type is not None:
+                field_type = to_nc_dtype(field_type)
             else:
                 try:
-                    np.asarray(field_values_sim, dtype=float)
-                    field_type_sim = to_nc_dtype(float)
-                    logger_stream.warning(f'Info type for "{field_key_sim}" inferred as float.')
+                    np.asarray(field_values, dtype=float)
+                    field_type = to_nc_dtype(float)
+                    logger_stream.warning(f'Info type for "{field_key}" inferred as float.')
                 except Exception:
-                    field_type_sim = to_nc_dtype(str)
+                    field_type = to_nc_dtype(str)
                     logger_stream.warning(
-                        f'Info type for "{field_key_sim}" inferred as string (fallback). Please verify values.'
+                        f'Info type for "{field_key}" inferred as string (fallback). Please verify values.'
                     )
 
             # create variable object
-            info_obj = file_handle.createVariable(
-                varname=field_key_sim, dimensions=(data_dim,), datatype=field_type_sim
-            )
+            info_obj = file_handle.createVariable(varname=field_key, dimensions=(data_dim,), datatype=field_type)
 
             # assign variable values
-            info_obj[:] = field_values_sim
+            info_obj[:] = field_values
     else:
         # warning for info_data defined by NoneType
         logger_stream.warning('Info data object is defined by NoneType')
@@ -438,7 +452,7 @@ def write_ts_hmc(
         zlib=compression_flag, complevel=compression_level)
     data_obj_sim.units = data_units
     data_obj_sim.missing_value = data_no_value
-
+    # set data simulated
     data_obj_sim[:, :] = data_sim
 
     # create obs object - 2d format
@@ -448,7 +462,7 @@ def write_ts_hmc(
         zlib=compression_flag, complevel=compression_level)
     data_obj_obs.units = data_units
     data_obj_obs.missing_value = data_no_value
-
+    # set data observed
     data_obj_obs[:, :] = data_obs
     # ------------------------------------------------------------------------------------------------------------------
 

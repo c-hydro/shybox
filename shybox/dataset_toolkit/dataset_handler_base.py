@@ -1024,7 +1024,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self._write_data(data, out_file)
             return
 
-        # case of csv, json, txt, shp and ascii files
+        # case of csv, json, txt, shp afiles
         if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
             append = kwargs.pop('append', False)
             self._write_data(data, out_file, append = append)
