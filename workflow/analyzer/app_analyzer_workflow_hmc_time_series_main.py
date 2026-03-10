@@ -13,13 +13,13 @@ General command line:
 python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Examples of environment variables declarations:
-TIME_RUN="2025-11-18 00:34";
+TIME_RUN="2024-10-16 00:34";
 TIME_PERIOD=1;
 DOMAIN_NAME='PoBasin';
 PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/geo/';
 
-PATH_SRC_HMC='/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc/data/time_series/hmc/';
-PATH_SRC_OBS='/home/fabio/Desktop/shybox/dset/case_study_destine/converter_hmc/data/time_series/obs/';
+PATH_SRC_HMC='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/data/hmc/';
+PATH_SRC_OBS='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/data/obs/';
 
 PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/analyzer_hmc/data/time_series/';
 PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/analyzer_hmc/tmp/;

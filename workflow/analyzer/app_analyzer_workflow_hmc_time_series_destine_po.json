@@ -45,7 +45,7 @@
         "path_geo": "string",
         "path_dynamic_source_hmc": "string", "path_dynamic_source_obs": "string",
         "path_dynamic_destination": "string",
-        "path_time_source": "%Y/%m/%d", "path_time_destination": "%Y/%m/%d",
+        "path_time_source": "%Y%m%d_%H", "path_time_destination": "%Y%m%d_%H",
         "file_time_source": "%Y%m%d%H00", "file_time_destination": "%Y%m%d%H00",
         "time_direction": "string", "time_run": "%Y%m%d%H00",
         "time_period": "int", "time_rounding": "string", "time_frequency": "string",
@@ -77,17 +77,17 @@
     },
     "dynamic_data_src": {
       "hmc":{
-        "path": "{path_dynamic_source_hmc}/{domain_name}/{path_time_source}/time_series/",
+        "path": "{path_dynamic_source_hmc}/{path_time_source}/{domain_name}/",
         "file_name": "hmc.hydrograph.txt"
       },
       "obs": {
-        "path": "{path_dynamic_source_obs}/{domain_name}/",
-        "file_name": "obs.hydrograph.period_lt_hmc.txt"
+        "path": "{path_dynamic_source_obs}/{path_time_source}/{domain_name}",
+        "file_name": "obs.hydrograph.txt"
       }
     },
     "dynamic_data_dst": {
-      "path": "{path_dynamic_destination}/{domain_name}/{path_time_destination}/time_series/",
-      "file_name": "hmc.hydrograph_{file_time_destination}.nc",
+      "path": "{path_dynamic_destination}/{path_time_destination}/",
+      "file_name": "hmc.hydrograph_{domain_name}_{file_time_destination}.nc",
       "format": "netcdf",
       "type": null,
       "mode": "time_series",

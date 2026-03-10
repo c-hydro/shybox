@@ -6,6 +6,7 @@ Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20260309'
 Version:       '1.1.0'
 """
+import numpy as np
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import pandas as pd
@@ -17,7 +18,9 @@ from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_proc
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
-@as_process(input_type='pandas', output_type='pandas')
+@as_process(
+    input_type='pandas', output_type='pandas',
+    lazy_undefined_args=True, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
 def join_time_series_by_registry(
         df_sim, df_obs,
@@ -30,11 +33,15 @@ def join_time_series_by_registry(
     var_time_name = 'time'
 
     # check dataframe data
-    check_df_sim = _check_dataframe(df_sim, logger_stream, name="time-series datasets")
-    if not check_df_sim: return None
+    check_df_sim = _check_dataframe(df_sim, name="time-series datasets")
+    if not check_df_sim:
+        logger_stream.warning("Simulated dataframe is empty or defined by None. Return NoneType object.")
+        return None
     # check dataframe obs
-    check_df_obs = _check_dataframe(df_obs, logger_stream, name="observations datasets", allow_empty=True)
-    if not check_df_obs: return None
+    check_df_obs = _check_dataframe(df_obs, name="observations datasets", allow_empty=True)
+    if not check_df_obs:
+        logger_stream.warning("Observed dataframe is empty or defined by None.")
+        df_obs = None
 
     # check dataframe sections and database
     if sections_hmc is None or sections_hmc.empty:
@@ -107,10 +114,6 @@ def join_time_series_by_registry(
         for c in names_data:
             ts_obs[c] = pd.to_numeric(ts_obs[c], errors="coerce")
 
-    # fill missing values in sim and obs with no_data_value (before joining, to avoid mixing with fill_value)
-    ts_sim = ts_sim.fillna(no_data_value)
-    ts_obs = ts_obs.fillna(no_data_value)
-
     # JOIN DATASET
     ts_sim = ts_sim.set_index(var_time_name)
     if ts_obs is not None and not ts_obs.empty:
@@ -118,7 +121,11 @@ def join_time_series_by_registry(
         # align obs to simulation timeline
         ts_obs = ts_obs.reindex(ts_sim.index)
     else:
-        ts_obs = pd.DataFrame(index=ts_sim.index)
+        ts_obs = pd.DataFrame(no_data_value, index=ts_sim.index, columns=ts_sim.columns)
+
+    # fill missing values in sim and obs with no_data_value (before joining, to avoid mixing with fill_value)
+    ts_sim = ts_sim.fillna(no_data_value)
+    ts_obs = ts_obs.fillna(no_data_value)
 
     # create combined dataframe with multi-level columns: obs and sim
     df_common = pd.concat({"obs": ts_obs, "sim": ts_sim}, axis=1)
@@ -149,7 +156,7 @@ def _prepare_timeseries(
         df, names_domains,
         name="time-series dataset", time_name="time", allow_empty=False):
 
-    check_df = _check_dataframe(df, logger_stream, name=name, allow_empty=allow_empty)
+    check_df = _check_dataframe(df, name=name, allow_empty=allow_empty)
     if not check_df:
         return None
 
@@ -196,21 +203,18 @@ def _prepare_timeseries(
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to check dataframe(s)
 @with_logger(var_name='logger_stream')
-def _check_dataframe(data, logger=None, name="data", allow_empty=False):
+def _check_dataframe(data, name="data", allow_empty=False):
 
     if data is None:
-        if logger:
-            logger.warning(f"{name} is None.")
+        logger_stream.warning(f"{name} is None.")
         return False
 
     if not isinstance(data, pd.DataFrame):
-        if logger:
-            logger.warning(f"{name} must be a pandas DataFrame, got {type(data)}.")
+        logger_stream.warning(f"{name} must be a pandas DataFrame, got {type(data)}.")
         return False
 
     if not allow_empty and data.empty:
-        if logger:
-            logger.warning(f"{name} must be a non-empty DataFrame.")
+        logger_stream.warning(f"{name} must be a non-empty DataFrame.")
         return False
 
     return True

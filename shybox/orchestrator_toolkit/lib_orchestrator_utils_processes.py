@@ -145,13 +145,25 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                     else:
                         normalized_dict = dict(zip((p.name for p in params), normalized_data))
 
+                    lazy_undefined_args = False
+                    if 'lazy_undefined_args' in decorator_attrs and decorator_attrs['lazy_undefined_args']:
+                        lazy_undefined_args = decorator_attrs['lazy_undefined_args']
+
                     # check for missing required parameters (those that are not in normalized_dict and have no default)
                     missing = [p.name for p in params if p.name not in normalized_dict and p.default is inspect._empty]
                     if missing:
-                        raise TypeError(f"Function '{func.__name__}' missing required arguments: {missing}")
+                        if not lazy_undefined_args:
+                            raise TypeError(f"Function '{func.__name__}' missing required arguments: {missing}")
+                        else:
+                            lazy_undefined_value = None
+                            if 'lazy_undefined_value' in decorator_attrs:
+                                lazy_undefined_value = decorator_attrs['lazy_undefined_value']
+                            lazy_kwargs = {k: lazy_undefined_value for k in missing}
+                    else:
+                        lazy_kwargs = {}
 
                     # organize the call kwargs: normalized_dict takes precedence over kwargs
-                    extended_kwargs = {**normalized_dict, **kwargs}
+                    extended_kwargs = {**normalized_dict, **kwargs, **lazy_kwargs}
                     result = func(*args, **extended_kwargs)
 
                 elif isinstance(normalized_data, pd.DataFrame):
