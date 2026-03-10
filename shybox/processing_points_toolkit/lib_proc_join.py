@@ -90,7 +90,6 @@ def join_points_to_time_series(data, ref, time, name='points_time_series',
                             v = v.flat[0]
 
                     vals.append(float(v))
-                    print(type(v), v.shape)
             else:
                 logger_stream.warning(f"Missing point '{tag}' at time '{ts}'. Using {fill_missing_tag}.")
                 vals.append(fill_missing_tag)
