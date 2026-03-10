@@ -84,7 +84,7 @@ def main(view_table: bool = False):
         section=alg_cfg_application,
         resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
         template_keys=('path_time_source', 'file_time_source',
-                       'path_time_destination', 'file_time_destination',)
+                       'file_time_destination',)
     )
     # view application section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)

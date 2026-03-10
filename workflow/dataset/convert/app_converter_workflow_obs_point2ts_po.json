@@ -42,7 +42,7 @@
         "domain_name": "string",
         "path_geo": "string",
         "path_dynamic_source": "string", "path_dynamic_destination": "string",
-        "path_time_source": "%Y/%m/%d", "path_time_destination": "%Y/%m/%d",
+        "path_time_source": "%Y/%m/%d", "path_time_destination": "%Y%m%d_%H",
         "file_time_source": "%Y%m%d%H00", "file_time_destination": "%Y%m%d%H00",
         "time_direction": "string", "time_run": "%Y%m%d%H00",
         "time_period": "int", "time_rounding": "string", "time_frequency": "string",
@@ -73,7 +73,7 @@
       "file_name": "discharge_{domain_name}_{file_time_source}.csv"
     },
     "dynamic_data_dst": {
-      "path": "{path_dynamic_destination}/{domain_name}/{path_time_destination}/time_series/",
+      "path": "{path_dynamic_destination}/{domain_name}/{path_time_destination}/",
       "file_name": "obs.hydrograph.txt",
       "format": "ascii",
       "type": null,
