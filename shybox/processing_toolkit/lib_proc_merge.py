@@ -184,16 +184,18 @@ def burn_sub_on_ref_interp(da_sub, ref_x_1d, ref_y_1d, ref_nan=None,
     return out
 
 # method to merge data
-@as_process(input_type='xarray', output_type='xarray')
+@as_process(input_type='xarray', output_type='xarray',
+            lazy_undefined_args=True, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
 def merge_data_by_watermark(
         data,
-        ref: xr.DataArray, watermark: (list, xr.DataArray) = None,
+        ref: xr.DataArray,
+        watermark: (list, xr.DataArray) = None,
         ref_no_data=-9999.0, var_no_data=-9999.0,
         coord_name_x='longitude', coord_name_y='latitude',
         dim_name_x='longitude', dim_name_y='latitude',
         interpolation_mode: bool = True, interpolation_method: str= 'nearest',
-        debug: bool=False, **kwargs):
+        debug: bool=True, **kwargs):
 
     # algorithm info start
     logger_stream.info_up("Merge data by watermark ... ")
@@ -245,7 +247,7 @@ def merge_data_by_watermark(
         var_merge = np.full((nrows_ref, ncols_ref), np.nan, dtype=np.float64)
 
         # iterate over datasets to merge
-        for ds_id, (ds_vars, da_wm) in enumerate(zip(ds_list, wm_list)):
+        for ds_id, (ds_vars, da_wm, da_metrics, da_area) in enumerate(zip(ds_list, wm_list, metrics_list, area_list)):
             if var_name not in ds_vars.data_vars:
                 continue
 

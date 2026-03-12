@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN - DISCHARGE
+SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN - RETURN TIME
 
 __date__ = '20260209'
 __version__ = '1.3.0'
@@ -18,11 +18,13 @@ TIME_START="'1983-10-31 11:00'";
 TIME_END="'1983-10-31 12:00'";
 PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/geo/';
 PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/data/';
+PATH_METRICS='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/metrics/';
 PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/data';
 PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/log/;
 PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/tmp/
 
 Version(s):
+20260310 (1.4.0) --> Extend to compute the return time layer
 20260209 (1.3.0) --> Set the algorithm for merging soil moisture and discharge variables
 20260129 (1.2.0) --> Add class method to create data on demand
 20260122 (1.1.0) --> Refactor using class methods in shybox package
@@ -44,9 +46,7 @@ from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
-from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
-from shybox.processing_toolkit.lib_proc_merge import merge_data_by_watermark
+from shybox.processing_hydro_toolkit.lib_proc_compute_rt import compute_return_time
 
 from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_format
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,10 +54,10 @@ from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_fo
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Application for processing datasets - Merger by Domain - Discharge'
+alg_name = 'Application for processing datasets - Merger by Domain - Return Time'
 alg_type = 'Package'
-alg_version = '1.3.0'
-alg_release = '2026-02-09'
+alg_version = '1.4.0'
+alg_release = '2026-03-10'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -141,7 +141,7 @@ def main(view_table: bool = False):
 
     # define logging instance
     logging_handle = LoggingManager(
-        name="shybox_algorithm_merger_by_domain_hmc",
+        name="shybox_algorithm_merger_by_domain_hmc_discharge",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------
@@ -203,8 +203,8 @@ def main(view_table: bool = False):
         dset_src_handler_list = []
         for alg_data_id, (alg_data_src_key, alg_data_src_settings) in enumerate(alg_cfg_step['data_source'].items()):
 
-            # deps handler
-            dset_src_handler_deps = DataLocal(
+            # deps watermark handler
+            dset_src_handler_deps_watermark = DataLocal(
                 path=alg_data_src_settings['file_watermark']['path'],
                 file_name=alg_data_src_settings['file_watermark']['file_name'],
                 file_type='grid_2d', file_format='ascii', file_mode='local',
@@ -218,17 +218,50 @@ def main(view_table: bool = False):
                 logger=logging_handle
             )
 
+            # deps area handler
+            dset_src_handler_deps_area = DataLocal(
+                path=alg_data_src_settings['file_area']['path'],
+                file_name=alg_data_src_settings['file_area']['file_name'],
+                file_type='grid_2d', file_format='ascii', file_mode='local',
+                file_variable=['AREA'], file_io='input',
+                data_id=alg_data_id,
+                variable_template={
+                    "dims_geo": {"x": "longitude", "y": "latitude"},
+                    "vars_data": {"area": "deps_area"}
+                },
+                time_signature=None, time_direction=None,
+                logger=logging_handle
+            )
+
+            # deps metrics handler
+            dset_src_handler_deps_metrics = DataLocal(
+                path=alg_data_src_settings['file_metrics']['path'],
+                file_name=alg_data_src_settings['file_metrics']['file_name'],
+                file_type='as_is', file_format='nc', file_mode='local',
+                file_variable=['METRICS'], file_io='input',
+                data_id=alg_data_id, data_as_is=True,
+                variable_template={
+                    "dims_geo": {"x": "longitude", "y": "latitude"},
+                    "vars_data": {"metrics": "deps_metrics"}
+                },
+                time_signature=None, time_direction=None,
+                logger=logging_handle
+            )
+
             # dataset handler
             dset_src_handler_data = DataLocal(
                 path=alg_data_src_settings['file_data']['path'],
                 file_name=alg_data_src_settings['file_data']['file_name'],
                 file_type='grid_hmc', file_format='netcdf', file_mode='local',
-                file_variable=['DISCHARGE'], file_io='input',
-                file_deps={'watermark': dset_src_handler_deps},
+                file_variable=['RETURN_TIME'], file_io='input',
+                file_deps={
+                    'watermark': dset_src_handler_deps_watermark,
+                    'metrics': dset_src_handler_deps_metrics,
+                    'area': dset_src_handler_deps_area},
                 data_id=alg_data_id,
                 variable_template={
                     "dims_geo": {"west_east": "longitude", "south_north": "latitude", "time": "time"},
-                    "vars_data": {"SM": "simulated_discharge"}
+                    "vars_data": {"Discharge": "discharge_to_rt"}
                 },
                 time_signature='current',
                 time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
@@ -244,7 +277,7 @@ def main(view_table: bool = False):
             path=alg_cfg_step['data_destination']['path'],
             file_name=alg_cfg_step['data_destination']['file_name'],
             file_type='grid_2d', file_format='geotiff', file_mode='local',
-            file_variable=['DISCHARGE'], file_io='output',
+            file_variable=['RETURN_TIME'], file_io='output',
             variable_template={
                 "dims_geo": alg_cfg_step['data_destination']['dims_geo'],
                 "vars_data": alg_cfg_step['data_destination']['vars_data']

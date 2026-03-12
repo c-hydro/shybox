@@ -216,7 +216,17 @@ class ProcessorContainer:
             # append deps to data_raw and data_names
             if isinstance(data_raw, list):
                 id_deps = len(data_raw)
-                data_raw.extend(in_deps)
+
+                if isinstance(in_deps, dict):
+                    data_raw.extend(in_deps.values())
+
+                elif isinstance(in_deps, list):
+                    for item in in_deps:
+                        if isinstance(item, dict):
+                            data_raw.extend(item.values())
+                        else:
+                            data_raw.append(item)
+
                 data_names.extend(names_deps)
             elif isinstance(data_raw, DataLocal):
                 id_deps = 1
@@ -453,9 +463,9 @@ class ProcessorContainer:
             # iterate over the list of data objects
             id_other = 0
             fx_data, fx_metadata, fx_deps = [], {}, []
-            fx_other, fx_varid, fx_check = {}, [], []; print(data_list, data_names, time)
-            for data_partial_id, data_global_id, data_tmp, type_tmp, time_tmp, time_step in (
-                    zip(id_partial, id_global, data_list, type_list, time_list, time)):
+            fx_other, fx_varid, fx_check = {}, [], [];
+            for data_partial_id, data_global_id, data_tmp, name_tmp, type_tmp, time_tmp, time_step in (
+                    zip(id_partial, id_global, data_list, data_names, type_list, time_list, time)):
 
                 # assing id to data object (partial id for the repeated time steps, global id for the whole list)
                 if data_partial_id == data_global_id:
@@ -483,7 +493,7 @@ class ProcessorContainer:
                 if isinstance(data_tmp, list):
                     if len(data_tmp) == 1:
                         data_tmp = data_tmp[0]
-                        key_tmp = None
+                        key_tmp = name_tmp
                     else:
                         self.logger.error('Nested lists of data objects are not supported')
                         raise ValueError('Nested lists of data objects are not supported')
@@ -499,6 +509,7 @@ class ProcessorContainer:
                         self.logger.error('Multiple keys dictionary of data objects are not supported')
                         raise ValueError('Multiple keys dictionary of data objects are not supported')
                 elif isinstance(data_tmp, DataLocal):
+                    key_tmp = name_tmp
                     pass
                 else:
                     self.logger.error('data_tmp must be a DataLocal, list or a dict')
@@ -551,7 +562,8 @@ class ProcessorContainer:
                 if fx_check[data_id]:
 
                     # save data and deps
-                    fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, **kwargs)
+                    as_is = data_tmp.data_as_is
+                    fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, as_is=as_is ,**kwargs)
                     fx_deps.append(step_tag)
 
                     # convert to DataArray if single variable
@@ -580,7 +592,10 @@ class ProcessorContainer:
                             if not isinstance(tmp_other, list):
                                 tmp_other = [tmp_other]
                             tmp_other.append(fx_tmp)
-                            fx_other = {key_tmp: tmp_other}
+
+                            fx_tmp = {key_tmp: tmp_other}
+                            fx_other = {**fx_other, **fx_tmp}
+
                     else:
                         # add other data in the fx_other dict with a generic key (id_other) if no key is available (key_tmp is None)
                         fx_other[id_other] = fx_tmp

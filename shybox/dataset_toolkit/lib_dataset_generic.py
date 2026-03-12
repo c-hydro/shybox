@@ -313,7 +313,7 @@ def read_from_file(
             file = path
 
         # read the netcdf file according to the file type
-        if file_type == 'default':
+        if file_type == 'default' or file_type == 'as_is':
             data = xr.open_dataset(file)
         elif file_type == 'grid_s3m' or file_type == 'forcing_s3m':
             data = read_datasets_s3m(path=file)

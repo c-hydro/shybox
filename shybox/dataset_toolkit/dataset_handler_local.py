@@ -148,6 +148,11 @@ class DataLocal(Dataset):
         dims_key_default = layout_cfg["dims_key"]
         coords_key_default = layout_cfg["coords_key"]
 
+        # handle as_is flag (if True, data are returned as read without any processing)
+        self.data_as_is = False
+        if 'data_as_is' in kwargs:
+            self.data_as_is = kwargs.pop('data_as_is')
+
         dims_user = (
                 variable_template.get(dims_key_default)
                 or variable_template.get("dims_geo")
@@ -201,6 +206,7 @@ class DataLocal(Dataset):
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
             "data_layout": layout_norm,
             "data_id": self.data_id,
+            "data_as_is": self.data_as_is,
             'file_variable': file_variable,
             'file_workflow': file_workflow
         })

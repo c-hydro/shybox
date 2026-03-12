@@ -126,6 +126,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'data_id' in kwargs:
             self.data_id = kwargs.pop('data_id')
 
+        self.data_as_is = False
+        if 'data_as_is' in kwargs:
+            self.data_as_is = kwargs.pop('data_as_is')
+
         self.data_layout = None
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
@@ -829,6 +833,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
                 # return data as is (if specified)
                 if as_is:
+                    log_data('end', name=name, time=time, from_memory=False)
                     return data
 
                 # check if data is xarray DataArray
@@ -858,6 +863,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
             # return data as is (if specified)
             if as_is:
+                log_data('end', name=name, time=time, from_memory=False)
                 return data
 
             # ensure that the data dimensions are not empty
