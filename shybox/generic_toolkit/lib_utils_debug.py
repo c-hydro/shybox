@@ -128,7 +128,9 @@ def _filter_vars(vars_to_plot: list, var_id: (None, int, list) = None)  -> (list
 
 # method to plot xarray.Dataset variables for debugging
 @with_logger(var_name="logger_stream")
-def plot_data(data, var_name=None, var_id: (int, list, None) = None, strict_name: bool = False, cmap="viridis", title=None):
+def plot_data(data, var_name=None, var_id: (int, list, None) = None,
+              var_min: (float, None) = None, var_max: (float, None) = None,
+              strict_name: bool = False, cmap: str ="viridis", title=None, plot_block: bool = False):
 
     # numpy array case
     if isinstance(data, np.ndarray):
@@ -137,12 +139,21 @@ def plot_data(data, var_name=None, var_id: (int, list, None) = None, strict_name
             raise TypeError(f"Unsupported NumPy array shape: {data.shape} (expect 2D)")
 
         var_label = var_name or "Array"
+
         plt.figure()
         plt.title(f"{title} - {var_label}" if title else var_label)
+
         im = plt.imshow(data, cmap=cmap)
+
+        # Apply clim only if both are defined
+        if (var_min is not None) and (var_max is not None):
+            im.set_clim(var_min, var_max)
+
         cbar = plt.colorbar(im)
         cbar.set_label(var_label)
-        plt.show(block=True)
+
+        plt.show(block=plot_block)
+        plt.pause(0.2)
         return
 
     # xarray.DataArray case
@@ -151,9 +162,15 @@ def plot_data(data, var_name=None, var_id: (int, list, None) = None, strict_name
         plt.figure()
         plt.title(f"{title} - {var_label}" if title else var_label)
         im = plt.imshow(data.values, cmap=cmap)
+
+        # Apply clim only if both are defined
+        if (var_min is not None) and (var_max is not None):
+            im.set_clim(var_min, var_max)
+
         cbar = plt.colorbar(im)
         cbar.set_label(var_label)
-        plt.show(block=True)
+        plt.show(block=plot_block)
+        plt.pause(0.2)
         return
 
     # xarray.Dataset or dict-like case
@@ -212,7 +229,8 @@ def plot_data(data, var_name=None, var_id: (int, list, None) = None, strict_name
         im = plt.imshow(da.values, cmap=cmap)
         cbar = plt.colorbar(im)
         cbar.set_label(name)
-        plt.show(block=True)
+        plt.show(block=plot_block)
+        plt.pause(0.2)
     return
 # ----------------------------------------------------------------------------------------------------------------------
 

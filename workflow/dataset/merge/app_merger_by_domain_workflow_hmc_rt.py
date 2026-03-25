@@ -141,7 +141,7 @@ def main(view_table: bool = False):
 
     # define logging instance
     logging_handle = LoggingManager(
-        name="shybox_algorithm_merger_by_domain_hmc_discharge",
+        name="shybox_algorithm_merger_by_domain_hmc_rt",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------

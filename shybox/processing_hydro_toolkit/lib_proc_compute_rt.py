@@ -12,6 +12,7 @@ Version:       '1.2.0'
 import xarray as xr
 import numpy as np
 from scipy.stats import genextreme
+from decimal import Decimal
 import pandas as pd
 
 from pyresample.geometry import GridDefinition
@@ -114,12 +115,14 @@ def compute_return_time(
         ref_no_data=-9999.0, var_no_data=-9999.0,
         coord_name_x='longitude', coord_name_y='latitude',
         dim_name_x='longitude', dim_name_y='latitude',
+        cellsize_name='cellsize',
         interpolation_mode: bool = False, interpolation_method: str= 'nearest',
         thr_discharge_min_flag: bool = True, thr_discharge_max_flag: bool = False,
         thr_discharge_min_value: float = 8, thr_discharge_max_value: float = 10000,
         thr_rt_min_flag: bool = False, thr_rt_max_flag: bool = True,
         thr_rt_min_value: float = 0, thr_rt_max_value: float = 100, bins_n_rt: int = 5,
-        debug: bool=False, **kwargs):
+        debug_box: bool = False, debug_geo_steps: bool = False,  debug_data_steps: bool = False,
+        debug_data_out: bool = False,  **kwargs):
 
     # algorithm info start
     logger_stream.info_up("Compute return time ... ")
@@ -218,11 +221,33 @@ def compute_return_time(
         values_q_in = da_in.values
 
         # get area values
+        values_area = None
         area_x_1d, area_y_1d = None, None
         if da_area is not None:
-            values_area = da_area.values
+            values_area_px = da_area.values
             area_x_1d = da_area[coord_name_x].values
             area_y_1d = da_area[coord_name_y].values
+
+            # get cell size in degrees from area attributes
+            cell_size_deg = da_area.attrs[cellsize_name]
+
+            # ensure float
+            if isinstance(cell_size_deg, Decimal):
+                cell_size_deg = float(cell_size_deg)
+            else:
+                cell_size_deg = float(cell_size_deg)
+
+            # approximate conversion deg -> km
+            lat_mean = float(np.nanmean(area_y_1d))
+
+            km_per_deg_lat = 111.32
+            km_per_deg_lon = 111.32 * np.cos(np.deg2rad(lat_mean))
+
+            dx_km = cell_size_deg * km_per_deg_lon
+            dy_km = cell_size_deg * km_per_deg_lat
+
+            values_area_km2 = values_area_px * (dx_km * dy_km)
+
             area_x_2d, area_y_2d = np.meshgrid(area_x_1d, area_y_1d)
         else:
             # exit if area not provided
@@ -234,6 +259,7 @@ def compute_return_time(
             return None
 
         # get watermark values
+        values_wm = None
         wm_x_1d, wm_y_1d = None, None
         if da_wm is not None:
             values_wm = da_wm.values
@@ -269,6 +295,14 @@ def compute_return_time(
             if thr_discharge_max_flag:
                 values_a[-1] = thr_discharge_max_value
 
+            # check results
+            if debug_geo_steps:
+                plot_data(values_q_in, title=f"rt - discharge values", plot_block=True)
+                plot_data(values_area_km2, title=f"rt - cell area", plot_block=True)
+                plot_data(values_wm, title=f"rt - watermark", plot_block=True)
+            if debug_data_steps:
+                plot_data(values_q_idx, title=f"rt - discharge index", plot_block=True)
+
             # iterate over area classes
             a_num = len(values_a) - 1
             for a_id, a_step in enumerate(range(a_num)):
@@ -277,8 +311,12 @@ def compute_return_time(
                 a_1, a_2 = values_a[a_step], values_a[a_step + 1]
 
                 # mask for current area class
-                mask_area = (values_area > a_1) & (values_area < a_2)
+                mask_area = (values_area_km2 > a_1) & (values_area_km2 < a_2)
                 mask_count = np.sum(mask_area)
+
+                # check results
+                if debug_geo_steps:
+                    plot_data(mask_area, title=f"rt - mask area")
 
                 # info start variable
                 logger_stream.info_up(
@@ -326,10 +364,14 @@ def compute_return_time(
             mask_rt = values_rt.copy()
             mask_rt[mask_rt >= 0] = 1
 
+            # filter areas outside the watermark (if watermark provided)
+            values_rt[values_wm == 1] = np.nan
+
             # check results
-            if debug:
-                plot_data(values_rt, title=f"rt - values")
-                plot_data(mask_rt, title=f"rt - mask")
+            if debug_data_steps:
+                plot_data(values_rt, title=f"rt - values", plot_block=True)
+                plot_data(mask_rt, title=f"rt - mask", plot_block=True)
+                plot_data(values_wm, title=f"rt - watermark", plot_block=True)
 
         else:
             # exit if metrics not provided
@@ -351,6 +393,45 @@ def compute_return_time(
 
         # clean sub data
         sub_x_1d,  sub_y_1d  = da_rt[coord_name_x].values, da_rt[coord_name_y].values
+
+        # check ref/sub grid compatibility
+        dx_ref = float(np.abs(np.median(np.diff(ref_x_1d))))
+        dy_ref = float(np.abs(np.median(np.diff(ref_y_1d))))
+
+        dx_sub = float(np.abs(np.median(np.diff(sub_x_1d))))
+        dy_sub = float(np.abs(np.median(np.diff(sub_y_1d))))
+
+        same_dx = np.isclose(dx_ref, dx_sub, atol=1e-10)
+        same_dy = np.isclose(dy_ref, dy_sub, atol=1e-10)
+
+        # comment about grids
+        logger_stream.info(
+            f"Grid check dataset {ds_id} :: "
+            f"ref_dx={dx_ref:.12f}, ref_dy={dy_ref:.12f}, "
+            f"sub_dx={dx_sub:.12f}, sub_dy={dy_sub:.12f}"
+        )
+
+        # if grid spacing is different, use area geometry directly and force interpolation
+        # area geometry is the authoritative subgrid geometry
+        if not (same_dx and same_dy):
+
+            logger_stream.warning(
+                f"Grid resolution mismatch in dataset {ds_id}. "
+                f"Using area geometry directly and interpolating to reference grid."
+            )
+
+            # rebuild subgrid coordinates from area geometry
+            # da_area is assumed to carry the correct native geometry
+            area_x_native = da_area[coord_name_x].values
+            area_y_native = da_area[coord_name_y].values
+
+            # enforce RT field on area native coordinates
+            da_rt = create_darray(
+                values_rt, area_x_native, area_y_native,
+                name=var_name_out,
+                coord_name_x=coord_name_x, coord_name_y=coord_name_y,
+                dim_name_x=dim_name_x, dim_name_y=dim_name_y
+            )
 
         # activate interpolation mode if sub grid is not perfectly aligned with ref grid
         if interpolation_mode:
@@ -377,6 +458,30 @@ def compute_return_time(
             i_ref = _map_1d_to_ref_indices(ref_x_1d, sub_x_1d)  # length 559
             j_ref = _map_1d_to_ref_indices(ref_y_1d, sub_y_1d)  # length 167
 
+            dx_ref = np.abs(np.median(np.diff(ref_x_1d)))
+            dx_sub = np.abs(np.median(np.diff(sub_x_1d)))
+            dy_ref = np.abs(np.median(np.diff(ref_y_1d)))
+            dy_sub = np.abs(np.median(np.diff(sub_y_1d)))
+
+            x_phase = (sub_x_1d[0] - ref_x_1d[0]) / dx_ref
+            y_phase = (ref_y_1d[0] - sub_y_1d[0]) / dy_ref
+
+            if debug_box:
+                logger_stream.info("ref x start: %s", ref_x_1d[0])
+                logger_stream.info("sub x start: %s", sub_x_1d[0])
+                logger_stream.info("ref y start: %s", ref_y_1d[0])
+                logger_stream.info("sub y start: %s", sub_y_1d[0])
+
+                logger_stream.info("dx_ref: %s", dx_ref)
+                logger_stream.info("dx_sub: %s", dx_sub)
+                logger_stream.info("dy_ref: %s", dy_ref)
+                logger_stream.info("dy_sub: %s", dy_sub)
+
+                logger_stream.info("x_phase: %s", x_phase)
+                logger_stream.info("y_phase: %s", y_phase)
+                logger_stream.info("x_phase nearest int diff: %s", x_phase - round(x_phase))
+                logger_stream.info("y_phase nearest int diff: %s", y_phase - round(y_phase))
+
             # build 2D index grids
             jj_ref, ii_ref = np.meshgrid(j_ref, i_ref, indexing="ij")  # shape (167, 559)
             # update only where sub valid and ref is valid
@@ -384,7 +489,7 @@ def compute_return_time(
             merge_rt[jj_ref[mask_finite], ii_ref[mask_finite]] = sub_data[mask_finite]
 
         # debug
-        if debug:
+        if debug_data_steps:
             plot_data(da_rt.values, title=f"return time - data step")
             plot_data(merge_rt, title=f"return time - merge step")
 
@@ -395,8 +500,8 @@ def compute_return_time(
     merge_rt[ref_nan] = np.nan
 
     # check results
-    if debug:
-        plot_data(merge_rt, title=f"return time - merge step - final")
+    if debug_data_out:
+        plot_data(merge_rt, title=f"return time - merge step - final", plot_block=True)
 
     # define output DataArray
     da_merge = create_darray(

@@ -32,10 +32,10 @@ try:
 except ImportError:
     pass
 
-from decimal import Decimal
 from typing import Optional, Dict
 
 from shybox.generic_toolkit.lib_utils_file import fix_file_path
+from shybox.io_toolkit.lib_io_ascii_grid import read_grid
 from shybox.io_toolkit.lib_io_ascii_points import read_points_1d
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
@@ -185,6 +185,9 @@ def read_from_file(
         # manage different file types
         if file_type in ['grid', 'grid_2d']:
 
+            data = read_grid(file_name=path)
+
+            '''
             # get header
             geo_attrs = {}
             with open(path, 'r') as file:
@@ -216,6 +219,7 @@ def read_from_file(
             squeeze_dims = [dim for dim in data.dims if data[dim].size == 1]
             if len(squeeze_dims) > 0:
                 data = data.squeeze(squeeze_dims)
+            '''
 
         elif file_type == 'points_1d':
 

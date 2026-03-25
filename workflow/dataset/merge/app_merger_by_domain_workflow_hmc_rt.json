@@ -67,7 +67,7 @@
         "path": "{path_geo}",
         "file_name": "mask_italy_500m_epsg4326.txt"
       },
-      "grid" : {"y_ll": 36.3, "x_ll": 6.5, "cols": 2500, "rows": 2280, "res": 0.005002, "value": 1}
+      "grid" : {"y_ll": 36.3, "x_ll": 6.50, "cols": 2500, "rows": 2280, "res": 0.005, "value": 1}
     },
     "data_source": {
 

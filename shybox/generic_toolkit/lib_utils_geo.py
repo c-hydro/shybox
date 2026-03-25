@@ -105,8 +105,9 @@ def create_grid_from_corners(
             data,
             dims=("latitude", "longitude"),
             coords={
-                "longitude": (("latitude", "longitude"), lon2d),
-                "latitude": (("latitude", "longitude"), lat2d),
+                # FIX: use 1D coords instead of 2D
+                "longitude": x_coords,
+                "latitude": y_coords,
             },
             name=grid_name
         )
