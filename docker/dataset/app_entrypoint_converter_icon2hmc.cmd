@@ -1,4 +1,13 @@
 ## --------------------------------------------------------------------------------------------------
+## FREE SPACE
+# docker not used volume, containers ...
+docker image prune -a
+
+# singularity/apptainer tmp
+apptainer cache clean blob
+## --------------------------------------------------------------------------------------------------
+
+## --------------------------------------------------------------------------------------------------
 ## BUILD DOCKERS
 # clone git branch destine
 git clone --branch destine https://github.com/c-hydro/shybox.git package_shybox
