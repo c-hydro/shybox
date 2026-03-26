@@ -233,7 +233,8 @@ class TimeManager:
         start_days_before: (int, None) = 2,
         time_as_string: Tuple[str, ...] = ("time_start", "time_end"),
         time_as_int:    Tuple[str, ...] = ("time_period",),
-        tz: str = "Europe/Rome",
+        time_priority: str = 'period', time_ref : str = 'time_run',
+        tz: str = "Europe/Rome", priority: str = 'times',
         log: LoggingManager | None = None,
     ) -> "TimeManager":
         """
@@ -307,6 +308,10 @@ class TimeManager:
             "time_rounding":     lut.get("time_rounding"),
             "start_days_before": start_days_before,         # <- integer, compatible
         }
+
+
+        # adjust cfg (priority based and update results)
+        cfg = cls.adjust(cfg, priority=time_priority, ref_key=time_ref)
 
         # Create TimeManager using the central from_dict()
         tm = cls.from_dict(
@@ -935,6 +940,110 @@ class TimeManager:
                 flat[new_key] = value
 
         return flat
+
+    @classmethod
+    def adjust(cls, cfg: Dict[str, Any], priority: str = "bounds", ref_key: str = "time_start") -> Dict[str, Any]:
+        """
+        Update cfg in-place to keep time_period / time_start / time_end consistent.
+
+        Rules
+        -----
+        priority == "time_period":
+            - recompute time_end from time_start + time_period
+            - time_start and time_period must be defined, otherwise raise
+            - update cfg["time_end"]
+
+        priority == "times":
+            - recompute time_period from time_start and time_end
+            - time_start and time_end must be defined, otherwise raise
+            - update cfg["time_period"]
+
+        In both cases:
+            - if time_run is defined and is outside [time_start, time_end], emit a warning
+        """
+
+        # check if ref_key is valid
+        if ref_key not in list(cfg.keys()):
+            raise ValueError(
+                f"ref_key='{ref_key}' is not a valid key in cfg. "
+                f"Available keys: {list(cfg.keys())}"
+            )
+
+        # priority-based adjustment
+        if priority == "period":
+            if ref_key is not None:
+                cfg_key = ref_key
+            else:
+                raise ValueError("ref_key must be provided when priority='period'.")
+
+            time_ref = cfg.get(cfg_key)
+            time_period = cfg.get("time_period")
+
+            if time_ref is None or time_period is None:
+                raise RuntimeError(
+                    "Priority is 'time_period', but 'time_ref' and/or 'time_period' are None."
+                )
+
+            ts_start = pd.Timestamp(time_ref)
+            delta = pd.to_timedelta(time_period)
+            ts_end = ts_start + delta
+
+            cfg["time_start"] = ts_start
+            cfg["time_end"] = ts_end
+
+        elif priority == "bounds":
+
+            time_start = cfg.get("time_start")
+            time_end = cfg.get("time_end")
+
+            if time_start is None or time_end is None:
+                raise RuntimeError(
+                    "Priority is 'times', but 'time_start' and/or 'time_end' are None."
+                )
+
+            ts_start = pd.Timestamp(time_start)
+            ts_end = pd.Timestamp(time_end)
+
+            if ts_end < ts_start:
+                raise RuntimeError("'time_end' must be greater than or equal to 'time_start'.")
+
+            delta = ts_end - ts_start
+            hours = int(delta.total_seconds() / 3600)
+
+            cfg["time_start"] = ts_start
+            cfg["time_end"] = ts_end
+            cfg["time_period"] = f"{hours}H"
+
+            if ref_key == 'time_start':
+                cfg["time_run"] = ts_start
+            elif ref_key == 'time_end':
+                cfg["time_run"] = ts_end
+            elif ref_key is None:
+                cfg["time_run"] = None
+            else:
+                raise ValueError(
+                    f"time_reference='{ref_key}' is not a valid option. "
+                    f"Valid options are: 'time_start', 'time_end', or None."
+                )
+
+
+        else:
+            raise RuntimeError(f"Unsupported priority '{priority}'. Use 'period' or 'bounds'.")
+
+        # Check time_run against the final time window
+        time_run = cfg.get("time_run")
+        if time_run is not None:
+            ts_run = pd.Timestamp(time_run)
+            cfg["time_run"] = ts_run
+
+            if not (cfg["time_start"] <= ts_run <= cfg["time_end"]):
+                warnings.warn(
+                    f"'time_run' ({ts_run}) is outside the period "
+                    f"[{cfg['time_start']}, {cfg['time_end']}].",
+                    UserWarning,
+                )
+
+        return cfg
 
     # view method
     def view(
