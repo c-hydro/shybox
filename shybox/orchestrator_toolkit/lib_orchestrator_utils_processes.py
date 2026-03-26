@@ -91,24 +91,41 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                 else:
                     return obj  # 'xarray' passthrough
 
+            # handle different data structures: dict, list/tuple, or single object
             if isinstance(data, dict):
+
                 # Defer conversion of individual values to the function (dict can contain multiple fields)
                 normalized_data = {k: _convert_single(v) for k, v in data.items()}
+
             elif isinstance(data, (list, tuple)):
 
+                # iterate over items, convert each, and flatten if needed (e.g. list of lists)
                 normalized_data = []
                 for v in data:
+
+                    # manage value (keep if not None, skip if None unless lazy_undefined_value is set)
                     value = _convert_single(v)
                     if value is None:
-                        continue
+                        if 'lazy_undefined_value' in decorator_attrs:
+                            pass
+                        else:
+                            continue
+                    # values is a list/tuple
                     if isinstance(value, (list, tuple)):
                         for item in value:
+
+                            # manage None values in list/tuple: skip if None or keep if lazy_undefined_value is set
                             if item is not None:
                                 normalized_data.append(item)
+                            else:
+                                if 'lazy_undefined_value' in decorator_attrs:
+                                    normalized_data.append(decorator_attrs['lazy_undefined_value'])
+                                else:
+                                    pass
+
                     else:
                         normalized_data.append(value)
 
-                #normalized_data = type(data)(_convert_single(v) for v in data)
             else:
                 normalized_data = _convert_single(data)
 
