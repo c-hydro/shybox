@@ -17,12 +17,16 @@ from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_proc
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
-@as_process(input_type='pandas', output_type='pandas')
+@as_process(input_type='pandas', output_type='pandas',
+            lazy_undefined_obj=True, lazy_undefined_args=True, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
-def join_points_to_time_series(data, ref, time, name='points_time_series',
-                 fill_missing_step=-9998.0, fill_missing_tag=-9999.0,
-                 time_fmt="%Y%m%d%H%M",
-                 fixed_width=True,decimals=2, col_width=12, **kwargs):
+def join_points_to_time_series(
+        data, ref, time,
+        name='points_time_series',
+        fill_missing_step: (float, int) = -9998.0, fill_no_data_step: (float, int) = -9999.0,
+        fill_missing_tag: (str, float, int) = -9999.0,
+        time_fmt: str = "%Y%m%d%H%M",
+        fixed_width: bool = True, decimals: int = 2, col_width: int = 12, **kwargs):
     """
     data: iterable of per-step objects where:
           - d is None OR
@@ -47,12 +51,36 @@ def join_points_to_time_series(data, ref, time, name='points_time_series',
                 parts.append(extra_s)
         return " ".join(parts)
 
+    # check data availability
+    if len(data) == 0:
+        logger_stream.warning("Empty data for the whole time series. Return None")
+        return None
+    else:
+        nd_df = None
+        for template in data:
+            if template is not None:
+                nd_df = pd.DataFrame(fill_missing_step,
+                    index=template.index, columns=template.columns)
+                break
+
+    # if all data steps are None, template is not available due to the data are not available
+    if nd_df is None:
+        logger_stream.warning("All data steps are None. Return None")
+        return None
+
     # tags ordered as ref
     tags = [make_tag(r) for _, r in ref.iterrows()]
 
     # iterate over data and time together
     rows = []
     for d, t in zip(data, time):
+
+        # check if d is None, if so use template with fill_missing_step
+        if d is None:
+            logger_stream.warning(f"Adding missing step for time: {t}")
+            d = nd_df
+
+        # format time string
         ts = pd.to_datetime(t).strftime(time_fmt)
 
         # missing whole timestep
@@ -72,33 +100,46 @@ def join_points_to_time_series(data, ref, time, name='points_time_series',
             p_str = " ".join(str(p).strip().split())
             step_map[p_str] = v  # if duplicates, last wins
 
+        # iterate over tags
         vals = []
         for tag in tags:
+
+            # organize key by normalizing spaces to avoid mismatches
             key = " ".join(str(tag).strip().split())
 
+            # lookup value for this tag; if missing, use fill_missing_tag
             if key in step_map:
+
+                # get value and check if it's valid (not None or NaN)
                 v = step_map[key]
+
+                # check value format and handle missing/invalid values
                 if v is None or (isinstance(v, float) and np.isnan(v)):
                     vals.append(fill_missing_tag)
                 else:
-
+                    # if value is an array, try to extract a single numeric value
                     if isinstance(v, np.ndarray):
                         if v.size == 1:
                             v = v.item()
                         else:
                             logger_stream.warning(f"Array with shape {v.shape}, using first element")
                             v = v.flat[0]
-
+                    # ensure numeric value
                     vals.append(float(v))
             else:
                 logger_stream.warning(f"Missing point '{tag}' at time '{ts}'. Using {fill_missing_tag}.")
                 vals.append(fill_missing_tag)
 
+        # define row for this time step
         rows.append([ts] + vals)
 
+    # create dataframe
     df = pd.DataFrame(rows, columns=["time"] + tags)
 
-    # fixed width formatting (still DF, ready for to_csv elsewhere)
+    # fill missing numeric values first
+    df = df.fillna(fill_no_data_step)
+
+    # fixed width formatting (still dataframe, ready for to_csv elsewhere) --> this is string formatting
     if fixed_width:
         for c in df.columns[1:]:
             df[c] = df[c].map(lambda x: f"{float(x):{col_width}.{decimals}f}")
