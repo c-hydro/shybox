@@ -147,7 +147,8 @@ def main(view_table: bool = False):
     ## TIME MANAGEMENT
     # create time object
     alg_cfg_time = TimeManager.from_config(
-        alg_cfg_obj, start_days_before=None,
+        alg_cfg_obj, start_days_before=1,
+        time_priority='period', time_ref='time_run',
         time_as_string=('time_frequency',), time_as_int=('time_period',))
     # update lut using time tags
     alg_cfg_obj.update_lut_using_extra_tags(extra_tags=alg_cfg_time.as_dict(), overwrite=True)
@@ -191,7 +192,7 @@ def main(view_table: bool = False):
     source_data_discharge = DataLocal(
         path=alg_cfg_application['dynamic_data_src']['path'],
         file_name=alg_cfg_application['dynamic_data_src']['file_name'],
-        data_layout='points',
+        data_layout='points', data_mandatory=False,
         file_deps=None,
         file_type='points_1d', file_format='ascii', file_mode='local',
         file_variable='DISCHARGE', file_io='input',
