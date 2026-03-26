@@ -354,9 +354,11 @@ class ProcessorContainer:
                 type_raw = type_raw * len(time)
                 data_raw_expanded = data_raw * len(time)
                 time_expanded = [t for t in time for _ in range(data_n)]
+                data_names_expanded = [f"data_{i}" for i, _ in enumerate(data_raw_expanded)]
 
                 # overwrite originals if you want
                 data_raw = data_raw_expanded
+                data_names = data_names_expanded
                 time = time_expanded
 
             elif isinstance(data_raw, DataLocal):
@@ -561,15 +563,17 @@ class ProcessorContainer:
                 # read data (check if data is readable or not)
                 if fx_check[data_id]:
 
-                    # save data and deps
-                    as_is = data_tmp.data_as_is
+                    # get settings
+                    as_is, mandatory = data_tmp.data_as_is, data_tmp.data_mandatory
+
+                    # get data
                     fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, as_is=as_is ,**kwargs)
                     fx_deps.append(step_tag)
 
                     # convert to DataArray if single variable
                     fx_tmp = _to_dataarray_if_single_var(fx_tmp)
                     # get variable name(s) from data
-                    fx_vars = _get_variable_name(fx_tmp)
+                    fx_vars = _get_variable_name(fx_tmp, mandatory)
                     # store variable id
                     fx_varid.append(var_id)
 
@@ -1116,14 +1120,16 @@ def _sync_variable_name(data, vars):
 
 # method to get variable name(s)
 @with_logger(var_name="logger_stream")
-def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}"):
+def _get_variable_name(obj, mandatory = True,
+                       default="undefined", indexed_default="undefined_{}"):
 
-    # Case 1: DataArray → single variable
+    # Case 1: DataArray -- grid format -- single variable
     if isinstance(obj, xr.DataArray):
         return obj.name if obj.name is not None else default
 
-    # Case 2: Dataset → multiple variables
+    # Case 2: Dataset -- grid format -- multiple variables
     elif isinstance(obj, xr.Dataset):
+
         names = []
         for i, name in enumerate(obj.data_vars):
             if name is None:
@@ -1132,6 +1138,7 @@ def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}")
                 names.append(name)
         return names
 
+    # Case 3: DataFrame -- time-series format
     elif isinstance(obj, pd.DataFrame):
 
         if getattr(obj, "name", None) is None:
@@ -1142,9 +1149,20 @@ def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}")
 
         return names
 
+    # Case 4: None or unknown type
+    elif obj is None:
+
+        # if variable name is mandatory, raise an error or return NoneType
+        if mandatory:
+            logger_stream.error("Object is None but variable name is mandatory. Cannot proceed.")
+            raise ValueError("Object is None but variable name is mandatory. Cannot proceed.")
+        else:
+            logger_stream.warning("Object is None. Variable name will be set to 'undefined'.")
+            return default
+
     else:
-        logger_stream.error("Input must be an xarray DataArray or Dataset")
-        raise TypeError("Input must be an xarray DataArray or Dataset")
+        logger_stream.error("Input must be an xarray DataArray, Dataset, DataFrame or None.")
+        raise TypeError("Input must be an xarray DataArray, Dataset, DataFrame or None.")
 
 # filter to convert dataset to dataarray if single variable
 @with_logger(var_name="logger_stream")
