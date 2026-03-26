@@ -134,6 +134,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
 
+        self.data_mandatory = True
+        if 'data_mandatory' in kwargs:
+            self.data_mandatory = kwargs.pop('data_mandatory')
+
         self.variable_template = {}
         if 'variable_template' in kwargs:
             self.variable_template = kwargs.pop('variable_template')
@@ -852,8 +856,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 return data
 
             else:
-                self.logger.error(f'Could not resolve data from {full_location}.')
-                raise ValueError(f'Could not resolve data from {full_location}.')
+                # check data mandatory or not
+                if self.data_mandatory:
+                     self.logger.error(f'Could not resolve data from {full_location}.')
+                     raise ValueError(f'Could not resolve data from {full_location}.')
+                else:
+                    self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
+                    # info get data end (source case)
+                    log_data('end', name=name, time=time, from_memory=False)
+                    return None
 
         # check if data is available
         if self.check_data(time, **kwargs):
@@ -914,8 +925,16 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.memory_data = deepcopy(data)
 
         else:
-            self.logger.error(f'Could not resolve data from {full_location}.')
-            raise ValueError(f'Could not resolve data from {full_location}.')
+            # check data mandatory or not
+            if self.data_mandatory:
+                self.logger.error(f'Could not resolve data from {full_location}.')
+                raise ValueError(f'Could not resolve data from {full_location}.')
+            else:
+                self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
+
+                # info get data end (source case)
+                log_data('end', name=name, time=time, from_memory=False)
+                return None
 
         # if there is no template for the dataset, create it from the data
         structure_template = self.get_structure_template(make_it=False, **kwargs)

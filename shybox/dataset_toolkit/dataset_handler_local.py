@@ -90,6 +90,11 @@ class DataLocal(Dataset):
             self.data_layout = kwargs.pop('data_layout')
         else:
             self.data_layout = 'geo'
+        # check data mandatory
+        if 'data_mandatory' in kwargs:
+            self.data_mandatory = kwargs.pop('data_mandatory')
+        else:
+            self.data_mandatory = True
 
         # check data_id (to link data to ancillary info if needed)
         if 'data_id' in kwargs:
@@ -207,6 +212,7 @@ class DataLocal(Dataset):
             "data_layout": layout_norm,
             "data_id": self.data_id,
             "data_as_is": self.data_as_is,
+            "data_mandatory": self.data_mandatory,
             'file_variable': file_variable,
             'file_workflow': file_workflow
         })
