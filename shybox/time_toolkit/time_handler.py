@@ -985,7 +985,7 @@ class TimeManager:
                 )
 
             ts_start = pd.Timestamp(time_ref)
-            delta = pd.to_timedelta(time_period)
+            delta = pd.to_timedelta(time_period.lower())
             ts_end = ts_start + delta
 
             cfg["time_start"] = ts_start
