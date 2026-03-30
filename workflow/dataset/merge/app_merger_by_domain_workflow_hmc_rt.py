@@ -2,8 +2,8 @@
 """
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN - RETURN TIME
 
-__date__ = '20260209'
-__version__ = '1.3.0'
+__date__ = '20260310'
+__version__ = '1.4.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
