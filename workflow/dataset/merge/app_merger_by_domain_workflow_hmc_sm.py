@@ -2,8 +2,8 @@
 """
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN - SOIL MOISTURE
 
-__date__ = '20260209'
-__version__ = '1.2.0'
+__date__ = '20260326'
+__version__ = '1.4.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
@@ -18,11 +18,13 @@ TIME_START="'1983-10-31 11:00'";
 TIME_END="'1983-10-31 12:00'";
 PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/geo/';
 PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/data/';
+PATH_METRICS='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/metrics/';
 PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/data';
 PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/log/;
 PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/tmp/
 
 Version(s):
+20260326 (1.4.0) --> Extend to compute the soil moisture layer
 20260209 (1.3.0) --> Set the algorithm for merging soil moisture and discharge variables
 20260129 (1.2.0) --> Add class method to create data on demand
 20260122 (1.1.0) --> Refactor using class methods in shybox package
@@ -44,9 +46,7 @@ from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
-from shybox.processing_toolkit.lib_proc_merge import merge_data_by_ref
-from shybox.processing_toolkit.lib_proc_merge import merge_data_by_watermark
+from shybox.processing_hydro_toolkit.lib_proc_compute_sm import compute_soil_moisture
 
 from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_format
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,10 +54,10 @@ from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_fo
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Application for processing datasets - Merger by Domain - Discharge'
+alg_name = 'Application for processing datasets - Merger by Domain - Soil Moisture'
 alg_type = 'Package'
-alg_version = '1.1.0'
-alg_release = '2026-01-22'
+alg_version = '1.4.0'
+alg_release = '2026-03-26'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -203,8 +203,8 @@ def main(view_table: bool = False):
         dset_src_handler_list = []
         for alg_data_id, (alg_data_src_key, alg_data_src_settings) in enumerate(alg_cfg_step['data_source'].items()):
 
-            # deps handler
-            dset_src_handler_deps = DataLocal(
+            # deps watermark handler
+            dset_src_handler_deps_watermark = DataLocal(
                 path=alg_data_src_settings['file_watermark']['path'],
                 file_name=alg_data_src_settings['file_watermark']['file_name'],
                 file_type='grid_2d', file_format='ascii', file_mode='local',
@@ -223,8 +223,8 @@ def main(view_table: bool = False):
                 path=alg_data_src_settings['file_data']['path'],
                 file_name=alg_data_src_settings['file_data']['file_name'],
                 file_type='grid_hmc', file_format='netcdf', file_mode='local',
-                file_variable=['SM'], file_io='input',
-                file_deps={'watermark': dset_src_handler_deps},
+                file_variable=['SOIL_MOISTURE'], file_io='input',
+                file_deps={'watermark': dset_src_handler_deps_watermark},
                 data_id=alg_data_id,
                 variable_template={
                     "dims_geo": {"west_east": "longitude", "south_north": "latitude", "time": "time"},
@@ -244,7 +244,7 @@ def main(view_table: bool = False):
             path=alg_cfg_step['data_destination']['path'],
             file_name=alg_cfg_step['data_destination']['file_name'],
             file_type='grid_2d', file_format='geotiff', file_mode='local',
-            file_variable=['SM'], file_io='output',
+            file_variable=['SOIL_MOISTURE'], file_io='output',
             variable_template={
                 "dims_geo": alg_cfg_step['data_destination']['dims_geo'],
                 "vars_data": alg_cfg_step['data_destination']['vars_data']
@@ -261,7 +261,7 @@ def main(view_table: bool = False):
             data_package_in=dset_src_handler_list,
             data_package_out=dset_dst_handler_obj,
             data_ref=ref_data,
-            priority=['soil_moisture'],
+            priority=None,
             configuration=alg_cfg_workflow,
             logger=logging_handle
         )
