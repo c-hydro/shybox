@@ -43,7 +43,7 @@ def compute_soil_moisture(
         debug_data_by_watermark: bool = False, debug_data_by_river_network: bool = False,
         debug_data_by_resampling: bool = False,
         debug_data_merge_domain_partial: bool = False, debug_data_merge_domain_gaps: bool = False,
-        debug_data_merge_domain_merged: bool = False, debug_data_merge_domain_weighted: bool = True,
+        debug_data_merge_domain_merged: bool = False, debug_data_merge_domain_weighted: bool = False,
         fill_gaps_flag: bool = True, fill_gaps_distance: int = 2,
         interp_flag: bool = False,
         interp_method: str = "nn", interp_max_distance: float = 20000, interp_neighbours: int =  7,

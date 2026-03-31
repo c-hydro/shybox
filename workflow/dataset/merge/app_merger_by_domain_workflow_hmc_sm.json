@@ -59,7 +59,7 @@
     "time": {
       "start": "{time_start}",
       "end": "{time_end}",
-      "frequency": "h",
+      "frequency": "12h",
       "format": "%Y-%m-%d %H:00"
     },
     "geo": {
