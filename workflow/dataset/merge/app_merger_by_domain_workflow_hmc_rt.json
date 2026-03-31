@@ -15,7 +15,7 @@
           "time_source": null,  "time_destination": null,
           "time_rounding": "D", "time_frequency": "D",  "time_direction": "forward",
           "file_log": "{execution_name}_{domain_name}.log",
-          "execution_name": "merger_dataset_by_domain_hmc_discharge",
+          "execution_name": "merger_dataset_by_domain_hmc_rt",
           "execution_mode": "nrt"
         },
         "environment": {
