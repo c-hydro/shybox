@@ -97,6 +97,11 @@ def join_time_series_by_registry(
     # PREPARE OBS USING THE SAME COLUMN SET / ORDER
     if ts_obs is not None and not ts_obs.empty:
 
+        # force obs time to flat hour
+        ts_obs[var_time_name] = pd.to_datetime(
+            ts_obs[var_time_name], errors="coerce"
+        ).dt.floor("h")
+
         obs_data_cols = [c for c in ts_obs.columns if c != var_time_name]
 
         # keep only obs columns that are in sim canonical names

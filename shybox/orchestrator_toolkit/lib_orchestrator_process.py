@@ -586,7 +586,10 @@ class ProcessorContainer:
 
                 # append data (in list format)
                 if (id_deps is None) or (data_id < id_deps):
-                    fx_data.append(fx_tmp)
+                    if data_tmp.file_io == 'derived':
+                        pass
+                    else:
+                        fx_data.append(fx_tmp)
                 else:
                     if key_tmp is not None:
                         if not key_tmp in list(fx_other.keys()):
