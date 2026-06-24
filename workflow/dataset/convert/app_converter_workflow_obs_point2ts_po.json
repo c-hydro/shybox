@@ -21,6 +21,7 @@
           "path_dynamic_source": "PATH_SRC", "path_dynamic_destination": "PATH_DST",
           "file_time_source": "TIME_RUN", "file_time_destination": "TIME_RUN",
           "time_run": "TIME_RUN", "time_period" : "TIME_PERIOD",
+          "time_start": "TIME_START", "time_end": "TIME_END",
           "path_app": "PATH_APP",
           "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
         }
@@ -32,6 +33,7 @@
         "path_time_source": "string", "path_time_destination": "string",
         "file_time_source": "timestamp", "file_time_destination": "timestamp",
         "time_direction": "string", "time_run": "string",
+        "time_start": "string", "time_end": "string",
         "time_period": "int", "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
         "path_log": "string", "file_log": "string",
@@ -45,6 +47,7 @@
         "path_time_source": "%Y/%m/%d", "path_time_destination": "%Y%m%d_%H",
         "file_time_source": "%Y%m%d%H00", "file_time_destination": "%Y%m%d%H00",
         "time_direction": "string", "time_run": "%Y%m%d%H00",
+        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
         "time_period": "int", "time_rounding": "string", "time_frequency": "string",
         "path_app": "string",
         "path_log": "string", "file_log": "string",

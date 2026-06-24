@@ -979,7 +979,18 @@ class TimeManager:
             time_ref = cfg.get(cfg_key)
             time_period = cfg.get("time_period")
 
+            time_start = cfg.get("time_start", None)
+            time_end = cfg.get("time_end", None)
+
             if time_ref is None or time_period is None:
+
+                if time_start is not None and time_end is not None:
+                    raise RuntimeError(
+                        "Priority is 'time_period', but 'time_ref' and/or 'time_period' are None. "
+                        f"Found 'time_start'={time_start} and 'time_end'={time_end}. "
+                        "Consider defining 'time_ref' and 'time_period' from these bounds."
+                    )
+
                 raise RuntimeError(
                     "Priority is 'time_period', but 'time_ref' and/or 'time_period' are None."
                 )
@@ -993,8 +1004,9 @@ class TimeManager:
 
         elif priority == "bounds":
 
-            time_start = cfg.get("time_start")
-            time_end = cfg.get("time_end")
+            time_start = cfg.get("time_start", None)
+            time_end = cfg.get("time_end", None)
+            time_run = cfg.get("time_run", None)
 
             if time_start is None or time_end is None:
                 raise RuntimeError(
@@ -1018,6 +1030,12 @@ class TimeManager:
                 cfg["time_run"] = ts_start
             elif ref_key == 'time_end':
                 cfg["time_run"] = ts_end
+            elif ref_key == 'time_run':
+                if time_run is not None:
+                    ts_run = pd.Timestamp(time_run)
+                    cfg["time_run"] = ts_run
+                else:
+                    cfg["time_run"] = None
             elif ref_key is None:
                 cfg["time_run"] = None
             else:

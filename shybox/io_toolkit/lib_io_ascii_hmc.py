@@ -40,13 +40,13 @@ LUT_DB_DEFAULT = {
     "catchment_area_km2": "AREA",
     "correlation_time_hr": "CORR_TIME",
     "curve_number": "CN",
-    "threshold_level_1": "THR1",
-    "threshold_level_2": "THR2",
-    "threshold_level_3": "THR3",
-    "alert_zone": "ALERTZONE",
     "discharge_yellow": "Q_ALLARME",
     "discharge_orange": "Q_ARANCIONE",
     "discharge_red": "Q_ALLERTA",
+    "threshold_level_1": "Q_ALLARME",  #THR1 # assigned to THR but for viewer reassigned to Q (to avoid rewrite code)
+    "threshold_level_2": "Q_ARANCIONE", #THR2 # assigned to THR but for viewer reassigned to Q (to avoid rewrite code)
+    "threshold_level_3": "Q_ALLERTA", #THR3 # assigned to THR but for viewer reassigned to Q (to avoid rewrite code)
+    "alert_zone": "ALERTZONE",
     "threshold_source": "Fonte Q_soglia",
     "discharge_estimation": "StimaQoss",
     "quality_index_1_5": "QUAL1_5",
@@ -79,6 +79,9 @@ TYPE_DB_DEFAULT = {
     'threshold_level_1': float,
     'threshold_level_2': float,
     'threshold_level_3': float,
+    "discharge_yellow": float,
+    "discharge_orange": float,
+    "discharge_red": float,
     'alert_zone': int,
     'is_calibrated': str
 }

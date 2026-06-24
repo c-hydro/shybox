@@ -148,7 +148,7 @@ def main(view_table: bool = False):
     # create time object
     alg_cfg_time = TimeManager.from_config(
         alg_cfg_obj, start_days_before=1,
-        time_priority='period', time_ref='time_run',
+        time_priority='bounds', time_ref='time_run',
         time_as_string=('time_frequency',), time_as_int=('time_period',))
     # update lut using time tags
     alg_cfg_obj.update_lut_using_extra_tags(extra_tags=alg_cfg_time.as_dict(), overwrite=True)
