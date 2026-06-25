@@ -20,5 +20,7 @@ DOCKER_BUILDKIT=1 docker build --no-cache --progress=plain -f Dockerfile --targe
 
 # docker build converter [ONLY CONVERTER]
 DOCKER_BUILDKIT=1 docker build --progress=plain -f Dockerfile --target app-converter-pnt2ts -t converter_pnt2ts:dev .
+
+DOCKER_BUILDKIT=1 docker build --progress=plain -f Dockerfile --target app-converter-pnt2ts -t converter_pnt2ts:dev .
 ## --------------------------------------------------------------------------------------------------
 
