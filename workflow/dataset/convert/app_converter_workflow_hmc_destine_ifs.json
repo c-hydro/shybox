@@ -163,7 +163,8 @@
 
       "RAIN": [
         {"function": "interpolate_data", "method": "nn", "max_distance": 25000, "neighbours": 7, "fill_value": null},
-        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null},
+        {"function": "convert_rain_units", "to_mm": true}
       ],
 
       "WIND_U": [], "WIND_V": [],
@@ -174,7 +175,7 @@
         {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
       ],
 
-      "QW": [], "DEW_POINT": [],
+      "QV": [], "DEW_POINT": [],
       "RH": [
         {"function": "compute_data_rh", "ref_value": -9999, "mask_no_data": null,
           "deps_vars": {"t": "AIR_T", "q": "QV", "td": "DEW_POINT"}},

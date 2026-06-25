@@ -63,7 +63,13 @@ def read_grid(file_name: str, file_epsg: str = 'EPSG:4326', file_dtype: str = 'f
     data = dset.read()
 
     if dset.crs is None:
-        file_crs = CRS.from_string(file_epsg)
+        try:
+            file_crs = CRS.from_string(file_epsg)
+        except Exception:
+            if str(file_epsg).upper() in ["EPSG:4326", "4326"]:
+                file_crs = 4326
+            else:
+                raise RuntimeError('EPSG code is not correctly parsed')
     else:
         file_crs = dset.crs
 

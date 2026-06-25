@@ -44,6 +44,7 @@ from shybox.config_toolkit.config_handler import ConfigManager
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_toolkit.lib_proc_interp import interpolate_data
 from shybox.processing_toolkit.lib_proc_mask import mask_data_by_ref
+from shybox.processing_toolkit.lib_proc_compute_rain import convert_rain_units
 from shybox.processing_toolkit.lib_proc_compute_temperature import convert_temperature_units
 from shybox.processing_toolkit.lib_proc_compute_wind import compute_data_wind_speed
 from shybox.processing_toolkit.lib_proc_compute_humidity import compute_data_rh
@@ -371,7 +372,7 @@ def main(view_table: bool = False):
         data_package_in=[rain_data, airt_data, rh_data, inc_rad_data, wind_speed_data],
         data_package_out=output_data,
         data_ref=geo_data,
-        priority=['INC_RAD'],
+        priority=['RH'],
         configuration=alg_cfg_workflow,
         logger=logging_handle
     )

@@ -399,7 +399,12 @@ class ProcessorContainer:
         else:
 
             # compute data length (before expansion)
-            data_n = len(data_raw)
+            if isinstance(data_raw, list):
+                data_n = len(data_raw)
+            elif isinstance(data_raw, DataLocal):
+                data_n = 1
+            else:
+                raise TypeError('Data object is not compatible with time list')
 
             type_raw = ['data'] * data_n
             if id_deps is not None:
@@ -658,6 +663,7 @@ class ProcessorContainer:
             if fx_other:
                 for key, obj in fx_other.items():
                     fx_data.append(obj)
+                id_deps = 0 # no data available only deps so init to 0 index
                 add_other = False
 
         # check if fx data is available or not
@@ -731,6 +737,8 @@ class ProcessorContainer:
                 tmp_deps = []
                 if id_deps > 0:
                     tmp_deps = tmp_data[id_deps:]
+                else:
+                    tmp_deps = deepcopy(tmp_data)
 
                 # save the data elements using the deps_vars mapping
                 fx_data = {}
