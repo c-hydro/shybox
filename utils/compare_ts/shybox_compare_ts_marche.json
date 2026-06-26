@@ -1,0 +1,42 @@
+{
+  "time_run": "2026-03-31 10:12",
+  "type_run": "obs; nwp ifs",
+
+  "source": {
+    "nc": {
+      "folder": "/home/fabio/Desktop/shybox/dset/case_study_destine/compare_time_series/op_chain_destine/{time_folder}",
+      "folder_time_format": "%Y%m%d_%H",
+      "filename": "hmc.hydrograph_MarcheDomain_{time_file}.nc",
+      "file_time_format": "%Y%m%d%H00"
+    },
+
+    "txt": {
+      "folder": "/home/fabio/Desktop/shybox/dset/case_study_destine/compare_time_series/op_chain_ita/{time_folder}",
+      "folder_time_format": "%Y%m%d",
+      "filename": "hydrograph_{tag}_{time_file}.txt",
+      "file_time_format": "%Y%m%d*"
+    }
+  },
+
+  "destination": {
+    "json": {
+      "folder": "/home/fabio/Desktop/shybox/exec/case_study_destine/compare_time_series/{time_folder}/json/",
+      "folder_time_format": "%Y%m%d_%H",
+      "filename": "destine_ts_{tag}_{time_file}.json",
+      "file_time_format": "%Y%m%d%H00"
+    },
+
+    "png": {
+      "folder": "/home/fabio/Desktop/shybox/exec/case_study_destine/compare_time_series/{time_folder}/png/",
+      "folder_time_format": "%Y%m%d_%H",
+      "filename": "destine_ts_{tag}_{time_file}.png",
+      "file_time_format": "%Y%m%d%H00"
+    }
+  },
+  "logging": {
+    "folder": "/home/fabio/Desktop/shybox/exec/case_study_destine/compare_time_series/log/",
+    "filename": "app_compare_ts_destine_marche.log",
+    "level": "INFO",
+    "rotate_daily": true
+  }
+}
