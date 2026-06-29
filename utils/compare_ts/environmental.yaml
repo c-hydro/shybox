@@ -1,0 +1,28 @@
+name: shybox_compare_ts
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.11
+
+  # Core scientific stack
+  - numpy
+  - pandas
+  - scipy
+
+  # NetCDF / xarray
+  - xarray
+  - netcdf4
+  - h5netcdf
+  - bottleneck
+
+  # Plotting
+  - matplotlib
+
+  # GIS (recommended for Shybox projects)
+  - pyproj
+  - rasterio
+
+  # Utilities
+  - pip

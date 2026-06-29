@@ -35,8 +35,6 @@ from lib_plot import plot_ts
 
 from config_info import LOGGER_NAME, ALG_NAME, ALG_RELEASE, ALG_VERSION
 
-import matplotlib.pylab as plt
-
 # set logger
 logger = logging.getLogger(LOGGER_NAME)
 #-----------------------------------------------------------------------------------------------------------------------
