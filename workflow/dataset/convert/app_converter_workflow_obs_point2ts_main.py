@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO TIME-SERIES - HMC
 
-__date__ = '20260302'
-__version__ = '1.0.0'
+__date__ = '20260630'
+__version__ = '1.1.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -27,6 +27,7 @@ PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/converter_hmc/tmp/;
 PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/converter_hmc/log/;
 
 Version(s):
+20260630 (1.1.0) --> Update and fixed release for shybox package
 20260302 (1.0.0) --> Beta release for shybox package
 """
 
@@ -54,8 +55,8 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 project_name = 'shybox'
 alg_name = 'Workflow for converting data points to time-series configuration'
 alg_type = 'Package'
-alg_version = '1.0.0'
-alg_release = '2026-03-02'
+alg_version = '1.1.0'
+alg_release = '2026-06-30'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -217,7 +218,7 @@ def main(view_table: bool = False):
             "coord_data": {"time": "time", "sections": "n"},
             "vars_data": {"discharge": "discharge_"}
         },
-        time_signature='end',
+        time_signature='end', time_reference=alg_reference_time,
         time_period=1, time_format='%Y%m%d%H%M',
         logger=logging_handle, message=False
     )

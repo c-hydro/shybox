@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_proc_join
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260305'
-Version:       '1.0.0'
+Date:          '20260630'
+Version:       '1.3.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -25,7 +25,7 @@ def join_points_to_time_series(
         name='points_time_series',
         fill_missing_step: (float, int) = -9998.0, fill_no_data_step: (float, int) = -9999.0,
         fill_missing_tag: (str, float, int) = -9999.0,
-        time_fmt: str = "%Y%m%d%H%M",
+        time_fmt: str = "%Y%m%d%H%M", time_reference: pd.Timestamp = None,
         fixed_width: bool = True, decimals: int = 2, col_width: int = 12, **kwargs):
     """
     data: iterable of per-step objects where:
@@ -67,6 +67,26 @@ def join_points_to_time_series(
     if nd_df is None:
         logger_stream.warning("All data steps are None. Return None")
         return None
+
+    # recover time_reference from kwargs if not explicitly provided
+    if time_reference is None:
+
+        for key in (
+                "time_reference",
+                "time_ref",
+                "time_run",
+                "time_now",
+                "time",
+                "reference_time",
+                "run_time",
+                "date_reference",
+        ):
+            if key in kwargs and kwargs[key] is not None:
+                time_reference = kwargs[key]
+                logger_stream.info(
+                    f"Using '{key}' from kwargs as time_reference: {time_reference}"
+                )
+                break
 
     # tags ordered as ref
     tags = [make_tag(r) for _, r in ref.iterrows()]
@@ -135,6 +155,31 @@ def join_points_to_time_series(
 
     # create dataframe
     df = pd.DataFrame(rows, columns=["time"] + tags)
+
+    # set all values after time_reference to no_data
+    if time_reference is not None:
+
+        time_reference = pd.to_datetime(time_reference)
+
+        # remove timezone if present
+        if time_reference.tzinfo is not None:
+            time_reference = time_reference.tz_localize(None)
+
+        time_check = pd.to_datetime(df["time"], format=time_fmt, errors="coerce")
+
+        # remove timezone from parsed dataframe time if present
+        if getattr(time_check.dt, "tz", None) is not None:
+            time_check = time_check.dt.tz_localize(None)
+
+        mask_after_reference = time_check > time_reference
+
+        if mask_after_reference.any():
+            logger_stream.warning(
+                f"Setting values after time_reference '{time_reference}' "
+                f"to no_data '{fill_no_data_step}'"
+            )
+
+            df.loc[mask_after_reference, df.columns[1:]] = fill_no_data_step
 
     # fill missing numeric values first
     df = df.fillna(fill_no_data_step)

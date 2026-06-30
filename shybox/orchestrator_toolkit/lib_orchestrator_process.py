@@ -568,8 +568,10 @@ class ProcessorContainer:
                 # read data (check if data is readable or not)
                 if fx_check[data_id]:
 
-                    # get settings
+                    # get object settings
                     as_is, mandatory = data_tmp.data_as_is, data_tmp.data_mandatory
+                    # get object time reference (if available)
+                    time_ref = getattr(data_tmp, "time_reference", None)
 
                     # get data
                     fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, as_is=as_is ,**kwargs)
@@ -625,6 +627,8 @@ class ProcessorContainer:
                 time_ref = data_raw.time_reference
                 if time_ref != time:
                     return None, None
+            else:
+                time_ref = getattr(data_raw, "time_reference", None)
 
             # obtain variable name from data object
             str_workflow, str_variable = fx_variable_trace.split(':')
@@ -693,6 +697,8 @@ class ProcessorContainer:
         # collect and prepare function arguments
         fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
         fx_args['time'] = time
+        # add reference time (in case of needed by the procedure)
+        fx_args['time_reference'] = time_ref
 
         # manage reference argument (if available in fx_static) and add it to fx_args (if not already present)
         if 'ref' in self.fx_static:
