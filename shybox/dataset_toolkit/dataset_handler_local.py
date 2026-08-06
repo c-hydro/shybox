@@ -3,8 +3,8 @@ Class Features
 
 Name:          dataset_handler_local
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251104'
-Version:       '1.0.0'
+Date:          '20260123'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -13,7 +13,6 @@ import os
 import xarray as xr
 import pandas as pd
 
-from types import SimpleNamespace
 from datetime import datetime
 
 from shybox.dataset_toolkit.dataset_handler_base import Dataset
@@ -75,19 +74,33 @@ class DataLocal(Dataset):
                  message: bool = True,
                  **kwargs):
 
-        self.path = path
+        # set data local logger
         self.logger = logger or LoggingManager(name="DataLocal")
+
+        # store path
+        self.path = path
 
         # check file dependencies
         if 'file_deps' in kwargs:
             self.file_deps = kwargs.pop('file_deps')
         else:
             self.file_deps = []
-
+        # check data layout
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
         else:
             self.data_layout = 'geo'
+        # check data mandatory
+        if 'data_mandatory' in kwargs:
+            self.data_mandatory = kwargs.pop('data_mandatory')
+        else:
+            self.data_mandatory = True
+
+        # check data_id (to link data to ancillary info if needed)
+        if 'data_id' in kwargs:
+            self.data_id = kwargs.pop('data_id')
+        else:
+            self.data_id = -1
 
         # determine directory name
         if path is not None:
@@ -105,7 +118,7 @@ class DataLocal(Dataset):
         if file_io is not None:
             self.file_io = file_io  # triggers the setter
 
-        # --- determine file name ---
+        # define file name (different options)
         if file_name is not None:
             self.file_name = file_name
         elif 'file_name' in kwargs:
@@ -140,6 +153,11 @@ class DataLocal(Dataset):
         dims_key_default = layout_cfg["dims_key"]
         coords_key_default = layout_cfg["coords_key"]
 
+        # handle as_is flag (if True, data are returned as read without any processing)
+        self.data_as_is = False
+        if 'data_as_is' in kwargs:
+            self.data_as_is = kwargs.pop('data_as_is')
+
         dims_user = (
                 variable_template.get(dims_key_default)
                 or variable_template.get("dims_geo")
@@ -164,6 +182,7 @@ class DataLocal(Dataset):
             else:
                 vars_data = {f"var_{i}": f"var{i}" for i in range(1, int(n_vars) + 1)}
 
+        # select file_workflow based on file_io (defined in calling code)
         if self.file_io == 'input':
             file_workflow = list(vars_data.values())
         elif self.file_io == 'output':
@@ -191,6 +210,9 @@ class DataLocal(Dataset):
             'message': message,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
             "data_layout": layout_norm,
+            "data_id": self.data_id,
+            "data_as_is": self.data_as_is,
+            "data_mandatory": self.data_mandatory,
             'file_variable': file_variable,
             'file_workflow': file_workflow
         })
@@ -228,6 +250,7 @@ class DataLocal(Dataset):
         return self.get_key(time, **kwargs)
 
     ## INPUT/OUTPUT METHODS
+    # method to read data
     def _read_data(self, path: str,
                    vars_data: dict = None, vars_geo: dict = None, dims_geo: dict = None,
                    **kwargs) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
@@ -235,10 +258,12 @@ class DataLocal(Dataset):
         # message info start
         self.logger.info_up(f"Read data from {path} ... ")
 
+        # manage variables to read
         variable = None
         if vars_data is not None:
             variable = list(vars_data.keys())
 
+        # method to read data from file
         data = read_from_file(
             path,
             file_format=self.file_format, file_type=self.file_type, file_variable=variable)
@@ -247,15 +272,30 @@ class DataLocal(Dataset):
         self.logger.info_down(f"Read data from {path} ... DONE")
 
         return data
-    
+
+    # method to write data
     def _write_data(self, data: (xr.DataArray, pd.DataFrame), path: str, **kwargs) -> None:
+
+        # message info start
+        self.logger.info_up(f"Write data to {path} ... ")
+
+        # method to write data to file
         write_to_file(
             data,
             path, file_format=self.file_format, file_type=self.file_type, file_mode=self.file_mode,
             **kwargs)
 
+        # message info end
+        self.logger.info_down(f"Write data to {path} ... DONE")
+
+    # method to remove data
     def _rm_data(self, path) -> None:
         rm_file(path)
+
+    # method to create data (not used - just to initialize the abstract method in the base)
+    def _create_data(self, input_obj: dict):
+        self.data = None  # or some neutral placeholder
+        return None
 
     ## METHODS TO CHECK DATA AVAILABILITY
     def _check_data(self, path) -> bool:

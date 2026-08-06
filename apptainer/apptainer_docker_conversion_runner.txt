@@ -6,6 +6,8 @@ docker save runner:dev -o runner_hmc.tar
 # 2) convert tar → SIF
 apptainer build runner_hmc.sif docker-archive://runner_hmc.tar
 
+# 3) copy to leonardo
+scp /home/fabio/Desktop/shybox/docker/runner/runner_hmc.sif fdelogu0@login.leonardo.cineca.it:/leonardo_work/DE374_lot1/fdelogu0/container/runner
 
 # 3a) give the right permission to results fgolder
 	

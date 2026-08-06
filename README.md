@@ -1,107 +1,124 @@
-# 🌨️ shybox: Snow and Hydrologic Modeling Toolbox
+# 🌨️ SHYBOX – Snow and Hydrologic Modeling Toolbox
 
 [![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![Release](https://img.shields.io/github/v/release/c-hydro/shybox)](https://github.com/c-hydro/shybox/releases)
 
-**shybox** (Snow and HYdrologic toolBOX) is a Python- and Fortran-based toolkit designed to support operational and research-level hydrological modeling. It is developed and maintained by the [CIMA Research Foundation](https://www.cimafoundation.org/), with active use in Italy’s regional civil protection forecasting systems.
+**SHYBOX** (Snow and HYdrologic toolBOX) is a modular hydrological processing framework designed to run **reproducible workflows** using **versioned environmental datasets**.
+
+It is developed and maintained by the **CIMA Research Foundation** and is used both for **operational forecasting systems** and **research activities** in hydrology and cryosphere modeling.
+
+SHYBOX is intended to work together with the companion dataset repository  
+👉 **[`shydata`](https://github.com/c-hydro/shydata)**
+
+---
+
+## 🔎 Overview
+
+SHYBOX provides tools and workflows to process hydrological and environmental data in a **structured, configurable, and reproducible** way.
+
+Key design principles:
+
+- Separation between **processing logic** and **data distribution**
+- Modular processing chains
+- Traceability and reproducibility of experiments
+- Clean integration with versioned datasets
+
+⚠️ **Datasets are not included in this repository** and must be retrieved separately from `shydata`.
+
+---
+
+## 🎯 Objectives
+
+The main objectives of SHYBOX are to:
+
+- Support reproducible hydrological and snow-modeling workflows
+- Provide modular and configurable processing chains
+- Integrate Python and Fortran-based modeling engines
+- Operate consistently across research and operational environments
 
 ---
 
 ## 📦 Features
 
 - Modular design for snow and hydrological modeling
-- Integration with Flood-PROOFS system
-- Support for Python and Fortran-based modeling engines (e.g., S3M, HMC)
+- Integration with operational systems (e.g. Flood-PROOFS)
+- Support for Python and Fortran-based models:
+  - **S3M** – Distributed Snow Simulation System  
+  - **HMC** – Hydrological Modeling Chain
 - Tools for:
   - Data ingestion and transformation
-  - Multi-source time-series analysis
+  - Multi-source time-series processing
+  - Spatial interpolation and masking
   - 2D/3D visualization of hydrometeorological fields
-  - Laboratory simulation environments for research & education
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Linux (Debian/Ubuntu preferred)
-- Python ≥ 3.8
-- Fortran compiler (e.g., `gfortran`)
-- Git, Conda (recommended)
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/c-hydro/shybox.git
-cd shybox
-
-# Set up the environment (Conda recommended)
-bash setup/setup_conda_shybox_base.sh
-```
 
 ---
 
 ## 📂 Repository Structure
 
 ```text
+shybox/
+├── shybox/             # Core Python package
 ├── bin/                # Compiled model executables
 ├── configuration/      # JSON settings for workflows
-├── datasets/           # Sample or default input data
 ├── script/             # Python driver scripts
-├── setup/              # Environment and dependency setup scripts
-├── lib/                # Python modules for hydrology (hyde)
-├── docs/               # Documentation and usage examples
+├── tools/              # Utility scripts
+├── setup/              # Environment and dependency setup
+├── docs/               # Documentation and examples
+├── tests/              # Tests
 └── README.md
 ```
 
 ---
 
-## 📊 Models Supported
+## 🗃️ Datasets – `shydata`
 
-- **S3M** – Distributed Snow Simulation System
-- **HMC** – Hydrological Modeling Chain
+SHYBOX relies on datasets provided by the companion repository:
 
-> Each model may require its own build process and configuration.
+🔗 **https://github.com/c-hydro/shydata**
 
----
-
-## 🧪 Use Cases
-
-- Regional flood forecasting
-- Snowpack modeling
-- Civil protection alert systems
-- Research and education on hydro-meteorological processes
+- Datasets are distributed via **versioned releases**
+- Data must be retrieved and stored locally before running workflows
+- Dataset structure and conventions are documented in `shydata`
 
 ---
 
-## 📝 License
+## 🚀 Installation
 
-This project is licensed under the **EUPL-1.2** – see the [LICENSE](LICENSE) file for details.
+```bash
+git clone https://github.com/c-hydro/shybox.git
+cd shybox
+```
 
----
+Environment setup (Conda recommended):
 
-## 🤝 Contributing
-
-Contributions, bug reports, and suggestions are welcome! To contribute:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature-name`)
-3. Commit your changes (`git commit -am 'Add new feature'`)
-4. Push to the branch (`git push origin feature-name`)
-5. Create a pull request
+```bash
+bash setup/setup_conda_shybox_base.sh
+```
 
 ---
 
-## 📬 Contact
+## ▶️ Usage
 
-For questions, collaborations or support, reach out via [CIMA Foundation](https://www.cimafoundation.org/) or open an issue on [GitHub](https://github.com/c-hydro/shybox/issues).
+SHYBOX workflows are driven by **configuration files** and executed via the provided scripts and tools.
+
+Refer to:
+- `docs/` for detailed workflow descriptions
+- Configuration examples for model-specific setups (S3M, HMC)
 
 ---
 
-## 🌐 Acknowledgements
+## 📜 License
 
-- CIMA Research Foundation
-- Italian Civil Protection Department
-- Contributors to Flood-PROOFS and the hydrological modeling community
+This project is licensed under the  
+**European Union Public License v1.2 (EUPL-1.2)**
+
+---
+
+## 🔗 Related Repositories
+
+- **SHYBOX (processing framework)**  
+  https://github.com/c-hydro/shybox
+
+- **SHYDATA (datasets)**  
+  https://github.com/c-hydro/shydata

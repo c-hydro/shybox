@@ -22,6 +22,7 @@ from shybox.generic_toolkit.lib_utils_geo import match_coords_to_reference
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -48,7 +49,7 @@ class ProcessorContainer:
         # get static and dynamic arguments
         fx_args, fx_static = {}, {}
         for arg_name, arg_value in args.items():
-            if isinstance(arg_value, DataLocal):
+            if isinstance(arg_value, DataLocal) or isinstance(arg_value, DataOnDemand):
                 if not arg_value.is_static:
                     fx_args[arg_name] = arg_value
                 else:
@@ -60,7 +61,39 @@ class ProcessorContainer:
                     # update logger (for messages consistency)
                     arg_value.logger = self.logger.compare(arg_value.logger)
                     # get static data
-                    fx_static[arg_name] = arg_value.get_data(mapping=variable_template, name=arg_name)
+                    if isinstance(arg_value, DataLocal):
+                        fx_static[arg_name] = arg_value.get_data(mapping=variable_template, name=arg_name)
+                    elif isinstance(arg_value, DataOnDemand):
+                        fx_static[arg_name] = arg_value.create_data(mapping=variable_template, name=arg_name)
+                    else:
+                        self.logger.error('Argument data object is not DataLocal or DataOnDemand instance')
+                        raise TypeError('Argument data object is not DataLocal or DataOnDemand instance')
+
+            elif isinstance(arg_value, dict):
+                fx_static[arg_name] = {}
+                for key, value in arg_value.items():
+                    if isinstance(value, DataLocal) or isinstance(value, DataOnDemand):
+                        if not value.is_static:
+                            fx_args[f"{arg_name}_{key}"] = value
+                        else:
+
+                            variable_template = {}
+                            if hasattr(value, 'variable_template'):
+                                variable_template = value.variable_template
+
+                            # update logger (for messages consistency)
+                            value.logger = self.logger.compare(value.logger)
+                            # get static data
+                            if isinstance(value, DataLocal):
+                                fx_static[arg_name][key] = value.get_data(mapping=variable_template, name=f"{arg_name}_{key}")
+                            elif isinstance(value, DataOnDemand):
+                                fx_static[arg_name][key] = value.create_data(mapping=variable_template, name=f"{arg_name}_{key}")
+                            else:
+                                self.logger.error('Argument data object is not DataLocal or DataOnDemand instance')
+                                raise TypeError('Argument data object is not DataLocal or DataOnDemand instance')
+                    else:
+                        fx_static[arg_name][key] = value
+
             else:
                 fx_static[arg_name] = arg_value
 
@@ -137,13 +170,13 @@ class ProcessorContainer:
 
         # check data names (list or single)
         if isinstance(data_raw, list):
-            data_names = ['data'] * len(data_raw)
+            data_names = [f"data_{i}" for i, _ in enumerate(data_raw)]
         else:
             data_names = 'data'
 
         # adjust data (if deps are available)
         id_deps, in_deps, names_deps = 0, [], []
-        str_vars_raw, str_deps_raw = [], []
+        obj_vars_raw, obj_deps_raw = None, None
         if (self.in_deps is not None) and (len(self.in_deps) > 0):
 
             if isinstance(self.in_deps, dict):
@@ -155,12 +188,25 @@ class ProcessorContainer:
             elif isinstance(self.in_deps, list):
 
                 # get deps
-                in_deps = self.in_deps
+                list_deps = self.in_deps
+
+                # re-organize deps for the steps before the first one (basically for file with multiple times)
+                in_deps = []
+                for tmp_deps in list_deps:
+                    if tmp_deps in data_raw:
+                        data_raw.remove(tmp_deps)
+                    in_deps.append(tmp_deps)
+
                 # flatten only if it's a list of lists
                 if in_deps and isinstance(in_deps[0], (list, tuple)):
                     in_deps = [x for sub in in_deps for x in sub]
                 # get names
-                names_deps = [f"dep_{i}" for i in range(len(in_deps))]
+                if isinstance(in_deps[0], dict):
+                    for tmp_deps in in_deps:
+                        for dep_key, dep_value in tmp_deps.items():
+                            names_deps.append(dep_key)
+                else:
+                    names_deps = [f"dep_{i}" for i in range(len(in_deps))]
 
             else:
                 # get deps and names type mismatch
@@ -170,7 +216,17 @@ class ProcessorContainer:
             # append deps to data_raw and data_names
             if isinstance(data_raw, list):
                 id_deps = len(data_raw)
-                data_raw.extend(in_deps)
+
+                if isinstance(in_deps, dict):
+                    data_raw.extend(in_deps.values())
+
+                elif isinstance(in_deps, list):
+                    for item in in_deps:
+                        if isinstance(item, dict):
+                            data_raw.extend(item.values())
+                        else:
+                            data_raw.append(item)
+
                 data_names.extend(names_deps)
             elif isinstance(data_raw, DataLocal):
                 id_deps = 1
@@ -182,49 +238,190 @@ class ProcessorContainer:
 
             # normalize data to list of DataLocal (if needed)
             data_list = _normalize_local_data(data_raw)
-            for data_tmp in data_list:
-                if not isinstance(data_tmp, DataLocal):
-                    self.logger.error(
-                        f'Data object {type(data_tmp)} is not a DataLocal instance'
-                    )
-                    raise TypeError('Data object in the list is not a DataLocal instance')
+            for tmp_parser in data_list:
 
-                str_variable = data_tmp.file_namespace.get('variable')
-                str_workflow = data_tmp.file_namespace.get('workflow')
+                data_parser, name_parser = [], []
+                if isinstance(tmp_parser, dict):
+                    for key, value in tmp_parser.items():
+                        data_parser.append(value)
+                        name_parser.append(key)
+                elif isinstance(tmp_parser, DataLocal):
 
-                var_tag = ':'.join([str_variable, str_workflow])
+                    # re-organize data parser and name parser
+                    data_parser = [tmp_parser]
 
-                str_vars_raw.append(var_tag)
-                str_deps_raw.append(str_variable)
+                    # analyze file namespace to get variable and workflow for the name (if possible)
+                    tmp_namespace = tmp_parser.file_namespace
+
+                    # append data (in list format)
+                    tmp_variable = tmp_namespace.get('variable')
+                    tmp_workflow = tmp_namespace.get('workflow')
+                    tmp_tag = ':'.join([tmp_variable, tmp_workflow])
+                    name_parser.append(tmp_tag)
+
+                elif isinstance(tmp_parser, list):
+                    data_parser = tmp_parser
+                else:
+                    self.logger.error('Data object in the list is not a dict, list or DataLocal instance')
+                    raise TypeError('Data object in the list is not a dict, list or DataLocal instance')
+
+                for id_tmp, (name_tmp, data_tmp) in enumerate(zip(name_parser, data_parser)):
+
+                    if not isinstance(data_tmp, DataLocal):
+                        self.logger.error(
+                            f'Data object {type(data_tmp)} is not a DataLocal instance'
+                        )
+                        raise TypeError('Data object in the list is not a DataLocal instance')
+
+                    # append data (in list format)
+                    str_variable = data_tmp.file_namespace.get('variable')
+                    str_workflow = data_tmp.file_namespace.get('workflow')
+
+                    var_tag = ':'.join([str_variable, str_workflow])
+
+                    # initialize objects to list
+                    if obj_vars_raw is None: obj_vars_raw = []
+                    if obj_deps_raw is None: obj_deps_raw = []
+
+                    obj_vars_raw.append(var_tag)
+                    obj_deps_raw.append(str_variable)
 
         else:
             # normalize data to list of DataLocal (if needed)
             id_deps = None
+            # iterate over data objects
             data_list = _normalize_local_data(data_raw)
-            for data_tmp in data_list:
+
+            # store variable names (as found in the data objects)
+            dict_vars_raw = {}
+            for data_id, data_tmp in enumerate(data_list):
                 if not isinstance(data_tmp, DataLocal):
                     self.logger.error(
                         f'Data object {type(data_tmp)} is not a DataLocal instance'
                     )
                     raise TypeError('Data object in the list is not a DataLocal instance')
 
-                str_variable = data_tmp.file_namespace.get('variable')
-                str_workflow = data_tmp.file_namespace.get('workflow')
+                # check file namespace (variable or list of variables)
+                if isinstance(data_tmp.file_namespace, list):
 
-                var_tag = ':'.join([str_variable, str_workflow])
-                str_vars_raw.append(var_tag)
+                    # initialize objects to dict
+                    if obj_vars_raw is None: obj_vars_raw = {}
+                    if obj_deps_raw is None: obj_deps_raw = {}
+
+                    # multiple variables case
+                    str_vars_raw = []
+                    for file_ns in data_tmp.file_namespace:
+
+                        str_variable = file_ns.get('variable')
+                        str_workflow = file_ns.get('workflow')
+
+                        var_tag = ':'.join([str_variable, str_workflow])
+                        str_vars_raw.append(var_tag)
+                    # store the list of variables for the data object
+                    obj_vars_raw[data_id] = str_vars_raw.copy()
+
+                else:
+
+                    # initialize objects to list
+                    if obj_vars_raw is None: obj_vars_raw = []
+                    if obj_deps_raw is None: obj_deps_raw = []
+
+                    # single variable case
+                    str_variable = data_tmp.file_namespace.get('variable')
+                    str_workflow = data_tmp.file_namespace.get('workflow')
+                    # store the variable for the data object
+                    var_tag = ':'.join([str_variable, str_workflow])
+                    obj_vars_raw.append(var_tag)
 
         # manage time if data_raw is a list or single object
         if isinstance(time, list):
             if isinstance(data_raw, list):
-                data_raw = data_raw * len(time)
+
+                # compute data length (before expansion)
+                data_n = len(data_raw)
+
+                # type_raw (as you already do)
+                type_raw = ['data'] * data_n
+                if id_deps is not None:
+                    type_raw[id_deps:] = ['deps'] * (data_n - id_deps)
+
+                # partial id inside each repeated block: 0..data_n-1, repeated for each time
+                id_partial = list(range(data_n)) * len(time)
+                # global id over the expanded vectors: 0..(data_n*len(time)-1)
+                id_global = list(range(data_n * len(time)))
+
+                # expand everything consistently ---
+                type_raw = type_raw * len(time)
+                data_raw_expanded = data_raw * len(time)
+                time_expanded = [t for t in time for _ in range(data_n)]
+                data_names_expanded = [f"data_{i}" for i, _ in enumerate(data_raw_expanded)]
+
+                # overwrite originals if you want
+                data_raw = data_raw_expanded
+                data_names = data_names_expanded
+                time = time_expanded
+
             elif isinstance(data_raw, DataLocal):
+
+                # compute data length (before expansion)
+                data_n = len(data_raw)
+
+                type_raw = ['data'] * len(time)
                 data_raw = [data_raw] * len(time)
+
+                # partial id (inside each data_raw block)
+                id_partial = [list(range(data_n)) for _ in time]
+
+                # global id across the flattened structure
+                id_global = []
+                gid = 0
+                for _ in time:
+                    id_global.append(list(range(gid, gid + data_n)))
+                    gid += data_n
+
+            else:
+                self.logger.error('Data object is not compatible with time list')
+                raise TypeError('Data object is not compatible with time list')
+
+            # create data names (overwrite the previous obj to match time length)
+            times_raw, obj_vars_raw = [], []
+            for t, data_step in zip(time, data_raw):
+
+                # manage variable and data names
+                step_variable = data_step.file_namespace.get('variable')
+                step_workflow = data_step.file_namespace.get('workflow')
+                # store the variable for the data object
+                step_tag = ':'.join([step_variable, step_workflow])
+                obj_vars_raw.append(step_tag)
+
+                times_raw.append(f"{t.strftime('%Y%m%d%H%M')}" if hasattr(t, "strftime") else f"{str(t)}")
+
+        else:
+
+            # compute data length (before expansion)
+            if isinstance(data_raw, list):
+                data_n = len(data_raw)
+            elif isinstance(data_raw, DataLocal):
+                data_n = 1
+            else:
+                raise TypeError('Data object is not compatible with time list')
+
+            type_raw = ['data'] * data_n
+            if id_deps is not None:
+                type_raw[id_deps:] = ['deps'] * (data_n - id_deps)
+            type_raw = type_raw * 1
+
+            # ids
+            id_partial = list(range(data_n))
+            id_global = list(range(data_n))
+
+            times_raw = [str(time)] * data_n
 
         # check if data_raw is a list and adapt time accordingly
         if isinstance(data_raw, list):
             if not isinstance(time, list):
                 time = [time] * len(data_raw)
+
             elif isinstance(time, list):
                 if len(data_raw) != len(time):
                     time = time[0] * len(data_raw)
@@ -256,20 +453,74 @@ class ProcessorContainer:
 
             # normalize data to list of DataLocal (if needed)
             data_list = _normalize_local_data(data_raw)
+            type_list = _normalize_local_data(type_raw)
+            time_list = _normalize_local_data(times_raw)
+
+            '''
+            # check if time step have some groups (repeated time steps) and group data and time accordingly
+            data_has_group, data_time_group, data_obj_group, data_names_group = _group_by_time(time, data_list, data_names)
+            type_has_group, type_time_group, type_obj_group, type_names_group = _group_by_time(time, type_list, data_names)
+
+            if data_has_group:
+                time, data_list, data_names = data_time_group, data_obj_group, data_names_group
+            if type_has_group:
+                type_list = type_obj_group
+            '''
 
             # iterate over the list of data objects
+            id_other = 0
             fx_data, fx_metadata, fx_deps = [], {}, []
-            fx_other = {}
-            for data_id, (data_tmp, data_name, str_var_tmp, time_tmp) in enumerate(
-                    zip(data_list, data_names, str_vars_raw, time)):
+            fx_other, fx_varid, fx_check = {}, [], [];
+            for data_partial_id, data_global_id, data_tmp, name_tmp, type_tmp, time_tmp, time_step in (
+                    zip(id_partial, id_global, data_list, data_names, type_list, time_list, time)):
+
+                # assing id to data object (partial id for the repeated time steps, global id for the whole list)
+                if data_partial_id == data_global_id:
+                    data_id = data_global_id
+                else:
+                    data_id = data_partial_id
+
+                # define the variable name to read
+                if isinstance(obj_vars_raw, list):
+                    str_var_tmp = obj_vars_raw[data_id]
+                elif isinstance(obj_vars_raw, dict):
+                    list_var_tmp = obj_vars_raw.get(data_id)
+                    if fx_variable_trace in list_var_tmp:
+                        str_var_tmp = fx_variable_trace
+                    else:
+                        self.logger.error(f'Variable trace {fx_variable_trace} does not exist in the data object')
+                        raise ValueError(f'Variable trace {fx_variable_trace} does not exist in the data object')
+
+                else:
+                    self.logger.error('obj_vars_raw must be a list or a dict')
+                    raise TypeError('obj_vars_raw must be a list or a dict')
 
                 # check nested list
+                key_tmp = None
                 if isinstance(data_tmp, list):
                     if len(data_tmp) == 1:
                         data_tmp = data_tmp[0]
+                        key_tmp = name_tmp
                     else:
                         self.logger.error('Nested lists of data objects are not supported')
                         raise ValueError('Nested lists of data objects are not supported')
+                elif isinstance(data_tmp,  dict):
+                    tmp_string, tmp_obj = [], []
+                    for tmp_key, tmp_value in data_tmp.items():
+                        tmp_obj.append(tmp_value)
+                        tmp_string.append(tmp_key)
+                    if len(tmp_obj) == 1:
+                        data_tmp = tmp_obj[0]
+                        key_tmp = tmp_string[0]
+                    else:
+                        self.logger.error('Multiple keys dictionary of data objects are not supported')
+                        raise ValueError('Multiple keys dictionary of data objects are not supported')
+                elif isinstance(data_tmp, DataLocal):
+                    key_tmp = name_tmp
+                    pass
+                else:
+                    self.logger.error('data_tmp must be a DataLocal, list or a dict')
+                    raise TypeError('data_tmp must be a DataLocal, list or a dict')
 
                 # check data object type
                 if not isinstance(data_tmp, DataLocal):
@@ -279,36 +530,90 @@ class ProcessorContainer:
                 # check time reference uniqueness and match
                 if data_tmp.time_direction == 'single':
                     time_ref = pd.Timestamp(data_tmp.time_reference)
-                    if time_ref != time_tmp:
+                    if time_ref != time_step:
                         # skip to next variable if time does not match
                         continue
 
-                # read data only if readable (condition of data object)
-                if not data_tmp.is_readable():
-                    continue  # skip unreadable data
+                # update logger (for messages consistency)
+                data_tmp.logger = self.logger.compare(data_tmp.logger)
+
+                # read data only if readable (ok or template) --> condition of data object
+                self.logger.info(f"Check object '{time_step}' and variable '{str_var_tmp}' ... ")
+
+                status_tag_tmp, status_readable_tmp =  data_tmp.is_readable()
+                if not status_readable_tmp:
+                    if not status_tag_tmp == 'template':
+                        self.logger.warning(f"Object {time_tmp} is not readable. File is not available.")
+                        self.logger.info(f"Control obj '{time_tmp}' variable '{str_var_tmp}' is readable ... SKIP")
+                        fx_check.append(False)
+                    else:
+                        self.logger.info(f"Object {time_tmp} is a template. The template will be filled by the times.")
+                        self.logger.info(f"Check object '{time_tmp}' and variable '{str_var_tmp}' ... PASS")
+                        fx_check.append(True)
+                else:
+                    self.logger.info(f"Check object '{time_tmp}' and variable '{str_var_tmp}' ... PASS")
+                    fx_check.append(True)
 
                 # manage variable mapping
                 kwargs['variable'] = str_var_tmp
 
-                # update logger (for messages consistency)
-                data_tmp.logger = self.logger.compare(data_tmp.logger)
-                # read data
-                fx_tmp = data_tmp.get_data(time=time_tmp, name=str_var_tmp, **kwargs)
-                fx_deps.append(str_var_tmp)
+                # variable definition (variable, workflow and tag)
+                step_variable = data_tmp.file_namespace.get('variable')
+                step_workflow = data_tmp.file_namespace.get('workflow')
+                step_tag = ':'.join([step_variable, step_workflow])
 
-                # convert to DataArray if single variable
-                fx_tmp = _to_dataarray_if_single_var(fx_tmp)
-                # get variable name(s) from data
-                fx_vars = _get_variable_name(fx_tmp)
+                # variable id
+                var_id = data_tmp.data_id
 
-                # debug data in
-                if self.debug_state_in: plot_data(fx_tmp)
+                # read data (check if data is readable or not)
+                if fx_check[data_id]:
+
+                    # get object settings
+                    as_is, mandatory = data_tmp.data_as_is, data_tmp.data_mandatory
+                    # get object time reference (if available)
+                    time_ref = getattr(data_tmp, "time_reference", None)
+
+                    # get data
+                    fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, as_is=as_is ,**kwargs)
+                    fx_deps.append(step_tag)
+
+                    # convert to DataArray if single variable
+                    fx_tmp = _to_dataarray_if_single_var(fx_tmp)
+                    # get variable name(s) from data
+                    fx_vars = _get_variable_name(fx_tmp, mandatory)
+                    # store variable id
+                    fx_varid.append(var_id)
+
+                    # debug data in
+                    if self.debug_state_in: plot_data(fx_tmp)
+                else:
+                    # data is not readable (default)
+                    fx_tmp = None
+                    fx_vars = time_tmp
 
                 # append data (in list format)
                 if (id_deps is None) or (data_id < id_deps):
-                    fx_data.append(fx_tmp)
+                    if data_tmp.file_io == 'derived':
+                        pass
+                    else:
+                        fx_data.append(fx_tmp)
                 else:
-                    fx_other[data_name] = fx_tmp
+                    if key_tmp is not None:
+                        if not key_tmp in list(fx_other.keys()):
+                            fx_other[key_tmp] = fx_tmp
+                        else:
+                            tmp_other = fx_other[key_tmp]
+                            if not isinstance(tmp_other, list):
+                                tmp_other = [tmp_other]
+                            tmp_other.append(fx_tmp)
+
+                            fx_tmp = {key_tmp: tmp_other}
+                            fx_other = {**fx_other, **fx_tmp}
+
+                    else:
+                        # add other data in the fx_other dict with a generic key (id_other) if no key is available (key_tmp is None)
+                        fx_other[id_other] = fx_tmp
+                        id_other += 1
 
                 # create metadata
                 if 'fx_variable' not in fx_metadata:
@@ -322,6 +627,8 @@ class ProcessorContainer:
                 time_ref = data_raw.time_reference
                 if time_ref != time:
                     return None, None
+            else:
+                time_ref = getattr(data_raw, "time_reference", None)
 
             # obtain variable name from data object
             str_workflow, str_variable = fx_variable_trace.split(':')
@@ -332,6 +639,11 @@ class ProcessorContainer:
 
             # update logger (for messages consistency)
             data_raw.logger = self.logger.compare(data_raw.logger)
+
+            # variable id
+            var_id = data_raw.data_id
+            fx_varid = []
+
             # get data
             fx_data = data_raw.get_data(time=time, name=var_name, **kwargs)
             fx_deps = []
@@ -355,6 +667,7 @@ class ProcessorContainer:
             if fx_other:
                 for key, obj in fx_other.items():
                     fx_data.append(obj)
+                id_deps = 0 # no data available only deps so init to 0 index
                 add_other = False
 
         # check if fx data is available or not
@@ -384,7 +697,38 @@ class ProcessorContainer:
         # collect and prepare function arguments
         fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
         fx_args['time'] = time
-        fx_args['ref'] = self.fx_static['ref']
+        # add reference time (in case of needed by the procedure)
+        fx_args['time_reference'] = time_ref
+
+        # manage reference argument (if available in fx_static) and add it to fx_args (if not already present)
+        if 'ref' in self.fx_static:
+            ref_obj = self.fx_static['ref']
+
+            if isinstance(ref_obj, dict):
+
+                # remove ref if ref is defined by a dictionary
+                if 'ref' in fx_args.keys():
+                    fx_args.pop('ref', None)
+
+                for key, value in ref_obj.items():
+                    if key not in fx_args:
+                        fx_args[key] = value
+                    else:
+                        self.logger.warning(
+                            f"Key '{key}' in 'ref' is already present in fx_args. "
+                            "The value from 'ref' will be ignored."
+                        )
+
+            elif isinstance(ref_obj, (list, tuple, set)):
+                self.logger.error("Reference value in fx_static cannot be a list, tuple, or set")
+                raise TypeError("Reference value in fx_static cannot be a list, tuple, or set")
+
+            else:
+                # single reference object
+                fx_args['ref'] = ref_obj
+
+        else:
+            fx_args['ref'] = None
 
         # organize the function data based on deps_vars mapping
         if 'deps_vars' in list(self.fx_obj.keywords.keys()):
@@ -395,8 +739,16 @@ class ProcessorContainer:
                 if not isinstance(tmp_data, list):
                     tmp_data = [tmp_data]
 
+                # get deps elements (from the data list)
+                tmp_deps = []
+                if id_deps > 0:
+                    tmp_deps = tmp_data[id_deps:]
+                else:
+                    tmp_deps = deepcopy(tmp_data)
+
+                # save the data elements using the deps_vars mapping
                 fx_data = {}
-                for fx_dep, tmp_values in zip(fx_deps, tmp_data):
+                for fx_dep, tmp_values in zip(fx_deps, tmp_deps):
                     fx_var, fx_wf = fx_dep.split(':')
                     if fx_var in deps_vars.values():
                         # find the key corresponding to this value
@@ -420,8 +772,11 @@ class ProcessorContainer:
             fx_variable_data = list(fx_save.data_vars)
         elif isinstance(fx_save, pd.DataFrame):
             fx_variable_data = fx_save.name
+        elif fx_save is None:
+            self.logger.warning('Output datasets are defined NoneType. No output will be saved.')
+            return None, fx_memory
         else:
-            self.logger.error('Unknown fx output type')
+            self.logger.error('Output datasets are defined by unknown type')
             raise ValueError('Unknown fx output type')
 
         # check variable data
@@ -628,6 +983,23 @@ class ProcessorContainer:
                 # save the data
                 if not len(collections_variables) == 0:
 
+                    # get signature to use in write_data (if time signature is defined in the output object)
+                    time_signature = self.out_obj.time_signature
+
+                    if time_signature == 'step' or time_signature == 'current':
+                        pass
+                    elif time_signature == 'range' or time_signature == 'start/end':
+                        time = (time[0], time[-1])
+                    elif time_signature == 'end':
+                        time = time[-1]
+                    elif time_signature == 'start':
+                        time = time[0]
+                    elif time_signature == 'period':
+                        time = (time[0], time[-1])
+                    else:
+                        self.logger.error(f"Unknown time signature '{time_signature}' in output object")
+                        raise ValueError(f"Unknown time signature '{time_signature}' in output object")
+
                     # write collections
                     self.out_obj.write_data(
                         collections_obj, time,
@@ -656,6 +1028,52 @@ class ProcessorContainer:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
+from collections import OrderedDict
+
+def _check_list_of_list(x):
+    return (
+        isinstance(x, list) and
+        all(
+            isinstance(i, list) and
+            all(isinstance(j, list) for j in i) or isinstance(i, list)
+            for i in x
+        )
+    )
+
+def _group_by_time(time_list, data_list, data_names):
+    if not (len(time_list) == len(data_list) == len(data_names)):
+        raise ValueError("time_list, data_list, data_names must have same length")
+
+    # time -> name -> list_of_data (preserves insertion order)
+    grouped = OrderedDict()
+
+    for t, d, n in zip(time_list, data_list, data_names):
+        if t not in grouped:
+            grouped[t] = OrderedDict()
+        if n not in grouped[t]:
+            grouped[t][n] = []
+        grouped[t][n].append(d)
+
+    time_unique = list(grouped.keys())
+
+    # For each time: list of names (stable order) and corresponding list of data-lists
+    names_grouped = []
+    data_grouped = []
+    has_repeats = False
+
+    for t in time_unique:
+        names_t = list(grouped[t].keys())                 # stable order of first appearance
+        data_t = [grouped[t][n] for n in names_t]         # each is a list (may have repeats)
+
+        # repeats exist if any (time, name) has >1 data
+        if any(len(v) > 1 for v in data_t):
+            has_repeats = True
+
+        names_grouped.append(names_t)
+        data_grouped.append(data_t)
+
+    return has_repeats, time_unique, data_grouped, names_grouped
+
 def _get_memory_data(obj):
     if hasattr(obj, "memory_data"):
         return obj.memory_data
@@ -697,6 +1115,9 @@ def _sync_variable_name(data, vars):
         else:
             logger_stream.error(f"Object fx_data DataFrame has no attribute 'name' or it is None.")
             raise TypeError("Object fx_data DataFrame has no attribute 'name' or it is None.")
+    elif data is None:
+        logger_stream.warning(f"Object fx_data DataFrame is None. Datasets are not available.")
+        data_vars = []
     else:
         logger_stream.error("Object fx_data must be an xarray [DataArray, Dataset] or pandas [DataFrame].")
         raise NotImplementedError('Case not implemented yet')
@@ -716,14 +1137,16 @@ def _sync_variable_name(data, vars):
 
 # method to get variable name(s)
 @with_logger(var_name="logger_stream")
-def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}"):
+def _get_variable_name(obj, mandatory = True,
+                       default="undefined", indexed_default="undefined_{}"):
 
-    # Case 1: DataArray → single variable
+    # Case 1: DataArray -- grid format -- single variable
     if isinstance(obj, xr.DataArray):
         return obj.name if obj.name is not None else default
 
-    # Case 2: Dataset → multiple variables
+    # Case 2: Dataset -- grid format -- multiple variables
     elif isinstance(obj, xr.Dataset):
+
         names = []
         for i, name in enumerate(obj.data_vars):
             if name is None:
@@ -732,6 +1155,7 @@ def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}")
                 names.append(name)
         return names
 
+    # Case 3: DataFrame -- time-series format
     elif isinstance(obj, pd.DataFrame):
 
         if getattr(obj, "name", None) is None:
@@ -742,9 +1166,20 @@ def _get_variable_name(obj, default="undefined", indexed_default="undefined_{}")
 
         return names
 
+    # Case 4: None or unknown type
+    elif obj is None:
+
+        # if variable name is mandatory, raise an error or return NoneType
+        if mandatory:
+            logger_stream.error("Object is None but variable name is mandatory. Cannot proceed.")
+            raise ValueError("Object is None but variable name is mandatory. Cannot proceed.")
+        else:
+            logger_stream.warning("Object is None. Variable name will be set to 'undefined'.")
+            return default
+
     else:
-        logger_stream.error("Input must be an xarray DataArray or Dataset")
-        raise TypeError("Input must be an xarray DataArray or Dataset")
+        logger_stream.error("Input must be an xarray DataArray, Dataset, DataFrame or None.")
+        raise TypeError("Input must be an xarray DataArray, Dataset, DataFrame or None.")
 
 # filter to convert dataset to dataarray if single variable
 @with_logger(var_name="logger_stream")

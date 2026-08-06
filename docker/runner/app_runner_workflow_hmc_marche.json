@@ -1,89 +1,63 @@
 {
-  "__comment__": "configuration file for the hmc runner information",
-  "settings": {
-    "priority": {
-      "reference": "environment",
-      "other": "user"
-    },
-    "flags": {
-      "update_namelist": true,
-      "update_execution": true
-    },
+  "__comment__" : "configuration file for the hmc runner information [3.1.6]",
+  "configuration": {
+    "priority": {"reference": "environment", "other": "user"},
+    "flags": {"update_namelist": true, "update_execution": true},
     "variables": {
       "lut": {
         "user": {
-          "time_run": "{time_run}",
-          "time_restart": "{time_restart}",
-          "time_start": null,
-          "time_end": null,
-          "time_period": 2,
-          "time_rounding": "H",
-          "time_frequency": "H",
-          "file_namelist": "{execution_name}_{domain_name}.namelist",
-          "file_log": "{execution_name}_{domain_name}.log",
-          "execution_name": "exec_base",
-          "execution_mode": "deterministic"
+          "path_geo": "{path_geo}",
+          "time_run": "{time_run}", "time_restart": "{time_restart}",
+          "time_start": null, "time_end": null,
+          "time_period": 2, "time_rounding": "H", "time_frequency": "H",
+          "file_namelist": "{execution_name}_{domain_name}.namelist", "file_log": "{execution_name}_{domain_name}.log",
+          "execution_name": "exec_base", "execution_mode": "deterministic"
         },
         "environment": {
           "domain_name": "DOMAIN_NAME",
-          "path_source": "PATH_SRC",
-          "path_destination": "PATH_DST",
-          "time_run": "TIME_RUN",
-          "time_restart": "TIME_RESTART",
-          "time_period": "TIME_PERIOD",
-          "path_app": "PATH_APP",
-          "path_log": "PATH_LOG",
-          "path_namelist": "PATH_NAMELIST"
+          "path_geo": "PATH_GEO", "path_restart": "PATH_RESTART",
+          "path_source" : "PATH_SRC", "path_destination" : "PATH_DST",
+          "time_run" : "TIME_RUN", "time_restart": "TIME_RESTART", "time_period" : "TIME_PERIOD",
+          "path_app": "PATH_APP", "path_namelist": "PATH_NAMELIST",
+          "path_info": "PATH_INFO",
+          "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
         }
       },
       "format": {
         "domain_name": "string",
-        "path_source": "string",
-        "path_destination": "string",
-        "time_run": "timestamp",
-        "time_restart": "timestamp",
-        "time_period": "int",
-        "time_start": "string",
-        "time_end": "string",
-        "time_rounding": "string",
-        "time_frequency": "string",
-        "path_app": "string",
-        "path_log": "string",
-        "file_log": "string",
-        "path_namelist": "string",
-        "file_namelist": "string",
-        "execution_name": "string",
-        "execution_mode": "string"
+        "path_source": "string", "path_destination": "string",
+        "time_run": "timestamp", "time_restart": "timestamp", "time_period": "int",
+        "time_start": "string", "time_end": "string",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_app": "string", "path_geo": "string", "path_restart": "string",
+        "path_tmp": "string",
+        "path_log": "string", "file_log": "string",
+        "path_namelist": "string", "file_namelist": "string",
+        "path_info": "string",
+        "execution_name": "string", "execution_mode": "string"
       },
       "template": {
         "domain_name": "string",
-        "path_source": "string",
-        "path_destination": "string",
-        "time_run": "%Y%m%d%H00",
-        "time_restart": "%Y%m%d%H00",
-        "time_period": "int",
-        "time_start": "%Y%m%d%H00",
-        "time_end": "%Y%m%d%H00",
-        "time_rounding": "string",
-        "time_frequency": "string",
-        "path_app": "string",
-        "path_log": "string",
-        "file_log": "string",
-        "path_namelist": "string",
-        "file_namelist": "string",
-        "execution_name": "string",
-        "execution_mode": "string"
+        "path_source": "string", "path_destination": "string",
+        "time_run": "%Y%m%d%H00", "time_restart": "%Y%m%d%H00", "time_period": "int",
+        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
+        "time_rounding": "string", "time_frequency": "string",
+        "path_tmp": "string",
+        "path_app": "string", "path_geo": "string", "path_restart": "string",
+        "path_log": "string", "file_log": "string",
+        "path_namelist": "string", "file_namelist": "string",
+        "path_info": "string",
+        "execution_name": "string", "execution_mode": "string"
       }
     }
   },
-  "namelist": {
+  "application_namelist": {
     "description": {
-      "version": "3.1.6",
-      "type": "hmc"
+      "version": "3.1.6", "type": "hmc"
     },
     "file": {
       "template": "hmc.template.info.v3.1.6.txt",
-      "project": "{path_app}/{file_namelist}"
+      "location": "{path_app}/{file_namelist}"
     },
     "fields": {
       "by_value": {
@@ -99,86 +73,64 @@
         "dFrac": 0.7,
         "dWS": 3.6780000000000003e-09,
         "dWDL": 3.6780000000000003e-09,
-        "iFlagCType": 1,
-        "a1dIntStep": [
-          1,
-          5,
-          25,
-          600
-        ],
+        "iFlagCType" : 1,
+        "a1dIntStep" : [1, 5, 25, 600],
         "sDomainName": "{domain_name}",
-        "sPathData_Static_Point": "{path_source}/data_static/point/",
-        "sPathData_Static_Gridded": "{path_source}/data_static/gridded/",
-        "sPathData_Forcing_Gridded": "{path_source}/data_dynamic/gridded/$yyyy/$mm/$dd/",
-        "sPathData_Forcing_Point": "{path_source}/data_dynamic/point/$yyyy/$mm/$dd/",
-        "sPathData_Forcing_TimeSeries": "{path_source}/data_dynamic/time_series/",
-        "sPathData_Updating_Gridded": "{path_source}/data_dynamic/gridded/$yyyy/$mm/$dd/",
-        "sPathData_Updating_Point": "{path_source}/data_dynamic/point/$yyyy/$mm/$dd/",
-        "sPathData_Restart_Gridded": "{path_destination}/model_state/$yyyy/$mm/$dd/",
-        "sPathData_Restart_Point": "{path_destination}/model_state/$yyyy/$mm/$dd/",
-        "sPathData_Output_Point": "{path_destination}/model_results/point/$yyyy/$mm/$dd/",
-        "sPathData_Output_Gridded": "{path_destination}/model_results/gridded/$yyyy/$mm/$dd/",
-        "sPathData_Output_TimeSeries": "{path_destination}/model_results/time_series/",
-        "sPathData_State_Gridded": "{path_destination}/model_state/gridded/$yyyy/$mm/$dd/",
-        "sPathData_State_Point": "{path_destination}/model_state/point/$yyyy/$mm/$dd/",
-        "sTimeStart": "{time_run}",
+        "sPathData_Static_Point": "{path_geo}/{domain_name}/point/",
+        "sPathData_Static_Gridded": "{path_geo}/{domain_name}/gridded/",
+        "sPathData_Forcing_Gridded": "{path_source}/{domain_name}/$yyyy/$mm/$dd/",
+        "sPathData_Forcing_Point": "{path_source}/{domain_name}/$yyyy/$mm/$dd/",
+        "sPathData_Forcing_TimeSeries": "{path_source}/{domain_name}/time_series/",
+        "sPathData_Updating_Gridded": "{path_source}/{domain_name}/$yyyy/$mm/$dd/",
+        "sPathData_Updating_Point": "{path_source}/{domain_name}/$yyyy/$mm/$dd/",
+        "sPathData_Restart_Gridded": "{path_restart}/{domain_name}/model_state/$yyyy/$mm/$dd/",
+        "sPathData_Restart_Point": "{path_restart}/{domain_name}/model_state/$yyyy/$mm/$dd/",
+        "sPathData_Output_Point": "{path_destination}/{domain_name}/model_results/point/$yyyy/$mm/$dd/",
+        "sPathData_Output_Gridded": "{path_destination}/{domain_name}/model_results/gridded/$yyyy/$mm/$dd/",
+        "sPathData_Output_TimeSeries": "{path_destination}/{domain_name}/model_results/time_series/",
+        "sPathData_State_Gridded": "{path_destination}/{domain_name}/model_state/gridded/$yyyy/$mm/$dd/",
+        "sPathData_State_Point": "{path_destination}/{domain_name}/model_state/point/$yyyy/$mm/$dd/",
+        "sTimeStart": "{time_start}",
         "sTimeRestart": "{time_restart}",
         "iSimLength": "{time_period}",
         "iTcMax": 0,
+        "iFlagDynVeg": 0,
         "iTVeg": 800,
-        "iFlagDynVeg" : 0
+        "iDtModel": 3600,
+        "iDtPhysConv": 50,
+        "iDtPhysMethod": 1,
+        "iFlagDebugSet": 0
       },
       "by_pattern": {
-        "pattern_dt": {
-          "active": true,
-          "template": "iDt",
-          "value": 3600
-        },
-        "pattern_path_data": {
-          "active": true,
-          "template": "sPathData",
-          "value": "{path_source}/tmp/"
-        }
+        "pattern_dt": {"active": true, "template": "iDtData", "value": 3600},
+        "pattern_path_data": {"active": false, "template": "sPathData", "value": "{path_source}/tmp/"}
       }
     }
   },
-  "application": {
+  "application_execution": {
     "description": {
-      "execution_name": "{execution_name}",
-      "execution_mode": "{execution_mode}"
+      "execution_name": "{execution_name}", "execution_mode": "{execution_mode}"
     },
     "executable": {
       "location": "{path_app}/HMC_Model_V3_{execution_name}.x",
       "arguments": "{path_app}/{file_namelist}"
     },
     "info": {
-      "location": "/$HOME/HMC_Model_V3_{execution_name}_{execution_mode}.info"
+      "location": "{path_app}/HMC_Model_V3_{execution_name}_{execution_mode}.info"
     },
     "library": {
       "location": "/app/library/package_hmc/hmc/HMC_Model_V3_$RUN.x",
-      "dependencies": [
-        "/app/library/libs_system/nc4/lib/"
-      ]
+      "dependencies": ["/app/library/libs_system/nc4/lib/"]
     }
   },
-  "configuration": {
-    "time_run": "{time_run}",
-    "time_restart": "{time_restart}",
-    "time_period": "{time_period}",
-    "time_start": "{time_start}",
-    "time_end": "{time_end}",
-    "time_rounding": "{time_rounding}",
-    "domain_name": "{domain_name}",
-    "path_app": "{path_app}",
-    "path_source": "{path_source}",
-    "path_destination": "{path_destination}",
-    "file_namelist": "{file_namelist}",
-    "path_namelist": "{path_app}",
-    "file_log": "{file_log}",
-    "path_log": "{path_app}",
-    "file_tmp": null,
-    "path_tmp": "{path_app}",
-    "execution_name": "{execution_name}",
-    "execution_mode": "{execution_mode}"
+  "info": {
+    "path": "{path_info}/{domain_name}/", "file_name": "hmc_runner.env", "format": "env"
+  },
+  "log": {
+      "path": "{path_log}/{domain_name}/",  "file_name": "runner_hmc.txt",
+      "handlers": ["file","stream"]
+  },
+  "tmp": {
+      "path": "{path_tmp}/{domain_name}/", "file_name": null
   }
 }

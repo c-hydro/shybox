@@ -1,9 +1,19 @@
+"""
+Library Features:
+
+Name:          lib_io_ascii_hmc
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20260305'
+Version:       '1.0.0'
+"""
+
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from __future__ import annotations
 
 import os
 import re
+import numpy as np
 import pandas as pd
 
 from pathlib import Path
@@ -30,13 +40,13 @@ LUT_DB_DEFAULT = {
     "catchment_area_km2": "AREA",
     "correlation_time_hr": "CORR_TIME",
     "curve_number": "CN",
-    "threshold_level_1": "THR1",
-    "threshold_level_2": "THR2",
-    "threshold_level_3": "THR3",
-    "alert_zone": "ALERTZONE",
     "discharge_yellow": "Q_ALLARME",
     "discharge_orange": "Q_ARANCIONE",
     "discharge_red": "Q_ALLERTA",
+    "threshold_level_1": "Q_ALLARME",  #THR1 # assigned to THR but for viewer reassigned to Q (to avoid rewrite code)
+    "threshold_level_2": "Q_ARANCIONE", #THR2 # assigned to THR but for viewer reassigned to Q (to avoid rewrite code)
+    "threshold_level_3": "Q_ALLERTA", #THR3 # assigned to THR but for viewer reassigned to Q (to avoid rewrite code)
+    "alert_zone": "ALERTZONE",
     "threshold_source": "Fonte Q_soglia",
     "discharge_estimation": "StimaQoss",
     "quality_index_1_5": "QUAL1_5",
@@ -47,10 +57,39 @@ LUT_DB_DEFAULT = {
 }
 # columns for domain registry
 LUT_DOMAIN_DEFAULT = ['X', 'Y', 'catchment_name', 'section_name', 'extra']
+
+# data types for sections database
+TYPE_DB_DEFAULT = {
+    'tag': str,
+    'id': int,
+    'section_name': str,
+    'station_name': str,
+    'catchment_name': str,
+    'data_from': str,
+    'domain_name': str,
+    'municipality': str,
+    'province': str,
+    'region': str,
+    'basin': int,
+    'longitude': np.float64,
+    'latitude': np.float64,
+    'catchment_area_km2': float,
+    'correlation_time_hr': float,
+    'curve_number': float,
+    'threshold_level_1': float,
+    'threshold_level_2': float,
+    'threshold_level_3': float,
+    "discharge_yellow": float,
+    "discharge_orange": float,
+    "discharge_red": float,
+    'alert_zone': int,
+    'is_calibrated': str
+}
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to read sections database (csv format)
+@with_logger(var_name='logger_stream')
 def _parse_tag_from_data_from(text: str) -> str:
     """
     Parse 'Catchment, Section' → 'catchment:section_with_underscores'
@@ -65,10 +104,65 @@ def _parse_tag_from_data_from(text: str) -> str:
         return f"{left}:{right}"
     return s.lower()
 
+@with_logger(var_name='logger_stream')
+def _select_warn_and_cast(
+    df: pd.DataFrame,
+    type_map: dict,
+    keep_only_typed_cols: bool = True,
+    store_info: bool = True,
+) -> pd.DataFrame:
+
+    if type_map is None:
+        return df
+
+    wanted = list(type_map.keys())
+    missing = [c for c in wanted if c not in df.columns]
+    existing = [c for c in wanted if c in df.columns]
+
+    if missing:
+        logger_stream.warning(f"Missing expected columns (skipping): {missing}")
+
+    # store metadata in attributes
+    info = {}
+    if store_info:
+        info["fields_requested"] = wanted
+        info["fields_selected"] = existing
+        info["fields_missing"] = missing
+        info["fields_types"] = {k: str(v) for k, v in type_map.items()}
+
+    # select fields
+    if keep_only_typed_cols:
+        df = df[existing].copy()
+    else:
+        df = df.copy()
+
+    # cast fields
+    for col in existing:
+        t = type_map[col]
+
+        if t is int:
+            s = pd.to_numeric(df[col], errors="coerce")
+            df[col] = s.astype("Int64")
+
+        elif t in (float, np.float64, np.float32):
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("float64")
+
+        elif t is str:
+            df[col] = df[col].astype("string")
+
+        else:
+            try:
+                df[col] = df[col].astype(t)
+            except Exception as e:
+                logger_stream.warning(f"Could not cast column '{col}' to {t}: {e}")
+
+    return df, info
+
 # method to read sections database (csv format from fp chain)
 @with_logger(var_name='logger_stream')
 def read_sections_db(
     file_path: str,
+    name: str = 'sections_db',
     lut: dict = None,
     col_datafrom: str = "DATI_DA",
     col_filter: str = None,
@@ -88,13 +182,16 @@ def read_sections_db(
 
     if lut is None:
         lut = LUT_DB_DEFAULT
-        logger_stream.info("Using default LUT_DB_DEFAULT")
+        logger_stream.warning("Using default LUT_DB_DEFAULT")
 
+    # read the csv file (db sections)
     df = pd.read_csv(file_path, sep=sep, encoding=encoding)
 
+    # check reference column (according to which the 'tag' is created)
     if col_datafrom not in df.columns:
         logger_stream.error(f"Required column '{col_datafrom}' not found in CSV.")
 
+    # apply data types
     df_out = df.copy()
     if col_filter and filter_value is not None:
         if col_filter not in df_out.columns:
@@ -117,10 +214,99 @@ def read_sections_db(
         cols = [out_col] + [c for c in df_out.columns if c != out_col]
         df_out = df_out[cols]
 
+    # select + warn + cast using TYPE_DB_DEFAULT (or provided type_map)
+    df_out, df_info = _select_warn_and_cast(
+        df_out,
+        type_map=TYPE_DB_DEFAULT,  # or `type_map` if you add it as an arg
+        keep_only_typed_cols=True,  # keep only these fields
+        store_info=True
+    )
+
+    # organize type info in attributes
+    info_type = {}
+    if df_info:
+        if 'fields_types' in list(df_info.keys()):
+            type_info = df_info['fields_types']
+            # assign info to dataframe series
+            for type_key, type_value in type_info.items():
+                if type_key in df_out.columns:
+                    info_type[type_key] =  type_value
+    df_out.attrs['type'] = info_type
+
     # add name to the dataframe (to recognize its type)
-    df_out.name = "sections_db"
+    if name is not None:
+        df_out.name = name
 
     return df_out
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to write sections data hmc (txt format)
+@with_logger(var_name='logger_stream')
+def write_sections_data(
+    path,
+    df,
+    sep=" ",
+    header=False,
+    index=False,
+    float_format="%.2f",
+    fill_nan=-9999.0,
+    create_dir=True,
+    overwrite=True,
+    inplace_fill=False,   # if True, fill NaNs in df itself; else work on a copy
+):
+    path = Path(path)
+
+    if create_dir:
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not overwrite and path.exists():
+        raise FileExistsError(f"File already exists: {path}")
+
+    # Fill NaNs only for numeric part (all columns except the first = time)
+    if inplace_fill:
+        df_num = df.iloc[:, 1:]
+        df_num[:] = df_num.fillna(fill_nan)
+        df_work = df
+    else:
+        df_work = df.copy()
+        df_work.iloc[:, 1:] = df_work.iloc[:, 1:].fillna(fill_nan)
+
+    with open(path, "w") as f:
+
+        # header line (optional)
+        if header:
+            cols = []
+            if index:
+                cols.append("index")
+            cols.extend(df_work.columns.tolist())
+            f.write(sep.join(map(str, cols)) + "\n")
+
+        # rows
+        for i in range(len(df_work)):
+            row = df_work.iloc[i]
+
+            parts = []
+            if index:
+                parts.append(str(df_work.index[i]))
+
+            # time (first col) as string
+            parts.append(str(row.iloc[0]))
+
+            # values: cast to float and format at write time
+            for v in row.iloc[1:]:
+                vf = float(v)  # now NaNs already replaced
+
+                if pd.isna(vf):
+                    vf = fill_nan
+
+                if float_format is None:
+                    parts.append(str(vf))
+                else:
+                    parts.append(float_format % vf)
+
+            f.write(sep.join(parts) + "\n")
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -190,6 +376,7 @@ def read_sections_registry(
     strict: bool = False,
     out_col: str = "tag",
     out_first: bool = False,
+    name: str = "sections_hmc",
 ) -> pd.DataFrame:
     """
     Read a info_section-style TXT with flexible column naming and create a
@@ -287,7 +474,8 @@ def read_sections_registry(
     if out_first and out_col in df.columns:
         df = df[[out_col] + [c for c in df.columns if c != out_col]]
     # add name to the dataframe (to recognize its type)
-    df.name = "sections_hmc"
+    if name is not None:
+        df.name = name
 
     return df
 

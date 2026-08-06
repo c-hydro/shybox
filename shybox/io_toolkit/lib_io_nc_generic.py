@@ -115,3 +115,43 @@ def da_to_dset(da: xr.DataArray) -> xr.Dataset:
     var_name = da.name if da.name is not None else "variable"
     return da.to_dataset(name=var_name)
 # ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to adjust object type to netcdf dtype
+@with_logger(var_name='logger_stream')
+def to_nc_dtype(t):
+
+    # If it's already a real dtype/type, return it
+    if t in (str, int, float, np.float32, np.float64, np.int32, np.int64, np.uint8):
+        return t
+    if isinstance(t, type):  # e.g., <class 'int'>
+        # map builtins to explicit numpy types (recommended)
+        if t is int:
+            return np.int32
+        if t is float:
+            return np.float32
+        if t is str:
+            return str
+        return t
+
+    # If it's a string like "<class 'str'>" / "<class 'numpy.float64'>"
+    if isinstance(t, str):
+        s = t.strip()
+        mapping = {
+            "<class 'str'>": str,
+            "<class 'int'>": np.int32,
+            "<class 'float'>": np.float32,
+            "<class 'numpy.float64'>": np.float64,
+            "<class 'numpy.float32'>": np.float32,
+            "<class 'numpy.int64'>": np.int64,
+            "<class 'numpy.int32'>": np.int32,
+        }
+        if s in mapping:
+            return mapping[s]
+        # also accept netcdf typecodes if you ever use them
+        if s in ("f4","f8","i4","i8","u1","S1"):
+            return s
+
+    logger_stream.error(f"Unsupported dtype spec: {t!r}")
+    raise TypeError(f"Unsupported dtype spec: {t!r}")
+# ----------------------------------------------------------------------------------------------------------------------

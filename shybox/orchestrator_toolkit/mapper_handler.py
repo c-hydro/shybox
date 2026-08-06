@@ -26,7 +26,14 @@ class Mapper:
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
 
     def build_mapping(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+
+        # info start
+        self.logger.info_up("Build input-output variables mapping ... ")
+
+        # check mapping
         if self._mapping is not None:
+            # info end
+            self.logger.info_down("Build input-output variables mapping ... ALREADY AVAILABLE. SKIPPED.")
             return self._mapping
 
         result: Dict[str, Dict[str, Dict[str, Any]]] = {}
@@ -41,16 +48,24 @@ class Mapper:
         if missing_in:
             self.logger.warning(f"Keys present only in output: {missing_in}")
 
+        # define shared keys
         shared_keys = keys_in & keys_out
-
+        # iterate over shared keys
         for key in shared_keys:
+
+            # info start
+            self.logger.info_up(f"Build mapping for key: '{key}' ... ")
+
             obj_in = self._as_list(self._data_in.get(key))
             obj_out = self._as_list(self._data_out.get(key))
 
             for side, objs in (("in", obj_in), ("out", obj_out)):
                 for idx, partial in enumerate(objs):
-                    labels_sorted, items_sorted = self._sorted_labels_and_items(partial, key, side, idx)
 
+                    # sort labels and items
+                    labels_sorted, workflow_sorted, items_sorted = self._sorted_labels_and_items(partial, key, side, idx)
+
+                    # check length mismatch
                     if len(labels_sorted) != len(items_sorted):
                         self.logger.warning(
                             f"[{key}] {side.upper()} side mismatch: "
@@ -58,7 +73,9 @@ class Mapper:
                             f"extra entries will be ignored."
                         )
 
+                    # iterate over sorted labels and items
                     for label, (tpl_key, tpl_val) in zip(labels_sorted, items_sorted):
+
                         label = str(label)
                         tpl_key = str(tpl_key)
                         if label not in result:
@@ -70,10 +87,23 @@ class Mapper:
                             )
                         result[label][side][tpl_key] = tpl_val
 
+            # info end
+            self.logger.info_down(f"Build mapping for key: '{key}' ... DONE")
+
+        # print summary to check if mapping is correct
+        for wf_name, wf_struct in result.items():
+            self.logger.info(f"'{wf_name}' = {{dict: {len(wf_struct)}}} {wf_struct}")
+
+        # cache mapping
         self._mapping = result
+
+        # info end
+        self.logger.info_down("Build input-output variables mapping ... DONE")
+
         return result
 
     def compact_rows(self, start_id: int = 1) -> List[Dict[str, Any]]:
+
         mapping = self.build_mapping()
         rows: List[Dict[str, Any]] = []
         next_id = start_id
@@ -111,6 +141,7 @@ class Mapper:
         start_id: int = 1,
         field: str = "in",
     ) -> List[Dict[str, Any]]:
+
         if rows is None:
             rows = self.compact_rows(start_id=start_id)
         if not priority_vars:
@@ -162,6 +193,7 @@ class Mapper:
                 )
 
         elif type == "reference":
+
             if ":" not in name:
                 raise ValueError("Invalid reference. Expected 'tag:workflow'.")
             tag, wf_name = name.split(":", 1)
@@ -236,26 +268,52 @@ class Mapper:
         side: str,
         index_in_tag: int,
     ) -> Tuple[List[str], List[Tuple[str, Any]]]:
+
+        # get file variables
         file_vars = self._getattr_or_key(partial, "file_variable", None)
         if file_vars is None:
             self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_variable'; skipping.")
             return [], []
 
+        # get file workflows
+        file_wf = self._getattr_or_key(partial, "file_workflow", None)
+        if file_wf is None:
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_wf'; skipping.")
+            return [], []
+
+        # manage the order of labels and workflows
         labels = [str(x) for x in file_vars] if isinstance(file_vars, (list, tuple, set)) else [str(file_vars)]
-        labels_sorted = sorted(labels, key=str)
+        workflows = [str(x) for x in file_wf] if isinstance(file_wf, (list, tuple, set)) else [str(file_wf)]
+
+        labels_sorted, workflow_sorted = zip(*sorted(zip(labels, workflows), key=lambda x: str(x[0])))
+        labels_sorted, workflow_sorted = list(labels_sorted), list(workflow_sorted)
 
         variable_template = self._getattr_or_key(partial, "variable_template", None)
         if not isinstance(variable_template, (dict, AbcMapping)):
-            warnings.warn(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'variable_template'; skipping.")
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'variable_template'; skipping.")
             return [], []
 
         vars_data = variable_template.get("vars_data")
         if not isinstance(vars_data, (dict, AbcMapping)):
-            warnings.warn(f"[{tag}] {side.upper()} partial #{index_in_tag} 'vars_data' is not a mapping; skipping.")
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} 'vars_data' is not a mapping; skipping.")
             return [], []
 
-        items_sorted = sorted(((str(k), v) for k, v in vars_data.items()), key=lambda kv: kv[0])
-        return labels_sorted, items_sorted
+        # sort items based on variable template keys
+        items_tmp = sorted(((str(k), v) for k, v in vars_data.items()), key=lambda kv: kv[0])
+
+        # check to ensure according to labels, workflows and items
+        items_sorted = []
+        for label, wflow in zip(labels_sorted, workflow_sorted):
+            # search item matching workflow
+            item_pos = next((i for i, t in enumerate(items_tmp) if wflow in t), -1)
+            if item_pos == -1:
+                self.logger.warning(
+                    f"Item is not selected for label '{label}' and workflow '{wflow}'; skipping."
+                )
+            else:
+                items_sorted.append(items_tmp[item_pos])
+
+        return labels_sorted, workflow_sorted, items_sorted
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -363,6 +421,3 @@ def build_pairs_and_process(process_list, file_variable, dataset_namespace, str_
 
     return pairs_list_str, pairs_list_tuple, process_found, info
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-# ---------------------------

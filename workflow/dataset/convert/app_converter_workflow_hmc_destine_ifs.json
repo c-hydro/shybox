@@ -2,12 +2,10 @@
   "__comment__": "configuration file for the datasets information",
   "configuration": {
     "priority": {
-      "reference": "environment",
-      "other": "user"
+      "reference": "environment", "other": "user"
     },
     "flags": {
-      "update_namelist": true,
-      "update_execution": true
+      "update_namelist": true, "update_execution": true
     },
     "variables": {
       "lut": {
@@ -63,7 +61,7 @@
         "path_geo": "string",
         "path_root_source": "string",
         "path_time_source": "%Y%m%d",
-        "file_time_source": "%Y%m%d%H00",
+        "file_time_source": "%Y%m%d",
         "path_root_destination": "string",
         "path_time_destination": "%Y/%m/%d/",
         "file_time_destination": "%Y%m%d%H%M",
@@ -95,7 +93,7 @@
       },
       "geo": {
         "terrain": {
-          "path": "{path_geo}",
+          "path": "{path_geo}/{domain_name}/gridded/",
           "file_name": "{domain_name}.dem.txt"
         }
       },
@@ -134,8 +132,8 @@
         }
       },
       "data_destination": {
-        "__comment_": "{path_root_destination}/{path_time_destination}/{path_time_run}/",
-        "path": "{path_root_destination}/{path_time_destination}/",
+        "__comment_": "{path_root_destination}/{path_time_destination}/{path_time_run}/{domain_name}",
+        "path": "{path_root_destination}/{path_time_destination}/{domain_name}/",
         "file_name": "hmc.forcing-grid.{file_time_destination}.nc",
         "format": "netcdf",
         "type": "hmc",
@@ -154,7 +152,7 @@
   "workflow": {
     "options": {
       "intermediate_output": "Tmp",
-      "tmp_dir": "tmp"
+      "tmp_dir": "{path_tmp}"
     },
     "process_list": {
       "AIR_T": [
@@ -165,7 +163,8 @@
 
       "RAIN": [
         {"function": "interpolate_data", "method": "nn", "max_distance": 25000, "neighbours": 7, "fill_value": null},
-        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+        {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null},
+        {"function": "convert_rain_units", "to_mm": true}
       ],
 
       "WIND_U": [], "WIND_V": [],
@@ -176,7 +175,7 @@
         {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
       ],
 
-      "QW": [], "DEW_POINT": [],
+      "QV": [], "DEW_POINT": [],
       "RH": [
         {"function": "compute_data_rh", "ref_value": -9999, "mask_no_data": null,
           "deps_vars": {"t": "AIR_T", "q": "QV", "td": "DEW_POINT"}},

@@ -13,11 +13,15 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase, as_list, remove_none, ensure_variables
+from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
+    as_list, remove_none, ensure_variables, ensure_workflows)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -26,29 +30,38 @@ from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_p
 class OrchestratorGrid(OrchestratorBase):
 
     # ------------------------------------------------------------------------------------------------------------------
-    # class method multi time
+    # class method multi times
     @classmethod
     def multi_time(cls,
                    data_package_in: (dict, list), data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
                    priority: list = None,
                    configuration: dict = None, logger: LoggingManager = None ) -> 'Orchestrator':
 
-        return cls.multi_tile(
+        # initialize multi-tile orchestrator
+        class_obj = cls.multi_tile(
             data_package_in=data_package_in, data_package_out=data_package_out,
-            data_ref=data_ref, configuration=configuration)
+            data_ref=data_ref, configuration=configuration,
+            priority=priority, logger=logger, description='multi_time')
+
+        return class_obj
 
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    # class method multi tile
+    # class method multi tiles
     @classmethod
     def multi_tile(cls,
-                   data_package_in: (dict, list), data_package_out: (DataLocal, dict, list) = None, data_ref: DataLocal = None,
+                   data_package_in: (dict, list), data_package_out: (DataLocal, dict, list) = None,
+                   data_ref: (DataLocal, DataOnDemand) = None,
                    priority: list = None,
-                   configuration: dict = None, logger: LoggingManager = None ) -> 'Orchestrator':
+                   configuration: dict = None, logger: LoggingManager = None,
+                   description: str = 'multi_tile') -> 'Orchestrator':
+
+        # define logger (local or external)
+        logger = logger or LoggingManager(name="OrchestratorGrid")
 
         # info orchestrator start
-        logger.info_up(f'Organize orchestrator [multi-tile] ...', tag='ow')
+        logger.info_up(f'Organize orchestrator [{description}] ...', tag='ow')
 
         # get workflow functions and options
         workflow_fx = configuration.get('process_list', None)
@@ -58,6 +71,15 @@ class OrchestratorGrid(OrchestratorBase):
         if workflow_fx is None:
             logger.error('Workflow functions must be provided in the configuration.')
             raise RuntimeError('Workflow functions must be provided in the configuration.')
+
+        # normalize input/output data packages
+        if not isinstance(data_package_in, list):
+            data_package_in = [data_package_in]
+        if not isinstance(data_package_out, list):
+            data_package_out = [data_package_out]
+
+        # get and ensure workflow functions (check data package in and out and workflows fx)
+        ensure_workflows(data_package_in, data_package_out, workflow_fx)
 
         # ensure data collections in
         if isinstance(data_package_in, list):
@@ -140,15 +162,74 @@ class OrchestratorGrid(OrchestratorBase):
         # method to remap variable tags, in and out
         workflow_mapper = Mapper(data_collections_in, data_collections_out)
 
+        # organize deps collections in
+        deps_collections_in, args_collections_in = {}, {}
+        for data_key, data_config in data_collections_in.items():
+
+            # normalize: always iterate a list, remember if originally a seq
+            configs, is_sequence = as_list(data_config)
+
+            deps_list, args_list = [], []
+            for idx, cfg in enumerate(configs):
+                # your original logic, but on `cfg`
+                data_deps = getattr(cfg, 'file_deps', [])
+                args_deps = getattr(cfg, 'args_deps', [])
+
+                deps_list.append(remove_none(data_deps))
+                args_list.append(args_deps)
+
+            # if original was a single object → store single element
+            if is_sequence:
+
+                if len(deps_list) == 1:
+                    deps_collections_in[data_key] = deps_list[0]
+                    args_collections_in[data_key] = args_list[0]
+                elif len(deps_list) > 1:
+                    deps_collections_in[data_key] = deps_list
+                    args_collections_in[data_key] = args_list
+            else:
+                deps_collections_in[data_key] = deps_list
+                args_collections_in[data_key] = args_list
+
+        # organize deps collections out
+        deps_collections_out, args_collections_out = {}, {}
+        for data_key, data_config in data_collections_out.items():
+
+            # normalize: always iterate a list, remember if originally a seq
+            configs, is_sequence = as_list(data_config)
+
+            deps_list, args_list = [], []
+            for idx, cfg in enumerate(configs):
+                # your original logic, but on `cfg`
+                data_deps = getattr(cfg, 'file_deps', [])
+                args_deps = getattr(cfg, 'args_deps', [])
+
+                deps_list.append(remove_none(data_deps))
+                args_list.append(args_deps)
+
+            # if original was a single object → store single element
+            if is_sequence:
+                if len(deps_list) == 1:
+                    deps_collections_out[data_key] = deps_list[0]
+                    args_collections_out[data_key] = args_list[0]
+                elif len(deps_list) > 1:
+                    deps_collections_out[data_key] = deps_list
+                    args_collections_out[data_key] = args_list
+            else:
+                deps_collections_out[data_key] = deps_list
+                args_collections_out[data_key] = args_list
+
         # class to create workflow based using the orchestrator
         workflow_common = OrchestratorBase(
             data_in=data_collections_in, data_out=data_collections_out,
-            deps_in=None, deps_out=None, args_in=None, args_out=None,
+            deps_in = deps_collections_in, deps_out = None,
+            args_in=None, args_out=None,
             options=workflow_options,
             mapper=workflow_mapper, logger=logger)
 
         # iterate over the defined input variables and their process(es)
-        for workflow_row in workflow_mapper.get_rows_by_priority(priority_vars=priority):
+        workflow_configuration = workflow_mapper.get_rows_by_priority(priority_vars=priority, field='tag')
+        for workflow_row in workflow_configuration:
 
             # get workflow information by tag
             workflow_tag, workflow_name = workflow_row['tag'], workflow_row['workflow']
@@ -173,7 +254,7 @@ class OrchestratorGrid(OrchestratorBase):
             logger.info_down(f'Configure workflow "{workflow_name}" ... DONE', tag='ow')
 
         # info orchestrator end
-        logger.info_down(f'Organize orchestrator [multi-tile] ... DONE', tag='ow')
+        logger.info_down(f'Organize orchestrator [{description}] ... DONE', tag='ow')
 
         return workflow_common
     # ------------------------------------------------------------------------------------------------------------------
@@ -184,13 +265,14 @@ class OrchestratorGrid(OrchestratorBase):
     def multi_variable(cls,
                        data_package_in: (dict, list), data_package_out: DataLocal = None, data_ref: DataLocal = None,
                        priority: list = None,
-                       configuration: dict = None, logger: LoggingManager = None ) -> 'Orchestrator':
+                       configuration: dict = None, logger: LoggingManager = None,
+                       description: str = 'multi_variable') -> 'Orchestrator':
 
         # define logger (local or external)
         logger = logger or LoggingManager(name="OrchestratorGrid")
 
         # info orchestrator start
-        logger.info_up(f'Organize orchestrator [multi-variable] ...', tag='ow')
+        logger.info_up(f'Organize orchestrator [{description}] ...', tag='ow')
 
         # get workflow functions and options
         workflow_fx = configuration.get('process_list', [])
@@ -206,6 +288,9 @@ class OrchestratorGrid(OrchestratorBase):
             data_package_in = [data_package_in]
         if not isinstance(data_package_out, list):
             data_package_out = [data_package_out]
+
+        # get and ensure workflow functions (check data package in and out and workflows fx)
+        workflows_checks = ensure_workflows(data_package_in, data_package_out, workflow_fx, show_report=True)
 
         # ensure data collections in
         fx_collections = {}
@@ -311,7 +396,7 @@ class OrchestratorGrid(OrchestratorBase):
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
 
         # method to remap variable tags, in and out
-        workflow_mapper = Mapper(data_collections_in, data_collections_out)
+        workflow_mapper = Mapper(data_collections_in, data_collections_out, logger=logger)
 
         # organize deps collections in
         deps_collections_in, args_collections_in = {}, {}
@@ -338,7 +423,6 @@ class OrchestratorGrid(OrchestratorBase):
                 args_collections_in[data_key] = args_list
 
         # organize deps collections out
-        # organize deps collections in
         deps_collections_out, args_collections_out = {}, {}
         for data_key, data_config in data_collections_out.items():
 
@@ -398,7 +482,7 @@ class OrchestratorGrid(OrchestratorBase):
             logger.info_down(f'Configure workflow "{workflow_name}" ... DONE', tag='ow')
 
         # info orchestrator end
-        logger.info_down(f'Organize orchestrator [multi-variable] ... DONE', tag='ow')
+        logger.info_down(f'Organize orchestrator [{description}] ... DONE', tag='ow')
 
         return workflow_common
     # ------------------------------------------------------------------------------------------------------------------

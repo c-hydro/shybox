@@ -15,13 +15,14 @@ import pandas as pd
 import numpy as np
 
 from datetime import datetime
-from netCDF4 import Dataset, date2num, num2date
+from netCDF4 import Dataset, date2num, num2date, stringtochar
 
-from shybox.default.lib_default_args import file_conventions, file_title, file_institution, file_source, \
+from shybox.default.lib_default_info import file_conventions, file_title, file_institution, file_source, \
     file_history, file_references, file_comment, file_email, file_web_site, file_project_info, file_algorithm
-from shybox.default.lib_default_args import time_units, time_calendar
+from shybox.default.lib_default_time import time_units as time_default_units, time_calendar as time_default_calendar
+from shybox.default.lib_default_geo import crs_obj as crs_default
 from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
-from shybox.io_toolkit.lib_io_nc_generic import get_dims_by_object, da_to_dset
+from shybox.io_toolkit.lib_io_nc_generic import get_dims_by_object, da_to_dset, to_nc_dtype
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
@@ -29,109 +30,314 @@ from shybox.generic_toolkit.lib_utils_debug import plot_data
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# registry default type(s)
-registry_default_attrs = {
-    'tag': str,
-    'id': int,
-    'section_name': str,
-    'station_name': str,
-    'catchment_name': str,
-    'domain_name': str,
-    'municipality': str,
-    'province': str,
-    'region': str,
-    'basin': int,
-    'longitude': np.float64,
-    'latitude': np.float64,
-    'catchment_area_km2': float,
-    'correlation_time_hr': float,
-    'curve_number': float,
-    'threshold_level_1': float,
-    'threshold_level_2': float,
-    'threshold_level_3': float,
-    'alert_zone': int,
-    'is_calibrated': str
-}
+# helper ro
+def _build_geo_from_attrs(ds: xr.Dataset,
+                         y_dim: str = "south_north",
+                         x_dim: str = "west_east",
+                         lon_name: str = "Longitude",
+                         lat_name: str = "Latitude") -> tuple[xr.DataArray, xr.DataArray]:
 
-# time default type(s)
-time_default_type = {
-    'time_type': 'GMT',  # 'GMT', 'local'
-    'time_units': 'days since 1970-01-01 00:00:00',
-    'time_calendar': 'gregorian'
-}
-# crs default type(s)
-crs_attrs_default = {
-    'crs_epsg_code': 4326,
-    'crs_epsg_code_string': 'EPSG:4326',
-    'crs_grid_mapping_name': "latitude_longitude",
-    'crs_longitude_of_prime_meridian': 0.0,
-    'crs_semi_major_axis': 6378137.0,
-    'crs_inverse_flattening': 298.257223563
-}
+    # get attributes
+    attrs = ds.attrs
+
+    # check required attributes
+    required = ["xllcorner", "yllcorner", "xcellsize", "ycellsize", "ncols", "nrows"]
+    missing = [k for k in required if k not in attrs]
+    if missing:
+        raise ValueError(
+            f"Cannot rebuild {lat_name}/{lon_name}: missing attributes {missing}. "
+            f"Available attrs: {list(attrs.keys())}"
+        )
+
+    # get values from attributes
+    xll = float(attrs["xllcorner"])
+    yll = float(attrs["yllcorner"])
+    dx = float(attrs["xcellsize"])
+    dy = float(attrs["ycellsize"])
+    ncols = int(attrs["ncols"])
+    nrows = int(attrs["nrows"])
+
+    # create 1D coordinate vectors (assumes yllcorner is minimum latitude, xllcorner is minimum longitude)
+    lon_1d = xll + np.arange(ncols, dtype=np.float64) * dx
+    lat_1d = yll + np.arange(nrows, dtype=np.float64) * dy
+
+    # define 2D meshgrid with (y, x) indexing
+    lon2d, lat2d = np.meshgrid(lon_1d, lat_1d)
+    lon_da = xr.DataArray(lon2d.astype(np.float32), dims=(y_dim, x_dim), name=lon_name)
+    lat_da = xr.DataArray(lat2d.astype(np.float32), dims=(y_dim, x_dim), name=lat_name)
+
+    # Add standard-ish attributes
+    lon_da.attrs.update({"standard_name": "longitude", "units": "degrees_east"})
+    lat_da.attrs.update({"standard_name": "latitude", "units": "degrees_north"})
+
+    return lon_da, lat_da
+
+# helper to check if geo is complete
+def _geo_is_complete(ds: xr.Dataset,
+                    y_dim: str = "south_north",
+                    x_dim: str = "west_east",
+                    lon_name: str = "Longitude",
+                    lat_name: str = "Latitude") -> bool:
+
+    # return False if lon/lat variables are missing
+    if lon_name not in ds or lat_name not in ds:
+        return False
+
+    # get values
+    lon = ds[lon_name].values
+    lat = ds[lat_name].values
+
+    # apply limits
+    lon = np.where((lon < -180) | (lon > 180), np.nan, lon)
+    lat = np.where((lat < -90) | (lat > 90), np.nan, lat)
+
+    # consider "not complete" if any NaNs
+    if np.isnan(lon).any() or np.isnan(lat).any():
+        return False
+
+    return True
+
+# method to read hmc dataset from netcdf file
+def read_datasets_hmc(
+        path: str, debug: bool = False,
+        y_dim: str = "south_north", x_dim: str = "west_east",
+        lon_name: str = "Longitude", lat_name: str = "Latitude",) -> xr.Dataset:
+
+    # read dataset
+    ds = xr.open_dataset(path)
+
+    # check if geo is complete
+    if _geo_is_complete(ds, y_dim=y_dim, x_dim=x_dim, lon_name=lon_name, lat_name=lat_name):
+        lon_da, lat_da = ds[lon_name], ds[lat_name]
+    else:
+        lon_da, lat_da = _build_geo_from_attrs(ds, y_dim=y_dim, x_dim=x_dim, lon_name=lon_name, lat_name=lat_name)
+
+    # get time
+    time = ds['time'].values
+
+    # compute geo arrays from data
+    lat_1d = lat_da.isel({x_dim: 0}).values  # take first column -> varies along y
+    lon_1d = lon_da.isel({y_dim: 0}).values  # take first row    -> varies along x
+
+    # ensure increasing order
+    if lat_1d[0] > lat_1d[-1]:
+        lat_1d = lat_1d[::-1]
+    if lon_1d[0] > lon_1d[-1]:
+        lon_1d = lon_1d[::-1]
+
+    # create the update datasets
+    ds_new = xr.Dataset(
+        coords={
+            "time": ("time", time),
+            "latitude": ("south_north", lat_1d),
+            "longitude": ("west_east", lon_1d),
+        }
+    )
+    # store all variables in the new dataset
+    for var in ds.data_vars:
+        ds_new[var] = ds[var]
+    ds_new['Latitude'] = lat_da
+    ds_new['Longitude'] = lon_da
+
+    # Flip dataset along latitude dimension
+    ds_new = ds_new.isel(south_north=slice(None, None, -1))
+
+    # debug testing variable(s)
+    if debug:
+        plot_data(ds_new['Latitude'].values)
+        plot_data(ds_new['SM'].values)
+
+    return ds_new
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
+# helper to squeeze (N,1) arrays to (N,) arrays
+def squeeze_n1(a):
+    a = np.asarray(a)
+    if a.ndim == 2 and a.shape[1] == 1:
+        return a[:, 0]
+    return a
+
+# helper to write 1d string variable
+def write_string_1d(ds, name, data_1d, dim_n):
+    seq = ["" if x is None else str(x) for x in data_1d]
+    nchar = max((len(s) for s in seq), default=1)
+    dim_c = f"{name}_nchar"
+    if dim_c not in ds.dimensions:
+        ds.createDimension(dim_c, nchar)
+
+    v = ds.createVariable(name, "S1", (dim_n, dim_c))
+    v[:, :] = stringtochar(np.array(seq, dtype=f"S{nchar}"))
+
 # method to write time series in netcdf file
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
-        file_name: str = None, file_format='NETCDF4',
-        ts : pd.DataFrame = None, time: pd.DatetimeIndex = None, attrs_data: dict = None,
-        registry_df : pd.DataFrame = None, registry_attrs : dict = registry_default_attrs,
-        var_time_name : str = 'time',
-        var_time_format: str = '%Y-%m-%d %H:%M', var_time_dim: str = 'time', var_time_type: str = 'float64',
-        var_data_name : str = 'discharge',
-        var_data_units : str = 'm3 s-1', var_data_dim: str = 'sections', var_data_type : str = 'float64',
-        var_data_fill_value: (float, int) = -9999.0,  var_data_no_value: (float, int) = -9999.0,
-        var_name_crs: str = 'crs', crs_attrs: dict = crs_attrs_default,
-        var_compression_flag : bool = True, var_compression_level: int = 5,
+        file_name: str = None, file_format='NETCDF4', file_update: bool = True,
+        data : pd.DataFrame = None,
+        variable_name_sim: str = 'sim', variable_name_obs: str = 'obs',
+        time_name: str = 'time',
+        time_format: str = '%Y-%m-%d %H:%M', time_dim: str = 'time', time_type: str = 'float64',
+        time_calendar: str = time_default_calendar, time_units: str = time_default_units,
+        data_units: str = 'm3 s-1', data_dim : str = 'sections', data_type : str = 'float64',
+        data_fill_value: (float, int) = -9999.0,  data_no_value: (float, int) = -9999.0,
+        data_name_sim : str = 'simulated_discharge', data_name_obs: str = 'observed_discharge',
+        crs_name: str = 'crs', crs_attrs: dict = crs_default,
+        compression_flag : bool = True, compression_level: (None, int) = 5,
         debug_flag : bool = True, **kwargs)  -> None:
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # INFO START
+    logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... ')
+
+    test = kwargs
+
+    # FILE PREPARATION
+    if file_update:
+        if os.path.exists(file_name):
+            os.remove(file_name)
+    # check ts sim object
+    if data is None:
+        logger_stream.warning(f'Time series dataframe is None. Skip time-series writing process to {file_name}.')
+        # INFO END - SKIPPED
+        logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... SKIPPED')
+        return None
+
+    # get sim and obs dataframes
+    if variable_name_sim in data.columns:
+        ts_sim = data[variable_name_sim]
+    else:
+        logger_stream.warning(f'Simulated time series is None. Skip time-series writing process to {file_name}.')
+        return None
+
+    # get sim and obs dataframes
+    if variable_name_obs in data.columns:
+        ts_obs = data[variable_name_obs]
+    else:
+        logger_stream.warning(f'Simulated time series is None. Datasets will not available in {file_name}.')
+        ts_obs = None
+    # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## TIME PREPARATION
+    # check names of time index (not mandatory, just to notify potential mismatches)
+    if data.index.name != time_name:
+        logger_stream.warning(f'Time series index name mismatch: expected "{time_name}", found "{data.index.name}".')
+
     # define time data
-    time_data = ts[var_time_name].to_numpy()
+    time_data = data.index.to_numpy()
     time_list_string, time_list_numeric = [], []
     for time_step in time_data:
         time_numeric = pd.to_datetime(str(time_step))
-        time_string = time_numeric.strftime(var_time_format)
+        time_string = time_numeric.strftime(time_format)
 
         time_list_string.append(time_string)
         time_list_numeric.append(time_numeric)
 
     time_list_nc = date2num(
-        time_list_numeric, units=time_default_type['time_units'], calendar=time_default_type['time_calendar'])
+        time_list_numeric, units=time_units, calendar=time_calendar)
 
     # get time min and max
-    time_start, time_end = time_data.min().strftime(var_time_format), time_data.max().strftime(var_time_format)
+    time_start, time_end = time_data.min().strftime(time_format), time_data.max().strftime(time_format)
+    # get the data dimensions (time)
+    time_n = time_data.shape[0]
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## ATTRS PREPARATION
-    attrs_data = ts.attrs
-    tags = attrs_data["tag"]
+    attrs_data, attrs_type = {}, {}
+    if 'data' in data.attrs:
+        attrs_data = data.attrs['data']
+    if 'type' in data.attrs:
+        attrs_type = data.attrs['type']
 
-    registry_data = {}
-    for i, tag in tags.items():
-        row = {}
-        for k, v in attrs_data.items():
+    info_data, info_type, info_dim = {}, {}, None
+    for key, obj in attrs_data.items():
+        if isinstance(obj, pd.Series):
+            data_values = obj.values
+        else:
+            data_values = np.array(obj)
 
-            if isinstance(v, pd.Series):
-                row[k] = v.iloc[i]
-            elif isinstance(v, (list, tuple, np.ndarray)):
-                row[k] = v[i]
-            else:
-                row[k] = v
+        if key in list(attrs_type.keys()):
+            type_values = attrs_type[key]
+        else:
+            type_values = data_values.dtype
 
-        registry_data[tag] = row
+        if info_dim is None:
+            info_dim = data_values.shape[0]
+
+        info_type[key] = type_values
+        info_data[key] = data_values
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    ## DATA PREPARATION
-    # define ts data (in 2d dimensions: time, ts)
-    var_data = ts.drop(columns=var_time_name).to_numpy(dtype=float)
+    ## SIM DATA PREPARATION
+    # define ts data (expected: data 2d dimensions and times as index)
+    data_sim = ts_sim.to_numpy(dtype=float, copy=True)
+
+    # if in some edge case it is 1D, make it 2D (time, 1)
+    if data_sim.ndim == 1:
+        data_sim = data_sim.reshape(-1, 1)
+
+    # replace NaNs with no_data
+    data_sim[np.isnan(data_sim)] = data_no_value
+
     # get the data dimensions (time and time-series)
-    time_n, var_n = var_data.shape
+    data_steps_sim, data_n_sim = data_sim.shape
+
+    # OLD CODE
+    # define ts data (in 2d dimensions: time, ts)
+    #data_sim = ts_sim.drop(columns=time_name).to_numpy(dtype=float)
+    # replace NaNs with no_data
+    #data_sim[np.isnan(data_sim)] = data_no_value
+    # get the data dimensions (time and time-series)
+    #data_steps_sim, data_n_sim = data_sim.shape
+
+    # check if data is empty or not (rows or columns)
+    if data_sim.ndim < 2 or data_sim.shape[0] == 0 or data_sim.shape[1] == 0:
+        # INFO END - FAILED
+        logger_stream.warning(
+            f"Sections datasets for simulations is empty. "
+            f"Skip time-series writing process to {file_name}."
+        )
+        logger_stream.info(
+            f'Writing time series data to netCDF file "{file_name}" ... FAILED'
+        )
+        return None
+
+    ## OBS DATA PREPARATION
+    if ts_obs is None:
+        # create empty obs matrix with same dims as sim
+        data_obs = np.full((time_n, data_n_sim), data_no_value, dtype=float)
+    else:
+        # convert obs dataframe to numpy (expected: data 2d dimensions and times as index)
+        data_obs = ts_obs.to_numpy(dtype=float, copy=True)
+
+        # if in some edge case it is 1D, make it 2D (time, 1)
+        if data_obs.ndim == 1:
+            data_obs = data_obs.reshape(-1, 1)
+
+        # check dims consistency (optional but recommended)
+        if data_obs.shape != (time_n, data_n_sim):
+            raise ValueError(
+                f"OBS shape {data_obs.shape} does not match SIM shape {(time_n, data_n_sim)}"
+            )
+
+        # replace NaNs with no_data
+        data_obs[np.isnan(data_obs)] = data_no_value
+
+    # get the data dimensions (time and time-series)
+    data_steps_obs, data_n_obs = data_obs.shape
+
+    # check dims consistency
+    assert data_steps_sim == data_steps_obs == time_n, \
+        f"Simulations time steps {data_steps_sim} does not match observed time steps {data_steps_obs}"
+    assert data_n_sim == data_n_obs, \
+        f"Simulations sections number {data_n_sim} does not match observed sections number {data_n_obs}"
+
+    data_n = data_n_sim
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -145,114 +351,132 @@ def write_ts_hmc(
     file_handle.filedate = 'Created ' + tm.ctime(tm.time())
 
     # create dimensions
-    file_handle.createDimension(var_data_dim, var_n)
-    file_handle.createDimension(var_time_dim, time_n)
+    file_handle.createDimension(data_dim, data_n)
+    file_handle.createDimension(time_dim, time_n)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - TIME OBJECT
     # create time object
-    var_time_obj = file_handle.createVariable(
-        varname=var_time_name, dimensions=(var_time_dim,), datatype=var_time_type)
-    var_time_obj.calendar = time_default_type['time_calendar']
-    var_time_obj.units = time_default_type['time_units']
-    var_time_obj.time_start = time_start
-    var_time_obj.time_end = time_end
-    var_time_obj.time_dates = time_list_string
-    var_time_obj.axis = 'T'
-    var_time_obj[:] = time_list_nc
+    time_obj = file_handle.createVariable(
+        varname=time_name, dimensions=(time_dim,), datatype=time_type)
+    time_obj.calendar = time_calendar
+    time_obj.units = time_units
+    time_obj.time_start = time_start
+    time_obj.time_end = time_end
+    time_obj.time_dates = time_list_string
+    time_obj.axis = 'T'
+    time_obj[:] = time_list_nc
 
     # debug variable time object
     if debug_flag:
-        date_check = num2date(var_time_obj[:],
-                              units=time_default_type['time_units'], calendar=time_default_type['time_calendar'])
+        date_check = num2date(time_obj[:], units=time_units, calendar=time_calendar)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - CRS OBJECT
     # create crs object
-    variable_crs_obj = file_handle.createVariable(var_name_crs, 'i')
+    crs_obj = file_handle.createVariable(crs_name, 'i')
     if crs_attrs is not None:
         for crs_key, crs_value in crs_attrs.items():
             if isinstance(crs_value, str):
-                variable_crs_obj.setncattr(crs_key.lower(), str(crs_value))
+                crs_obj.setncattr(crs_key.lower(), str(crs_value))
             elif isinstance(crs_value, (int, np.integer)):
-                variable_crs_obj.setncattr(crs_key.lower(), int(crs_value))
+                crs_obj.setncattr(crs_key.lower(), int(crs_value))
             elif isinstance(crs_value, (float, np.floating)):
-                variable_crs_obj.setncattr(crs_key.lower(), float(crs_value))
+                crs_obj.setncattr(crs_key.lower(), float(crs_value))
             else:
                 logger_stream.warning(
                     f'Attribute CRS for "{crs_key}" is defined by NoneType or not supported')
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - REGISTRY OBJECT(S)
-    # create registry object(s) -- 1d format
-    if registry_data is not None:
-
-        # set registry dimension (use the data dimension)
-        var_reg_dim = var_data_dim
+    # FILE NETCDF - INFO OBJECT(S)
+    if info_data is not None:
 
         # iterate over registry variable(s)
-        for var_reg_key, var_reg_data in registry_data.items():
+        for field_key, field_obj in info_data.items():
 
-            # set registry type
-            if var_reg_key in list(registry_attrs.keys()):
-                var_reg_type = registry_attrs[var_reg_key]
-
-                if var_reg_type is not None:
-
-                    var_reg_obj = file_handle.createVariable(
-                        varname=var_reg_key, dimensions=(var_reg_dim,), datatype=var_reg_type)
-
-                    var_reg_obj[:] = var_reg_data
-
-                else:
-
-                    logger_stream.warning(f'Registry type for "{var_reg_key}" is defined by NoneType')
-
+            # convert from pandas series to numpy array (str, float or int)
+            if isinstance(field_obj, pd.Series):
+                field_values = field_obj.values
             else:
-                logger_stream.warning(f'Registry format for "{var_reg_key}" not defined!')
+                field_values = np.array(field_obj)
+
+            # get field type safely
+            if (info_type is not None) and isinstance(info_type, dict):
+                field_type = info_type.get(field_key, None)
+
+                if field_key not in info_type:
+                    logger_stream.warning(
+                        f'Info type for "{field_key}" is not defined in info_type dictionary. '
+                        f'Trying to infer dtype automatically (float -> string fallback).'
+                    )
+            else:
+                field_type = None
+                logger_stream.warning(
+                    f'info_type dictionary is not defined (None or invalid type). '
+                    f'Trying to infer dtype for "{field_key}" automatically (float -> string fallback).'
+                )
+
+            # check / infer type
+            if field_type is not None:
+                field_type = to_nc_dtype(field_type)
+            else:
+                try:
+                    np.asarray(field_values, dtype=float)
+                    field_type = to_nc_dtype(float)
+                    logger_stream.warning(f'Info type for "{field_key}" inferred as float.')
+                except Exception:
+                    field_type = to_nc_dtype(str)
+                    logger_stream.warning(
+                        f'Info type for "{field_key}" inferred as string (fallback). Please verify values.'
+                    )
+
+            # create variable object
+            info_obj = file_handle.createVariable(varname=field_key, dimensions=(data_dim,), datatype=field_type)
+
+            # assign variable values
+            info_obj[:] = field_values
+    else:
+        # warning for info_data defined by NoneType
+        logger_stream.warning('Info data object is defined by NoneType')
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - DATA OBJECT
     # create data object - 2d format
-    var_data_obj = file_handle.createVariable(
-        varname=var_data_name, datatype=var_data_type, fill_value=var_data_fill_value,
-        dimensions=(var_time_dim, var_data_dim),
-        zlib=var_compression_flag, complevel=var_compression_level)
-    var_data_obj.units = var_data_units
-    var_data_obj.no_data = var_data_no_value
+    data_obj_sim = file_handle.createVariable(
+        varname=data_name_sim, datatype=data_type, fill_value=data_fill_value,
+        dimensions=(time_dim, data_dim),
+        zlib=compression_flag, complevel=compression_level)
+    data_obj_sim.units = data_units
+    data_obj_sim.missing_value = data_no_value
+    # set data simulated
+    data_obj_sim[:, :] = data_sim
 
-    var_data_obj[:, :] = var_data
+    # create obs object - 2d format
+    data_obj_obs = file_handle.createVariable(
+        varname=data_name_obs, datatype=data_type, fill_value=data_fill_value,
+        dimensions=(time_dim, data_dim),
+        zlib=compression_flag, complevel=compression_level)
+    data_obj_obs.units = data_units
+    data_obj_obs.missing_value = data_no_value
+    # set data observed
+    data_obj_obs[:, :] = data_obs
     # ------------------------------------------------------------------------------------------------------------------
-
-    '''
-     import matplotlib
-     matplotlib.use('TkAgg')
-     plt.figure()
-     plt.imshow(dset_data[variable_name].values[i, :, :])
-     plt.colorbar(); plt.clim(2, 20)
-     plt.figure()
-     plt.imshow(variable_data[i, :, :])
-     plt.colorbar(); plt.clim(2, 20)
-     plt.figure()
-     plt.imshow(tmp_data)
-     plt.colorbar(); plt.clim(2, 20)
-     plt.figure()
-     plt.imshow(variable_tmp[i, :, :])
-     plt.colorbar(); plt.clim(2, 20)
-     plt.show()
-     '''
 
     # ------------------------------------------------------------------------------------------------------------------
     # FILE NETCDF - CLOSE FILE
     # close file
     file_handle.close()
+
+    # INFO END - DONE
+    logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... DONE')
     # ------------------------------------------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (netcdf library for hmc dataset)
@@ -261,13 +485,19 @@ def write_dataset_hmc(
         path, data, time: (pd.DatetimeIndex, pd.Timestamp) = None,
         attrs_data: dict = None, attrs_system: dict = None, attrs_x: dict = None, attrs_y: dict = None,
         file_format: str = 'NETCDF4', time_format: str ='%Y%m%d%H%M',
-        compression_flag: bool =True, compression_level: int = 5,
+        compression_flag: bool =True, compression_level: (int, None) = 5,
         file_compression: bool =True, file_update: bool = True,
+        time_units: str = time_default_units, time_calendar: str = time_default_calendar,
         var_system: str ='crs',
         var_time: str = 'time', var_x: str = 'longitude', var_y: str = 'latitude',
         dim_time: str = 'time', dim_x: str = 'west_east', dim_y: str = 'south_north',
         type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64',
         debug_geo: bool = False, debug_data: bool = False, **kwargs):
+
+    # check file format
+    if not isinstance(file_format, str):
+        logger_stream.warning(' ===> File format is not defined as string type! Using default format NETCDF4')
+        file_format = 'NETCDF4'
 
     # manage file path
     path_unzip = path

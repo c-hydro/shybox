@@ -84,7 +84,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self.logger.info(f'Dataset obj {self.__str__()} ... ')
 
         # define loc_pattern BEFORE using it
-        self.loc_pattern = kwargs.pop('loc_pattern', None)
+        self.loc_pattern = None
+        if 'loc_pattern' in kwargs:
+            self.loc_pattern = kwargs.pop('loc_pattern', None)
 
         # substitute "now" with the current time
         if self.loc_pattern is not None:
@@ -120,9 +122,21 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'nan_value' in kwargs:
             self.nan_value = kwargs.pop('nan_value')
 
+        self.data_id = -1
+        if 'data_id' in kwargs:
+            self.data_id = kwargs.pop('data_id')
+
+        self.data_as_is = False
+        if 'data_as_is' in kwargs:
+            self.data_as_is = kwargs.pop('data_as_is')
+
         self.data_layout = None
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
+
+        self.data_mandatory = True
+        if 'data_mandatory' in kwargs:
+            self.data_mandatory = kwargs.pop('data_mandatory')
 
         self.variable_template = {}
         if 'variable_template' in kwargs:
@@ -178,13 +192,14 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if self.message:
             self.logger.info(f'Dataset obj {self.__str__()} ... INITIALIZED')
 
-    # method to return a string representation
+    # method to return information as a string representation
     def __repr__(self):
         return (f"{self.__class__.__name__}("
                 f"{self.file_name!r}, {self.file_mode!r}, {self.data_layout!r}, {self.file_type!r}, "
                 f"{self.file_format!r}, {self.file_variable!r}, {self.file_namespace!r},"
-                f"status={self.status!r})")
+                f"status={self.status!r}, id={self.data_id!r})")
 
+    # method to extract information from string representation
     def __str__(self):
 
         file_name = getattr(self, "file_name", "<unknown>")
@@ -224,6 +239,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     "netcdf", "nc", "netcdf4", "nc4",
                     "csv", "json",
                     "txt", "ascii"),
+            allowed_compressions: Tuple[str, ...] = ("gz",),
             temp_markers: Tuple[str, ...] = ("tmp", "temp"),
             min_size_bytes: int = 1,
             expected_mode: Optional[str] = "local",
@@ -291,7 +307,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # 6) Extension vs declared format
         ext = p.suffix.lower().lstrip(".")
         if ext and (ext not in allowed_formats):
-            self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
+            if ext not in allowed_compressions:
+                self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
 
         # 7) Expected mode
         if expected_mode and (self.file_mode != expected_mode):
@@ -306,24 +323,42 @@ class Dataset(ABC, metaclass=DatasetMeta):
             if self.warnings:
                 self.logger.warning("\n".join(self.warnings))
 
+        # define readable or not
         self.readable = bool(readable)
+        # set the status
         self.status = "ok" if self.readable else "nio"
+
         return self.readable
-    # Convenience: human summary
+
+    # method to get readable summary in human format
     def readable_summary(self) -> str:
         if self.readable:
             return "readable: yes"
         return "readable: no → " + "; ".join(self.warnings)
 
+    # method to check if readable
     def is_readable(self) -> bool:
         """
         Check if this instance is readable.
         Returns True if status is 'ok', False otherwise.
         Automatically updates readability before returning.
         """
-        self.readable_settings()
-        return self.status == "ok"
 
+        # call readable settings to update status
+        self.readable_settings()
+
+        # return based on status
+        if self.status == "template":
+            return self.status, False
+        elif self.status == "nio":
+            return self.status, False
+        elif self.status == "ok":
+            return self.status, True
+        else:
+            self.logger.error(f"Unknown status '{self.status}' encountered.")
+            raise NotImplemented('Case not implemented.')
+
+    # method to update data object
     def update(self, in_place = False, **kwargs):
 
         new_file_name = substitute_string(self.file_name, kwargs)
@@ -487,7 +522,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
     @property
     def available_keys(self):
         return self.get_available_keys()
-    
+
+    # method to get available keys
     def get_available_keys(self, time: (dt.datetime, pd.date_range) = None, **kwargs):
         
         prefix = self.get_prefix(time, **kwargs)
@@ -513,7 +549,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
     @property
     def is_static(self):
-        return not '{' in self.loc_pattern and not self.has_time
+        if self.loc_pattern is None: # add for DataOnDemand case
+            return True
+        if not '{' in self.loc_pattern and not self.has_time:  # previous case (DataLocal)
+            return True
+        #return not '{' in self.loc_pattern and not self.has_time
 
     @property
     def has_time(self):
@@ -797,6 +837,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
                 # return data as is (if specified)
                 if as_is:
+                    log_data('end', name=name, time=time, from_memory=False)
                     return data
 
                 # check if data is xarray DataArray
@@ -815,8 +856,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 return data
 
             else:
-                self.logger.error(f'Could not resolve data from {full_location}.')
-                raise ValueError(f'Could not resolve data from {full_location}.')
+                # check data mandatory or not
+                if self.data_mandatory:
+                     self.logger.error(f'Could not resolve data from {full_location}.')
+                     raise ValueError(f'Could not resolve data from {full_location}.')
+                else:
+                    self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
+                    # info get data end (source case)
+                    log_data('end', name=name, time=time, from_memory=False)
+                    return None
 
         # check if data is available
         if self.check_data(time, **kwargs):
@@ -826,6 +874,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
             # return data as is (if specified)
             if as_is:
+                log_data('end', name=name, time=time, from_memory=False)
                 return data
 
             # ensure that the data dimensions are not empty
@@ -853,9 +902,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
             data = self._check_step(data, "straighten_data")
             if data is None: return None
 
-            # debug data
-            if self.debug_state: plot_data(data)
-
             # ensure that the data dimensions are flat
             data = flat_dims(data)
 
@@ -864,6 +910,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 data, time_file=self.time_reference, time_freq=self.time_freq, time_direction=self.time_direction)
             data = self._check_step(data, "straighten_time")
             if data is None: return None
+
+            # debug data
+            if self.debug_state: plot_data(data)
 
             # make sure the nodata value is set to np.nan for floats and to the max int for integers
             data = set_type(data, self.nan_value)
@@ -876,8 +925,16 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.memory_data = deepcopy(data)
 
         else:
-            self.logger.error(f'Could not resolve data from {full_location}.')
-            raise ValueError(f'Could not resolve data from {full_location}.')
+            # check data mandatory or not
+            if self.data_mandatory:
+                self.logger.error(f'Could not resolve data from {full_location}.')
+                raise ValueError(f'Could not resolve data from {full_location}.')
+            else:
+                self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
+
+                # info get data end (source case)
+                log_data('end', name=name, time=time, from_memory=False)
+                return None
 
         # if there is no template for the dataset, create it from the data
         structure_template = self.get_structure_template(make_it=False, **kwargs)
@@ -969,6 +1026,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def _read_data(self, input_key:str):
         raise NotImplementedError
 
+    @abstractmethod
+    def _create_data(self, input_obj:dict):
+        raise NotImplementedError
+
     # method to write date
     def write_data(self, data,
                    time: Union[dt.datetime, pd.Timestamp] = None,
@@ -988,11 +1049,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self._write_data(data, out_file)
             return
 
-        # case of csv, json, txt, shp files
-        if self.file_format in ['csv', 'json', 'txt', 'shp']:
+        # case of csv, json, txt, shp afiles
+        if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
             append = kwargs.pop('append', False)
             self._write_data(data, out_file, append = append)
             return
+
+        # update variable from metadata (if available)
+        if 'variables' in list(metadata.keys()):
+            variable = metadata.pop('variables')
 
         # case of pandas DataFrame
         if isinstance(data, pd.DataFrame):
@@ -1085,11 +1150,38 @@ class Dataset(ABC, metaclass=DatasetMeta):
             new_key = timestamp.strftime(substitute_string(new_loc_pattern, kwargs))
         self._write_data(data, new_key)
 
+    # method to create data
+    def create_data(self, mapping, name: str='variable'):
+
+
+        # get information from classes
+        obj_info = self.info
+
+        # create data
+        data = self._create_data(obj=obj_info, variable=name)
+
+        # map the data dimensions
+        data = map_dims(data, **self.variable_template)
+        data = self._check_step(data, "map_dims")
+        if data is None: return None
+
+        # map the data coords
+        data = map_coords(data, **self.variable_template)
+        data = self._check_step(data, "map_coords")
+        if data is None: return None
+
+        # store in memory (if active)
+        if self.memory_active:
+            self.memory_data = deepcopy(data)
+
+        return data
+
     # method to remove data
     def rm_data(self, time: Union[dt.datetime, pd.Timestamp] = None, **kwargs):
         key = self.get_key(time, **kwargs)
         self._rm_data(key)
 
+    # method to move data (and remove the original)
     def move_data(self, new_loc_pattern, time: Union[dt.datetime, pd.Timestamp] = None, **kwargs):
         self.copy_data(new_loc_pattern, time, **kwargs)
         self.rm_data(time, **kwargs)
@@ -1253,9 +1345,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 start = this_dim_values[0]
                 end = this_dim_values[-1]
                 length = len(this_dim_values)
-                self._structure_template[step_key]['dims_starts'][dim] = float(start)
-                self._structure_template[step_key]['dims_ends'][dim] = float(end)
+                self._structure_template[step_key]['dims_starts'][dim] = self._safe_dim(start)
+                self._structure_template[step_key]['dims_ends'][dim] = self._safe_dim(end)
                 self._structure_template[step_key]['dims_lengths'][dim] = length
+
+    # method to safely convert dimension values (particularly based on time objects e.g., datetime) to float
+    @staticmethod
+    def _safe_dim(value):
+        if isinstance(value, np.datetime64):
+            return value.astype("datetime64[s]").astype(int)
+        if isinstance(value, dt.datetime):
+            return value.timestamp()
+        return float(value)
 
     @staticmethod
     def build_structure_template_array(template_dict: dict, data = None) -> (xr.DataArray,xr.Dataset):
@@ -1332,14 +1433,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return data
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # helpers
+# print logging message
 @with_logger(var_name="logger_stream")
-# print logg message
 def log_data(stage, name=None, time=None, from_memory=False, reference=None):
 
+    # determine tag
     tag = "memory" if from_memory else "source"
-
-    # Build the base message
+    # build the base message
     if name is not None:
         if time is not None:
             base = f'Get data for variable "{name}" at time "{time}"'
@@ -1367,3 +1469,4 @@ def log_data(stage, name=None, time=None, from_memory=False, reference=None):
         logger_stream.info_down(
             f'[{tag}] {base} ... SKIPPED. Variables are not available'
         )
+# ----------------------------------------------------------------------------------------------------------------------

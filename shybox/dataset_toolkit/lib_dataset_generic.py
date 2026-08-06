@@ -3,7 +3,7 @@ Library Features:
 
 Name:          lib_dataset_generic
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251029'
+Date:          '20261022'
 Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
@@ -32,17 +32,21 @@ try:
 except ImportError:
     pass
 
-from decimal import Decimal
 from typing import Optional, Dict
 
-from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry
+from shybox.generic_toolkit.lib_utils_file import fix_file_path
+from shybox.io_toolkit.lib_io_ascii_grid import read_grid
+from shybox.io_toolkit.lib_io_ascii_points import read_points_1d
+from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
-from shybox.io_toolkit.lib_io_nc_s3m import write_dataset_s3m
-from shybox.io_toolkit.lib_io_nc_hmc import write_dataset_hmc, write_ts_hmc
-from shybox.io_toolkit.lib_io_nc_other import write_dataset_itwater
+from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
+from shybox.io_toolkit.lib_io_nc_hmc import read_datasets_hmc, write_dataset_hmc, write_ts_hmc
+from shybox.io_toolkit.lib_io_nc_other import read_dataset_itwater, write_dataset_itwater
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.time_toolkit.lib_utils_time import is_date
 from shybox.logging_toolkit.lib_logging_utils import with_logger
+from shybox.generic_toolkit.lib_utils_code import deprecated
+from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 # manage logger
 try:
@@ -54,6 +58,7 @@ except Exception as e:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check data format
+@with_logger(var_name="logger_stream")
 def check_data_format(data, file_format: str) -> None:
     """"
     Ensures that the data is compatible with the format of the dataset.
@@ -80,7 +85,7 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write a geopandas dataframe to a {file_format} file.')
                 
     elif 'pd' in globals() and isinstance(data, pd.DataFrame):
-        if file_format not in ['csv', 'netcdf']:
+        if file_format not in ['csv', 'netcdf', 'ascii', 'txt']:
             raise ValueError(f'Cannot write a pandas dataframe to a {file_format} file.')
     
     elif format not in 'file':
@@ -89,6 +94,7 @@ def check_data_format(data, file_format: str) -> None:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to get zip from path
+@with_logger(var_name="logger_stream")
 def get_zip_from_path(path: str) -> (str, None):
     # get the zip extension
     extension = path.split('.')[-1]
@@ -102,6 +108,7 @@ def get_zip_from_path(path: str) -> (str, None):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to get format from path
+@with_logger(var_name="logger_stream")
 def get_format_from_path(path: str) -> str:
     # get the file extension
     extension = path.split('.')[-1]
@@ -142,6 +149,7 @@ def get_format_from_path(path: str) -> str:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to read from file
+@with_logger(var_name="logger_stream")
 def read_from_file(
         path, file_format: Optional[str] = None,
         file_type: Optional[str] = None, file_variable: (str, list) = 'na') \
@@ -153,6 +161,9 @@ def read_from_file(
     rio_logger = logging.getLogger('rasterio')
     rio_logger.setLevel(logging.ERROR)
 
+    # check path (if blanks are present, remove them)
+    path = fix_file_path(path)
+    # get file format from path
     if file_format is None:
         file_format = get_format_from_path(path)
 
@@ -170,8 +181,13 @@ def read_from_file(
 
     # read the data from a txt file
     elif file_format in ['txt', 'ascii']:
+
+        # manage different file types
         if file_type in ['grid', 'grid_2d']:
 
+            data = read_grid(file_name=path)
+
+            '''
             # get header
             geo_attrs = {}
             with open(path, 'r') as file:
@@ -203,6 +219,11 @@ def read_from_file(
             squeeze_dims = [dim for dim in data.dims if data[dim].size == 1]
             if len(squeeze_dims) > 0:
                 data = data.squeeze(squeeze_dims)
+            '''
+
+        elif file_type == 'points_1d':
+
+            data = read_points_1d(file_path=path, header=True, delimiter=';')
 
         elif file_type == 'points_section_db':
 
@@ -242,9 +263,9 @@ def read_from_file(
 
         # data = rxr.open_rasterio(path) # if no epsg are provided ... we have to set a geo template
         with rio.open(path) as src:
+
             # Read band with mask
             tmp = src.read(1, masked=True)
-
             # Extract transform
             transform = src.transform
 
@@ -286,22 +307,38 @@ def read_from_file(
     # read the data from a netcdf (and similar formats)
     elif file_format in ['netcdf', 'nc', 'nc4']:
 
+        # check if the file is compressed
         has_compression = has_compression_extension(path)
 
+        # uncompress the file if needed
         if has_compression:
             file = uncompress_and_remove(path)
         else:
             file = path
 
-        data = xr.open_dataset(file)
+        # read the netcdf file according to the file type
+        if file_type == 'default' or file_type == 'as_is':
+            data = xr.open_dataset(file)
+        elif file_type == 'grid_s3m' or file_type == 'forcing_s3m':
+            data = read_datasets_s3m(path=file)
+        elif file_type == 'grid_hmc' or file_type == 'forcing_hmc':
+            data = read_datasets_hmc(path=file)
+        elif file_type == 'grid_itwater': # it_water project
+            data = read_dataset_itwater(path=file)
+        else:
+            logger_stream.warning(f'File type not defined for netcdf reading: {file_type}. Using default reader.')
+            data = xr.open_dataset(file)
+
         # check if there is a single variable in the dataset
         if len(data.data_vars) == 1:
             data = data[list(data.data_vars)[0]]
 
+        # remove the uncompressed file if needed
         if has_compression:
             if os.path.exists(file):
                 os.remove(file)
 
+    # read the data from a grib (and similar formats)
     elif file_format == 'grib':
 
         has_compression = has_compression_extension(path)
@@ -322,6 +359,7 @@ def read_from_file(
 
         # 2) Sanity check
         if "step" not in data.coords and "step" not in data.dims:
+            logger_stream.error("Dataset has no 'step' coordinate/dimension from cfgrib.")
             raise ValueError("Dataset has no 'step' coordinate/dimension from cfgrib.")
 
         # 3) Compute valid timestamps and assign them back onto the 'step' coordinate
@@ -338,6 +376,7 @@ def read_from_file(
         if len(data.data_vars) == 1:
             data = data[list(data.data_vars)[0]]
 
+        # remove the uncompressed file if needed
         if has_compression:
             if os.path.exists(file):
                 os.remove(file)
@@ -346,10 +385,12 @@ def read_from_file(
     elif file_format == 'file':
         data = path
 
+    # read the data from a tmp
     elif file_format == 'tmp':
         data = path
 
     else:
+        logger_stream.error(f'File format not supported: {file_format}')
         raise ValueError(f'File format not supported: {file_format}')
 
     return data
@@ -357,6 +398,7 @@ def read_from_file(
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write to file
+@with_logger(var_name="logger_stream")
 def write_to_file(data, path,
                   file_format: Optional[str] = None, file_type: Optional[str] = None,
                   append = False, **kwargs) -> None:
@@ -365,17 +407,30 @@ def write_to_file(data, path,
     if 'time' in kwargs:
         time = kwargs.pop('time')
 
+    # check path
+    path = fix_file_path(path)
+
+    # get file format from path
     if file_format is None:
         file_format = get_format_from_path(path)
 
+    # manage dir name
     dir = os.path.dirname(path)
     if len(dir) > 0:
         os.makedirs(os.path.dirname(path), exist_ok = True)
     if not os.path.exists(path):
         append = False
 
+    # write the data to a ascii
+    if file_format == 'ascii':
+        if file_type == 'hydrograph_hmc':
+            write_sections_data(path=path, df=data)
+        else:
+            logger_stream.error(f'File type {file_type} not supported for format ascii writing.')
+            raise NotImplemented(f'File type {file_type} not supported for format ascii writing.')
+
     # write the data to a csv
-    if file_format == 'csv':
+    elif file_format == 'csv':
         if append:
             data.to_csv(path, mode = 'a', header = False)
         else:
@@ -406,6 +461,7 @@ def write_to_file(data, path,
     elif file_format == 'shp':
         data.to_file(path)
 
+    # write the data to a txt file
     elif file_format == 'txt':
         if append:
             with open(path, 'a') as f:
@@ -425,17 +481,24 @@ def write_to_file(data, path,
         if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
             write_dataset_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['time_series_hmc', 'ts_hmc']:
-            write_ts_hmc(file_name=path, ts=data, time=time, attrs_data=None, **kwargs)
+            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['grid_s3m', 'forcing_s3m']:
             write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
-        elif file_type in ['itwater', 'it_water']:
+        elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
             write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
+        elif file_type in ['default']:
+            data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
         else:
-            data.to_netcdf(path, format = 'NETCDF4', engine = 'netcdf4')
+            logger_stream.error(f'File type not supported for netcdf writing: {file_type}')
+            raise ValueError(f'File type not supported for netcdf writing: {file_type}')
 
     # write the data to a png or pdf (i.e. move the file)
     elif file_format == 'file':
         os.rename(data, path)
+
+    else:
+        logger_stream.error(f'File format not supported: {file_format}')
+        raise ValueError(f'File format not supported: {file_format}')
 
 def rm_file(path) -> None:
     os.remove(path)
@@ -445,6 +508,7 @@ def rm_file(path) -> None:
 # DECORATOR TO MAKE THE FUNCTION BELOW WORK WITH XR.DATASET
 def withxrds(func):
     def wrapper(*args, **kwargs):
+
         if isinstance(args[0], xr.Dataset):
             obj_fx = None
             for var in args[0]:
@@ -493,10 +557,26 @@ def with_dict(func):
 # ----------------------------------------------------------------------------------------------------------------------
 ## FUNCTIONS TO CLEAN DATA
 @withxrds
-def straighten_dims(data: xr.DataArray) -> (xr.DataArray, None):
+@with_logger(var_name="logger_stream")
+def straighten_dims(data: xr.DataArray, default_name: str='variable') -> xr.DataArray | None:
+
+    # get variable name (fallback if missing)
+    if data.name:
+        var_name = data.name
+    else:
+        var_name = default_name
+
+    # check info
+    logger_stream.info(f"Check DataArray: {var_name} ... ")
+
+    # If scalar (no dimensions), return None
     if data.dims == ():
+        logger_stream.warning(f"DataArray {var_name} has no dimensions. Returning None.")
+        logger_stream.info(f"Check DataArray: {var_name} ... FAILED.")
         return None
     else:
+        # Otherwise return the DataArray
+        logger_stream.info(f"Check DataArray: {var_name} ... DONE.")
         return data
 
 # flat dims
@@ -516,8 +596,10 @@ def flat_dims(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = 'latitu
     return data
 
 # method to map dims
+@deprecated(use="map_dims", since="2026-01-27", use_new=False)
 @withxrds
-def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray:
+def map_dims_OLD(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray:
+    # check if dims mapping is required
     if dims_geo is not None:
 
         for dim_in, dim_out in dims_geo.items():
@@ -526,9 +608,45 @@ def map_dims(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray
                 data = data.rename({'var_tmp': dim_out})
     return data
 
-# method to map coords
 @withxrds
-def map_coords(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.DataArray:
+def map_dims(data: xr.DataArray,
+             dims_geo: dict | None = None, *, create_dim_coords: bool = True,
+             **kwargs) -> xr.DataArray:
+    if not dims_geo:
+        return data
+
+    # rename dims that exist
+    rename_dims = {k: v for k, v in dims_geo.items() if k in data.dims}
+    # rename coords/variables that exist (important if time coord isn't the dim name)
+    rename_coords = {k: v for k, v in dims_geo.items() if k in data.coords}
+
+    rename_all = {**rename_dims, **rename_coords}
+    if rename_all:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="rename .* does not create an index anymore.*",
+                category=UserWarning,
+            )
+            data = data.rename(rename_all)
+
+    # ensure each renamed dim has a coordinate with same name (optional but often needed)
+    for dim_out in rename_dims.values():
+        if dim_out in data.dims and dim_out not in data.coords:
+            if not create_dim_coords:
+                continue
+            data = data.assign_coords({dim_out: np.arange(data.sizes[dim_out])})
+
+        # only set_index when the coordinate exists and is 1D along that dim
+        if dim_out in data.coords and data[dim_out].dims == (dim_out,):
+            data = data.set_index({dim_out: dim_out})
+
+    return data
+
+# method to map coords
+@deprecated(use="map_coords", since="2026-01-30", use_new=False)
+@withxrds
+def map_coords_OLD(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.DataArray:
 
     if coords_geo is not None:
         for coords_in, coords_out in coords_geo.items():
@@ -553,6 +671,64 @@ def map_coords(data: xr.DataArray, coords_geo: dict = None, **kwargs) -> xr.Data
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     data = data.rename({'var_tmp': coords_out})
+
+    return data
+
+@withxrds
+@with_logger(var_name="logger_stream")
+def map_coords(data: xr.DataArray, coords_geo: dict = None, *, drop_in: bool = False, **kwargs) -> xr.DataArray:
+
+    if coords_geo is None:
+        return data
+
+    for coords_in, coords_out in coords_geo.items():
+        if coords_in not in data.coords:
+            continue
+
+        crd = data.coords[coords_in]
+
+        # If the incoming coord is actually a dimension name, xarray can rename cleanly
+        if coords_in in data.dims and coords_in == crd.dims[0] and crd.ndim == 1:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                data = data.rename({coords_in: coords_out})
+            continue
+
+        # Otherwise, assign a new coordinate safely
+        if crd.ndim == 2:
+            d0, d1 = crd.dims  # e.g. ('latitude','longitude')
+
+            ax1 = crd.isel({d0: 0}).values      # varies along d1
+            ax2 = crd.isel({d1: 0}).values      # varies along d0
+
+            # checks: is axis constant?
+            check_ax1 = np.unique(ax1).size == 1
+            check_ax2 = np.unique(ax2).size == 1
+
+            if (not check_ax1) and check_ax2:
+                # use ax1 along d1
+                new_dim = d1
+                new_vals = ax1
+            elif check_ax1 and (not check_ax2):
+                # use ax2 along d0
+                new_dim = d0
+                new_vals = ax2
+            else:
+                logger_stream.error(f"Cannot map 2D coordinate {coords_in} to 1D {coords_out} unambiguously.")
+                raise ValueError(f"Cannot map 2D coordinate {coords_in} to 1D {coords_out} unambiguously.")
+
+            data = data.assign_coords({coords_out: (new_dim, new_vals)})
+
+        elif crd.ndim == 1:
+            (new_dim,) = crd.dims
+            data = data.assign_coords({coords_out: (new_dim, crd.values)})
+
+        else:
+            logger_stream.error(f"Unsupported coord ndim={crd.ndim} for {coords_in}")
+            raise ValueError(f"Unsupported coord ndim={crd.ndim} for {coords_in}")
+
+        if drop_in and coords_in != coords_out:
+            data = data.drop_vars(coords_in)
 
     return data
 
@@ -715,6 +891,7 @@ def straighten_data(
     coord_x: str = "longitude", coord_y: str = "latitude"
 ) -> xr.DataArray:
 
+    # copy data
     da = data
 
     # Pick spatial dims if generic 'x'/'y' exist

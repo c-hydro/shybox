@@ -303,7 +303,6 @@ def main():
         output_handler = DataLocal(
             path=alg_cfg_application['data_destination']['path'],
             file_name=alg_cfg_application['data_destination']['file_name'],
-            time_signature='step',
             file_format='netcdf', file_type='grid_hmc', file_mode='local',
             file_variable=['rain', 'air_t', 'rh', 'inc_rad', 'wind'], file_io='output',
             variable_template={
@@ -316,7 +315,7 @@ def main():
                     "incoming_radiation": "IncRadiation",
                     "wind": "Wind"}
             },
-            time_period=1, time_format='%Y%m%d%H%M',
+            time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
             logger=logging_handle, message=False
         )
 

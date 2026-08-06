@@ -1,0 +1,291 @@
+{
+  "__comment__": "configuration file for the datasets information",
+  "configuration": {
+    "priority": {
+      "reference": "environment", "other": "user"
+    },
+    "flags": {
+      "update_namelist": true, "update_execution": true
+    },
+    "variables": {
+      "lut": {
+        "user": {
+          "file_source_time": null, "file_destination_time": null,
+          "path_source_time": null, "path_destination_time": null,
+          "time_source": null,  "time_destination": null,
+          "time_rounding": "D", "time_frequency": "D",  "time_direction": "forward",
+          "file_log": "{execution_name}_{domain_name}.log",
+          "execution_name": "merger_dataset_by_domain_hmc_discharge",
+          "execution_mode": "nrt"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "time_start": "TIME_START", "time_end": "TIME_END", "time_tag": "TIME_RUN",
+          "path_geo": "PATH_GEO",
+          "path_source_root": "PATH_SRC", "path_destination_root": "PATH_DST",
+          "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "file_source_time": "time", "file_destination_time": "time",
+        "path_source_time": "time", "path_destination_time": "time",
+        "path_source_root": "string",  "path_destination_root": "string",
+        "time_source": "string", "time_destination": "string",
+        "time_start": "string", "time_end": "string", "time_tag": "string",
+        "time_direction": "string", "time_rounding": "string", "time_frequency": "string",
+        "path_log": "string", "file_log": "string", "path_tmp": "string",
+        "execution_name": "string", "execution_mode": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_source_root": "string",  "path_destination_root": "string",
+        "file_source_time": "%Y%m%d%H%M", "file_destination_time": "%Y%m%d%H%M",
+        "path_source_time": "", "path_destination_time": "%Y/%m/%d/",
+        "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M",
+        "time_start": "%Y%m%d", "time_end": "%Y%m%d", "time_tag": "%Y/%m/%d/"
+        "time_direction": "string", "time_rounding": "string", "time_frequency": "string",
+        "path_log": "string", "file_log": "string", "path_tmp": "string",
+        "execution_name": "string", "execution_mode": "string"
+      }
+    }
+  },
+  "application": {
+    "info": {
+      "domain_name": ["liguria", "lazio", "toscana"]
+    },
+    "time": {
+      "start": "{time_start}",
+      "end": "{time_end}",
+      "frequency": "h",
+      "format": "%Y-%m-%d %H:00"
+    },
+    "geo": {
+      "grid" : {"y_ll": 36.3, "x_ll": 6.5, "cols": 2500, "rows": 2280, "res": 0.005002, "value": 1}
+    },
+    "data_source": {
+      
+      "dset_01": {
+        "file_data": {
+          "path": "{path_source_root}/AdigeDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/AdigeDomain/gridded/",
+          "file_name": "AdigeDomain.WaterMarkQ.txt"
+        }
+      },
+      
+      "dset_02": {
+        "file_data": {
+          "path": "{path_source_root}/BasilicataDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/BasilicataDomain/gridded/",
+          "file_name": "BasilicataDomain.WaterMarkQ.txt"
+        }
+      },
+      
+      "dset_03": {
+        "file_data": {
+          "path": "{path_source_root}/CalabriaDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/CalabriaDomain/gridded/",
+          "file_name": "CalabriaDomain.WaterMark.txt"
+        }
+      },
+      
+	  "dset_04": {
+        "file_data": {
+          "path": "{path_source_root}/FriuliDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/FriuliDomain/gridded/",
+          "file_name": "FriuliDomain.WaterMarkQ.txt"
+        }
+      },      
+      
+  	  "dset_05": {
+        "file_data": {
+          "path": "{path_source_root}/GarganoDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/GarganoDomain/gridded/",
+          "file_name": "GarganoDomain.WaterMarkQ.txt"
+        }
+      },      
+      
+      "dset_06": {
+        "file_data": {
+          "path": "{path_source_root}/LazioDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/LazioDomain/gridded/",
+          "file_name": "LazioDomain.WaterMark.txt"
+        }
+      },
+      
+      "dset_07": {
+        "file_data": {
+          "path": "{path_source_root}/LiguriaDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/LiguriaDomain/gridded/",
+          "file_name": "LiguriaDomain.WaterMarkQ.txt"
+        }
+      },
+	  
+
+	  "dset_08": {
+        "file_data": {
+          "path": "{path_source_root}/LiriDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/LiriDomain/gridded/",
+          "file_name": "LiriDomain.WaterMarkQ.txt"
+        }
+      }, 
+      
+      "dset_09": {
+        "file_data": {
+          "path": "{path_source_root}/MarcheDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/MarcheDomain/gridded/",
+          "file_name": "MarcheDomain.WaterMarkQ.txt"
+        }
+      }, 
+	  
+	  "dset_10": {
+        "file_data": {
+          "path": "{path_source_root}/PoBasin/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/PoBasin/gridded/",
+          "file_name": "PoBasin.WaterMarkQ.txt"
+        }
+      }, 
+	  
+	  "dset_11": {
+        "file_data": {
+          "path": "{path_source_root}/PugliaDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/PugliaDomain/gridded/",
+          "file_name": "PugliaDomain.WaterMarkQ.txt"
+        }
+      }, 
+	  
+  	  "dset_12": {
+        "file_data": {
+          "path": "{path_source_root}/RomagnaDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/RomagnaDomain/gridded/",
+          "file_name": "RomagnaDomain.WaterMarkQ.txt"
+        }
+      }, 
+	  
+	  "dset_13": {
+        "file_data": {
+          "path": "{path_source_root}/SardegnaDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/SardegnaDomain/gridded/",
+          "file_name": "SardegnaDomain.WaterMark.txt"
+        }
+      }, 
+	  
+	  "dset_14": {
+        "file_data": {
+          "path": "{path_source_root}/SiciliaDomain/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/SiciliaDomain/gridded/",
+          "file_name": "SiciliaDomain.WaterMark.txt"
+        }
+      }, 
+	  
+	  "dset_15": {
+        "file_data": {
+          "path": "{path_source_root}/TevereBasin/model_results/gridded/{time_tag}/",
+          "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+        },
+        "file_watermark": {
+          "path": "{path_geo}/TevereBasin/gridded/",
+          "file_name": "TevereBasin.WaterMark.txt"
+        }
+      }, 
+	  
+      "dset_16": {
+         "file_data": {
+           "path": "{path_source_root}/ToscanaDomain/model_results/gridded/{time_tag}/",
+           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+         },
+         "file_watermark": {
+            "path": "{path_geo}/ToscanaDomain/gridded/",
+            "file_name": "ToscanaDomain.WaterMark.txt"
+         }
+      },
+      
+      "dset_17": {
+         "file_data": {
+           "path": "{path_source_root}/VolturnoDomain/model_results/gridded/{time_tag}/",
+           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
+         },
+         "file_watermark": {
+            "path": "{path_geo}/VolturnoDomain/gridded/",
+            "file_name": "VolturnoDomain.WaterMark.txt"
+         }
+      }
+      
+    },
+    "data_destination": {
+      "path": "{path_destination_root}/{path_destination_time}",
+      "file_name": "hmc.sm.{file_destination_time}.tiff",
+      "format": "geotiff",
+      "type": null,
+      "mode": "grid",
+      "variable": "soil_moisture",
+      "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+      "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+      "vars_data": {"soil_moisture": "soil_moisture"}
+    }
+  },
+  "workflow": {
+    "options": {
+        "intermediate_output": "Tmp",
+        "tmp_dir": "{path_tmp}/{domain_name}"
+    },
+    "process_list": {
+        "SM": [
+            {"function": "merge_data_by_watermark", "method": "nn", "max_distance": 25000, "neighbours": 7,
+             "fill_value": null, "var_no_data": -9999}
+        ]
+    }
+  },
+  "log": {
+    "path": "{path_log}/{domain_name}",
+    "file_name": "merger_by_domain_hmc_sm.txt"
+  },
+  "tmp": {
+    "path": "{path_tmp}/{domain_name}",
+    "file_name": null
+  }
+}

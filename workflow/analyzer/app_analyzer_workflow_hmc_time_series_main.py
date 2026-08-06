@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW ANALYZER TIME-SERIES - HMC
 
-__date__ = '20260107'
-__version__ = '1.0.0'
+__date__ = '20260208'
+__version__ = '1.2.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -13,14 +13,21 @@ General command line:
 python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Examples of environment variables declarations:
-TIME_RUN="2025-09-10 07:34";
+TIME_RUN="2024-10-16 00:34";
 TIME_PERIOD=1;
-DOMAIN_NAME='LiguriaDomain';
-PATH_STATIC='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/static/';
-PATH_DYNAMIC_DST='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/dynamic/';
-PATH_DYNAMIC_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine_analyzer/dynamic/';
+DOMAIN_NAME='PoBasin';
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/geo/';
+
+PATH_SRC_HMC='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/data/hmc/';
+PATH_SRC_OBS='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/data/obs/';
+
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/analyzer_hmc/data/time_series/';
+PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/analyzer_hmc/tmp/;
+PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/analyzer_hmc/log/;
 
 Version(s):
+20260207 (1.2.0) --> Update to operational version for shybox package
+20260204 (1.1.0) --> Update to latest classes structure
 20260107 (1.0.0) --> Beta release for shybox package
 """
 
@@ -47,13 +54,13 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 project_name = 'shybox'
 alg_name = 'Workflow for analyzer time-series configuration'
 alg_type = 'Package'
-alg_version = '1.0.0'
-alg_release = '2026-01-07'
+alg_version = '1.2.0'
+alg_release = '2026-02-08'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # script main
-def main(view_table: bool = False, dry_run : bool = False):
+def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## CONFIGURATION MANAGEMENT
@@ -110,7 +117,7 @@ def main(view_table: bool = False, dry_run : bool = False):
     LoggingManager.setup(
         logger_folder=alg_app_log['path'], logger_file=alg_app_log['file_name'],
         logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
-        handlers=['file', 'stream'],
+        handlers=alg_app_log.get('handlers', ['stream']),
         force_reconfigure=True,
         arrow_base_len=3, arrow_prefix='-', arrow_suffix='>',
         warning_dynamic=False, error_dynamic=False, warning_fixed_prefix="===> ", error_fixed_prefix="===> ",
@@ -192,21 +199,55 @@ def main(view_table: bool = False, dry_run : bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## DYNAMIC DATASETS MANAGEMENT
-    # source data discharge handler
-    source_data_discharge = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['file_name'],
+    # source data discharge hmc handler
+    source_data_discharge_hmc = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['hmc']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['hmc']['file_name'],
         data_layout='time_series',
-        file_deps={'sections_hmc': registry_sections_hmc, 'sections_db': registry_sections_data},
+        file_deps=None,
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE', file_io='input',
+        file_variable='DISCHARGE_SIM', file_io='input',
         variable_template={
             "dims_data": {"y": "time", "x": "sections"},
-            "vars_data": {"DISCHARGE": "discharge"}
+            "vars_data": {"DISCHARGE_SIM": "single_discharge_sim"}
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
         logger=logging_handle, message=False
+    )
+    # source data discharge obs handler
+    source_data_discharge_obs = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['obs']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['obs']['file_name'],
+        data_layout='time_series',
+        file_deps=None,
+        file_type='time_series_hmc', file_format='ascii', file_mode='local',
+        file_variable='DISCHARGE_OBS', file_io='input',
+        variable_template={
+            "dims_data": {"y": "time", "x": "sections"},
+            "vars_data": {"DISCHARGE_OBS": "single_discharge_obs"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # source data variables handler (example of derived variable with dependencies)
+    source_data_discharge = DataLocal(
+        path=None,
+        file_name=None,
+        file_type=None, file_format='tmp', file_mode='local',
+        file_variable='DISCHARGE_TS' , file_io='derived',
+        file_deps=[source_data_discharge_hmc, source_data_discharge_obs],
+        variable_template={
+            "dims_data": {"time": "time", "sections": "n"},
+            "coord_data": {"time": "time", "sections": "n"},
+            "vars_data": {
+                "single_discharge_sim": "joined_discharge_sim"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
+        logger=logging_handle
     )
 
     # destination data discharge handler
@@ -215,11 +256,13 @@ def main(view_table: bool = False, dry_run : bool = False):
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
         data_layout='time_series',
         file_type='time_series_hmc', file_format='netcdf', file_mode='local',
-        file_variable='DISCHARGE', file_io='output',
+        file_variable='DISCHARGE_TS', file_io='output',
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
-            "vars_data": {"discharge": "discharge_simulated"}
+            "vars_data": {
+                "joined_discharge_sim": "discharge_simulated"}
+                #"joined_discharge_obs": "discharge_observed"}
         },
         time_signature='step',
         time_period=1, time_format='%Y%m%d%H%M',
@@ -231,45 +274,16 @@ def main(view_table: bool = False, dry_run : bool = False):
     ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
     orc_process = Orchestrator.time_series_discharge(
-        data_package_in=source_data_discharge, data_package_out=destination_data_discharge,
-        data_ref=None, priority=None,
+        data_package_in=source_data_discharge,
+        data_package_out=destination_data_discharge,
+        data_ref={'sections_hmc': registry_sections_hmc, 'sections_db': registry_sections_data},
+        priority=None,
         configuration=alg_cfg_workflow,
         logger=logging_handle
     )
     # orchestrator exec
     orc_process.run(time=alg_reference_time)
     # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    ## VARIABLE MANAGEMENT
-    # get lut section
-    alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
-    # view lut section
-    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=view_table)
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    ## APPLICATION MANAGEMENT
-    # get application execution
-    alg_app_exec = alg_cfg_obj.get_application("application", root_key=None)
-    # fill application execution
-    alg_app_exec = alg_app_exec.resolved(
-        time_values=None,  # no fill_section_with_times
-        when=None,  # no LUT time resolution
-        strict=False,
-        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
-        expand_env=True,  # BUT expand $HOME, $RUN, ...
-        env_extra=None,  # or {"RUN": "base"} etc
-        validate_result=False,  # or True + allow_placeholders=True if needed
-        validate_allow_placeholders=True,
-        validate_allow_none=False,
-    )
-    # view application execution section
-    alg_cfg_obj.view(section=alg_app_exec, table_name='application [cfg application]', table_print=view_table)
-    # ------------------------------------------------------------------------------------------------------------------
-
-
-
 
     # ------------------------------------------------------------------------------------------------------------------
     ## INFO END
@@ -289,5 +303,5 @@ def main(view_table: bool = False, dry_run : bool = False):
 # ----------------------------------------------------------------------------------------------------------------------
 # call script from external library
 if __name__ == "__main__":
-    main(view_table=True, dry_run=True)
+    main(view_table=True)
 # ----------------------------------------------------------------------------------------------------------------------

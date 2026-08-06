@@ -15,12 +15,13 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Union
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_base import (
-    OrchestratorBase, as_list, remove_none, ensure_variables, normalize_deps)
+from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
+    as_list, remove_none, ensure_variables, normalize_deps)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -28,16 +29,13 @@ from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_p
 # class orchestrator grid
 class OrchestratorTimeSeries(OrchestratorBase):
 
-    #def grouping_tag(self) -> str:
-    #    return "reference"
-
     # ------------------------------------------------------------------------------------------------------------------
     # class method ts discharge
     @classmethod
     def time_series_discharge(
             cls,
             data_package_in: Union[DataLocal, dict, list], data_package_out: Union[DataLocal, dict, list] = None,
-            data_ref: DataLocal = None,
+            data_ref: (dict, DataLocal) = None,
             priority: list = None,
             configuration: dict = None, logger: LoggingManager = None) -> "Orchestrator":
 
@@ -164,7 +162,6 @@ class OrchestratorTimeSeries(OrchestratorBase):
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
             raise RuntimeError(
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
-
 
         # method to remap variable tags, in and out
         workflow_mapper = Mapper(data_collections_in, data_collections_out, logger=logger)

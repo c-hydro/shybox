@@ -2,12 +2,10 @@
   "__comment__": "configuration file for the datasets information",
   "configuration": {
     "priority": {
-      "reference": "environment",
-      "other": "user"
+      "reference": "environment", "other": "user"
     },
     "flags": {
-      "update_namelist": true,
-      "update_execution": true
+      "update_namelist": true, "update_execution": true
     },
     "variables": {
       "lut": {
@@ -146,7 +144,7 @@
   "workflow": {
     "options": {
       "intermediate_output": "Tmp",
-      "tmp_dir": "tmp"
+      "tmp_dir": "{path_tmp}"
     },
     "process_list": {
       "AIR_T": [
