@@ -89,7 +89,13 @@ def join_points_to_time_series(
                 break
 
     # tags ordered as ref
-    tags = [make_tag(r) for _, r in ref.iterrows()]
+    if "tag"  in ref.columns:
+        tags = ref["tag"].tolist()
+        logger_stream.info("Tags found in reference data")
+    else:
+        tags = [make_tag(r) for _, r in ref.iterrows()]
+        ref["tags"] = tags
+        logger_stream,info("Tags not found: created using make_tag()")
 
     # iterate over data and time together
     rows = []
@@ -120,19 +126,19 @@ def join_points_to_time_series(
             p_str = " ".join(str(p).strip().split())
             step_map[p_str] = v  # if duplicates, last wins
 
-        # iterate over tags
+        # normalize step_map keys once: strip, collapse spaces, lowercase
+        step_map_normalized = {" ".join(str(k).strip().split()).lower(): v for k, v in step_map.items()}
+
         vals = []
         for tag in tags:
 
-            # organize key by normalizing spaces to avoid mismatches
-            key = " ".join(str(tag).strip().split())
+            # normalize tag for case-insensitive lookup
+            key = " ".join(str(tag).strip().split()).lower()
 
             # lookup value for this tag; if missing, use fill_missing_tag
-            if key in step_map:
+            if key in step_map_normalized:
 
-                # get value and check if it's valid (not None or NaN)
-                v = step_map[key]
-
+                v = step_map_normalized[key]
                 # check value format and handle missing/invalid values
                 if v is None or (isinstance(v, float) and np.isnan(v)):
                     vals.append(fill_missing_tag)
@@ -144,8 +150,10 @@ def join_points_to_time_series(
                         else:
                             logger_stream.warning(f"Array with shape {v.shape}, using first element")
                             v = v.flat[0]
+
                     # ensure numeric value
                     vals.append(float(v))
+
             else:
                 logger_stream.warning(f"Missing point '{tag}' at time '{ts}'. Using {fill_missing_tag}.")
                 vals.append(fill_missing_tag)

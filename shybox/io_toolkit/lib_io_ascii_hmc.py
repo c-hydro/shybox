@@ -448,23 +448,17 @@ def read_sections_registry(
     c3 = df[cols[3]].astype("string").str.strip()          # section (part 1)
     c4 = df[cols[4]].astype("string").str.strip()          # section (part 2 / extra)
 
-    # merge section = c3 if c4 empty/NA, else "c3 c4"
+    # merge section = c3 if c4 empty/NA, else "c3 c4" ---> NOT CLEAR IF FOR SAME CASE IN SECTION_CLEAN
     section = c3.where(c4.isna() | (c4 == ""), c3 + " " + c4)
 
     # clean and format
     catchment_clean = (
         c2.str.replace(r"\s+", " ", regex=True)
-          .fillna("_")
-          .str.lower()
-          .str.strip()
+          .fillna("_").str.lower().str.strip()
     )
-
     section_clean = (
-        section.fillna("_")
-               .replace(r"^\s*$", "_", regex=True)  # empty → "_"
-               .str.replace(r"\s+", "_", regex=True)  # spaces → underscores
-               .str.lower()
-               .str.strip()
+        c3.str.replace(r"\s+", " ", regex=True)
+          .fillna("_").str.lower().str.strip()
     )
 
     # build tag (form "catchment:section")
