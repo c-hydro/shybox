@@ -130,6 +130,12 @@ class DataLocal(Dataset):
         else:
             self.file_name = ensure_file_tmp()
 
+        # check file delimiter (default ,)
+        if 'file_delimiter' in kwargs:
+            self.delimiter = kwargs.pop('file_delimiter')
+        else:
+            self.delimiter = ';'
+
         # handle file_template normalization
         file_variable = kwargs.get('file_variable', 'variable')
         n_vars = kwargs.pop('n_vars', 1) or 1
@@ -266,7 +272,8 @@ class DataLocal(Dataset):
         # method to read data from file
         data = read_from_file(
             path,
-            file_format=self.file_format, file_type=self.file_type, file_variable=variable)
+            file_format=self.file_format, file_type=self.file_type, file_delimiter=self.delimiter,
+            file_variable=variable)
 
         # message info end
         self.logger.info_down(f"Read data from {path} ... DONE")

@@ -995,9 +995,9 @@ class TimeManager:
                     "Priority is 'time_period', but 'time_ref' and/or 'time_period' are None."
                 )
 
-            ts_start = pd.Timestamp(time_ref)
+            ts_end = pd.Timestamp(time_ref)
             delta = pd.to_timedelta(time_period.lower())
-            ts_end = ts_start + delta
+            ts_start = ts_end - delta
 
             cfg["time_start"] = ts_start
             cfg["time_end"] = ts_end

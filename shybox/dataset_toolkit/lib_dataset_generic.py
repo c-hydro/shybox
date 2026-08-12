@@ -151,7 +151,7 @@ def get_format_from_path(path: str) -> str:
 # method to read from file
 @with_logger(var_name="logger_stream")
 def read_from_file(
-        path, file_format: Optional[str] = None,
+        path, file_format: Optional[str] = None, file_delimiter: Optional[str] = ';',
         file_type: Optional[str] = None, file_variable: (str, list) = 'na') \
         -> (xr.DataArray, xr.Dataset, pd.DataFrame):
 
@@ -223,7 +223,7 @@ def read_from_file(
 
         elif file_type == 'points_1d':
 
-            data = read_points_1d(file_path=path, header=True, delimiter=';')
+            data = read_points_1d(file_path=path, header=True, delimiter=file_delimiter)
 
         elif file_type == 'points_section_db':
 
