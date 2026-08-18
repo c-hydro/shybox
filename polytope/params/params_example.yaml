@@ -1,0 +1,13 @@
+# params/params_example.yaml
+
+2t:
+  param:    "167"
+  levtype:  "sfc"
+  step:     "1/to/6/by/1"
+  type:     "instant"
+
+tp:
+  param:    "228"
+  levtype:  "sfc"
+  step:     "0-1/to/5-6/by/1"
+  type:     "accum"
