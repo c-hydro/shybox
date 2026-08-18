@@ -35,46 +35,30 @@ def join_time_series_by_registry(
     var_time_name = "time"
 
     if not isinstance(datasets, dict) or not datasets:
-        logger_stream.warning(
-            "'datasets' should be a non-empty dictionary. Return NoneType object."
-        )
+        logger_stream.warning("'datasets' should be a non-empty dictionary. Return NoneType object.")
         return None
 
     if sections_hmc is None or sections_hmc.empty:
-        logger_stream.warning(
-            "'sections_hmc' should be a non-empty DataFrame."
-        )
+        logger_stream.warning("'sections_hmc' should be a non-empty DataFrame.")
 
     if sections_db is None or sections_db.empty:
-        logger_stream.warning(
-            "'sections_db' should be a non-empty DataFrame."
-        )
+        logger_stream.warning("'sections_db' should be a non-empty DataFrame.")
         return None
 
     names_domains, names_db, names_missing = [], [], []
 
     if sections_hmc is not None and sections_db is not None:
-        names_domains, names_db, names_missing = _join_tags(
-            sections_hmc,
-            sections_db,
-        )
+        names_domains, names_db, names_missing = _join_tags(sections_hmc, sections_db,)
     else:
-        logger_stream.warning(
-            "No section or model tags provided to create "
-            "the time series joined datasets."
-        )
+        logger_stream.warning("No section or model tags provided to create the time series joined datasets.")
 
     names_db = list(sections_db["tag"])
-
-    if not names_db:
-        raise ValueError("No db names found.")
+    if not names_db: raise ValueError("No db names found.")
 
     datasets_prepared = {}
     datasets_missing = []
-
     names_data_common = None
 
-    # ------------------------------------------------------------------
     # PREPARE AVAILABLE DATASETS
     for tmp_key, dataset_df in datasets.items():
 
@@ -91,18 +75,12 @@ def join_time_series_by_registry(
         # keep track of None datasets
         if dataset_df is None:
             logger_stream.warning(
-                f"Dataset '{dataset_key}' is defined by None; "
-                f"it will be filled with no_data_value={no_data_value}."
+                f"Dataset '{dataset_key}' is defined by None; it will be filled with no_data_value={no_data_value}."
             )
             datasets_missing.append(dataset_key)
             continue
 
-        check_df = _check_dataframe(
-            dataset_df,
-            name=f"dataset '{dataset_key}'",
-            allow_empty=True,
-        )
-
+        check_df = _check_dataframe(dataset_df, name=f"dataset '{dataset_key}'",allow_empty=True,)
         if not check_df:
             logger_stream.warning(
                 f"Dataset '{dataset_key}' is empty or invalid; "
@@ -112,66 +90,42 @@ def join_time_series_by_registry(
             continue
 
         ts_data = _prepare_timeseries(
-            dataset_df,
-            names_domains,
-            name=f"dataset '{dataset_key}'",
-            time_name=var_time_name,
-            allow_empty=True,
+            dataset_df, names_domains,
+            name=f"dataset '{dataset_key}'",time_name=var_time_name, allow_empty=True,
         )
 
         if ts_data is None or ts_data.empty:
             logger_stream.warning(
-                f"Dataset '{dataset_key}' could not be prepared; "
-                f"it will be filled with no_data_value={no_data_value}."
+                f"Dataset '{dataset_key}' could not be prepared; it will be filled with no_data_value={no_data_value}."
             )
             datasets_missing.append(dataset_key)
             continue
 
         # normalize time
-        ts_data[var_time_name] = pd.to_datetime(
-            ts_data[var_time_name],
-            errors="coerce",
-        ).dt.floor("h")
+        ts_data[var_time_name] = pd.to_datetime(ts_data[var_time_name], errors="coerce",).dt.floor("h")
 
-        names_data = [
-            c for c in ts_data.columns
-            if c != var_time_name
-        ]
-
+        names_data = [c for c in ts_data.columns if c != var_time_name]
         if not names_data:
             logger_stream.warning(
-                f"Dataset '{dataset_key}' has no data columns; "
-                f"it will be filled with no_data_value={no_data_value}."
+                f"Dataset '{dataset_key}' has no data columns; it will be filled with no_data_value={no_data_value}."
             )
             datasets_missing.append(dataset_key)
             continue
 
         # remove names not present in registry
-        missing_names = [
-            name_tmp for name_tmp in names_data
-            if name_tmp not in names_db
-        ]
+        missing_names = [name_tmp for name_tmp in names_data if name_tmp not in names_db]
 
         if missing_names:
-            ts_data = ts_data.drop(
-                columns=missing_names,
-                errors="ignore",
-            )
+            ts_data = ts_data.drop(columns=missing_names, errors="ignore",)
 
             logger_stream.warning(
-                f"Dataset '{dataset_key}': removed columns "
-                f"not found in registry: {missing_names}"
+                f"Dataset '{dataset_key}': removed columns not found in registry: {missing_names}"
             )
 
-        names_data = [
-            c for c in ts_data.columns
-            if c != var_time_name
-        ]
-
+        names_data = [c for c in ts_data.columns if c != var_time_name]
         if not names_data:
             logger_stream.warning(
-                f"Dataset '{dataset_key}' has no valid registry columns; "
-                f"it will be filled with no_data_value={no_data_value}."
+                f"Dataset '{dataset_key}' has no valid registry columns; it will be filled with no_data_value={no_data_value}."
             )
             datasets_missing.append(dataset_key)
             continue
@@ -181,49 +135,31 @@ def join_time_series_by_registry(
             names_data_common = list(names_data)
 
         # create missing canonical columns
-        missing_common = [
-            c for c in names_data_common
-            if c not in names_data
-        ]
-
+        missing_common = [ c for c in names_data_common if c not in names_data]
         for c in missing_common:
             ts_data[c] = pd.NA
 
-        extra_common = [
-            c for c in names_data
-            if c not in names_data_common
-        ]
-
+        extra_common = [c for c in names_data if c not in names_data_common]
         if extra_common:
             logger_stream.warning(
-                f"Dataset '{dataset_key}': columns not present in "
-                f"the reference dataset will be ignored: {extra_common}"
+                f"Dataset '{dataset_key}': columns not present in the reference dataset will be ignored: {extra_common}"
             )
 
-        ts_data = ts_data[
-            [var_time_name] + names_data_common
-        ]
-
+        ts_data = ts_data[[var_time_name] + names_data_common]
         for c in names_data_common:
-            ts_data[c] = pd.to_numeric(
-                ts_data[c],
-                errors="coerce",
-            )
-
+            ts_data[c] = pd.to_numeric(ts_data[c], errors="coerce",)
         ts_data = ts_data.set_index(var_time_name)
 
         datasets_prepared[dataset_key] = ts_data
 
-    # ------------------------------------------------------------------
+
     # NEED AT LEAST ONE VALID DATASET TO DEFINE N x T
     if not datasets_prepared:
         logger_stream.warning(
-            "No valid datasets are available to define the common "
-            "time axis and section dimensions. Return NoneType object."
+            "No valid datasets are available to define the common time axis and section dimensions. Return NoneType object."
         )
         return None
 
-    # ------------------------------------------------------------------
     # DEFINE COMMON TIME INDEX
     reference_key = next(iter(datasets_prepared))
     reference_index = datasets_prepared[reference_key].index
@@ -233,68 +169,48 @@ def join_time_series_by_registry(
 
         if not ts_data.index.equals(reference_index):
             logger_stream.warning(
-                f"Dataset '{dataset_key}' has a different time axis; "
-                f"aligning to reference dataset '{reference_key}'."
+                f"Dataset '{dataset_key}' has a different time axis; aligning to reference dataset '{reference_key}'."
             )
 
-        datasets_prepared[dataset_key] = (
-            ts_data
-            .reindex(reference_index)
-            .fillna(no_data_value)
-        )
+        datasets_prepared[dataset_key] = (ts_data.reindex(reference_index).fillna(no_data_value))
 
-    # ------------------------------------------------------------------
     # CREATE N x T DATAFRAMES FOR MISSING DATASETS
     for dataset_key in datasets_missing:
 
-        datasets_prepared[dataset_key] = pd.DataFrame(
-            no_data_value,
-            index=reference_index,
-            columns=names_data_common,
-            dtype=float,
-        )
+        ts_data_missing = pd.DataFrame(no_data_value, index=reference_index, columns=names_data_common, dtype=float,)
+        ts_data_missing.index.name = var_time_name
 
-        datasets_prepared[dataset_key].index.name = var_time_name
+        datasets_prepared[dataset_key] = ts_data_missing
 
         logger_stream.warning(
             f"Dataset '{dataset_key}' created as no-data array "
-            f"with shape {datasets_prepared[dataset_key].shape}."
+            f"with shape {ts_data_missing.shape}."
         )
 
-    # ------------------------------------------------------------------
     # RESTORE ORIGINAL DATASET ORDER
-    datasets_prepared = {
-        str(dataset_key): datasets_prepared[str(dataset_key)]
-        for dataset_key in datasets.keys()
-        if str(dataset_key) in datasets_prepared
-    }
+    original_keys = [str(key) for key in datasets.keys()]
 
-    # ------------------------------------------------------------------
-    # JOIN DATASETS
-    df_common = pd.concat(
-        datasets_prepared,
-        axis=1,
+    ordered_keys = (
+            [key for key in original_keys if key in datasets_prepared]
+            +
+            [key for key in datasets_prepared if key not in original_keys]
     )
 
+    datasets_prepared = {
+        key: datasets_prepared[key]
+        for key in ordered_keys
+    }
+
+    # JOIN DATASETS
+    df_common = pd.concat(datasets_prepared, axis=1)
     df_common.index.name = var_time_name
     df_common = df_common.fillna(fill_value)
 
-    # ------------------------------------------------------------------
     # REGISTRY
-    names_in_db = [
-        name_tmp for name_tmp in names_data_common
-        if name_tmp in names_db
-    ]
+    names_in_db = [name_tmp for name_tmp in names_data_common if name_tmp in names_db]
 
-    registry_db = (
-        sections_db
-        .set_index("tag")
-        .loc[names_in_db]
-        .reset_index()
-    )
-
+    registry_db = (sections_db.set_index("tag").loc[names_in_db].reset_index())
     registry_type = {}
-
     if "type" in registry_db.attrs:
         registry_type = registry_db.attrs["type"]
 
