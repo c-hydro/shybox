@@ -264,7 +264,6 @@ class TimeManager:
 
         # info start
         logger.info_up("Time ... ", tag="config")
-
         lut = None
 
         # Case 1: object has attribute `.lut`
@@ -289,7 +288,7 @@ class TimeManager:
         if not isinstance(lut, dict):
             raise ValueError("'lut' found, but it is not a dictionary.")
 
-        # ----------- convert LUT into TimeManager configuration ----------- #
+        # convert LUT into TimeManager configuration
         # time_period (int steps) + time_frequency -> timedelta string, e.g. '48H'
         period_steps = lut.get("time_period")
         if period_steps is None:
@@ -303,12 +302,13 @@ class TimeManager:
             "time_run":          lut.get("time_run"),
             "time_start":        lut.get("time_start"),
             "time_end":          lut.get("time_end"),
+            "time_start_rounding":       lut.get("time_start_rounding", 'h'),
+            "time_end_rounding":         lut.get("time_end_rounding", 'h'),
             "time_period":       time_period_str,           # e.g. '48H'
             "time_frequency":    lut.get("time_frequency", "1H"),
             "time_rounding":     lut.get("time_rounding"),
             "start_days_before": start_days_before,         # <- integer, compatible
         }
-
 
         # adjust cfg (priority based and update results)
         cfg = cls.adjust(cfg, priority=time_priority, ref_key=time_ref)
@@ -996,11 +996,63 @@ class TimeManager:
                 )
 
             ts_end = pd.Timestamp(time_ref)
-            delta = pd.to_timedelta(time_period.lower())
-            ts_start = ts_end - delta
+            ts_delta = pd.to_timedelta(time_period.lower())
+            ts_start = ts_end - ts_delta
+
+            ts_delta = ts_end - ts_start
+            time_frequency = cfg["time_frequency"]
+            if time_frequency == "h" or time_frequency == "H":
+                ts_period = int(ts_delta.total_seconds() / 3600)
+            elif time_frequency == "D":
+                ts_period = int(ts_delta.total_seconds() / 86400)
+            else:
+                raise NotImplementedError(f"Time frequency '{time_frequency}' is not supported")
 
             cfg["time_start"] = ts_start
             cfg["time_end"] = ts_end
+            cfg["time_period"] = f"{ts_period}{time_frequency}"
+
+        elif priority == "run":
+            if ref_key is not None:
+                cfg_key = ref_key
+            else:
+                raise ValueError("ref_key must be provided when priority='period'.")
+
+            time_ref = cfg.get(cfg_key)
+            time_period = cfg.get("time_period")
+
+            time_start = cfg.get("time_start", None)
+            time_end = cfg.get("time_end", None)
+
+            if time_ref is None or time_period is None:
+
+                if time_start is not None and time_end is not None:
+                    raise RuntimeError(
+                        "Priority is 'time_period', but 'time_ref' and/or 'time_period' are None. "
+                        f"Found 'time_start'={time_start} and 'time_end'={time_end}. "
+                        "Consider defining 'time_ref' and 'time_period' from these bounds."
+                    )
+
+                raise RuntimeError(
+                    "Priority is 'time_period', but 'time_ref' and/or 'time_period' are None."
+                )
+
+            ts_start = pd.Timestamp(time_ref)
+            delta = pd.to_timedelta(time_period.lower())
+            ts_end = ts_start + delta
+
+            ts_delta = ts_end - ts_start
+            time_frequency = cfg["time_frequency"]
+            if time_frequency == "h" or time_frequency == "H":
+                ts_period = int(ts_delta.total_seconds() / 3600)
+            elif time_frequency == "D":
+                ts_period = int(ts_delta.total_seconds() / 86400)
+            else:
+                raise NotImplementedError(f"Time frequency '{time_frequency}' is not supported")
+
+            cfg["time_start"] = ts_start
+            cfg["time_end"] = ts_end
+            cfg["time_period"] = f"{ts_period}{time_frequency}"
 
         elif priority == "bounds":
 
@@ -1019,12 +1071,18 @@ class TimeManager:
             if ts_end < ts_start:
                 raise RuntimeError("'time_end' must be greater than or equal to 'time_start'.")
 
-            delta = ts_end - ts_start
-            hours = int(delta.total_seconds() / 3600)
+            ts_delta = ts_end - ts_start
+            time_frequency = cfg["time_frequency"]
+            if time_frequency == "h" or time_frequency == "H":
+                ts_period = int(ts_delta.total_seconds() / 3600)
+            elif time_frequency == "D":
+                ts_period = int(ts_delta.total_seconds() / 86400)
+            else:
+                raise NotImplementedError(f"Time frequency '{time_frequency}' is not supported")
 
             cfg["time_start"] = ts_start
             cfg["time_end"] = ts_end
-            cfg["time_period"] = f"{hours}H"
+            cfg["time_period"] = f"{ts_period}{time_frequency}"
 
             if ref_key == 'time_start':
                 cfg["time_run"] = ts_start
@@ -1043,8 +1101,6 @@ class TimeManager:
                     f"time_reference='{ref_key}' is not a valid option. "
                     f"Valid options are: 'time_start', 'time_end', or None."
                 )
-
-
         else:
             raise RuntimeError(f"Unsupported priority '{priority}'. Use 'period' or 'bounds'.")
 
@@ -1060,6 +1116,24 @@ class TimeManager:
                     f"[{cfg['time_start']}, {cfg['time_end']}].",
                     UserWarning,
                 )
+
+        # round step to update times related to definitions
+        ts_start, ts_end = pd.Timestamp(cfg["time_start"]), pd.Timestamp(cfg["time_end"])
+        ts_start, ts_end = ts_start.floor(cfg["time_start_rounding"]), ts_end.floor(cfg["time_end_rounding"])
+
+        # recompute steps
+        ts_delta = ts_end - ts_start
+        time_frequency = cfg["time_frequency"]
+        if time_frequency == "h" or time_frequency == "H":
+            ts_period = int(ts_delta.total_seconds() / 3600)
+        elif time_frequency == "D":
+            ts_period = int(ts_delta.total_seconds() / 86400)
+        else:
+            raise NotImplementedError(f"Time frequency '{time_frequency}' is not supported")
+
+        cfg["time_start"] = ts_start
+        cfg["time_end"] = ts_end
+        cfg["time_period"] = f"{ts_period}{time_frequency}"
 
         return cfg
 

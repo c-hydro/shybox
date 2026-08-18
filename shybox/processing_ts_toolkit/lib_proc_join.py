@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process, with_dict_input
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -23,130 +23,285 @@ from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_proc
     lazy_undefined_args=True, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
 def join_time_series_by_registry(
-        df_sim, df_obs,
-        sections_hmc: pd.DataFrame = None, sections_db: pd.DataFrame = None,
-        name: str = 'time_series_hmc',
-        fill_value: float = -9998.0, no_data_value: float = -9999.0,
+        datasets: dict[str, pd.DataFrame | None],
+        sections_hmc: pd.DataFrame = None,
+        sections_db: pd.DataFrame = None,
+        name: str = "time_series_hmc",
+        mapping: dict = None,
+        fill_value: float = -9998.0,
+        no_data_value: float = -9999.0,
         **kwargs):
 
-    ## GENERIC CHECK
-    var_time_name = 'time'
+    var_time_name = "time"
 
-    # check dataframe data
-    check_df_sim = _check_dataframe(df_sim, name="time-series datasets")
-    if not check_df_sim:
-        logger_stream.warning("Simulated dataframe is empty or defined by None. Return NoneType object.")
+    if not isinstance(datasets, dict) or not datasets:
+        logger_stream.warning(
+            "'datasets' should be a non-empty dictionary. Return NoneType object."
+        )
         return None
-    # check dataframe obs
-    check_df_obs = _check_dataframe(df_obs, name="observations datasets", allow_empty=True)
-    if not check_df_obs:
-        logger_stream.warning("Observed dataframe is empty or defined by None.")
-        df_obs = None
 
-    # check dataframe sections and database
     if sections_hmc is None or sections_hmc.empty:
-        logger_stream.warning("'sections_hmc' should be a non-empty DataFrame.")
-    if sections_db is None or sections_db.empty:
-        logger_stream.warning("'sections_db' should be a non-empty DataFrame.")
-    # check sections and database tags
-    names_domains, names_db, names_missing = [], [], []
-    if sections_hmc is not None and sections_db is not None:
-        names_domains, names_db, names_missing = _join_tags(sections_hmc, sections_db)
-    else:
-        logger_stream.warning('No section or model tags provided to create the time series joined datasets')
+        logger_stream.warning(
+            "'sections_hmc' should be a non-empty DataFrame."
+        )
 
-    ## DATAFRAME PREPARATION
-    # prepare time series dataframes: time column/index, coercion, sorting, renaming
-    ts_sim = _prepare_timeseries(df_sim,names_domains,
-                                 name="simulation datasets", time_name=var_time_name, allow_empty=False)
-    if ts_sim is None:
+    if sections_db is None or sections_db.empty:
+        logger_stream.warning(
+            "'sections_db' should be a non-empty DataFrame."
+        )
         return None
 
-    # DETECT DATA NAMES FROM SIM
-    names_data = [c for c in ts_sim.columns if c != var_time_name]
-    names_data = list(names_data)
-    if not names_data:
-        logger_stream.error("No data names found.")
+    names_domains, names_db, names_missing = [], [], []
 
-    # DETECT REGISTRY NAMES
-    names_db = [c for c in sections_db["tag"]]
-    names_db = list(names_db)
+    if sections_hmc is not None and sections_db is not None:
+        names_domains, names_db, names_missing = _join_tags(
+            sections_hmc,
+            sections_db,
+        )
+    else:
+        logger_stream.warning(
+            "No section or model tags provided to create "
+            "the time series joined datasets."
+        )
+
+    names_db = list(sections_db["tag"])
+
     if not names_db:
         raise ValueError("No db names found.")
 
-    # KEEP ONLY NAMES PRESENT IN REGISTRY, AND PRESERVE SIM ORDER
-    names_in_db = [name for name in names_data if name in names_db]
-    registry_db = sections_db.set_index("tag").loc[names_in_db].reset_index()
+    datasets_prepared = {}
+    datasets_missing = []
 
-    # REMOVE MISSING NAMES FROM SIM
-    missing_names = [name for name in names_data if name not in names_db]
-    if missing_names:
-        ts_sim = ts_sim.drop(columns=missing_names)
-        names_data = [c for c in ts_sim.columns if c != var_time_name]
-        names_data = list(names_data)
-        logger_stream.warning(f"Removed sim columns not found in registry: {missing_names}")
+    names_data_common = None
 
-    # COERCE SIM TO NUMERIC
-    for c in names_data:
-        ts_sim[c] = pd.to_numeric(ts_sim[c], errors="coerce")
+    # ------------------------------------------------------------------
+    # PREPARE AVAILABLE DATASETS
+    for tmp_key, dataset_df in datasets.items():
 
-    # observations are optional, so allow empty and handle later
-    ts_obs = _prepare_timeseries(df_obs, names_domains,
-                                 name="observations datasets", time_name=var_time_name, allow_empty=True)
+        if mapping is not None:
+            if tmp_key in list(mapping.keys()):
+                dataset_key = mapping[tmp_key]
+            else:
+                dataset_key = tmp_key
+        else:
+            dataset_key = tmp_key
 
-    # PREPARE OBS USING THE SAME COLUMN SET / ORDER
-    if ts_obs is not None and not ts_obs.empty:
+        dataset_key = str(dataset_key)
 
-        # force obs time to flat hour
-        ts_obs[var_time_name] = pd.to_datetime(
-            ts_obs[var_time_name], errors="coerce"
+        # keep track of None datasets
+        if dataset_df is None:
+            logger_stream.warning(
+                f"Dataset '{dataset_key}' is defined by None; "
+                f"it will be filled with no_data_value={no_data_value}."
+            )
+            datasets_missing.append(dataset_key)
+            continue
+
+        check_df = _check_dataframe(
+            dataset_df,
+            name=f"dataset '{dataset_key}'",
+            allow_empty=True,
+        )
+
+        if not check_df:
+            logger_stream.warning(
+                f"Dataset '{dataset_key}' is empty or invalid; "
+                f"it will be filled with no_data_value={no_data_value}."
+            )
+            datasets_missing.append(dataset_key)
+            continue
+
+        ts_data = _prepare_timeseries(
+            dataset_df,
+            names_domains,
+            name=f"dataset '{dataset_key}'",
+            time_name=var_time_name,
+            allow_empty=True,
+        )
+
+        if ts_data is None or ts_data.empty:
+            logger_stream.warning(
+                f"Dataset '{dataset_key}' could not be prepared; "
+                f"it will be filled with no_data_value={no_data_value}."
+            )
+            datasets_missing.append(dataset_key)
+            continue
+
+        # normalize time
+        ts_data[var_time_name] = pd.to_datetime(
+            ts_data[var_time_name],
+            errors="coerce",
         ).dt.floor("h")
 
-        obs_data_cols = [c for c in ts_obs.columns if c != var_time_name]
+        names_data = [
+            c for c in ts_data.columns
+            if c != var_time_name
+        ]
 
-        # keep only obs columns that are in sim canonical names
-        obs_keep = [c for c in names_data if c in obs_data_cols]
+        if not names_data:
+            logger_stream.warning(
+                f"Dataset '{dataset_key}' has no data columns; "
+                f"it will be filled with no_data_value={no_data_value}."
+            )
+            datasets_missing.append(dataset_key)
+            continue
 
-        # create missing obs columns if needed
-        obs_missing = [c for c in names_data if c not in obs_data_cols]
-        for c in obs_missing:
-            ts_obs[c] = pd.NA
+        # remove names not present in registry
+        missing_names = [
+            name_tmp for name_tmp in names_data
+            if name_tmp not in names_db
+        ]
 
-        # reorder obs exactly like sim
-        ts_obs = ts_obs[[var_time_name] + names_data]
+        if missing_names:
+            ts_data = ts_data.drop(
+                columns=missing_names,
+                errors="ignore",
+            )
 
-        # coerce obs to numeric
-        for c in names_data:
-            ts_obs[c] = pd.to_numeric(ts_obs[c], errors="coerce")
+            logger_stream.warning(
+                f"Dataset '{dataset_key}': removed columns "
+                f"not found in registry: {missing_names}"
+            )
 
-    # JOIN DATASET
-    ts_sim = ts_sim.set_index(var_time_name)
-    if ts_obs is not None and not ts_obs.empty:
-        ts_obs = ts_obs.set_index(var_time_name)
-        # align obs to simulation timeline
-        ts_obs = ts_obs.reindex(ts_sim.index)
-    else:
-        ts_obs = pd.DataFrame(no_data_value, index=ts_sim.index, columns=ts_sim.columns)
+        names_data = [
+            c for c in ts_data.columns
+            if c != var_time_name
+        ]
 
-    # fill missing values in sim and obs with no_data_value (before joining, to avoid mixing with fill_value)
-    ts_sim = ts_sim.fillna(no_data_value)
-    ts_obs = ts_obs.fillna(no_data_value)
+        if not names_data:
+            logger_stream.warning(
+                f"Dataset '{dataset_key}' has no valid registry columns; "
+                f"it will be filled with no_data_value={no_data_value}."
+            )
+            datasets_missing.append(dataset_key)
+            continue
 
-    # create combined dataframe with multi-level columns: obs and sim
-    df_common = pd.concat({"obs": ts_obs, "sim": ts_sim}, axis=1)
-    # optional
+        # first valid dataset defines canonical columns
+        if names_data_common is None:
+            names_data_common = list(names_data)
+
+        # create missing canonical columns
+        missing_common = [
+            c for c in names_data_common
+            if c not in names_data
+        ]
+
+        for c in missing_common:
+            ts_data[c] = pd.NA
+
+        extra_common = [
+            c for c in names_data
+            if c not in names_data_common
+        ]
+
+        if extra_common:
+            logger_stream.warning(
+                f"Dataset '{dataset_key}': columns not present in "
+                f"the reference dataset will be ignored: {extra_common}"
+            )
+
+        ts_data = ts_data[
+            [var_time_name] + names_data_common
+        ]
+
+        for c in names_data_common:
+            ts_data[c] = pd.to_numeric(
+                ts_data[c],
+                errors="coerce",
+            )
+
+        ts_data = ts_data.set_index(var_time_name)
+
+        datasets_prepared[dataset_key] = ts_data
+
+    # ------------------------------------------------------------------
+    # NEED AT LEAST ONE VALID DATASET TO DEFINE N x T
+    if not datasets_prepared:
+        logger_stream.warning(
+            "No valid datasets are available to define the common "
+            "time axis and section dimensions. Return NoneType object."
+        )
+        return None
+
+    # ------------------------------------------------------------------
+    # DEFINE COMMON TIME INDEX
+    reference_key = next(iter(datasets_prepared))
+    reference_index = datasets_prepared[reference_key].index
+
+    # align valid datasets
+    for dataset_key, ts_data in datasets_prepared.items():
+
+        if not ts_data.index.equals(reference_index):
+            logger_stream.warning(
+                f"Dataset '{dataset_key}' has a different time axis; "
+                f"aligning to reference dataset '{reference_key}'."
+            )
+
+        datasets_prepared[dataset_key] = (
+            ts_data
+            .reindex(reference_index)
+            .fillna(no_data_value)
+        )
+
+    # ------------------------------------------------------------------
+    # CREATE N x T DATAFRAMES FOR MISSING DATASETS
+    for dataset_key in datasets_missing:
+
+        datasets_prepared[dataset_key] = pd.DataFrame(
+            no_data_value,
+            index=reference_index,
+            columns=names_data_common,
+            dtype=float,
+        )
+
+        datasets_prepared[dataset_key].index.name = var_time_name
+
+        logger_stream.warning(
+            f"Dataset '{dataset_key}' created as no-data array "
+            f"with shape {datasets_prepared[dataset_key].shape}."
+        )
+
+    # ------------------------------------------------------------------
+    # RESTORE ORIGINAL DATASET ORDER
+    datasets_prepared = {
+        str(dataset_key): datasets_prepared[str(dataset_key)]
+        for dataset_key in datasets.keys()
+        if str(dataset_key) in datasets_prepared
+    }
+
+    # ------------------------------------------------------------------
+    # JOIN DATASETS
+    df_common = pd.concat(
+        datasets_prepared,
+        axis=1,
+    )
+
     df_common.index.name = var_time_name
-    # fill missing values
     df_common = df_common.fillna(fill_value)
 
-    # manage time series attributes
-    registry_type = {}
-    if 'type' in list(registry_db.attrs.keys()):
-        registry_type = registry_db.attrs['type']
-    # store time series attributes
-    df_common.attrs['data'], df_common.attrs['type'] = registry_db, registry_type
+    # ------------------------------------------------------------------
+    # REGISTRY
+    names_in_db = [
+        name_tmp for name_tmp in names_data_common
+        if name_tmp in names_db
+    ]
 
-    # manage time series name
+    registry_db = (
+        sections_db
+        .set_index("tag")
+        .loc[names_in_db]
+        .reset_index()
+    )
+
+    registry_type = {}
+
+    if "type" in registry_db.attrs:
+        registry_type = registry_db.attrs["type"]
+
+    df_common.attrs["data"] = registry_db
+    df_common.attrs["type"] = registry_type
+    df_common.attrs["datasets"] = list(datasets_prepared.keys())
+
     if name is not None:
         df_common.name = name
 

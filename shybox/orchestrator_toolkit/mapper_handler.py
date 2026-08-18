@@ -267,51 +267,141 @@ class Mapper:
         tag: str,
         side: str,
         index_in_tag: int,
-    ) -> Tuple[List[str], List[Tuple[str, Any]]]:
+    ) -> Tuple[
+        List[str],
+        List[str],
+        List[Tuple[str, Any]],
+    ]:
 
         # get file variables
         file_vars = self._getattr_or_key(partial, "file_variable", None)
         if file_vars is None:
-            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_variable'; skipping.")
-            return [], []
+            self.logger.warning(
+                f"[{tag}] {side.upper()} partial #{index_in_tag} "
+                "missing 'file_variable'; skipping."
+            )
+            return [], [], []
 
         # get file workflows
         file_wf = self._getattr_or_key(partial, "file_workflow", None)
         if file_wf is None:
-            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_wf'; skipping.")
-            return [], []
+            self.logger.warning(
+                f"[{tag}] {side.upper()} partial #{index_in_tag} "
+                "missing 'file_workflow'; skipping."
+            )
+            return [], [], []
 
-        # manage the order of labels and workflows
-        labels = [str(x) for x in file_vars] if isinstance(file_vars, (list, tuple, set)) else [str(file_vars)]
-        workflows = [str(x) for x in file_wf] if isinstance(file_wf, (list, tuple, set)) else [str(file_wf)]
+        # normalize variables
+        labels = (
+            [str(x) for x in file_vars]
+            if isinstance(file_vars, (list, tuple, set))
+            else [str(file_vars)]
+        )
 
-        labels_sorted, workflow_sorted = zip(*sorted(zip(labels, workflows), key=lambda x: str(x[0])))
-        labels_sorted, workflow_sorted = list(labels_sorted), list(workflow_sorted)
+        # normalize workflows
+        workflows = (
+            [str(x) for x in file_wf]
+            if isinstance(file_wf, (list, tuple, set))
+            else [str(file_wf)]
+        )
 
-        variable_template = self._getattr_or_key(partial, "variable_template", None)
+        # deterministic order
+        labels_sorted = sorted(labels)
+
+        # workflow belongs to the whole variable group
+        workflow = "|".join(workflows)
+
+        # same workflow associated with every variable
+        workflow_sorted = [workflow] * len(labels_sorted)
+
+        # get variable template
+        variable_template = self._getattr_or_key(
+            partial, "variable_template", None
+        )
+
         if not isinstance(variable_template, (dict, AbcMapping)):
-            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'variable_template'; skipping.")
-            return [], []
+            self.logger.warning(
+                f"[{tag}] {side.upper()} partial #{index_in_tag} "
+                "missing 'variable_template'; skipping."
+            )
+            return [], [], []
 
         vars_data = variable_template.get("vars_data")
+
         if not isinstance(vars_data, (dict, AbcMapping)):
-            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} 'vars_data' is not a mapping; skipping.")
-            return [], []
+            self.logger.warning(
+                f"[{tag}] {side.upper()} partial #{index_in_tag} "
+                "'vars_data' is not a mapping; skipping."
+            )
+            return [], [], []
 
-        # sort items based on variable template keys
-        items_tmp = sorted(((str(k), v) for k, v in vars_data.items()), key=lambda kv: kv[0])
+        items_map = {name: i for i, name in enumerate(file_wf)}
+        items_tmp = sorted(
+            ((str(k), v) for k, v in vars_data.items()),
+            key=lambda kv: items_map.get(kv[0], len(items_map)),
+        )
 
-        # check to ensure according to labels, workflows and items
-        items_sorted = []
-        for label, wflow in zip(labels_sorted, workflow_sorted):
-            # search item matching workflow
-            item_pos = next((i for i, t in enumerate(items_tmp) if wflow in t), -1)
-            if item_pos == -1:
-                self.logger.warning(
-                    f"Item is not selected for label '{label}' and workflow '{wflow}'; skipping."
-                )
+        # get unique items
+        items_keys_unique = [k for k, _ in items_tmp]
+        items_values_unique = [v for _, v in items_tmp]
+
+        # get order based on side
+        if side == "in":
+            # order using values
+            idx_order = sorted(
+                range(len(items_values_unique)),
+                key=lambda i: workflows.index(items_values_unique[i])
+            )
+
+        elif side == "out":
+            # order using keys
+            idx_order = sorted(
+                range(len(items_keys_unique)),
+                key=lambda i: workflows.index(items_keys_unique[i])
+            )
+
+        else:
+            raise ValueError(f"Unsupported side: {side}")
+
+        # items keys
+        items_keys_unique = [items_keys_unique[i] for i in idx_order]
+        items_keys_merged = ["|".join(items_keys_unique)]
+        items_keys_common = items_keys_unique + items_keys_merged
+        # items values
+        items_values_unique = [items_values_unique[i] for i in idx_order]
+        items_values_merged = ["|".join(items_values_unique)]
+        items_values_common = items_values_unique + items_values_merged
+
+        item_selected, keys_selected = [], []
+        for label, workflow in zip(labels_sorted, workflow_sorted):
+
+            if side == "in":
+                items_search = items_values_common
+            elif side == "out":
+                items_search = items_keys_common
             else:
-                items_sorted.append(items_tmp[item_pos])
+                raise ValueError(f"Unsupported side: '{side}'")
+
+            if workflow in items_search:
+                # get workflow position
+                idx = items_search.index(workflow)
+
+                # select workflow and corresponding key
+                item_selected.append(items_values_common[idx])
+                keys_selected.append(items_keys_common[idx])
+
+            else:
+                self.logger.warning(
+                    f"Workflow '{workflow}' for label '{label}' "
+                    f"not found in variable template; skipping."
+                )
+
+        if item_selected is None:
+            self.logger.warning(f"Item is not selected for workflow '{workflow}'; skipping.")
+            return labels_sorted, workflow_sorted, []
+
+        # same selected item applies to all variables only when needed
+        items_sorted = list(zip(keys_selected, item_selected))
 
         return labels_sorted, workflow_sorted, items_sorted
 # ----------------------------------------------------------------------------------------------------------------------

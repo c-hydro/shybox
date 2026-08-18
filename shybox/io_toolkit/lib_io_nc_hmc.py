@@ -174,308 +174,386 @@ def write_string_1d(ds, name, data_1d, dim_n):
 # method to write time series in netcdf file
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
-        file_name: str = None, file_format='NETCDF4', file_update: bool = True,
-        data : pd.DataFrame = None,
-        variable_name_sim: str = 'sim', variable_name_obs: str = 'obs',
-        time_name: str = 'time',
-        time_format: str = '%Y-%m-%d %H:%M', time_dim: str = 'time', time_type: str = 'float64',
-        time_calendar: str = time_default_calendar, time_units: str = time_default_units,
-        data_units: str = 'm3 s-1', data_dim : str = 'sections', data_type : str = 'float64',
-        data_fill_value: (float, int) = -9999.0,  data_no_value: (float, int) = -9999.0,
-        data_name_sim : str = 'simulated_discharge', data_name_obs: str = 'observed_discharge',
-        crs_name: str = 'crs', crs_attrs: dict = crs_default,
-        compression_flag : bool = True, compression_level: (None, int) = 5,
-        debug_flag : bool = True, **kwargs)  -> None:
-    # ------------------------------------------------------------------------------------------------------------------
+        file_name: str = None,
+        file_format: str = "NETCDF4",
+        file_update: bool = True,
+        data: pd.DataFrame = None,
+        time_name: str = "time",
+        time_format: str = "%Y-%m-%d %H:%M",
+        time_dim: str = "time",
+        time_type: str = "float64",
+        time_calendar: str = time_default_calendar,
+        time_units: str = time_default_units,
+        data_units: dict[str, str] | None = None,
+        data_dim: str = "sections",
+        data_type: str = "float64",
+        data_fill_value: float | int = -9999.0,
+        data_no_value: float | int = -9999.0,
+        data_map: dict[str, str] | None = None,
+        crs_name: str = "crs",
+        crs_attrs: dict = crs_default,
+        compression_flag: bool = True,
+        compression_level: int | None = 5,
+        debug_flag: bool = True,
+        **kwargs,
+) -> None:
 
-    # ------------------------------------------------------------------------------------------------------------------
     # INFO START
     logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... ')
 
-    test = kwargs
-
     # FILE PREPARATION
-    if file_update:
-        if os.path.exists(file_name):
-            os.remove(file_name)
-    # check ts sim object
+    if file_update and file_name is not None and os.path.exists(file_name):
+        os.remove(file_name)
+
+    # check dataframe
     if data is None:
-        logger_stream.warning(f'Time series dataframe is None. Skip time-series writing process to {file_name}.')
-        # INFO END - SKIPPED
+        logger_stream.warning(f'Time series dataframe is None. Skip time-series writing process to "{file_name}".')
         logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... SKIPPED')
         return None
 
-    # get sim and obs dataframes
-    if variable_name_sim in data.columns:
-        ts_sim = data[variable_name_sim]
-    else:
-        logger_stream.warning(f'Simulated time series is None. Skip time-series writing process to {file_name}.')
+    if not isinstance(data, pd.DataFrame) or data.empty:
+        logger_stream.warning(f'Time series dataframe is empty or invalid. Skip time-series writing process to "{file_name}".')
+        logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... SKIPPED')
         return None
 
-    # get sim and obs dataframes
-    if variable_name_obs in data.columns:
-        ts_obs = data[variable_name_obs]
-    else:
-        logger_stream.warning(f'Simulated time series is None. Datasets will not available in {file_name}.')
-        ts_obs = None
-    # ------------------------------------------------------------------------------------------------------------------
+    if file_name is None:
+        logger_stream.warning("NetCDF file name is defined by NoneType. Writing skipped.")
+        return None
 
-    # ------------------------------------------------------------------------------------------------------------------
-    ## TIME PREPARATION
-    # check names of time index (not mandatory, just to notify potential mismatches)
+    # VARIABLE PREPARATION
+
+    # Expected columns structure:
+    #
+    # level 0 -> variable name
+    # level 1 -> section name
+    #
+    # Example:
+    #
+    # ("discharge_sim_openloop", "aspio:aspio")
+    # ("discharge_sim_openloop", "burano:pontedazzo")
+    # ("discharge_sim_analysis", "castellano:portacartara")
+    # ("discharge_obs", "aspio:aspio")
+    # ("air_temperature_obs", "aspio:aspio")
+
+    if not isinstance(data.columns, pd.MultiIndex):
+        logger_stream.warning("Time-series dataframe columns are not a MultiIndex. Expected column levels: (variable, section).")
+        return None
+
+    if data.columns.nlevels < 2:
+        logger_stream.warning("Time-series dataframe MultiIndex must contain at least two levels: variable and section.")
+        return None
+
+    # get unique variable names from first level
+    variable_names = (data.columns.get_level_values(0).unique().tolist())
+    variable_names = [str(variable_name) for variable_name in variable_names]
+
+    if not variable_names:
+        logger_stream.warning("No variables are available in the time-series dataframe.")
+        return None
+
+    # TIME PREPARATION
+    # check time index name
     if data.index.name != time_name:
         logger_stream.warning(f'Time series index name mismatch: expected "{time_name}", found "{data.index.name}".')
 
-    # define time data
-    time_data = data.index.to_numpy()
-    time_list_string, time_list_numeric = [], []
-    for time_step in time_data:
-        time_numeric = pd.to_datetime(str(time_step))
-        time_string = time_numeric.strftime(time_format)
+    # convert time index
+    time_data = pd.to_datetime(data.index, errors="coerce",)
 
-        time_list_string.append(time_string)
-        time_list_numeric.append(time_numeric)
+    # check invalid times
+    if time_data.isna().any():
+        raise ValueError("Time index contains invalid datetime values.")
 
-    time_list_nc = date2num(
-        time_list_numeric, units=time_units, calendar=time_calendar)
+    # convert time values to strings and numeric representation
+    time_list_string = [time_step.strftime(time_format) for time_step in time_data]
+    time_list_numeric = list(time_data)
+    time_list_nc = date2num(time_list_numeric, units=time_units, calendar=time_calendar,)
 
-    # get time min and max
-    time_start, time_end = time_data.min().strftime(time_format), time_data.max().strftime(time_format)
-    # get the data dimensions (time)
-    time_n = time_data.shape[0]
-    # ------------------------------------------------------------------------------------------------------------------
+    # get time metadata
+    time_start = time_data.min().strftime(time_format)
+    time_end = time_data.max().strftime(time_format)
 
-    # ------------------------------------------------------------------------------------------------------------------
-    ## ATTRS PREPARATION
-    attrs_data, attrs_type = {}, {}
-    if 'data' in data.attrs:
-        attrs_data = data.attrs['data']
-    if 'type' in data.attrs:
-        attrs_type = data.attrs['type']
+    # time dimension
+    time_n = len(time_data)
+
+    # ATTRIBUTES / REGISTRY PREPARATION
+    attrs_data = data.attrs.get("data", {})
+    attrs_type = data.attrs.get("type", {})
 
     info_data, info_type, info_dim = {}, {}, None
-    for key, obj in attrs_data.items():
-        if isinstance(obj, pd.Series):
-            data_values = obj.values
+    if attrs_data is not None:
+
+        # registry stored as DataFrame
+        if isinstance(attrs_data, pd.DataFrame):
+            attrs_iterator = attrs_data.items()
+
+        # registry stored as mapping
+        elif isinstance(attrs_data, dict):
+            attrs_iterator = attrs_data.items()
         else:
-            data_values = np.array(obj)
+            logger_stream.warning("Data attributes object is neither a DataFrame nor a dictionary.")
+            attrs_iterator = []
 
-        if key in list(attrs_type.keys()):
-            type_values = attrs_type[key]
-        else:
-            type_values = data_values.dtype
+        # iterate over common attributes
+        for field_key, field_obj in attrs_iterator:
 
-        if info_dim is None:
-            info_dim = data_values.shape[0]
-
-        info_type[key] = type_values
-        info_data[key] = data_values
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    ## SIM DATA PREPARATION
-    # define ts data (expected: data 2d dimensions and times as index)
-    data_sim = ts_sim.to_numpy(dtype=float, copy=True)
-
-    # if in some edge case it is 1D, make it 2D (time, 1)
-    if data_sim.ndim == 1:
-        data_sim = data_sim.reshape(-1, 1)
-
-    # replace NaNs with no_data
-    data_sim[np.isnan(data_sim)] = data_no_value
-
-    # get the data dimensions (time and time-series)
-    data_steps_sim, data_n_sim = data_sim.shape
-
-    # OLD CODE
-    # define ts data (in 2d dimensions: time, ts)
-    #data_sim = ts_sim.drop(columns=time_name).to_numpy(dtype=float)
-    # replace NaNs with no_data
-    #data_sim[np.isnan(data_sim)] = data_no_value
-    # get the data dimensions (time and time-series)
-    #data_steps_sim, data_n_sim = data_sim.shape
-
-    # check if data is empty or not (rows or columns)
-    if data_sim.ndim < 2 or data_sim.shape[0] == 0 or data_sim.shape[1] == 0:
-        # INFO END - FAILED
-        logger_stream.warning(
-            f"Sections datasets for simulations is empty. "
-            f"Skip time-series writing process to {file_name}."
-        )
-        logger_stream.info(
-            f'Writing time series data to netCDF file "{file_name}" ... FAILED'
-        )
-        return None
-
-    ## OBS DATA PREPARATION
-    if ts_obs is None:
-        # create empty obs matrix with same dims as sim
-        data_obs = np.full((time_n, data_n_sim), data_no_value, dtype=float)
-    else:
-        # convert obs dataframe to numpy (expected: data 2d dimensions and times as index)
-        data_obs = ts_obs.to_numpy(dtype=float, copy=True)
-
-        # if in some edge case it is 1D, make it 2D (time, 1)
-        if data_obs.ndim == 1:
-            data_obs = data_obs.reshape(-1, 1)
-
-        # check dims consistency (optional but recommended)
-        if data_obs.shape != (time_n, data_n_sim):
-            raise ValueError(
-                f"OBS shape {data_obs.shape} does not match SIM shape {(time_n, data_n_sim)}"
-            )
-
-        # replace NaNs with no_data
-        data_obs[np.isnan(data_obs)] = data_no_value
-
-    # get the data dimensions (time and time-series)
-    data_steps_obs, data_n_obs = data_obs.shape
-
-    # check dims consistency
-    assert data_steps_sim == data_steps_obs == time_n, \
-        f"Simulations time steps {data_steps_sim} does not match observed time steps {data_steps_obs}"
-    assert data_n_sim == data_n_obs, \
-        f"Simulations sections number {data_n_sim} does not match observed sections number {data_n_obs}"
-
-    data_n = data_n_sim
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - OPEN FILE AND GENERIC INFO
-    # open file
-    file_handle = Dataset(file_name, 'w', format=file_format)
-
-    # set generic attribute
-    file_handle.Conventions = "CF-1.8"
-    file_handle.title = "time series data (time, variable)"
-    file_handle.filedate = 'Created ' + tm.ctime(tm.time())
-
-    # create dimensions
-    file_handle.createDimension(data_dim, data_n)
-    file_handle.createDimension(time_dim, time_n)
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - TIME OBJECT
-    # create time object
-    time_obj = file_handle.createVariable(
-        varname=time_name, dimensions=(time_dim,), datatype=time_type)
-    time_obj.calendar = time_calendar
-    time_obj.units = time_units
-    time_obj.time_start = time_start
-    time_obj.time_end = time_end
-    time_obj.time_dates = time_list_string
-    time_obj.axis = 'T'
-    time_obj[:] = time_list_nc
-
-    # debug variable time object
-    if debug_flag:
-        date_check = num2date(time_obj[:], units=time_units, calendar=time_calendar)
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - CRS OBJECT
-    # create crs object
-    crs_obj = file_handle.createVariable(crs_name, 'i')
-    if crs_attrs is not None:
-        for crs_key, crs_value in crs_attrs.items():
-            if isinstance(crs_value, str):
-                crs_obj.setncattr(crs_key.lower(), str(crs_value))
-            elif isinstance(crs_value, (int, np.integer)):
-                crs_obj.setncattr(crs_key.lower(), int(crs_value))
-            elif isinstance(crs_value, (float, np.floating)):
-                crs_obj.setncattr(crs_key.lower(), float(crs_value))
-            else:
-                logger_stream.warning(
-                    f'Attribute CRS for "{crs_key}" is defined by NoneType or not supported')
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - INFO OBJECT(S)
-    if info_data is not None:
-
-        # iterate over registry variable(s)
-        for field_key, field_obj in info_data.items():
-
-            # convert from pandas series to numpy array (str, float or int)
+            # convert to numpy
             if isinstance(field_obj, pd.Series):
                 field_values = field_obj.values
             else:
-                field_values = np.array(field_obj)
+                field_values = np.asarray(field_obj)
 
-            # get field type safely
-            if (info_type is not None) and isinstance(info_type, dict):
-                field_type = info_type.get(field_key, None)
+            # section dimension from registry
+            if info_dim is None: info_dim = field_values.shape[0]
 
-                if field_key not in info_type:
-                    logger_stream.warning(
-                        f'Info type for "{field_key}" is not defined in info_type dictionary. '
-                        f'Trying to infer dtype automatically (float -> string fallback).'
-                    )
+            # get type from attrs, if available
+            if isinstance(attrs_type, dict) and field_key in attrs_type:
+                field_type = attrs_type[field_key]
             else:
+                field_type = field_values.dtype
+
+            info_data[field_key] = field_values
+            info_type[field_key] = field_type
+
+    # DATA PREPARATION
+    variables_data = {}
+    # if registry is available, use registry length as section dimension
+    data_n = info_dim
+
+    # iterate over variable(s)
+    for variable_name in variable_names:
+
+        logger_stream.info_up(f'Preparing variable "{variable_name}" ...')
+
+        # get variable dataframe
+        try:
+            ts_var = data[variable_name]
+        except KeyError:
+            logger_stream.warning(f'Variable "{variable_name}" is not available in dataframe; skipping.')
+            continue
+
+        # convert dataframe to numpy
+        try:
+            variable_data = ts_var.to_numpy(dtype=float, copy=True,)
+        except Exception as exc:
+            logger_stream.warning(f'Variable "{variable_name}" cannot be converted to numeric data: {exc}. Skipping.')
+            continue
+
+        # make sure variable is 2D: time x sections
+        if variable_data.ndim == 1:
+            variable_data = variable_data.reshape(-1, 1)
+
+        if variable_data.ndim != 2:
+            logger_stream.warning(f'Variable "{variable_name}" has invalid dimensions {variable_data.shape}; skipping.')
+            continue
+
+        # check time dimension
+        if variable_data.shape[0] != time_n:
+            logger_stream.warning(
+                f'Variable "{variable_name}" has '
+                f"{variable_data.shape[0]} time steps, "
+                f"expected {time_n}; skipping."
+            )
+            continue
+
+        # first valid variable can define section dimension
+        if data_n is None:
+            data_n = variable_data.shape[1]
+
+        # check section dimension
+        if variable_data.shape[1] != data_n:
+            logger_stream.warning(
+                f'Variable "{variable_name}" has '
+                f"{variable_data.shape[1]} sections, "
+                f"expected {data_n}; skipping."
+            )
+            continue
+
+        # replace NaN with no-data value
+        variable_data[np.isnan(variable_data)] = data_no_value
+
+        # check whether ALL values are no-data
+        if np.all(variable_data == data_no_value):
+            logger_stream.warning(f'Variable "{variable_name}" contains only no-data values ({data_no_value}).')
+
+        # save prepared data
+        variables_data[variable_name] = variable_data
+
+        logger_stream.info_down(f'Preparing variable "{variable_name}" ... DONE')
+
+    # CHECK PREPARED VARIABLES
+    if not variables_data:
+        logger_stream.warning("No valid variables are available for NetCDF writing.")
+        logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... FAILED')
+        return None
+
+    if data_n is None or data_n <= 0:
+        logger_stream.warning("Section dimension could not be determined.")
+        logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... FAILED')
+        return None
+
+
+    # DATA UNITS PREPARATION
+    if data_units is None:
+        data_units = {}
+
+    elif not isinstance(data_units, dict):
+        logger_stream.warning('data_units should be a dictionary indexed by variable name. Units will be set to NA.')
+        data_units = {}
+
+
+    # FILE NETCDF - OPEN FILE
+    file_handle = Dataset(file_name,"w",format=file_format,)
+    try:
+
+        # GENERIC ATTRIBUTES
+        file_handle.Conventions = "CF-1.8"
+        file_handle.title = "time series data (time, variable)"
+        file_handle.filedate = "Created " + tm.ctime(tm.time())
+
+        # DIMENSIONS
+        file_handle.createDimension(data_dim, data_n,)
+        file_handle.createDimension(time_dim, time_n,)
+
+        # TIME OBJECT
+        time_obj = file_handle.createVariable(varname=time_name, dimensions=(time_dim,), datatype=time_type,)
+
+        time_obj.calendar = time_calendar
+        time_obj.units = time_units
+        time_obj.time_start = time_start
+        time_obj.time_end = time_end
+        time_obj.time_dates = time_list_string
+        time_obj.axis = "T"
+
+        time_obj[:] = time_list_nc
+
+        # optional time consistency check
+        if debug_flag: _ = num2date(time_obj[:], units=time_units, calendar=time_calendar,)
+
+        # CRS OBJECT
+        crs_obj = file_handle.createVariable(crs_name,"i",)
+        if crs_attrs is not None:
+
+            # itereta over crs attributes
+            for crs_key, crs_value in crs_attrs.items():
+                crs_key = str(crs_key).lower()
+
+                if isinstance(crs_value, str):
+                    crs_obj.setncattr(crs_key, str(crs_value),)
+                elif isinstance(crs_value, (int, np.integer)):
+                    crs_obj.setncattr(crs_key, int(crs_value),)
+                elif isinstance(crs_value, (float, np.floating)):
+                    crs_obj.setncattr(crs_key, float(crs_value),)
+                else:
+                    logger_stream.warning(f'Attribute CRS "{crs_key}" is defined by NoneType or unsupported type.')
+
+        # REGISTRY / INFO VARIABLES
+        if info_data:
+
+            # iterate over info data
+            for field_key, field_values in info_data.items():
+
+                field_key = str(field_key)
+                field_values = np.asarray(field_values)
+
+                # verify length
+                if field_values.shape[0] != data_n:
+                    logger_stream.warning(
+                        f'Registry field "{field_key}" has '
+                        f"{field_values.shape[0]} values, "
+                        f"expected {data_n}; skipping."
+                    )
+                    continue
+
+                # get declared type
                 field_type = None
+                if isinstance(info_type, dict):
+                    field_type = info_type.get(field_key,None,)
+
+                # normalize NetCDF type
+                if field_type is not None:
+                    field_type = to_nc_dtype(field_type)
+
+                else:
+                    # try numeric
+                    try:
+                        np.asarray(field_values, dtype=float,)
+                        field_type = to_nc_dtype(float)
+                        logger_stream.warning(f'Info type for "{field_key}" inferred as float.')
+                    except Exception:
+
+                        field_type = to_nc_dtype(str)
+                        logger_stream.warning(f'Info type for "{field_key}" inferred as string.')
+
+                # create registry variable
+                info_obj = file_handle.createVariable(varname=field_key, dimensions=(data_dim,), datatype=field_type,)
+                # write registry values
+                info_obj[:] = field_values
+
+        else:
+            logger_stream.warning("Info data object is empty or not available.")
+
+        # DATA VARIABLES
+        # iterate over variable(s)
+        for variable_name_in, variable_data in variables_data.items():
+
+            # define input/output variable names
+            variable_name_in = str(variable_name_in)
+            variable_name_out = variable_name_in
+
+            # apply variable name mapping
+            if data_map is not None:
+                if variable_name_in in data_map:
+                    variable_name_out = data_map[variable_name_in]
+
+            logger_stream.info_up(
+                f'Writing variable "{variable_name_in}" as "{variable_name_out}" ...')
+
+            # get variable-specific units using input variable name
+            variable_units = data_units.get(variable_name_in, "NA")
+
+            # normalize invalid unit values
+            if variable_units is None:
+                variable_units = "NA"
+            variable_units = str(variable_units)
+
+            # notify missing units
+            if variable_units == "NA":
                 logger_stream.warning(
-                    f'info_type dictionary is not defined (None or invalid type). '
-                    f'Trying to infer dtype for "{field_key}" automatically (float -> string fallback).'
+                    f'Units for variable "{variable_name_in}" '
+                    f'(output="{variable_name_out}") are not defined. '
+                    f'Setting units="NA".'
                 )
 
-            # check / infer type
-            if field_type is not None:
-                field_type = to_nc_dtype(field_type)
-            else:
-                try:
-                    np.asarray(field_values, dtype=float)
-                    field_type = to_nc_dtype(float)
-                    logger_stream.warning(f'Info type for "{field_key}" inferred as float.')
-                except Exception:
-                    field_type = to_nc_dtype(str)
-                    logger_stream.warning(
-                        f'Info type for "{field_key}" inferred as string (fallback). Please verify values.'
-                    )
+            # create NetCDF variable using output variable name
+            data_obj = file_handle.createVariable(
+                varname=variable_name_out,
+                datatype=data_type,
+                fill_value=data_fill_value,
+                dimensions=(time_dim, data_dim),
+                zlib=compression_flag,
+                complevel=compression_level,
+            )
 
-            # create variable object
-            info_obj = file_handle.createVariable(varname=field_key, dimensions=(data_dim,), datatype=field_type)
+            # variable attributes
+            data_obj.units = variable_units
+            data_obj.missing_value = data_no_value
+            data_obj.grid_mapping = crs_name
 
-            # assign variable values
-            info_obj[:] = field_values
-    else:
-        # warning for info_data defined by NoneType
-        logger_stream.warning('Info data object is defined by NoneType')
-    # ------------------------------------------------------------------------------------------------------------------
+            # write values
+            data_obj[:, :] = variable_data
 
-    # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - DATA OBJECT
-    # create data object - 2d format
-    data_obj_sim = file_handle.createVariable(
-        varname=data_name_sim, datatype=data_type, fill_value=data_fill_value,
-        dimensions=(time_dim, data_dim),
-        zlib=compression_flag, complevel=compression_level)
-    data_obj_sim.units = data_units
-    data_obj_sim.missing_value = data_no_value
-    # set data simulated
-    data_obj_sim[:, :] = data_sim
+            logger_stream.info_down(f'Writing variable "{variable_name_in}" as "{variable_name_out}" ... DONE')
 
-    # create obs object - 2d format
-    data_obj_obs = file_handle.createVariable(
-        varname=data_name_obs, datatype=data_type, fill_value=data_fill_value,
-        dimensions=(time_dim, data_dim),
-        zlib=compression_flag, complevel=compression_level)
-    data_obj_obs.units = data_units
-    data_obj_obs.missing_value = data_no_value
-    # set data observed
-    data_obj_obs[:, :] = data_obs
-    # ------------------------------------------------------------------------------------------------------------------
+    # CLOSE FILE
+    finally:
+        file_handle.close()
 
-    # ------------------------------------------------------------------------------------------------------------------
-    # FILE NETCDF - CLOSE FILE
-    # close file
-    file_handle.close()
-
-    # INFO END - DONE
+    # INFO END
     logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... DONE')
-    # ------------------------------------------------------------------------------------------------------------------
 
-# ------------------------------------------------------------------------------------------------------------------
+    return None
+
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------

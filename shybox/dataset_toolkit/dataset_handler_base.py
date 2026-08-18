@@ -68,7 +68,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
     # default attributes
     _defaults = {
         'type': None, 'time_signature' : 'end', "workflow": 'undefined', "layout": 'undefined',
-        'mode': 'local', 'format': 'tmp', 'variable': 'undefined'}
+        'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}}
 
     def __init__(self, **kwargs):
 
@@ -113,6 +113,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.file_variable = self._defaults['variable']
         if 'file_variable' in kwargs:
             self.file_variable = kwargs.pop('file_variable')
+
+        self.units = self._defaults['units']
+        if 'units' in kwargs:
+            self.units = kwargs.pop('units')
 
         self.time_signature = self._defaults['time_signature']
         if 'time_signature' in kwargs:
@@ -1064,7 +1068,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
             if not data.empty:
                 append = kwargs.pop('append', False)
-                self._write_data(data, out_file, append=append)
+                self._write_data(data, out_file, append=append, **kwargs)
                 return
             else:
                 self.logger.warning('Output DataFrame is empty and writing data is not activated.')

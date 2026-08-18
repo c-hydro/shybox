@@ -82,8 +82,12 @@ def main(view_table: bool = False):
     # fill application section
     alg_cfg_application = alg_cfg_obj.fill_obj_from_lut(
         section=alg_cfg_application,
-        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
-        template_keys=('file_time_destination',)
+        resolve_time_placeholders=False,
+        time_keys=('time_run', 'time_start', 'time_end', 'time_period'),
+        template_keys=(
+            'path_time_source_hmc_discharge',
+            'path_time_source_obs_discharge', 'path_time_source_obs_airt',
+            'path_time_destination', 'file_time_destination',)
     )
     # view application section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)
@@ -152,7 +156,7 @@ def main(view_table: bool = False):
     alg_cfg_obj.update_lut_using_extra_tags(extra_tags=alg_cfg_time.as_dict(), overwrite=True)
     # view time object
     alg_cfg_time.view(table_name='time', table_print=view_table)
-
+    # get reference time
     alg_reference_time = alg_cfg_time.time_run
 
     # update the applications obj
@@ -174,7 +178,12 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_sections']['path'],
         file_name=alg_cfg_application['static_data']['registry_sections']['file_name'],
         data_layout='points',
-        file_type='points_section_db', file_format='ascii', file_mode='local', file_variable='registry_db', file_io='input',
+        file_type='points_section_db', file_format='ascii', file_mode='local',
+        file_args={
+            'lut_map': alg_cfg_application['static_data']['registry_sections']['lut_map'],
+            'lut_type': alg_cfg_application['static_data']['registry_sections']['lut_type'],
+            'sep':',', 'col_datafrom': 'SEC_TAG'},
+        file_variable='registry_db', file_io='input',
         variable_template={
             "dims_point": {"x": "fields", "y": "sections"},
             "vars_data": {"registry_db": "registry_db"}
@@ -187,7 +196,9 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_hmc']['path'],
         file_name=alg_cfg_application['static_data']['registry_hmc']['file_name'],
         data_layout='points',
-        file_type='points_section_hmc', file_format='ascii', file_mode='local', file_variable='registry_hmc', file_io='input',
+        file_type='points_section_hmc', file_format='ascii', file_mode='local',
+        file_args={'delimiter':','},
+        file_variable='registry_hmc', file_io='input',
         variable_template={
             "dims_point": {"x": "fields", "y": "sections"},
             "vars_data": {"registry_hmc": "registry_hmc"}
@@ -200,32 +211,66 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## DYNAMIC DATASETS MANAGEMENT
     # source data discharge hmc handler
-    source_data_discharge_hmc = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['hmc']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['hmc']['file_name'],
+    source_data_discharge_hmc_openloop = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['hmc_discharge_openloop']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['hmc_discharge_openloop']['file_name'],
         data_layout='time_series',
         file_deps=None,
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE_SIM', file_io='input',
+        file_variable='DISCHARGE_SIM_OL', file_io='input',
         variable_template={
             "dims_data": {"y": "time", "x": "sections"},
-            "vars_data": {"DISCHARGE_SIM": "single_discharge_sim"}
+            "vars_data": {"DISCHARGE_SIM_OL": "discharge_sim_openloop"}
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
         logger=logging_handle, message=False
     )
+
+    source_data_discharge_hmc_analysis = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['hmc_discharge_analysis']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['hmc_discharge_analysis']['file_name'],
+        data_layout='time_series',
+        file_deps=None,
+        file_type='time_series_hmc', file_format='ascii', file_mode='local',
+        file_variable='DISCHARGE_SIM_ANLS', file_io='input',
+        variable_template={
+            "dims_data": {"y": "time", "x": "sections"},
+            "vars_data": {"DISCHARGE_SIM_ANLS": "discharge_sim_analysis"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
     # source data discharge obs handler
     source_data_discharge_obs = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['obs']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['obs']['file_name'],
-        data_layout='time_series',
+        path=alg_cfg_application['dynamic_data_src']['obs_discharge']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['obs_discharge']['file_name'],
+        data_layout='time_series', data_mandatory=False,
         file_deps=None,
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
         file_variable='DISCHARGE_OBS', file_io='input',
         variable_template={
             "dims_data": {"y": "time", "x": "sections"},
-            "vars_data": {"DISCHARGE_OBS": "single_discharge_obs"}
+            "vars_data": {"DISCHARGE_OBS": "discharge_obs"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # source data air temperature obs handler
+    source_data_airt_obs = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['obs_air_temperature']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['obs_air_temperature']['file_name'],
+        data_layout='time_series', data_mandatory=False,
+        file_deps=None,
+        file_type='time_series_hmc', file_format='ascii', file_mode='local',
+        file_variable='AIR_TEMPERATURE_OBS', file_io='input',
+        variable_template={
+            "dims_data": {"y": "time", "x": "sections"},
+            "vars_data": {"AIR_TEMPERATURE_OBS": "air_temperature_obs"}
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
@@ -233,17 +278,25 @@ def main(view_table: bool = False):
     )
 
     # source data variables handler (example of derived variable with dependencies)
-    source_data_discharge = DataLocal(
+    source_data_time_series = DataLocal(
         path=None,
         file_name=None,
         file_type=None, file_format='tmp', file_mode='local',
-        file_variable='DISCHARGE_TS' , file_io='derived',
-        file_deps=[source_data_discharge_hmc, source_data_discharge_obs],
+        file_variable='VARS_TS' , file_io='derived',
+        file_deps=[
+            source_data_discharge_hmc_openloop,
+            source_data_discharge_hmc_analysis,
+            source_data_discharge_obs,
+            source_data_airt_obs],
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
             "vars_data": {
-                "single_discharge_sim": "joined_discharge_sim"}
+                "discharge_sim_openloop": "discharge_sim_ol",
+                "discharge_sim_analysis": "discharge_sim_anls",
+                "discharge_obs": "discharge_obs",
+                "air_temperature_obs": "air_temperature_obs",
+            }
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
@@ -251,18 +304,27 @@ def main(view_table: bool = False):
     )
 
     # destination data discharge handler
-    destination_data_discharge = DataLocal(
+    destination_data_time_series = DataLocal(
         path=alg_cfg_application['dynamic_data_dst']['path'],
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
-        data_layout='time_series',
+        data_layout='time_series', file_args={},
         file_type='time_series_hmc', file_format='netcdf', file_mode='local',
-        file_variable='DISCHARGE_TS', file_io='output',
+        file_variable='VARS_TS', file_io='output',
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
             "vars_data": {
-                "joined_discharge_sim": "discharge_simulated"}
-                #"joined_discharge_obs": "discharge_observed"}
+                "discharge_sim_ol": "discharge_simulated_openloop",
+                "discharge_sim_anls": "discharge_simulated_analysis",
+                "discharge_obs": "discharge_observed",
+                "air_temperature_obs": "air_temperature_observed",
+            },
+            "units": {
+                "discharge_sim_ol": "m^3/s",
+                "discharge_sim_anls": "m^3/s",
+                "discharge_obs": "m^3/s",
+                "air_temperature_obs": "C",
+            }
         },
         time_signature='step',
         time_period=1, time_format='%Y%m%d%H%M',
@@ -274,8 +336,8 @@ def main(view_table: bool = False):
     ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
     orc_process = Orchestrator.time_series_discharge(
-        data_package_in=source_data_discharge,
-        data_package_out=destination_data_discharge,
+        data_package_in=source_data_time_series,
+        data_package_out=destination_data_time_series,
         data_ref={'sections_hmc': registry_sections_hmc, 'sections_db': registry_sections_data},
         priority=None,
         configuration=alg_cfg_workflow,

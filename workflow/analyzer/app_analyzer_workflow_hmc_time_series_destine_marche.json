@@ -1,0 +1,166 @@
+{
+  "__comment__": "configuration file for the datasets information",
+  "configuration": {
+    "priority": {
+      "reference": "environment", "other": "user"
+    },
+    "flags": {
+      "update_namelist": true, "update_execution": true
+    },
+    "variables": {
+      "lut": {
+        "user": {
+          "path_time_source_hmc_discharge": null, "path_time_source_obs_discharge": null,
+          "path_time_source_obs_airt": null,
+          "path_time_destination": null,
+          "time_rounding": "H", "time_frequency": "H",  "time_direction": "forward",
+          "file_log": "{execution_name}_{domain_name}.log",
+          "execution_name": "analyzer_time_series_hmc", "execution_mode": "history"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "path_geo": "PATH_GEO",
+          "path_base_source_hmc_discharge": "PATH_SRC_HMC",
+          "path_base_source_obs_discharge": "PATH_SRC_OBS",
+          "path_base_source_obs_airt": "PATH_SRC_OBS",
+          "path_base_destination": "PATH_DST",
+          "file_time_source": "TIME_RUN", "file_time_destination": "TIME_RUN",
+          "time_run": "TIME_RUN", "time_period" : "TIME_PERIOD",
+          "path_app": "PATH_APP",
+          "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_base_source_hmc_discharge": "string",
+        "path_base_source_obs_discharge": "string", "path_base_source_obs_airt": "string",
+        "path_time_source_hmc_discharge": "timestamp",
+        "path_time_source_obs_discharge": "timestamp", "path_time_source_obs_airt": "timestamp",
+        "file_time_source": "timestamp",
+        "path_base_destination": "string", "path_time_destination": "timestamp",
+        "file_time_destination": "timestamp",
+        "time_direction": "string", "time_run": "string",
+        "time_period": "int", "time_rounding": "string", "time_frequency": "string",
+        "path_app": "string",
+        "path_log": "string", "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string", "execution_mode": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_base_source_hmc_discharge": "string",
+        "path_base_source_obs_discharge": "string", "path_base_source_obs_airt": "string",
+        "path_time_source_hmc_discharge": "%Y%m%d_%H",
+        "path_time_source_obs_discharge": "%Y%m%d_%H", "path_time_source_obs_airt": "%Y%m%d_%H",
+        "path_base_destination": "string", "path_time_destination": "%Y%m%d_%H",
+        "file_time_source": "%Y%m%d%H00", "file_time_destination": "%Y%m%d%H00",
+        "time_direction": "string", "time_run": "%Y%m%d%H00",
+        "time_period": "int", "time_rounding": "string", "time_frequency": "string",
+        "path_app": "string",
+        "path_log": "string", "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string", "execution_mode": "string"
+      }
+    }
+  },
+  "application": {
+    "time": {
+      "start": "{time_run}",
+      "end": "{time_run}",
+      "frequency": "H",
+      "format": "%Y-%m-%d %H:%M",
+      "analysis": "{time_period}",
+      "dataset": "{time_period}"
+    },
+    "static_data": {
+      "registry_sections": {
+        "path": "{path_geo}/",
+        "file_name": "fp_sections_marche.csv",
+        "lut_map": {
+          "id": "ID", "section_code": "SEC_CODE", "section_type": "TYPE", "section_name": "SEC_NAME",
+          "station_name": "SEC_RS", "station_code": "SEC_RS", "catchment_name": "BASIN",
+          "data_from": "SEC_TAG", "tag": "SEC_TAG", "domain_name": "DOMAIN",
+          "municipality": "ADMIN_B_L1", "province": "ADMIN_B_L2",  "region": "ADMIN_B_L3",
+          "basin": "BASIN", "longitude": "LON", "latitude": "LAT", "catchment_area_km2": "AREA",
+          "discharge_yellow": "Q_THR1", "discharge_orange": "Q_THR2", "discharge_red": "Q_THR3",
+          "threshold_level_1": "Q_THR1", "threshold_level_2": "Q_THR2", "threshold_level_3": "Q_THR3",
+          "section_baseflow": "BASEFLOW", "hmc_x": "HMC_X", "hmc_y": "HMC_Y"},
+        "lut_type": {
+          "tag": "str", "id": "int", "section_name": "str",
+          "station_name": "str", "catchment_name": "str",
+          "data_from": "str", "domain_name": "str",
+          "municipality": "str", "province": "str", "region": "str",  "basin": "str",
+          "longitude": "np.float64", "latitude": "np.float64", "catchment_area_km2": "float",
+          "threshold_level_1": "float", "threshold_level_2": "float", "threshold_level_3": "float",
+          "discharge_yellow": "float", "discharge_orange": "float", "discharge_red": "float"
+        }
+      },
+      "registry_hmc": {
+        "path": "{path_geo}/",
+        "file_name": "marche.info_section.txt"
+      }
+    },
+    "dynamic_data_src": {
+      "hmc_discharge_openloop":{
+        "path": "{path_base_source_hmc_discharge}/{path_time_source_hmc_discharge}/",
+        "file_name": "hmc.hydrograph_openloop.txt",
+        "units": "m^3/s"
+      },
+      "hmc_discharge_analysis": {
+        "path": "{path_base_source_hmc_discharge}/{path_time_source_hmc_discharge}/",
+        "file_name": "hmc.hydrograph_analysis.txt",
+        "units": "m^3/s"
+      },
+      "obs_discharge": {
+        "path": "{path_base_source_obs_discharge}/{path_time_source_obs_discharge}/",
+        "file_name": "obs.hydrograph.txt",
+        "units": "m^3/s"
+      },
+      "obs_air_temperature": {
+        "path": "{path_base_source_obs_airt}/{path_time_source_obs_airt}/",
+        "file_name": "obs.hydrograph.txt",
+        "units": "C"
+      }
+    },
+    "dynamic_data_dst": {
+      "path": "{path_base_destination}/{path_time_destination}/",
+      "file_name": "hmc.series_{domain_name}_{file_time_destination}.nc",
+      "format": "netcdf",
+      "type": null,
+      "mode": "time_series",
+      "_variable": ["discharge", "discharge", "discharge", "air_temperature"],
+      "units": {
+        "discharge_sim_ol": "m^3/s",
+        "discharge_sim_anls": "m^3/s",
+        "discharge_obs": "m^3/s",
+        "air_temperature_obs": "C"},
+      "dims_data": {"time": "time", "sections": "sections"},
+      "vars_data": {
+        "discharge_sim_ol": "discharge",
+        "discharge_sim_anls": "discharge",
+        "discharge_obs": "discharge",
+        "air_temperature_obs": "air_temperature"}
+    }
+  },
+  "workflow": {
+    "options": {
+        "intermediate_output": "Tmp",
+        "tmp_dir": "{path_tmp}"
+    },
+    "process_list": {
+        "VARS_TS": [
+            {"function": "join_time_series_by_registry", "fill_value": -9999, "no_data_value": -9999}
+        ]
+    }
+  },
+  "log": {
+    "path": "{path_log}/{domain_name}", "file_name": "analyzer_time_series_hmc.txt",
+    "handlers": ["file","stream"]
+  },
+  "tmp": {
+    "path": "{path_tmp}/{domain_name}",
+    "file_name": null
+  }
+}

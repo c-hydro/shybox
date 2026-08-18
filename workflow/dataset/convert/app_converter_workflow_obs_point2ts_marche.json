@@ -12,6 +12,7 @@
         "user": {
           "path_time_source": null, "path_time_destination": null,
           "time_rounding": "H", "time_frequency": "H",  "time_direction": "forward",
+          "time_start_rounding": "D", "time_end_rounding": "h",
           "file_log": "{execution_name}_{domain_name}.log",
           "execution_name": "analyzer_time_series_hmc", "execution_mode": "history"
         },
@@ -35,6 +36,7 @@
         "time_direction": "string", "time_run": "string",
         "time_start": "string", "time_end": "string",
         "time_period": "int", "time_rounding": "string", "time_frequency": "string",
+        "time_start_rounding": "string", "time_end_rounding": "string",
         "path_app": "string",
         "path_log": "string", "file_log": "string",
         "path_tmp": "string",
@@ -49,6 +51,7 @@
         "time_direction": "string", "time_run": "%Y%m%d%H00",
         "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
         "time_period": "int", "time_rounding": "string", "time_frequency": "string",
+        "time_start_rounding": "string", "time_end_rounding": "string",
         "path_app": "string",
         "path_log": "string", "file_log": "string",
         "path_tmp": "string",

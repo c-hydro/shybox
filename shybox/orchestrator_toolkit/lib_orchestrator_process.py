@@ -469,12 +469,12 @@ class ProcessorContainer:
 
             # iterate over the list of data objects
             id_other = 0
-            fx_data, fx_metadata, fx_deps = [], {}, []
+            fx_data, fx_metadata, fx_deps, fx_keys, fx_maps = [], {}, [], [], {}
             fx_other, fx_varid, fx_check = {}, [], [];
             for data_partial_id, data_global_id, data_tmp, name_tmp, type_tmp, time_tmp, time_step in (
                     zip(id_partial, id_global, data_list, data_names, type_list, time_list, time)):
 
-                # assing id to data object (partial id for the repeated time steps, global id for the whole list)
+                # assign id to data object (partial id for the repeated time steps, global id for the whole list)
                 if data_partial_id == data_global_id:
                     data_id = data_global_id
                 else:
@@ -562,6 +562,11 @@ class ProcessorContainer:
                 step_workflow = data_tmp.file_namespace.get('workflow')
                 step_tag = ':'.join([step_variable, step_workflow])
 
+                # store variable data
+                if type_tmp == 'data':
+                    tmp_maps = data_tmp.variable_template['vars_data']
+                    fx_maps = {**fx_maps, **tmp_maps}
+
                 # variable id
                 var_id = data_tmp.data_id
 
@@ -576,6 +581,7 @@ class ProcessorContainer:
                     # get data
                     fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, as_is=as_is ,**kwargs)
                     fx_deps.append(step_tag)
+                    fx_keys.append(step_workflow)
 
                     # convert to DataArray if single variable
                     fx_tmp = _to_dataarray_if_single_var(fx_tmp)
@@ -646,7 +652,7 @@ class ProcessorContainer:
 
             # get data
             fx_data = data_raw.get_data(time=time, name=var_name, **kwargs)
-            fx_deps = []
+            fx_deps, fx_keys = [], []
 
             # convert to DataArray if single variable
             fx_data = _to_dataarray_if_single_var(fx_data)
@@ -699,6 +705,10 @@ class ProcessorContainer:
         fx_args['time'] = time
         # add reference time (in case of needed by the procedure)
         fx_args['time_reference'] = time_ref
+        # add reference keys for method where input are not fixed
+        fx_args["keys"] = fx_keys
+        # add variable map
+        fx_args['mapping'] = fx_maps
 
         # manage reference argument (if available in fx_static) and add it to fx_args (if not already present)
         if 'ref' in self.fx_static:
@@ -772,6 +782,8 @@ class ProcessorContainer:
             fx_variable_data = list(fx_save.data_vars)
         elif isinstance(fx_save, pd.DataFrame):
             fx_variable_data = fx_save.name
+        elif isinstance(fx_save, dict):
+            fx_variable_data = list(fx_save.keys())
         elif fx_save is None:
             self.logger.warning('Output datasets are defined NoneType. No output will be saved.')
             return None, fx_memory
@@ -841,6 +853,60 @@ class ProcessorContainer:
             fx_save.attrs["workflow"] = fx_variable_wf
             fx_save.attrs["tag1"] = fx_variable_name
             fx_save.attrs["name"] = fx_variable_name
+
+        elif isinstance(fx_save, dict):
+
+            if isinstance(fx_variable_data, str):
+                variables = [fx_variable_data]
+            elif isinstance(fx_variable_data, list):
+                variables = fx_variable_data
+            else:
+                self.logger.error("fx_var must be a string or list when fx_save is a dictionary.")
+                raise TypeError("fx_var must be a string or list when fx_save is a dictionary.")
+
+            for var in variables:
+
+                # check variable availability
+                if var not in fx_save:
+                    self.logger.error(f"Variable '{var}' not found in dictionary.")
+                    raise ValueError(f"Variable '{var}' not found in dictionary.")
+                var_data = fx_save[var]
+
+                # xarray DataArray
+                if isinstance(var_data, xr.DataArray):
+                    var_data.name = var
+                    _set_name_and_attrs(var_data,var,fx_variable_wf,fx_variable_name)
+
+                # xarray Dataset
+                elif isinstance(var_data, xr.Dataset):
+
+                    # apply attributes to matching variable
+                    if var in var_data.data_vars:
+                        var_data[var].name = var
+                        _set_name_and_attrs(var_data[var], var, fx_variable_wf, fx_variable_name)
+
+                    # dataset-level attributes
+                    var_data.attrs["workflow"] = fx_variable_wf
+                    var_data.attrs["tag1"] = fx_variable_name
+                    var_data.attrs["name"] = fx_variable_name
+
+                # pandas DataFrame
+                elif isinstance(var_data, pd.DataFrame):
+
+                    var_data.name = var
+
+                    # DataFrame does not have xarray .attrs semantics
+                    # for variables, but metadata can be stored here
+                    var_data.attrs["workflow"] = fx_variable_wf
+                    var_data.attrs["tag1"] = fx_variable_name
+                    var_data.attrs["name"] = fx_variable_name
+
+                # None
+                elif var_data is None:
+                    self.logger.warning(f"Variable '{var}' is None. Attributes cannot be assigned.")
+                else:
+                    self.logger.error(f"Variable '{var}' has unsupported type: {type(var_data)}")
+                    raise TypeError(f"Variable '{var}' has unsupported type: {type(var_data)}")
 
         else:
             # error for unknown type (dataarray or dataset only)
@@ -925,6 +991,8 @@ class ProcessorContainer:
                             elif isinstance(obj_raw, xr.DataArray):
                                 # method to match coordinates to reference (no interpolation)
                                 obj_match = match_coords_to_reference(obj_raw, self.fx_static['ref'])
+                            elif isinstance(obj_raw, dict):
+                                obj_match = obj_raw
                             else:
                                 self.logger.error('Collections data must be xarray DataArray or pandas DataFrame')
                                 raise TypeError('Collections data must be xarray DataArray or pandas DataFrame')
@@ -937,6 +1005,8 @@ class ProcessorContainer:
                                     # organize data to keep the data array format
                                     collections_obj = xr.Dataset()
                                     collections_obj[key] = obj_match
+                                elif isinstance(obj_match, dict):
+                                    collections_obj = obj_match
                                 else:
                                     self.logger.error('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
                                     raise TypeError('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
@@ -968,12 +1038,16 @@ class ProcessorContainer:
                     collections_variables = collections_obj.name
                 elif isinstance(collections_obj, xr.Dataset):
                     collections_variables = list(collections_obj.data_vars)
+                elif isinstance(collections_obj, dict):
+                    collections_variables = list(collections_obj.keys())
                 else:
                     self.logger.error('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
                     raise TypeError('Collections dataset must be xarray Dataset or dict for pandas DataFrame')
 
                 # collections kwargs
-                kwargs['time_format'] = self.out_obj.get_attribute('time_format')
+                kwargs['time_format'] = self.out_obj.time_format
+                kwargs['units'] = self.out_obj.units
+                kwargs['map'] = self.out_obj.variable_template['vars_data']
                 kwargs['ref'] = self.fx_static['ref']
                 kwargs['out_opts'] = self.out_opts
 
@@ -1115,6 +1189,8 @@ def _sync_variable_name(data, vars):
         else:
             logger_stream.error(f"Object fx_data DataFrame has no attribute 'name' or it is None.")
             raise TypeError("Object fx_data DataFrame has no attribute 'name' or it is None.")
+    elif isinstance(data, dict):
+        data_vars = list(data.keys())
     elif data is None:
         logger_stream.warning(f"Object fx_data DataFrame is None. Datasets are not available.")
         data_vars = []

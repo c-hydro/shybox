@@ -43,13 +43,11 @@ def read_points_1d(file_path, header=True, delimiter=';'):
 
     # consider header presence
     header_row = 0 if header else None
-
     # read the file, treating -9998, -9999, and "NaN" as missing values
-    df = pd.read_csv(file_path,sep=delimiter, header=header_row, na_values=[-9998, -9999, "NaN"])
+    df = pd.read_csv(file_path, sep=delimiter, header=header_row, na_values=[-9998, -9999, "NaN"])
 
     # normalize column names for searching
     column_map = {str(col).strip().lower(): col for col in df.columns}
-
     if len(df.columns) == 2:
         # standard two-column format
         df.columns = ["points", "values"]

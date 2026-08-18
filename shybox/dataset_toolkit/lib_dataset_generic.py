@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_dataset_generic
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20261022'
-Version:       '1.1.0'
+Date:          '20260813'
+Version:       '1.2.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -23,9 +23,9 @@ import datetime as dt
 import xarray as xr
 import numpy as np
 import pandas as pd
+import inspect
 
 import rasterio as rio
-import rioxarray as rxr
 
 try:
     import geopandas as gpd
@@ -77,7 +77,7 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write a string to a {file_format} file.')
         
     elif isinstance(data, dict):
-        if file_format not in ['json']:
+        if file_format not in ['json', 'ascii', 'txt']:
             raise ValueError(f'Cannot write a dictionary to a {file_format} file.')
         
     elif 'gpd' in globals() and isinstance(data, gpd.GeoDataFrame):
@@ -151,7 +151,7 @@ def get_format_from_path(path: str) -> str:
 # method to read from file
 @with_logger(var_name="logger_stream")
 def read_from_file(
-        path, file_format: Optional[str] = None, file_delimiter: Optional[str] = ';',
+        path, file_format: Optional[str] = None, file_args: Optional[dict] = {},
         file_type: Optional[str] = None, file_variable: (str, list) = 'na') \
         -> (xr.DataArray, xr.Dataset, pd.DataFrame):
 
@@ -223,22 +223,31 @@ def read_from_file(
 
         elif file_type == 'points_1d':
 
-            data = read_points_1d(file_path=path, header=True, delimiter=file_delimiter)
+            # select args to configure method
+            method_args = set_method_args(method=read_points_1d, args=file_args)
+            # read data 1d format
+            data = read_points_1d(file_path=path, header=True, **method_args)
 
         elif file_type == 'points_section_db':
 
+            # select args to configure method
+            method_args = set_method_args(method=read_sections_db, args=file_args)
             # read section database (flood-proofs format)
-            data = read_sections_db(file_path=path)
+            data = read_sections_db(file_path=path, **method_args)
 
         elif file_type == 'points_section_hmc':
 
+            # select args to configure method
+            method_args = set_method_args(method=read_sections_registry, args=file_args)
             # read section registry (hmc format)
-            data = read_sections_registry(filepath=path)
+            data = read_sections_registry(filepath=path, **method_args)
 
         elif file_type == 'time_series_hmc':
 
+            # select args to configure method
+            method_args = set_method_args(method=read_sections_data, args=file_args)
             # read time series data (hmc format)
-            data = read_sections_data(path=path)
+            data = read_sections_data(path=path, **method_args)
 
         elif file_type == 'points' or file_type == 'points_generic':
 
@@ -481,7 +490,15 @@ def write_to_file(data, path,
         if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
             write_dataset_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['time_series_hmc', 'ts_hmc']:
-            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None, **kwargs)
+
+            units, map = None, None
+            if 'units' in kwargs:
+                units = kwargs.pop('units')
+            if 'map' in kwargs:
+                map = kwargs.pop('map')
+
+            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None, data_units=units, data_map=map,
+                         **kwargs)
         elif file_type in ['grid_s3m', 'forcing_s3m']:
             write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
@@ -1244,3 +1261,26 @@ def set_type(data: xr.DataArray, nan_value = None) -> xr.DataArray:
 
     return reset_nan(data, nan_value)
 # ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to set the method arguments
+@with_logger(var_name="logger_stream")
+def set_method_args(
+    method,args: dict = None, exclude: list = None,) -> dict:
+
+    args = args or {}
+    exclude = exclude or []
+
+    method_keys = inspect.signature(method).parameters
+
+    selected_args = {
+        key: value
+        for key, value in args.items()
+        if key in method_keys and key not in exclude
+    }
+
+    logger_stream.info(f"Selected args for '{method.__name__}': " f"{list(selected_args.keys())}")
+
+    return selected_args
+# ----------------------------------------------------------------------------------------------------------------------
+
