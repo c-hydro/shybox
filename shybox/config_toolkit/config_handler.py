@@ -1436,6 +1436,7 @@ class ConfigManager:
 
         return lut
 
+    # --------------------------------------------------------------
     # method to fill object using the LUT declared in the json config
     def fill_obj_from_lut(
             self,
@@ -1499,13 +1500,10 @@ class ConfigManager:
 
             if sub_lut:
                 resolved_sub = self.resolve_time_templates(
-                    when=when,
-                    lut=sub_lut,
-                    update_variables=False,
-                )
+                    when=when, lut=sub_lut, update_variables=False,)
                 effective_lut.update(resolved_sub)
 
-        # ---- handle template_keys: copy template value into LUT ----
+        # handle template_keys: copy template value into LUT
         if template_keys is not None:
             if hasattr(self, "template") and isinstance(self.template, dict):
                 template_dict = self.template
@@ -1519,9 +1517,7 @@ class ConfigManager:
             for k in template_keys:
                 if k not in template_dict:
                     if strict:
-                        raise KeyError(
-                            f"Template for key '{k}' not found in template dictionary."
-                        )
+                        raise KeyError(f"Template for key '{k}' not found in template dictionary.")
                     continue
 
                 tmpl_val = template_dict[k]
@@ -1533,14 +1529,23 @@ class ConfigManager:
                 if elk in list(extra_tags.keys()):
                     extra_tags[elk] = elv
 
-        filled = fill_with_mapping(
-            section,
-            effective_lut,
-            extra_tags=extra_tags,
-            strict=strict,
-            in_place=in_place,
+        # fill object using placeholders
+        filled, unfilled = fill_with_mapping(
+            section, effective_lut,
+            extra_tags=extra_tags,strict=strict, in_place=in_place,
         )
+
+        # check object unfilled
+        if unfilled:
+            if strict:
+                self.log.error("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
+                raise KeyError("The condition is strict; all placeholders must be resolved.")
+            else:
+                self.log.warning("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
+
         return filled
+
+    # --------------------------------------------------------------
 
     # --------------------------------------------------------------
     def fill_string_with_times(self, string_raw: str, **time_values) -> str:

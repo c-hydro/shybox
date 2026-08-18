@@ -2,10 +2,6 @@
 from typing import Dict
 from shybox.runner_toolkit.namelist.lib_utils_dataclass import M, D, Var
 
-
-
-
-
 # namelist template for HMC version 3.2.0
 namelist_hmc_330: Dict[str, Dict[str, Var]] = {
 

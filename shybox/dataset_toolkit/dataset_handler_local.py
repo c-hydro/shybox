@@ -80,6 +80,10 @@ class DataLocal(Dataset):
         # store path
         self.path = path
 
+        self.file_args = {}
+        if 'file_args' in kwargs:
+            self.file_args = kwargs.pop('file_args')
+
         # check file dependencies
         if 'file_deps' in kwargs:
             self.file_deps = kwargs.pop('file_deps')
@@ -188,6 +192,10 @@ class DataLocal(Dataset):
             else:
                 vars_data = {f"var_{i}": f"var{i}" for i in range(1, int(n_vars) + 1)}
 
+        # units nad ensure units are defined for all variables
+        units = variable_template.get("units", {})
+        units = {var_name: units.get(var_name, "NA") for var_name in vars_data}
+
         # select file_workflow based on file_io (defined in calling code)
         if self.file_io == 'input':
             file_workflow = list(vars_data.values())
@@ -214,6 +222,7 @@ class DataLocal(Dataset):
             'loc_pattern': self.loc_pattern,
             'logger': self.logger,
             'message': message,
+            'units': units,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
             "data_layout": layout_norm,
             "data_id": self.data_id,
@@ -272,7 +281,8 @@ class DataLocal(Dataset):
         # method to read data from file
         data = read_from_file(
             path,
-            file_format=self.file_format, file_type=self.file_type, file_delimiter=self.delimiter,
+            file_format=self.file_format, file_type=self.file_type,
+            file_args=self.file_args,
             file_variable=variable)
 
         # message info end

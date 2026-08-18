@@ -230,11 +230,8 @@ def _fill_obj_recursive(obj, tags: dict, strict: bool, unresolved: set, none_as_
 # method to fill object with mapping
 def fill_with_mapping(
     obj,
-    lut: dict,
-    extra_tags: dict | None = None,
-    strict: bool = False,
-    in_place: bool = True,
-) -> dict:
+    lut: dict, extra_tags: dict | None = None,
+    strict: bool = False, in_place: bool = True,) -> tuple[dict, set[str]]:
     """
     Fill placeholders {tag} in any nested object (e.g. application dict)
     using values from lut plus optional extra_tags.
@@ -280,14 +277,9 @@ def fill_with_mapping(
 
     target = obj if in_place else copy.deepcopy(obj)
 
+    # fill obj recursively
     unresolved: set[str] = set()
     result = _fill_obj_recursive(target, tags, strict, unresolved)
 
-    if strict and unresolved:
-        raise KeyError(
-            "fill_object_with_lut: unresolved placeholder(s): "
-            + ", ".join(sorted(unresolved))
-        )
-
-    return result
+    return result, unresolved
 # ----------------------------------------------------------------------------------------------------------------------

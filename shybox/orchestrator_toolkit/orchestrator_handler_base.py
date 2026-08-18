@@ -261,7 +261,8 @@ class OrchestratorBase:
         # create the process input
         if process_init:
             if isinstance(self.data_in, dict):
-                if process_var_reference in list(self.data_in.keys()):
+                in_keys = list(self.data_in.keys())
+                if process_var_reference in in_keys:
                     this_input = self.data_in[process_var_reference]
                 else:
                     self.logger.error(

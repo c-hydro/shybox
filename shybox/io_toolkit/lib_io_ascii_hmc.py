@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from pathlib import Path
-from typing import Dict, List, Union, Iterable
+from typing import Dict, List, Union, Iterable, Hashable
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
@@ -88,7 +88,7 @@ TYPE_DB_DEFAULT = {
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to read sections database (csv format)
+# helper to read sections database (csv format)
 @with_logger(var_name='logger_stream')
 def _parse_tag_from_data_from(text: str) -> str:
     """
@@ -104,6 +104,7 @@ def _parse_tag_from_data_from(text: str) -> str:
         return f"{left}:{right}"
     return s.lower()
 
+# helper to cast columns
 @with_logger(var_name='logger_stream')
 def _select_warn_and_cast(
     df: pd.DataFrame,
@@ -161,28 +162,26 @@ def _select_warn_and_cast(
 # method to read sections database (csv format from fp chain)
 @with_logger(var_name='logger_stream')
 def read_sections_db(
-    file_path: str,
-    name: str = 'sections_db',
-    lut: dict = None,
-    col_datafrom: str = "DATI_DA",
-    col_filter: str = None,
-    filter_value: str = None,
-    sep: str = ";",
-    encoding: str = "ISO-8859-1",
-    case: bool = False,
-    regex: bool = False,
-    out_col: str = "tag",
-    final_cols: list[str] = None,
-    out_first: bool = True,
-) -> pd.DataFrame:
+    file_path: str, name: str = 'sections_db',
+    lut_map: dict = None, lut_type: dict = None,
+    col_datafrom: str = "DATI_DA", col_filter: str = None, filter_value: str = None,
+    sep: str = ";", encoding: str = "ISO-8859-1", case: bool = False, regex: bool = False,
+    out_col: str = "tag",final_cols: list[str] = None, out_first: bool = True,) -> Hashable:
 
     # check file availability
     if not os.path.exists(file_path):
         logger_stream.error(f"File sections database not found: {file_path}")
 
-    if lut is None:
-        lut = LUT_DB_DEFAULT
-        logger_stream.warning("Using default LUT_DB_DEFAULT")
+    # check lut map and type
+    if lut_map is None:
+        lut_map = LUT_DB_DEFAULT
+        logger_stream.warning("Variable lut_map is not defined; using default LUT_DB_DEFAULT")
+    if lut_type is None:
+        lut_type = TYPE_DB_DEFAULT
+        logger_stream.warning("Variable lut_type is not defined; using default TYPE_DB_DEFAULT")
+    else:
+        map_type = {"str": str, "int": int, "float": float, "np.float64": np.float64,}
+        lut_type = {key: map_type[value] for key, value in lut_type.items()}
 
     # read the csv file (db sections)
     df = pd.read_csv(file_path, sep=sep, encoding=encoding)
@@ -199,9 +198,11 @@ def read_sections_db(
         df_out = df_out[df_out[col_filter].astype(str).str.contains(str(filter_value), case=case, regex=regex)]
         logger_stream.info(f"Filtered by {col_filter} = {filter_value} → {len(df_out)} rows")
 
+    # cast column used for tagging datasets
     df_out[out_col] = df_out[col_datafrom].map(_parse_tag_from_data_from)
 
-    rename_map = {src: dst for dst, src in lut.items() if src in df_out.columns}
+    # rename variables, excluding out_col
+    rename_map = {src: dst for dst, src in lut_map.items() if src in df_out.columns and dst != out_col}
     df_out = df_out.rename(columns=rename_map)
 
     if final_cols is not None:
@@ -214,10 +215,10 @@ def read_sections_db(
         cols = [out_col] + [c for c in df_out.columns if c != out_col]
         df_out = df_out[cols]
 
-    # select + warn + cast using TYPE_DB_DEFAULT (or provided type_map)
+    # select + warn + cast
     df_out, df_info = _select_warn_and_cast(
         df_out,
-        type_map=TYPE_DB_DEFAULT,  # or `type_map` if you add it as an arg
+        type_map=lut_type,  # or `type_map` if you add it as an arg
         keep_only_typed_cols=True,  # keep only these fields
         store_info=True
     )
@@ -254,9 +255,28 @@ def write_sections_data(
     fill_nan=-9999.0,
     create_dir=True,
     overwrite=True,
-    inplace_fill=False,   # if True, fill NaNs in df itself; else work on a copy
+    inplace_fill=False,
+    key=None,# if True, fill NaNs in df itself; else work on a copy
 ):
+    # define path of file
     path = Path(path)
+
+    # normalize input to DataFrame
+    if isinstance(df, dict):
+        if len(df) == 0:
+            raise ValueError("Input dictionary is empty.")
+        if key is not None:
+            if key not in df:
+                raise KeyError(f"Key '{key}' not found in input dictionary. Available keys: {list(df.keys())}")
+            df = df[key]
+        elif len(df) == 1:
+            df = next(iter(df.values()))
+        else:
+            raise ValueError(
+                "Input dictionary contains multiple DataFrames. Specify which one to use with 'key'. "
+                f"Available keys: {list(df.keys())}")
+    elif not isinstance(df, pd.DataFrame):
+        raise TypeError(f"Input data must be a pandas DataFrame or dict of DataFrames. Got {type(df)}")
 
     if create_dir:
         path.parent.mkdir(parents=True, exist_ok=True)

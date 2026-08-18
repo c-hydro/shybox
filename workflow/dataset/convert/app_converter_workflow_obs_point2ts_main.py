@@ -85,7 +85,7 @@ def main(view_table: bool = False):
         section=alg_cfg_application,
         resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
         template_keys=('path_time_source', 'file_time_source',
-                       'file_time_destination',)
+                       'path_time_destination', 'file_time_destination', )
     )
     # view application section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)
@@ -151,11 +151,12 @@ def main(view_table: bool = False):
         alg_cfg_obj, start_days_before=1,
         time_priority='period', time_ref='time_run',
         time_as_string=('time_frequency',), time_as_int=('time_period',))
+
     # update lut using time tags
     alg_cfg_obj.update_lut_using_extra_tags(extra_tags=alg_cfg_time.as_dict(), overwrite=True)
     # view time object
     alg_cfg_time.view(table_name='time', table_print=view_table)
-
+    # get reference time
     alg_reference_time = alg_cfg_time.time_run
 
     # update the applications obj
@@ -177,8 +178,9 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_hmc']['path'],
         file_name=alg_cfg_application['static_data']['registry_hmc']['file_name'],
         data_layout='points',
-        file_type='points_section_hmc', file_format='ascii', file_mode='local', file_variable='registry_hmc',
-        file_io='input', file_delimiter=',',
+        file_type='points_section_hmc', file_format='ascii', file_mode='local',
+        file_args={'delimiter':','},
+        file_variable='registry_hmc', file_io='input',
         variable_template={
             "dims_point": {"x": "fields", "y": "sections"},
             "vars_data": {"registry_hmc": "registry_hmc"}
@@ -196,8 +198,9 @@ def main(view_table: bool = False):
         file_name=alg_cfg_application['dynamic_data_src']['file_name'],
         data_layout='points', data_mandatory=False,
         file_deps=None,
-        file_type='points_1d', file_format='ascii', file_mode='local', file_delimiter=',',
+        file_type='points_1d', file_format='ascii', file_mode='local',
         file_variable='DISCHARGE', file_io='input',
+        file_args={'delimiter': ','},
         variable_template={
             "dims_data": {"x": "data"},
             "vars_data": {"DISCHARGE": "discharge"}
