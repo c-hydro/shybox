@@ -9,13 +9,12 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import os.path
-import numpy as np
 import xarray as xr
 import pandas as pd
 
 from copy import deepcopy
 
-from shybox.generic_toolkit.lib_utils_geo import find_geo_names, check_geo_orientation, fix_geo_orientation
+from shybox.geo_toolkit.lib_geo_coords import find_geo_names, check_geo_orientation, fix_geo_orientation
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 

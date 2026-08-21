@@ -42,6 +42,7 @@ from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
 from shybox.io_toolkit.lib_io_nc_hmc import read_datasets_hmc, write_dataset_hmc, write_ts_hmc
 from shybox.io_toolkit.lib_io_nc_other import read_dataset_itwater, write_dataset_itwater
+from shybox.geo_toolkit.lib_geo_watersheds import read_geo, create_grid
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
 from shybox.time_toolkit.lib_utils_time import is_date
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -187,39 +188,13 @@ def read_from_file(
 
             data = read_grid(file_name=path)
 
-            '''
-            # get header
-            geo_attrs = {}
-            with open(path, 'r') as file:
-                # Read the first six lines
-                geo_lines = [next(file) for _ in range(6)]
+        elif file_type == 'grid_geo':
 
-            # Parse the header lines
-            for line in geo_lines:
-                if line.startswith('xllcorner'):
-                    geo_attrs['xllcorner'] = Decimal(line.split()[1])
-                elif line.startswith('yllcorner'):
-                    geo_attrs['yllcorner'] = Decimal(line.split()[1])
-                elif line.startswith('cellsize'):
-                    geo_attrs['cellsize'] = Decimal(line.split()[1])
-                elif line.startswith('NODATA_value'):
-                    geo_attrs['NODATA_value'] = float(line.split()[1])
-                elif line.startswith('ncols'):
-                    geo_attrs['ncols']  = int(line.split()[1])
-                elif line.startswith('nrows'):
-                    geo_attrs['nrows']  = int(line.split()[1])
+            data = read_geo(file_name=path, name_data=file_variable)
 
-            # get data
-            data = rxr.open_rasterio(path)
-            generic_attrs = data.attrs
+        elif file_type == 'grid_obj':
 
-            # store attributes
-            data.attrs = {**generic_attrs, **geo_attrs}
-
-            squeeze_dims = [dim for dim in data.dims if data[dim].size == 1]
-            if len(squeeze_dims) > 0:
-                data = data.squeeze(squeeze_dims)
-            '''
+            data = create_grid(file_raster=path, name_raster=file_variable)
 
         elif file_type == 'points_1d':
 
@@ -256,6 +231,7 @@ def read_from_file(
                 data = f.readlines()
 
         else:
+            logger_stream.warning(f'File type not defined for ascii reading: {file_type}. Using default reader.')
             with open(path, 'r') as f:
                 data = f.readlines()
 

@@ -837,7 +837,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             if self._check_data(full_location):
 
                 # get data
-                data = self._read_data(full_location)
+                data = self._read_data(full_location, **kwargs)
 
                 # return data as is (if specified)
                 if as_is:

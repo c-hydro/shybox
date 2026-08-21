@@ -273,10 +273,10 @@ class DataLocal(Dataset):
         # message info start
         self.logger.info_up(f"Read data from {path} ... ")
 
-        # manage variables to read
+        # set variable if defined
         variable = None
-        if vars_data is not None:
-            variable = list(vars_data.keys())
+        if 'variable' in kwargs:
+            variable = kwargs['variable']
 
         # method to read data from file
         data = read_from_file(

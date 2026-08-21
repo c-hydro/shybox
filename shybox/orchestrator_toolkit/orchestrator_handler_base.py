@@ -315,10 +315,17 @@ class OrchestratorBase:
         self.processes.append(this_process)
 
     # method to wrap the run of the orchestrator
-    def run(self, time: Union[pd.Timestamp, str, pd.DatetimeIndex], **kwargs) -> None:
+    def run(self, time: Union[pd.Timestamp, str, pd.DatetimeIndex, None] = None, **kwargs) -> None:
 
         # info orchestrator start
         self.logger.info_up('Run orchestrator ...')
+
+        # check time availability
+        if time is not None:
+            self.logger.info('Active dynamic mode')
+        else:
+            self.logger.info('Active static mode')
+            time = pd.Timestamp.now()
 
         # group process by variable
         proc_group = group_process(self.processes, proc_tag='reference')

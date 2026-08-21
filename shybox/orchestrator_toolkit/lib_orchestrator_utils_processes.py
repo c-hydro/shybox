@@ -25,6 +25,8 @@ except Exception:  # pragma: no cover
 
 from osgeo import gdal
 from typing import Iterable
+
+from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -57,6 +59,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
     def decorator(func):
 
         @functools.wraps(func)
+        @with_logger(var_name='logger_stream')
         def wrapper(data, *args, **kwargs):
             created_temp_paths = []
 
@@ -142,64 +145,92 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                     # get the function signature to determine parameter names
                     signature = inspect.signature(func)
 
-                    # consider only positional parameters (positional-only and positional-or-keyword)
-                    params = [
-                        p for i, p in enumerate(signature.parameters.values())
-                        if (
-                                p.kind in (
-                            inspect.Parameter.POSITIONAL_ONLY,
-                            inspect.Parameter.POSITIONAL_OR_KEYWORD
-                        )
-                                and i >= len(args)
-                                and p.name not in kwargs
-                                and p.default is inspect._empty
-                        )
-                    ]
+                    # Debug: show function and its parameters
+                    logger_stream.info(f"Function: {func.__name__}")
+                    logger_stream.info(f"Signature: {signature}")
+                    logger_stream.info(f"Parameters: {list(signature.parameters.keys())}")
 
-                    # optional keys used to build dynamic dictionary input
-                    file_keys = kwargs.get("keys", None)
+                    # get optional keys used to build the dynamic dictionary input
+                    file_keys = kwargs.get("keys", [])
+
+                    # Find required positional parameters that have not been provided
+                    params = []
+                    for index, param in enumerate(signature.parameters.values()):
+
+                        is_required = param.default is inspect.Parameter.empty
+
+                        if param.default is None:
+                            if param.name in file_keys:
+                                is_required = True
+
+                        is_positional = param.kind in (
+                            inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        )
+
+                        is_provided = index < len(args) or param.name in kwargs
+
+                        if is_positional and is_required and not is_provided:
+                            params.append(param)
+
+                    # Debug: show parameters found
+                    logger_stream.info(f"Missing required parameters: {[param.name for param in params]}")
+
+                    # order based on file_keys
+                    order = {key: i for i, key in enumerate(file_keys)}
+                    params.sort(key=lambda param: order.get(param.name, len(order)))
 
                     # map normalized data to function parameters
                     if len(params) == 1:
 
                         param_name = params[0].name
-                        # dynamic dictionary case
                         if isinstance(normalized_data, (list, tuple)):
 
                             if file_keys is not None:
-                                file_keys = (
+                                sel_keys = (
                                     list(file_keys)
                                     if isinstance(file_keys, (list, tuple))
                                     else [file_keys]
                                 )
 
-                                if len(file_keys) != len(normalized_data):
-                                    raise ValueError(
-                                        f"Cannot build '{param_name}' dictionary: "
-                                        f"{len(file_keys)} file_keys vs "
-                                        f"{len(normalized_data)} normalized objects."
-                                    )
+                                if len(sel_keys) != len(normalized_data):
+                                    count_data = {}
+                                    for step_data in normalized_data:
+                                        name_data = step_data.name
+                                        if name_data not in count_data:
+                                            count_data[name_data] = 1
+                                        else:
+                                            count_data[name_data] += 1
+                                    for key_data, count_data in count_data.items():
+                                        count_keys = sel_keys.count(key_data)
+                                        if count_keys == count_data:
+                                            sel_keys = sel_keys[0:count_keys]
+                                        else:
+                                            raise ValueError(
+                                                f"Cannot build '{param_name}' dictionary: "
+                                                f"{len(sel_keys)} keys for "
+                                                f"{len(normalized_data)} normalized objects."
+                                            )
 
-                                # check if keys are all the same and link the normalized data
-                                if len(set(file_keys)) == 1:
-                                    param_value = {file_keys[0]: normalized_data}
+                                if len(set(sel_keys)) == 1:
+                                    param_value = {sel_keys[0]: normalized_data}
                                 else:
-                                    param_value = dict(zip(file_keys, normalized_data))
+                                    param_value = dict(zip(sel_keys, normalized_data))
 
                             else:
-                                # fallback autogenerated keys
                                 param_value = {
-                                    f"obj_{i + 1}": obj
-                                    for i, obj in enumerate(normalized_data)
+                                    f"obj_{index + 1}": obj
+                                    for index, obj in enumerate(normalized_data)
                                 }
+
                         else:
-                            # single object
                             param_value = normalized_data
 
                         normalized_dict = {param_name: param_value}
 
                     else:
-                        normalized_dict = dict(zip((p.name for p in params),normalized_data,))
+                        param_names = [param.name for param in params]
+                        normalized_dict = dict(zip(param_names, normalized_data))
 
                     lazy_undefined_args = False
                     if 'lazy_undefined_args' in decorator_attrs and decorator_attrs['lazy_undefined_args']:
