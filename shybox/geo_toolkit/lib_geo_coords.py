@@ -1,9 +1,9 @@
 """
 Library Features:
 
-Name:          lib_utils_geo
+Name:          lib_geo_coords
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260130'
+Date:          '20260818'
 Version:       '1.1.0'
 """
 
