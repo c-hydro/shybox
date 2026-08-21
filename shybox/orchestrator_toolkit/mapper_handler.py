@@ -38,18 +38,55 @@ class Mapper:
 
         result: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
-        keys_in = set(self._data_in.keys())
-        keys_out = set(self._data_out.keys())
+        # set keys in and out
+        keys_in, keys_out = set(self._data_in.keys()), set(self._data_out.keys())
 
-        missing_in = sorted(keys_out - keys_in)
         missing_out = sorted(keys_in - keys_out)
         if missing_out:
             self.logger.warning(f"Keys present only in input: {missing_out}")
+        missing_in = sorted(keys_out - keys_in)
         if missing_in:
             self.logger.warning(f"Keys present only in output: {missing_in}")
 
         # define shared keys
         shared_keys = keys_in & keys_out
+
+        # if shared keys are not defined, group variable definitions
+        if not shared_keys:
+
+            grouped = {}
+            # preserve original dictionary order:
+            # input definitions first, then output definitions
+            for key in list(self._data_in.keys()) + list(self._data_out.keys()):
+                var, defs = key.split(":", 1)
+                grouped.setdefault(var, [])
+                for def_name in defs.split("|"):
+                    if def_name not in grouped[var]:
+                        grouped[var].append(def_name)
+
+            # map variable -> grouped workflow key
+            grouped_keys = {var: f"{var}:{'|'.join(defs)}" for var, defs in grouped.items()}
+
+            # update input keys
+            data_in_new = {}
+            for key, value in self._data_in.items():
+                var, _ = key.split(":", 1)
+                new_key = grouped_keys[var]
+                data_in_new[new_key] = value
+
+            # update output keys
+            data_out_new = {}
+            for key, value in self._data_out.items():
+                var, _ = key.split(":", 1)
+                new_key = grouped_keys[var]
+                data_out_new[new_key] = value
+
+            self._data_in = data_in_new
+            self._data_out = data_out_new
+
+            # grouped keys are now shared by input and output
+            shared_keys = set(grouped_keys.values())
+
         # iterate over shared keys
         for key in shared_keys:
 

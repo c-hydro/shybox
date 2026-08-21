@@ -9,6 +9,7 @@ Version:       '1.0.0'
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
+import warnings
 import datetime as dt
 from copy import deepcopy
 from typing import Callable
@@ -18,7 +19,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from shybox.generic_toolkit.lib_utils_geo import match_coords_to_reference
+
+from shybox.geo_toolkit.lib_geo_coords import match_coords_to_reference
+from shybox.geo_toolkit.lib_geo_watersheds import import_pysheds, is_pysheds_raster
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -1241,6 +1244,17 @@ def _get_variable_name(obj, mandatory = True,
         names = [obj.name]
 
         return names
+
+    elif is_pysheds_raster(obj):
+
+        # get metadata from raster object (pysheds)
+        metadata = obj.metadata
+
+        name = 'Raster'
+        if 'name' in list(metadata.keys()):
+            name = metadata['name']
+
+        return name
 
     # Case 4: None or unknown type
     elif obj is None:

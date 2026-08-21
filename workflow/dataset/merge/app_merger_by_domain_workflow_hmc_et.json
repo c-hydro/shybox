@@ -43,7 +43,7 @@
         "path_geo": "string", "path_metrics": "string",
         "path_source_root": "string",  "path_destination_root": "string",
         "file_source_time": "%Y%m%d%H%M", "file_destination_time": "%Y%m%d%H%M",
-        "path_source_time": "", "path_destination_time": "%Y/%m/%d/",
+        "path_source_time": "%Y/%m/%d/%d/", "path_destination_time": "%Y/%m/%d/",
         "time_source": "%Y%m%d", "time_destination": "%Y%m%d%H%M",
         "time_start": "%Y%m%d", "time_end": "%Y%m%d", "time_run": "%Y%m%d%H%M",
         "time_direction": "string", "time_rounding": "string", "time_frequency": "string",
@@ -73,7 +73,7 @@
 
       "dset_01": {
         "file_data": {
-          "path": "{path_source_root}/AdigeDomain/",
+          "path": "{path_source_root}/AdigeDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -84,7 +84,7 @@
 
       "dset_02": {
         "file_data": {
-          "path": "{path_source_root}/BasilicataDomain/",
+          "path": "{path_source_root}/BasilicataDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -95,7 +95,7 @@
 
       "dset_03": {
         "file_data": {
-          "path": "{path_source_root}/CalabriaDomain/",
+          "path": "{path_source_root}/CalabriaDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -106,7 +106,7 @@
 
 	  "dset_04": {
         "file_data": {
-          "path": "{path_source_root}/FriuliDomain/",
+          "path": "{path_source_root}/FriuliDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -117,7 +117,7 @@
 
       "dset_05": {
         "file_data": {
-          "path": "{path_source_root}/GarganoDomain/",
+          "path": "{path_source_root}/GarganoDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -128,7 +128,7 @@
 
       "dset_06": {
         "file_data": {
-          "path": "{path_source_root}/LazioDomain/",
+          "path": "{path_source_root}/LazioDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -139,7 +139,7 @@
 
       "dset_07": {
         "file_data": {
-          "path": "{path_source_root}/LiguriaDomain/",
+          "path": "{path_source_root}/LiguriaDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -150,7 +150,7 @@
 
 	  "dset_08": {
         "file_data": {
-          "path": "{path_source_root}/LiriDomain/",
+          "path": "{path_source_root}/LiriDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -161,7 +161,7 @@
 
       "dset_09": {
         "file_data": {
-          "path": "{path_source_root}/MarcheDomain/",
+          "path": "{path_source_root}/MarcheDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -172,7 +172,7 @@
 
 	  "dset_10": {
         "file_data": {
-          "path": "{path_source_root}/PoBasin/",
+          "path": "{path_source_root}/PoBasin/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -183,7 +183,7 @@
 
 	  "dset_11": {
         "file_data": {
-          "path": "{path_source_root}/PugliaDomain/",
+          "path": "{path_source_root}/PugliaDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -194,7 +194,7 @@
 
   	  "dset_12": {
         "file_data": {
-          "path": "{path_source_root}/RomagnaDomain/",
+          "path": "{path_source_root}/RomagnaDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -205,7 +205,7 @@
 
 	  "dset_13": {
         "file_data": {
-          "path": "{path_source_root}/SardegnaDomain/",
+          "path": "{path_source_root}/SardegnaDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -216,7 +216,7 @@
 
 	  "dset_14": {
         "file_data": {
-          "path": "{path_source_root}/SiciliaDomain/",
+          "path": "{path_source_root}/SiciliaDomain/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -227,7 +227,7 @@
 
 	  "dset_15": {
         "file_data": {
-          "path": "{path_source_root}/TevereBasin/",
+          "path": "{path_source_root}/TevereBasin/model_results/gridded/{path_source_time}",
           "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
         },
         "file_watermark": {
@@ -238,7 +238,7 @@
 
       "dset_16": {
          "file_data": {
-           "path": "{path_source_root}/ToscanaDomain/",
+           "path": "{path_source_root}/ToscanaDomain/model_results/gridded/{path_source_time}",
            "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
          },
          "file_watermark": {
@@ -249,7 +249,7 @@
 
       "dset_17": {
          "file_data": {
-           "path": "{path_source_root}/VolturnoDomain/",
+           "path": "{path_source_root}/VolturnoDomain/model_results/gridded/{path_source_time}",
            "file_name": "hmc.output-grid.{file_source_time}.nc.gz"
          },
          "file_watermark": {
@@ -280,11 +280,11 @@
         "EVAPOTRANSPIRATION": [
             {
               "function": "compute_et",
-              "ref_no_data": -9999.0, "value_no_data": -9999.0,
+              "ref_no_data": 0, "value_no_data": 0,
               "thr_sm_min_flag": true, "thr_sm_min_value": 0.0,
               "thr_sm_max_flag": true, "thr_sm_max_value": 1.0,
-              "interp_flag" : false,
-              "interp_method": "nn", "interp_max_distance": 25000, "interp_neighbours": 7,
+              "interp_flag" : true,
+              "interp_method": "nn", "interp_max_distance": 5000, "interp_neighbours": 7,
               "fill_gaps_flag": true, "fill_gaps_distance": 2,
               "weight_flag": true,
               "weight_method": "distance", "weight_radius": 5, "weight_max_distance": 25

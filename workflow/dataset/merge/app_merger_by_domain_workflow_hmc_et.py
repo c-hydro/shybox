@@ -237,7 +237,12 @@ def main(view_table: bool = False):
             )
 
             # append to src list
-            dset_src_handler_list.append(dset_src_handler_data)
+            if dset_src_handler_data.status == 'ok':
+                dset_src_handler_list.append(dset_src_handler_data)
+
+        # check the source list of files (if empty continue to the next step)
+        if not dset_src_handler_list:
+            continue
 
         ## DESTINATION DATA MANAGEMENT
         # dataset handler 'grid_2d' or 'grid' for geotiff

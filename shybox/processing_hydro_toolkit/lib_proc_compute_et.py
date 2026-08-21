@@ -58,9 +58,16 @@ def compute_et(
     if isinstance(data, (xr.DataArray, xr.Dataset)):
         ds_list = [_to_dataset(data)]
     elif isinstance(data, (list, tuple)):
-        ds_list = [_to_dataset(it) for it in data]
+        ds_list = [_to_dataset(obj) for obj in data]
+    elif isinstance(data, dict):
+        ds_list = [
+            _to_dataset(obj)
+            for data_list in data.values()
+            for obj in data_list
+        ]
     else:
-        raise TypeError(f"`data` must be a DataArray, Dataset, or list/tuple. Got {type(data)}")
+        logger_stream.error(f"Unsupported data type: {type(data)}")
+        raise TypeError("`data` must be a DataArray, Dataset, list, tuple, or dict. Got {type(data)}")
 
     # normalize watermark to list aligned to ds_list (KEEP list behavior)
     if watermark is None:
@@ -242,17 +249,35 @@ def compute_et(
         # activate interpolation mode if sub grid is not perfectly aligned with ref grid
         if interp_flag:
 
+            # get source array
+            arr_tmp = da_tmp.values.astype(np.float64)
+            # original finite domain
+            mask_tmp = np.isfinite(arr_tmp)
+            mask_tmp = mask_tmp.astype(np.float64)
+
             # apply interpolation mode
             sub_out = _interp_data(
-                data_in=da_tmp.values,
-                geo_x_2d=ref_x_2d,
-                geo_y_2d=ref_y_2d,
+                data_in=arr_tmp,
+                geo_x_src=tmp_x_2d, geo_y_src=tmp_y_2d,
+                geo_x_dst=ref_x_2d, geo_y_dst=ref_y_2d,
                 method=interp_method,
-                neighbours=interp_neighbours,
-                radius_of_influence=interp_max_distance)
+                neighbours=interp_neighbours, radius_of_influence=interp_max_distance)
 
-            # now update merge (if you want overwrite only where sub has values)
-            mask_finite = ~np.isnan(sub_out)
+            # project original finite-domain mask onto destination grid
+            mask_out = _interp_data(
+                data_in=mask_tmp,
+                geo_x_src=tmp_x_2d, geo_y_src=tmp_y_2d,
+                geo_x_dst=ref_x_2d, geo_y_dst=ref_y_2d,
+                method="nearest", neighbours=1,
+                radius_of_influence=interp_max_distance,
+            )
+
+            # keep interpolated values only inside original finite domain
+            mask_domain = mask_out == 1.0
+            sub_out[~mask_domain] = np.nan
+
+            # merge only valid values inside the original domain
+            mask_finite = np.isfinite(sub_out) & mask_domain & (~ref_nan)
             merge_out_raw[mask_finite] = sub_out[mask_finite]
 
         else:
@@ -319,8 +344,8 @@ def compute_et(
         # interp all values to use interpolated values where the gaps are found
         merge_out_interp = _interp_data(
             data_in=merge_out_raw,
-            geo_x_2d=ref_x_2d,
-            geo_y_2d=ref_y_2d,
+            geo_x_src=ref_x_2d, geo_y_src=ref_y_2d,
+            geo_x_dst=ref_x_2d, geo_y_dst=ref_y_2d,
             method=interp_method,
             neighbours=interp_neighbours,
             radius_of_influence=interp_max_distance
@@ -466,77 +491,71 @@ def _apply_interp(data_raw, mask, data_to_apply_using_mask):
 @with_logger(var_name='logger_stream')
 def _interp_data(
     data_in,
-    geo_x_2d,
-    geo_y_2d,
+    geo_x_src,
+    geo_y_src,
+    geo_x_dst,
+    geo_y_dst,
     method="nearest",
     radius_of_influence=25000,
     neighbours=8,
     sigmas=25000,
     fill_value=np.nan,
 ):
-    """
-    Interpolate a 2D field on the whole grid using all finite input values
-    as source points.
 
-    Parameters
-    ----------
-    data_in : 2D array-like
-        Input data with finite values and NaNs.
-    geo_x_2d : 2D array-like
-        Grid x/lon coordinates.
-    geo_y_2d : 2D array-like
-        Grid y/lat coordinates.
-    method : {'nearest', 'gauss', 'custom'}, default 'nearest'
-        Interpolation method.
-    radius_of_influence : float, default 25000
-        Search radius in meters.
-    neighbours : int, default 8
-        Number of neighbours for 'gauss' and 'custom'.
-    sigmas : float, default 25000
-        Gaussian sigma in meters for method='gauss'.
-    fill_value : float, default np.nan
-        Fill value for unsuccessful interpolation.
-
-    Returns
-    -------
-    data_interp : 2D ndarray
-        Interpolated field on the full grid.
-    """
     data_in = np.asarray(data_in, dtype=float)
-    geo_x_2d = np.asarray(geo_x_2d, dtype=float)
-    geo_y_2d = np.asarray(geo_y_2d, dtype=float)
+
+    geo_x_src = np.asarray(geo_x_src, dtype=float)
+    geo_y_src = np.asarray(geo_y_src, dtype=float)
+
+    geo_x_dst = np.asarray(geo_x_dst, dtype=float)
+    geo_y_dst = np.asarray(geo_y_dst, dtype=float)
 
     if data_in.ndim != 2:
-        raise ValueError("`data_in` must be 2D")
-    if geo_x_2d.shape != data_in.shape or geo_y_2d.shape != data_in.shape:
-        raise ValueError("`data_in`, `geo_x_2d`, and `geo_y_2d` must have the same shape")
+        raise ValueError(f"`data_in` must be 2D. Got {data_in.shape}")
 
+    # source coordinates must match source data
+    if geo_x_src.shape != data_in.shape or geo_y_src.shape != data_in.shape:
+        raise ValueError(
+            "Source grid and data must have the same shape: "
+            f"data={data_in.shape}, "
+            f"x_src={geo_x_src.shape}, "
+            f"y_src={geo_y_src.shape}"
+        )
+
+    # target coordinates must match each other
+    if geo_x_dst.shape != geo_y_dst.shape:
+        raise ValueError(
+            "Target coordinates must have the same shape: "
+            f"x_dst={geo_x_dst.shape}, "
+            f"y_dst={geo_y_dst.shape}"
+        )
+
+    # valid source values
     src_mask = np.isfinite(data_in)
 
     if not np.any(src_mask):
-        return np.full(data_in.shape, fill_value, dtype=float)
+        return np.full(geo_x_dst.shape, fill_value, dtype=float,)
 
-    src_def = SwathDefinition(
-        lons=geo_x_2d[src_mask],
-        lats=geo_y_2d[src_mask]
-    )
-    tgt_def = GridDefinition(
-        lons=geo_x_2d,
-        lats=geo_y_2d
-    )
-
+    src_lons = geo_x_src[src_mask]
+    src_lats = geo_y_src[src_mask]
     src_values = data_in[src_mask]
 
-    if method == "nn":
+    src_def = SwathDefinition(lons=src_lons, lats=src_lats,)
+    tgt_def = GridDefinition(lons=geo_x_dst, lats=geo_y_dst,)
+
+    method = str(method).lower()
+    if method in ("nearest", "nn"):
+
         data_interp = resample_nearest(
             source_geo_def=src_def,
             data=src_values,
             target_geo_def=tgt_def,
             radius_of_influence=radius_of_influence,
-            fill_value=fill_value
+            fill_value=fill_value,
         )
 
     elif method == "gauss":
+
         data_interp = resample_gauss(
             source_geo_def=src_def,
             data=src_values,
@@ -544,25 +563,28 @@ def _interp_data(
             radius_of_influence=radius_of_influence,
             sigmas=sigmas,
             neighbours=neighbours,
-            fill_value=fill_value
+            fill_value=fill_value,
         )
 
     elif method == "custom":
+
         data_interp = resample_to_grid(
             {"data": src_values},
-            geo_x_2d[src_mask],
-            geo_y_2d[src_mask],
-            geo_x_2d,
-            geo_y_2d,
+            src_lons,
+            src_lats,
+            geo_x_dst,
+            geo_y_dst,
             search_rad=radius_of_influence,
             neighbours=neighbours,
-            fill_values=fill_value
+            fill_values=fill_value,
         )["data"]
 
     else:
-        raise ValueError("`method` must be 'nearest', 'gauss', or 'custom'")
+        raise ValueError(
+            "`method` must be 'nearest', 'nn', 'gauss', or 'custom'"
+        )
 
-    return data_interp
+    return np.asarray(data_interp, dtype=float)
 
 # helper to classify gaps in a 2D array based on NaN regions and distance to finite data (1=gap, 2=data, 3=extra)
 @with_logger(var_name='logger_stream')

@@ -69,7 +69,7 @@ class ConfigManager:
     ):
 
         # Set up logger for this ConfigManager instance
-        self.log = LoggingManager.get_logger(
+        self.logger = LoggingManager.get_logger(
             logger=logger, name="ConfigManager", set_as_current=False,
         )
 
@@ -397,7 +397,7 @@ class ConfigManager:
                 return section_copy
 
         if (name in mandatory_map) and not section_copy:
-            self.log.warning(f"Section '{name}' not found in mandatory fields. "
+            self.logger.warning(f"Section '{name}' not found in mandatory fields. "
                              f"Try to another section. Change name to remove this warning.")
 
         # 2) optional sections via raw config (if available)
@@ -437,7 +437,7 @@ class ConfigManager:
 
         # 3) nothing found
         if raise_if_missing:
-            self.log.error(f"Section '{name}' not found in mandatory or optional config.")
+            self.logger.error(f"Section '{name}' not found in mandatory or optional config.")
             raise KeyError(f"Section '{name}' not found in mandatory or optional config.")
 
         return None
@@ -845,7 +845,7 @@ class ConfigManager:
             lut_is_attr = False
 
         if lut is None:
-            self.log.error("LUT not available for environment update.")
+            self.logger.error("LUT not available for environment update.")
             raise ValueError("LUT not available.")
 
         # choose format container
@@ -927,13 +927,13 @@ class ConfigManager:
             self.variables["lut"] = lut
 
         if warn_missing and missing:
-            self.log.warning(
+            self.logger.warning(
                 "Environment variables missing for LUT keys (set to None): "
                 + ", ".join(missing),
             )
 
         if cast_failed:
-            self.log.warning(
+            self.logger.warning(
                 "Failed to cast environment values for LUT keys: "
                 + ", ".join(cast_failed),
             )
@@ -1485,10 +1485,7 @@ class ConfigManager:
         else:
             # resolve_time_placeholders=True
             if when is None:
-                raise ValueError(
-                    "Parameter 'when' must be provided when "
-                    "resolve_time_placeholders=True."
-                )
+                raise ValueError("Parameter 'when' must be provided when resolve_time_placeholders=True.")
 
             # decide which time keys to actually resolve
             if explicit_time_keys:
@@ -1538,10 +1535,10 @@ class ConfigManager:
         # check object unfilled
         if unfilled:
             if strict:
-                self.log.error("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
+                self.logger.error("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
                 raise KeyError("The condition is strict; all placeholders must be resolved.")
             else:
-                self.log.warning("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
+                self.logger.warning("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
 
         return filled
 

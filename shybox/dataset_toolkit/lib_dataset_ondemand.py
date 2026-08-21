@@ -13,7 +13,7 @@ import pandas as pd
 
 from typing import Optional
 
-from shybox.generic_toolkit.lib_utils_geo import create_grid_from_corners
+from shybox.geo_toolkit.lib_geo_coords import create_grid_from_corners
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
