@@ -14,14 +14,12 @@ python app_merger_workflow_main.py -settings_file configuration.json -time "YYYY
 
 Examples of environment variables declarations:
 DOMAIN_NAME='italy';
-TIME_START="'1983-10-31 11:00'";
-TIME_END="'1983-10-31 12:00'";
-PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/geo/';
-PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/data/';
-PATH_METRICS='/home/fabio/Desktop/shybox/dset/case_study_destine/merger_hmc_by_domain/metrics/';
-PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/data';
-PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/log/;
-PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/tmp/
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_itwater/merger_hmc_by_domain/data';
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_itwater/merger_hmc_by_domain/geo/';
+PATH_LOG=$HOME/Desktop/shybox/exec/case_study_itwater/merger_hmc_by_domain/log/;
+PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_itwater/merger_hmc_by_domain/data/';
+PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/tmp/;
+TIME_END="'1983-09-18 15:00'";TIME_RUN="1983-09-18 00:46";TIME_START="'1983-09-18 00:00'"
 
 Version(s):
 20260331 (1.4.1) --> Extend to compute the evapotranspiration layer
