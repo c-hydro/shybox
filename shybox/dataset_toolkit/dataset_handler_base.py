@@ -1073,6 +1073,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
             else:
                 self.logger.warning('Output DataFrame is empty and writing data is not activated.')
 
+        # case of dictionary
+        if isinstance(data, dict):
+            if data:
+                append = kwargs.pop('append', False)
+                self._write_data(data, out_file, append=append, **kwargs)
+                return
+            else:
+                self.logger.warning('Output Dictionary is empty and writing data is not activated.')
+
         # if data is a numpy array, ensure there is a structure template available
         if isinstance(data, np.ndarray):
 

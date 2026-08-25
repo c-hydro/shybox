@@ -23,8 +23,8 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 
 from shybox.geo_toolkit.lib_geo_watersheds import (
-    DIRMAP, create_mask_channel, create_mask_catchment, compute_catchment_area, plot_mask_catchment,
-    snap_outlet, delineate_catchment, convert_coords_geo2idx)
+    DIRMAP, create_channel_mask, compute_grid2coords,
+    create_catchment_mask, compute_catchment_area, plot_catchment_mask, delineate_catchment)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -33,18 +33,12 @@ from shybox.geo_toolkit.lib_geo_watersheds import (
             lazy_undefined_obj=False, lazy_undefined_args=False, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
 def delineate_watershed(
-        cnet: Raster,
-        fdir: Raster,
-        sections: pd.DataFrame = None,
-        grid: sGrid = None,
-        name: str = "watershed",
-        map_fdir=DIRMAP,
-        point_type: str = "coordinate",
+        cnet: Raster,fdir: Raster, sections: pd.DataFrame = None,
+        grid: sGrid = None, map_fdir=DIRMAP,
         longitude_tag: str = "longitude", latitude_tag: str = "latitude",
         x_tag: str = "x", y_tag: str = "y",
-        snap: bool = True, debug: bool = True,
+        debug: bool = False,
         **kwargs):
-
 
     # check sections
     if sections is None:
@@ -85,8 +79,11 @@ def delineate_watershed(
         logger_stream.error("Grid object is required to delineate watersheds. Pass it using grid=<Grid>.")
         raise ValueError("Missing pysheds Grid object. Use delineate_watershed(..., grid=obj_grid)")
 
+    # create coords from grid
+    lon_2d, lat_2d = compute_grid2coords(grid)
+
     # create channel mask once
-    channel_mask = create_mask_channel(cnet)
+    channel_mask = create_channel_mask(cnet)
 
     # iterate over sections
     watersheds = {}
@@ -101,58 +98,54 @@ def delineate_watershed(
         # info section start
         logger_stream.info(f"Delineating watershed for section '{section_tag}' ... ")
 
-        # 1. recover geographical and index outlet coordinates
+        # recover geographical and index outlet coordinates
         point_lon, point_lat = float(section[longitude_tag]), float(section[latitude_tag])
         point_x, point_y = int(section[y_tag]), int(section[x_tag])
 
-        # 2. geographical coordinates -> raster indexes
-        ind_x, ind_y = convert_coords_geo2idx(grid=grid, point_lon=point_lon, point_lat=point_lat)
+        # shift to zero base index
+        point_x, point_y = point_x - 1, point_y - 1
 
-        # info index found
-        logger_stream.info(
-            f"Section '{section_tag}' coordinates: lon={point_lon}, lat={point_lat} -> x={ind_x}, y={ind_y}")
+        # info coords
+        logger_stream.info(f" ::: coordinates lon: {point_lon} lat: {point_lat} x: {point_x} y: {point_y}")
 
-        # 3. check/snap outlet to channel network
-        snap_x, snap_y = snap_outlet(obj_grid=grid, obj_mask=channel_mask, x=ind_x, y=ind_y)
-
-        # info index snapped
-        logger_stream.info(f"Section '{section_tag}' snapped: x={snap_x}, y={snap_y}")
-
-        # 4. delineate catchment using raster indexes
+        # delineate catchment using raster indexes
         obj_catchment = delineate_catchment(
             obj_grid=grid, obj_fdir=fdir,
-            x=snap_x, y=snap_y,
-            map_fdir=map_fdir, xy_type="coordinate"
+            x=point_x, y=point_y,
+            map_fdir=map_fdir, xy_type="index"
         )
 
-        # 5. create binary catchment mask
-        catchment_mask = create_mask_catchment(obj_catchment=obj_catchment)
+        # create binary catchment mask
+        catchment_mask = create_catchment_mask(obj_catchment=obj_catchment)
 
-        # 6. compute catchment area
+        # compute catchment area
         catchment_area, catchment_cells = compute_catchment_area(
             grid_values=np.asarray(catchment_mask).copy(),
             grid_transform=catchment_mask.affine,
             unit_type="kilometers",
+            transform_is_metric=False, latitude=lat_2d,
             decimal_round=2
         )
 
+        # info catchment
+        logger_stream.info(f" ::: area: {catchment_area} - cells: {catchment_cells}")
+
         # debug plot
         if debug:
-            plot_mask_catchment(catchment_mask, title=(f"{section_tag} - Area: {catchment_area:.2f} km²"))
+            plot_catchment_mask(catchment_mask, title=(f"{section_tag} - Area: {catchment_area:.2f} km²"))
 
         # save section information
         watersheds[section_tag] = {
+            "type": "watershed",
             "tag": section_tag, "section_index": section_idx,
-            "x_point": point_x, "y_point": point_y,
-            "x_by_lon": ind_x, "y_by_lat": ind_y,
-            "x_snap": snap_x, "y_snap": snap_y,
+            "x": point_x, "y": point_y,
+            "longitude": point_lon, "latitude": point_lat,
             "catchment": obj_catchment, "mask": catchment_mask,
             "section": section.to_dict()
         }
 
         # info section end
         logger_stream.info(f"Delineating watershed for section '{section_tag}' ... DONE ")
-
 
     return watersheds
 # ----------------------------------------------------------------------------------------------------------------------

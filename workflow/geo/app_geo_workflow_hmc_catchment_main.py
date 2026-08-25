@@ -224,7 +224,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['geo_data_dst']['path'],
         file_name=alg_cfg_application['geo_data_dst']['file_name'],
         data_layout='geo', file_args={},
-        file_type='geo_hmc', file_format='tiff', file_mode='local',
+        file_type='geo_watershed', file_format='tiff', file_mode='local',
         file_variable='WATERSHEDS', file_io='output',
         variable_template={
             "dims_data": {"x": "longitude", "y": "latitude"},
