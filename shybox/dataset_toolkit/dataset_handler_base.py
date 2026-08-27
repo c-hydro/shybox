@@ -1044,6 +1044,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # check data (format and type)
         check_data_format(data, self.file_format)
 
+        # adapt the time format (if list = 1 is passed to the method)
+        if isinstance(time, list) and len(time) == 1:
+            time = time[0]
+
         # define the output file
         out_file = self.get_key(time, **kwargs)
         out_path, out_name = os.path.dirname(out_file), os.path.basename(out_file)

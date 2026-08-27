@@ -95,7 +95,7 @@ class TimeManager:
     ) -> None:
 
         # Set up logger for this ConfigManager instance
-        self.log = LoggingManager.get_logger(
+        self.logger = LoggingManager.get_logger(
             logger=logger, name="TimeManager", set_as_current=False,
         )
 
@@ -258,9 +258,7 @@ class TimeManager:
         """
 
         # Set up logger for this ConfigManager instance
-        logger = LoggingManager.get_logger(
-            logger=log, name="TimeManager", set_as_current=False,
-        )
+        logger = LoggingManager.get_logger(logger=log, name="TimeManager", set_as_current=False,)
 
         # info start
         logger.info_up("Time ... ", tag="config")
@@ -285,17 +283,25 @@ class TimeManager:
                 "expected obj.lut, obj['lut'], or obj.variables['lut']."
             )
 
+        # check lut format
         if not isinstance(lut, dict):
+            logger.error('LUT is not a dict')
             raise ValueError("'lut' found, but it is not a dictionary.")
 
-        # convert LUT into TimeManager configuration
-        # time_period (int steps) + time_frequency -> timedelta string, e.g. '48H'
-        period_steps = lut.get("time_period")
+        # get time period
+        period_steps = lut.get("time_period", None)
+        # manage time period according to priority
         if period_steps is None:
-            raise ValueError("'time_period' is required in LUT.")
+            if priority in ("period", "run"):
+                raise ValueError("'time_period' is required in LUT when priority is 'period' or 'run'.")
+            # bounds priority does not require a period
+            time_period_str = None
 
-        freq_unit = lut.get("time_frequency", "H")
-        time_period_str = f"{int(period_steps)}{freq_unit}"
+        else:
+            # get time frequency
+            freq_unit = lut.get("time_frequency", "H")
+            # convert period to timedelta string
+            time_period_str = f"{int(period_steps)}{freq_unit}"
 
         # Build cfg in the exact shape expected by from_dict()
         cfg: Dict[str, Any] = {
@@ -311,18 +317,12 @@ class TimeManager:
         }
 
         # adjust cfg (priority based and update results)
-        cfg = cls.adjust(cfg, priority=time_priority, ref_key=time_ref)
+        cfg = cls.adjust(cfg, priority=time_priority, ref_key=time_ref, log=logger)
 
-        # Create TimeManager using the central from_dict()
-        tm = cls.from_dict(
-            cfg,
-            tz=tz,
-            time_as_string=time_as_string,
-            time_as_int=time_as_int,
-            log=logger,
-        )
+        # create TimeManager object using the central from_dict()
+        tm = cls.from_dict(cfg,tz=tz, time_as_string=time_as_string, time_as_int=time_as_int, log=logger,)
 
-        # Optional derived key: time_restart
+        # optional derived key for hmc or s3m models: time_restart
         if "time_restart" in lut:
 
             restart_as_str = False
@@ -344,9 +344,8 @@ class TimeManager:
         logger.info_down("Time ... DONE", tag="config")
 
         return tm
-    # ------------------------------------------------------------------ #
-    # from_dict: main factory
-    # ------------------------------------------------------------------ #
+
+    # class factory using dict cfg object
     @classmethod
     def from_dict(
         cls,
@@ -493,10 +492,7 @@ class TimeManager:
             logger=logger,
         )
 
-    # ------------------------------------------------------------------ #
     # time_as_string / time_as_int handling for core fields
-    # ------------------------------------------------------------------ #
-
     def __dir__(self):
         """
         Make derived keys (time_restart, time_restart_ts, ...) visible in dir()
@@ -543,73 +539,53 @@ class TimeManager:
         """
         self.time_as_int = self._validate_time_as_int(fields)
 
-    # ------------------------------------------------------------------ #
     # Internal formatter
-    # ------------------------------------------------------------------ #
-
     @staticmethod
     def _format_ts(ts: pd.Timestamp, template: Optional[str]) -> str:
         if template:
             return ts.strftime(template)
         return ts.isoformat()
 
-    # ------------------------------------------------------------------ #
     # Public timestamp accessors (always Timestamp) for core fields
-    # ------------------------------------------------------------------ #
-
     @property
     def time_run_ts(self) -> pd.Timestamp:
         return self._time_run
-
     @property
     def time_start_ts(self) -> pd.Timestamp:
         return self._time_start
-
     @property
     def time_end_ts(self) -> pd.Timestamp:
         return self._time_end
-
     @property
     def time_period_td(self) -> pd.Timedelta:
-        """
-        Always return the raw Timedelta for time_period.
-        """
         return self._time_period
-
     @property
     def time_frequency(self) -> pd.Timedelta:
         return self._time_frequency
-
     @property
     def time_rounding(self) -> pd.Timedelta:
         return self._time_rounding
-
     @property
     def tz(self) -> str:
         return self._tz
 
-    # ------------------------------------------------------------------ #
-    # Core properties (string/int OR native, depending on flags)
-    # ------------------------------------------------------------------ #
 
+    # Core properties (string/int OR native, depending on flags)
     @property
     def time_run(self):
         if "time_run" in self.time_as_string:
             return self._format_ts(self._time_run, None)
         return self._time_run
-
     @property
     def time_start(self):
         if "time_start" in self.time_as_string:
             return self._format_ts(self._time_start, self._time_start_template)
         return self._time_start
-
     @property
     def time_end(self):
         if "time_end" in self.time_as_string:
             return self._format_ts(self._time_end, self._time_end_template)
         return self._time_end
-
     @property
     def time_period(self):
         """
@@ -623,10 +599,7 @@ class TimeManager:
             return int(self._time_period / self._time_frequency)
         return self._time_period
 
-    # ------------------------------------------------------------------ #
     # Derived time keys
-    # ------------------------------------------------------------------ #
-
     def _get_ref_timestamp(self, name: str) -> pd.Timestamp:
         """
         Resolve a reference name to a Timestamp.
@@ -731,10 +704,7 @@ class TimeManager:
 
         raise AttributeError(name)
 
-    # ------------------------------------------------------------------ #
     # Range & export
-    # ------------------------------------------------------------------ #
-
     @property
     def time_range(self) -> pd.DatetimeIndex:
         """Return a pandas date_range from time_start to time_end (inclusive)."""
@@ -771,10 +741,7 @@ class TimeManager:
 
         return data
 
-    # ------------------------------------------------------------------ #
     # Flatten / alignment helpers (operate on timestamps)
-    # ------------------------------------------------------------------ #
-
     def _adjust_for_new_start(self, new_start: pd.Timestamp, keep_end: bool = True) -> None:
         if new_start.tzinfo is None:
             new_start = new_start.tz_localize(self._tz)
@@ -912,9 +879,7 @@ class TimeManager:
 
         self._adjust_for_new_end(new_end, keep_start=keep_start)
 
-
-    # ------------------------------------------------------------------ #
-    # Helpers for view()#
+    # Helpers for view()
     @staticmethod
     def __flat_dict_key(
         data: Dict[str, Any],
@@ -942,7 +907,10 @@ class TimeManager:
         return flat
 
     @classmethod
-    def adjust(cls, cfg: Dict[str, Any], priority: str = "bounds", ref_key: str = "time_start") -> Dict[str, Any]:
+    def adjust(cls, cfg: Dict[str, Any],
+               priority: str = "bounds", ref_key: str = "time_start",
+               log: LoggingManager | None = None,
+               ) -> Dict[str, Any]:
         """
         Update cfg in-place to keep time_period / time_start / time_end consistent.
 
@@ -962,6 +930,11 @@ class TimeManager:
             - if time_run is defined and is outside [time_start, time_end], emit a warning
         """
 
+        # Set up logger for this ConfigManager instance
+        logger = LoggingManager.get_logger(
+            logger=log, name="TimeManager", set_as_current=False,
+        )
+
         # check if ref_key is valid
         if ref_key not in list(cfg.keys()):
             raise ValueError(
@@ -974,6 +947,7 @@ class TimeManager:
             if ref_key is not None:
                 cfg_key = ref_key
             else:
+                cls.logger.error("Priority is 'period', but ref_key is None.")
                 raise ValueError("ref_key must be provided when priority='period'.")
 
             time_ref = cfg.get(cfg_key)
@@ -1065,12 +1039,14 @@ class TimeManager:
                     "Priority is 'times', but 'time_start' and/or 'time_end' are None."
                 )
 
+            # parse time start and time end
             ts_start = pd.Timestamp(time_start)
             ts_end = pd.Timestamp(time_end)
-
+            # check time start and time end
             if ts_end < ts_start:
                 raise RuntimeError("'time_end' must be greater than or equal to 'time_start'.")
 
+            # compute time period
             ts_delta = ts_end - ts_start
             time_frequency = cfg["time_frequency"]
             if time_frequency == "h" or time_frequency == "H":
@@ -1084,14 +1060,20 @@ class TimeManager:
             cfg["time_end"] = ts_end
             cfg["time_period"] = f"{ts_period}{time_frequency}"
 
+            # assign time_run using different configuration
             if ref_key == 'time_start':
                 cfg["time_run"] = ts_start
             elif ref_key == 'time_end':
                 cfg["time_run"] = ts_end
             elif ref_key == 'time_run':
                 if time_run is not None:
-                    ts_run = pd.Timestamp(time_run)
-                    cfg["time_run"] = ts_run
+                    try:
+                        ts_run = pd.Timestamp(time_run)
+                        cfg["time_run"] = ts_run
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            'In "bounds" priority invalid "time_run" value "{time_run}". Using "time_end" instead.')
+                        cfg["time_run"] = cfg.get("time_end", None)
                 else:
                     cfg["time_run"] = None
             elif ref_key is None:
@@ -1102,7 +1084,7 @@ class TimeManager:
                     f"Valid options are: 'time_start', 'time_end', or None."
                 )
         else:
-            raise RuntimeError(f"Unsupported priority '{priority}'. Use 'period' or 'bounds'.")
+            raise RuntimeError(f"Unsupported priority '{priority}'. Use 'period', 'run' or 'bounds'.")
 
         # Check time_run against the final time window
         time_run = cfg.get("time_run")
@@ -1111,7 +1093,7 @@ class TimeManager:
             cfg["time_run"] = ts_run
 
             if not (cfg["time_start"] <= ts_run <= cfg["time_end"]):
-                warnings.warn(
+                logger.warning(
                     f"'time_run' ({ts_run}) is outside the period "
                     f"[{cfg['time_start']}, {cfg['time_end']}].",
                     UserWarning,
@@ -1129,8 +1111,10 @@ class TimeManager:
         elif time_frequency == "D":
             ts_period = int(ts_delta.total_seconds() / 86400)
         else:
+            logger.error('Time_frequency is not supported.')
             raise NotImplementedError(f"Time frequency '{time_frequency}' is not supported")
 
+        # return time info
         cfg["time_start"] = ts_start
         cfg["time_end"] = ts_end
         cfg["time_period"] = f"{ts_period}{time_frequency}"
@@ -1239,7 +1223,6 @@ class TimeManager:
 
         return final_table
 
-    # ------------------------------------------------------------------ #
     # Representation
     def __repr__(self) -> str:
         return (

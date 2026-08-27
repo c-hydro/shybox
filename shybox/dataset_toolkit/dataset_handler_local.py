@@ -312,12 +312,12 @@ class DataLocal(Dataset):
 
         # message info end
         if path_tags:
-            self.logger.info_up(
+            self.logger.info_down(
                 f"Write data to {path} ... DONE "
                 f"[tags {', '.join(path_tags)} filled by the output procedure]"
             )
         else:
-            self.logger.info_up(f"Write data to {path} ... DONE")
+            self.logger.info_down(f"Write data to {path} ... DONE")
 
     # method to remove data
     def _rm_data(self, path) -> None:

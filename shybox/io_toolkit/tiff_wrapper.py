@@ -18,7 +18,7 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# TIFF writer - watershed
+# composer to set decorators to the base method
 write_tiff_watershed = compose_decorators(
     write_tiff_base,
     iterate_obj,

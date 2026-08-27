@@ -140,7 +140,7 @@ def main(view_table: bool = False):
 
     # define logging instance
     logging_handle = LoggingManager(
-        name="shybox_algorithm_merger_by_domain_hmc_sm",
+        name="shybox_algorithm_merger_by_domain_hmc_et",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------
@@ -255,6 +255,7 @@ def main(view_table: bool = False):
             },
             time_signature='current',
             time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
+            logger=logging_handle
         )
         # ------------------------------------------------------------------------------------------------------------------
 

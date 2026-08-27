@@ -30,6 +30,32 @@ def normalize_deps(deps):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to count variables in package
+@with_logger(var_name='logger_stream')
+def count_variables(data_package_in, data_package_out, options):
+
+    n_vars_in = len(data_package_in.variable_template['vars_data'].keys())
+    n_vars_out = len(data_package_out.variable_template['vars_data'].keys())
+
+    expected = options.get("variables", {})
+    expected_in, expected_out = expected.get("in", None), expected.get("out", None)
+    if expected_in is not None and n_vars_in != expected_in:
+        raise ValueError(f"Invalid number of input variables: expected {expected_in}, found {n_vars_in}.")
+    if expected_out is not None and n_vars_out != expected_out:
+        raise ValueError(f"Invalid number of output variables: expected {expected_out}, found {n_vars_out}.")
+
+    # define variable configuration code
+    if n_vars_in == n_vars_out:
+        code_vars = 1  # same number of variables
+    elif n_vars_in > n_vars_out:
+        code_vars = 2  # more input than output variables
+    else:
+        code_vars = 3  # fewer input than output variables
+
+    return n_vars_in, n_vars_out, code_vars
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
 # method to ensure list
 @with_logger(var_name='logger_stream')
 def as_list(maybe_seq):
