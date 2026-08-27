@@ -18,6 +18,7 @@ from datetime import datetime
 from shybox.dataset_toolkit.dataset_handler_base import Dataset
 from shybox.dataset_toolkit.lib_dataset_generic import write_to_file, read_from_file, rm_file
 from shybox.generic_toolkit.lib_utils_tmp import ensure_folder_tmp, ensure_file_tmp
+from shybox.io_toolkit.lib_io_utils import get_unresolved_tags
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from typing import Optional
@@ -294,7 +295,14 @@ class DataLocal(Dataset):
     def _write_data(self, data: (xr.DataArray, pd.DataFrame), path: str, **kwargs) -> None:
 
         # message info start
-        self.logger.info_up(f"Write data to {path} ... ")
+        path_tags = get_unresolved_tags(path)
+        if path_tags:
+            self.logger.info_up(
+                f"Write data to {path} ... "
+                f"[tags {', '.join(path_tags)} filled by the output procedure]"
+            )
+        else:
+            self.logger.info_up(f"Write data to {path} ... ")
 
         # method to write data to file
         write_to_file(
@@ -303,7 +311,13 @@ class DataLocal(Dataset):
             **kwargs)
 
         # message info end
-        self.logger.info_down(f"Write data to {path} ... DONE")
+        if path_tags:
+            self.logger.info_down(
+                f"Write data to {path} ... DONE "
+                f"[tags {', '.join(path_tags)} filled by the output procedure]"
+            )
+        else:
+            self.logger.info_down(f"Write data to {path} ... DONE")
 
     # method to remove data
     def _rm_data(self, path) -> None:

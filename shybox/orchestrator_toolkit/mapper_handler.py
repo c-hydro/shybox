@@ -18,12 +18,14 @@ class Mapper:
         self,
         data_collections_in: Mapping[str, Union[Any, List[Any]]],
         data_collections_out: Mapping[str, Union[Any, List[Any]]],
+        data_count: Optional[int] = 1,
         logger: LoggingManager = None,
     ) -> None:
         self.logger = logger or LoggingManager(name="Mapper")
         self._data_in = data_collections_in
         self._data_out = data_collections_out
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
+        self._data_count: int = data_count
 
     def build_mapping(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
 
@@ -100,7 +102,8 @@ class Mapper:
                 for idx, partial in enumerate(objs):
 
                     # sort labels and items
-                    labels_sorted, workflow_sorted, items_sorted = self._sorted_labels_and_items(partial, key, side, idx)
+                    labels_sorted, workflow_sorted, items_sorted = self._sorted_labels_and_items(
+                        partial, key, side, idx, count=self._data_count)
 
                     # check length mismatch
                     if len(labels_sorted) != len(items_sorted):
@@ -173,6 +176,7 @@ class Mapper:
         self,
         priority_vars: Optional[List[str]] = None,
         rows: Optional[List[Dict[str, Any]]] = None,
+        code: Optional[int] = 1,
         *,
         sort_others: bool = True,
         start_id: int = 1,
@@ -304,6 +308,7 @@ class Mapper:
         tag: str,
         side: str,
         index_in_tag: int,
+        count: int = 1,
     ) -> Tuple[
         List[str],
         List[str],
@@ -345,11 +350,20 @@ class Mapper:
         # deterministic order
         labels_sorted = sorted(labels)
 
-        # workflow belongs to the whole variable group
-        workflow = "|".join(workflows)
-
-        # same workflow associated with every variable
-        workflow_sorted = [workflow] * len(labels_sorted)
+        # manage workflow according to variable count relation
+        if count == 1:
+            # same number of input/output variables:
+            # keep workflow and labels separated, one-to-one
+            workflow_sorted = list(workflows)
+            labels_sorted = list(labels_sorted)
+        elif count in (2, 3):
+            # different number of input/output variables:
+            # workflow belongs to the whole variable group
+            workflow = "|".join(workflows)
+            # same grouped workflow associated with every variable
+            workflow_sorted = [workflow] * len(labels_sorted)
+        else:
+            raise ValueError(f"Unsupported data_count '{data_count}'. Expected 1, 2 or 3.")
 
         # get variable template
         variable_template = self._getattr_or_key(

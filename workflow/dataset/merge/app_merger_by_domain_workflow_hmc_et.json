@@ -280,7 +280,7 @@
         "EVAPOTRANSPIRATION": [
             {
               "function": "compute_et",
-              "ref_no_data": 0, "value_no_data": 0,
+              "ref_no_data": -9999, "value_no_data": -9999,
               "thr_sm_min_flag": true, "thr_sm_min_value": 0.0,
               "thr_sm_max_flag": true, "thr_sm_max_value": 1.0,
               "interp_flag" : true,

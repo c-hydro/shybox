@@ -139,18 +139,8 @@ class ProcessorContainer:
     # method to run the process
     def run(self, time: (dt.datetime, str, pd.Timestamp), **kwargs) -> (None, None):
 
-        # check time information
-        if isinstance(time, pd.Timestamp):
-            time = [time]
-        elif isinstance(time, list):
-            if isinstance(time[0], pd.Timestamp):
-                pass
-            else:
-                self.logger.error('Time format is not pd.Timestamp in the time list')
-                raise ValueError('Time format is not pd.Timestamp in the time list')
-        else:
-            self.logger.error('Time format is not pd.Timestamp in the time step')
-            raise ValueError('Time format is not pd.Timestamp in the time step')
+        # parse timestamps
+        time = _parse_timestamps(time)
 
         # adjust list if only one timestamp is provided
         if isinstance(time, list):
@@ -848,13 +838,11 @@ class ProcessorContainer:
 
             # Optionally attach dataset-level attributes
             fx_save.attrs["workflow"] = fx_variable_wf
-            fx_save.attrs["tag1"] = fx_variable_name
             fx_save.attrs["name"] = fx_variable_name
 
         elif isinstance(fx_save, pd.DataFrame):
 
             fx_save.attrs["workflow"] = fx_variable_wf
-            fx_save.attrs["tag1"] = fx_variable_name
             fx_save.attrs["name"] = fx_variable_name
 
         elif isinstance(fx_save, dict):
@@ -867,6 +855,7 @@ class ProcessorContainer:
                 self.logger.error("fx_var must be a string or list when fx_save is a dictionary.")
                 raise TypeError("fx_var must be a string or list when fx_save is a dictionary.")
 
+            # iterate over variables
             for var in variables:
 
                 # check variable availability
@@ -890,7 +879,6 @@ class ProcessorContainer:
 
                     # dataset-level attributes
                     var_data.attrs["workflow"] = fx_variable_wf
-                    var_data.attrs["tag1"] = fx_variable_name
                     var_data.attrs["name"] = fx_variable_name
 
                 # pandas DataFrame
@@ -901,12 +889,18 @@ class ProcessorContainer:
                     # DataFrame does not have xarray .attrs semantics
                     # for variables, but metadata can be stored here
                     var_data.attrs["workflow"] = fx_variable_wf
-                    var_data.attrs["tag1"] = fx_variable_name
                     var_data.attrs["name"] = fx_variable_name
 
                 # None
                 elif var_data is None:
                     self.logger.warning(f"Variable '{var}' is None. Attributes cannot be assigned.")
+
+                elif isinstance(var_data, dict):
+
+                    # add to dict the fx settings
+                    fx_save[var]['workflow'] = fx_variable_wf
+                    fx_save[var]['name'] = fx_variable_name
+
                 else:
                     self.logger.error(f"Variable '{var}' has unsupported type: {type(var_data)}")
                     raise TypeError(f"Variable '{var}' has unsupported type: {type(var_data)}")
@@ -1063,6 +1057,10 @@ class ProcessorContainer:
                     # get signature to use in write_data (if time signature is defined in the output object)
                     time_signature = self.out_obj.time_signature
 
+                    # parse timestamps
+                    time = _parse_timestamps(time)
+
+                    # check time mode
                     if time_signature == 'step' or time_signature == 'current':
                         pass
                     elif time_signature == 'range' or time_signature == 'start/end':
@@ -1345,4 +1343,23 @@ def _reduce_if_same_timestamps(timestamps):
         return first  # All elements are the same
     else:
         return timestamps  # Elements differ, return as-is
+
+# method to parse time stamps
+@with_logger(var_name="logger_stream")
+def _parse_timestamps(time):
+
+    # check time information
+    if isinstance(time, pd.Timestamp):
+        time = [time]
+    elif isinstance(time, list):
+        if isinstance(time[0], pd.Timestamp):
+            pass
+        else:
+            logger_stream.error('Time format is not pd.Timestamp in the time list')
+            raise ValueError('Time format is not pd.Timestamp in the time list')
+    else:
+        logger_stream.error('Time format is not pd.Timestamp in the time step')
+        raise ValueError('Time format is not pd.Timestamp in the time step')
+
+    return time
 # ----------------------------------------------------------------------------------------------------------------------

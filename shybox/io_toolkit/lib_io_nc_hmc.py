@@ -98,10 +98,12 @@ def _geo_is_complete(ds: xr.Dataset,
     return True
 
 # method to read hmc dataset from netcdf file
+@with_logger(var_name='logger_stream')
 def read_datasets_hmc(
         path: str, debug: bool = False,
         y_dim: str = "south_north", x_dim: str = "west_east",
-        lon_name: str = "Longitude", lat_name: str = "Latitude",) -> xr.Dataset:
+        lon_name: str = "Longitude", lat_name: str = "Latitude",
+        mask_name: str = 'SM', mask_no_data: float = -9999) -> xr.Dataset:
 
     # read dataset
     ds = xr.open_dataset(path)
@@ -142,10 +144,31 @@ def read_datasets_hmc(
     # Flip dataset along latitude dimension
     ds_new = ds_new.isel(south_north=slice(None, None, -1))
 
+    # apply reference mask
+    if mask_name is not None:
+        if mask_name not in ds_new:
+            logger_stream.warning(f"Mask variable '{mask_name}' is not available in dataset. Return dataset unmasked")
+        else:
+            # get reference mask:
+            mask_da = ds_new[mask_name]
+            # define reference mask
+            mask_valid = (np.isfinite(mask_da) & (mask_da != mask_no_data))
+
+            # apply mask to all spatial variables
+            for var_name, var_da in ds_new.data_vars.items():
+                # skip geographical variables
+                if var_name in [lat_name, lon_name]:
+                    continue
+
+                # apply only to variables sharing the spatial dimensions
+                if y_dim in var_da.dims and x_dim in var_da.dims:
+                    ds_new[var_name] = var_da.where(mask_valid, mask_no_data)
+
     # debug testing variable(s)
     if debug:
         plot_data(ds_new['Latitude'].values)
         plot_data(ds_new['SM'].values)
+        plot_data(ds_new['ET'].values)
 
     return ds_new
 

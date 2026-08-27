@@ -11,12 +11,33 @@ Version:       '1.0.0'
 # libraries
 import logging
 import re
-from datetime import datetime
 import dateutil.parser as dparser
-
 import numpy as np
 import pandas as pd
 import xarray as xr
+
+from datetime import datetime
+from pathlib import Path
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to make file path
+def make_file_path(path, create_folder=True):
+
+    # convert to Path if needed
+    if not isinstance(path, Path):
+        file_path = Path(path)
+    else:
+        file_path = path
+
+    # get folder and filename
+    file_folder, file_name = file_path.parent, file_path.name
+
+    # create folder only if an explicit folder is defined
+    if create_folder and file_folder != Path("."):
+        file_folder.mkdir(parents=True, exist_ok=True)
+
+    return file_path, file_folder, file_name
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -32,18 +53,47 @@ def extract_time_from_string(string: str, time_format: str = None):
     return time_stamp
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get unresolved tags
+def get_unresolved_tags(string):
+    return re.findall(r"\{([^{}]+)\}", str(string))
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to substitute string by tags
-def substitute_string_by_tags(string: str, tags: dict = None) -> str:
-    if tags is None:
-        tags = {}
-    for key, value in tags.items():
-        key = '{' + key + '}'
-        string = string.replace(key, value)
-    return string
-# ----------------------------------------------------------------------------------------------------------------------
+def substitute_string_by_tags(string: str, tags: dict = None, warn_missing: bool = True) -> str:
 
+        # initialize tags
+        if tags is None:
+            tags = {}
+        # check string
+        if string is None:
+            logger_stream.warning('String is None. No tag substitution is applied.')
+            return string
+
+        # substitute available tags
+        for key, value in tags.items():
+            # define tag
+            tag = '{' + str(key) + '}'
+            # check if tag is available in string
+            if tag not in string:
+                continue
+
+            # check tag value
+            if value is None:
+                logger_stream.warning(f'Tag "{tag}" is defined but its value is None. The tag is kept unchanged.')
+                continue
+            # substitute tag
+            string = string.replace(tag, str(value))
+
+        # check unresolved tags
+        if warn_missing:
+            tags_missing = re.findall(r'\{([^{}]+)\}', string)
+            for tag_missing in tags_missing:
+                logger_stream.warning(f'Tag "{{{tag_missing}}}" is not defined. The tag is kept unchanged.')
+
+        return string
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to substitute string by date

@@ -1,3 +1,12 @@
+"""
+Library Features:
+
+Name:          lib_io_ascii_geo
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20260824'
+Version:       '1.0.0'
+"""
+
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
@@ -6,8 +15,6 @@ import pandas as pd
 
 from collections import OrderedDict
 from copy import deepcopy
-
-from shybox.io_toolkit.lib_io_utils import parse_row2str
 # ----------------------------------------------------------------------------------------------------------------------
 
 

@@ -21,10 +21,9 @@ PROJ_LIB=""
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-import warnings
 import os
 import numpy as np
-import pandas as pd
+
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -71,6 +70,33 @@ def create_grid(file_raster, name_raster='grid'):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to compute grid longitude and latitude
+def compute_grid2coords(grid):
+
+    # get grid shape
+    nrows, ncols = grid.shape
+
+    # get affine transform
+    transform = grid.affine
+
+    # create row and column indexes
+    cols, rows = np.meshgrid(np.arange(ncols), np.arange(nrows))
+
+    # compute coordinates at cell centers
+    grid_lon = (transform.c
+        + (cols + 0.5) * transform.a
+        + (rows + 0.5) * transform.b
+    )
+
+    grid_lat = (transform.f
+        + (cols + 0.5) * transform.d
+        + (rows + 0.5) * transform.e
+    )
+
+    return grid_lon, grid_lat
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
 # method to read flow direction ascii file
 @with_logger(var_name="logger_stream")
 def read_geo(file_name, name_data='raster', obj_data=None, mandatory_data=True):
@@ -98,9 +124,12 @@ def read_geo(file_name, name_data='raster', obj_data=None, mandatory_data=True):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to create mask
+# method to create channel_mask
 @with_logger(var_name="logger_stream")
-def create_mask_channel(obj_channel, channel_value=1):
+def create_channel_mask(obj_channel, channel_value=1):
+
+    # import pysheds library
+    Grid, Raster = import_pysheds()
 
     # create mask array
     arr_mask = np.asarray(obj_channel) == channel_value
@@ -116,45 +145,28 @@ def create_mask_channel(obj_channel, channel_value=1):
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-def snap_outlet(obj_grid, obj_mask, x, y):
-
-    arr_mask = np.asarray(obj_mask)
-
-    row = int(y)
-    col = int(x)
-
-    if arr_mask[row, col] > 0:
-        return x, y
-
-    x_snap, y_snap = obj_grid.snap_to_mask(
-        obj_mask,
-        (x, y)
-    )
-
-    return x_snap, y_snap
-
 # ----------------------------------------------------------------------------------------------------------------------
 # method to snap outlet
 @with_logger(var_name="logger_stream")
-def snap_outlet_OLD(obj_grid, obj_mask, x, y):
+def snap_outlet(obj_grid, obj_mask, x, y):
 
-    # cast x and y
-    col, row = int(x), int(y)
-    # get arra mask
-    arr_mask = np.asarray(obj_mask, dtype=bool)
+    # get data
+    arr_mask = np.asarray(obj_mask)
+    row, col = int(y), int(x)
 
     # check bounds
     nrows, ncols = arr_mask.shape
     if not (0 <= row < nrows and 0 <= col < ncols):
         raise IndexError(f"Outlet (row={row}, col={col}) is outside raster shape {arr_mask.shape}")
 
-    # outlet already belongs to channel network
-    if arr_mask[row, col]:
+    # if outlet is over the channel network
+    if arr_mask[row, col] > 0:
         logger_stream.info(f"Outlet already on channel network: row={row}, col={col}")
-        return col, row
+        return x, y
 
-    # otherwise find nearest channel cell
-    x_snap, y_snap = obj_grid.snap_to_mask(obj_mask, (col, row), xytype="index")
+    x_snap, y_snap = obj_grid.snap_to_mask(
+        obj_mask, (x, y), xytype="index")
+
     # info coordinates
     logger_stream.info(f"Outlet moved from (row={row}, col={col}) to row={y_snap}, col={x_snap})")
 
@@ -164,18 +176,18 @@ def snap_outlet_OLD(obj_grid, obj_mask, x, y):
 # ----------------------------------------------------------------------------------------------------------------------
 # method to delineate catchment
 @with_logger(var_name="logger_stream")
-def delineate_catchment(obj_grid, obj_fdir, x, y, map_fdir=DIRMAP, xy_type='coordinate'):
-    obj_catchment = obj_grid.catchment(
-        x=x, y=y,
-        fdir=obj_fdir, dirmap=map_fdir,
-        xytype=xy_type)
+def delineate_catchment(obj_grid, obj_fdir, x, y, map_fdir=DIRMAP, xy_type='index'):
+    obj_catchment = obj_grid.catchment(x=x, y=y,fdir=obj_fdir, dirmap=map_fdir,xytype=xy_type)
     return obj_catchment
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to create binary catchment map
+# method to create catchment binary map
 @with_logger(var_name="logger_stream")
-def create_mask_catchment(obj_catchment):
+def create_catchment_mask(obj_catchment):
+
+    # import pysheds library
+    Grid, Raster = import_pysheds()
 
     # create mask array
     arr_mask = np.asarray(obj_catchment,dtype=bool)
@@ -190,70 +202,74 @@ def create_mask_catchment(obj_catchment):
     return obj_mask
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to compute catchment area
 def compute_catchment_area(
-        grid_values,
-        grid_transform,
-        unit_type='kilometers',
-        decimal_round=2):
+        grid_values, grid_transform,
+        unit_type='kilometers', transform_is_metric=True,
+        latitude=None, decimal_round=2):
 
-    grid_values = np.asarray(grid_values).copy()
+    # get grid values
+    grid_values = np.asarray(grid_values)
+    # create catchment mask
+    mask_catchment = (np.isfinite(grid_values) &(grid_values > 0))
 
-    grid_values[grid_values <= 0] = 0
-    grid_values[grid_values > 0] = 1
+    # count catchment cells
+    grid_n = int(np.count_nonzero(mask_catchment))
+    # get grid resolution
+    res_x, res_y = abs(grid_transform[0]), abs(grid_transform[4])
 
-    grid_n = np.sum(grid_values)
-    grid_area = (grid_n * abs(grid_transform[0]) * abs(grid_transform[4]))
+    # compute cell area
+    if transform_is_metric:
+        # transform units are meters
+        cell_area_m2 = res_x * res_y
+    else:
 
+        # check latitude availability
+        if latitude is None:
+            raise ValueError("'latitude' must be provided when transform_is_metric=False")
+
+        # latitude can be scalar or grid
+        latitude = np.asarray(latitude)
+        if latitude.ndim > 0:
+            if latitude.shape != grid_values.shape:
+                raise ValueError("'latitude' grid must have the same shape as 'grid_values'")
+
+            # representative latitude of catchment
+            latitude_ref = float(np.nanmean(latitude[mask_catchment]))
+
+        else:
+            latitude_ref = float(latitude)
+
+        # approximate degree -> meters
+        meters_per_degree_lat = 111_320.0
+        meters_per_degree_lon = (111_320.0 * np.cos(np.deg2rad(latitude_ref)))
+
+        cell_size_x_m = res_x * meters_per_degree_lon
+        cell_size_y_m = res_y * meters_per_degree_lat
+        cell_area_m2 = cell_size_x_m * cell_size_y_m
+
+    # compute total catchment area
+    grid_area_m2 = float(grid_n * cell_area_m2)
+
+    # convert units
     if unit_type == 'kilometers':
-        grid_area /= 1_000_000
+        grid_area = grid_area_m2 / 1_000_000.0
     elif unit_type == 'meters':
-        pass
+        grid_area = grid_area_m2
     else:
         raise NotImplementedError(f"Unit type '{unit_type}' is not supported")
 
-    grid_area = np.round(grid_area,decimal_round)
+    # force scalar output
+    grid_area = float(np.round(grid_area, decimal_round))
 
     return grid_area, grid_n
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to compute catchment area
+# method to plot catchment mask
 @with_logger(var_name="logger_stream")
-def compute_area_catchment(obj_mask: Any, unit: str = "km2"):
-
-    # convert to array
-    arr_mask = np.asarray(obj_mask, dtype=bool)
-
-    # number of active catchment cells
-    n_cells = np.count_nonzero(arr_mask)
-    # affine transform
-    affine = obj_mask.affine
-
-    # pixel dimensions
-    dx, dy = abs(affine.a), abs(affine.e)
-
-    # pixel area
-    area_cell = dx * dy
-    # total area
-    area = n_cells * area_cell
-
-    if unit == "km2":
-        area = area / 1e6
-    elif unit == "ha":
-        area = area / 1e4
-    elif unit == "m2":
-        pass
-    else:
-        raise ValueError(f"Unsupported area unit '{unit}'. Supported units: 'm2', 'km2', 'ha'")
-
-    logger_stream.info(f"Catchment area: {area:.3f} {unit} ({n_cells} cells, cell size={dx} x {dy})")
-
-    return area
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
-# method to plot catchment area
-@with_logger(var_name="logger_stream")
-def plot_mask_catchment(
+def plot_catchment_mask(
         obj_mask: Any,
         title: str = "Catchment mask",
         show: bool = True):
@@ -277,70 +293,15 @@ def plot_mask_catchment(
     return fig, ax
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
 # method to convert raster to array
-def convert_raster_2_array(
-        obj_raster: Any,
-        obj_dtype=float):
-
-    return np.asarray(
-        obj_raster,
-        dtype=obj_dtype
-    )
+def convert_raster_2_array(obj_raster: Any, obj_dtype=float):
+    return np.asarray(obj_raster,dtype=obj_dtype)
 # ----------------------------------------------------------------------------------------------------------------------
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to convert geographical coordinates to raster indexes
-def convert_coords_geo2idx(
-        grid,
-        point_lon,
-        point_lat):
-
-    point_x, point_y = grid.nearest_cell(
-        point_lon,
-        point_lat
-    )
-
+def convert_coords_geo2idx(grid, point_lon, point_lat):
+    point_x, point_y = grid.nearest_cell(point_lon, point_lat)
     return point_x, point_y
-# ----------------------------------------------------------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# method to snap raster-index point to channel/accumulation mask
-def snap_coords_point(
-        x,
-        y,
-        grid,
-        obj_mask):
-
-    x_snap, y_snap = grid.snap_to_mask(
-        obj_mask,
-        (x, y)
-    )
-
-    return x_snap, y_snap
-# ----------------------------------------------------------------------------------------------------------------------
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-# method to compute catchment mask
-def compute_catchment_mask(
-        x_out,
-        y_out,
-        grid_fdir,
-        obj_fdir,
-        map_fdir=DIRMAP,
-        xy_type='index'):
-
-    obj_catch = grid_fdir.catchment(
-        x=x_out,
-        y=y_out,
-        fdir=obj_fdir,
-        dirmap=map_fdir,
-        xytype=xy_type
-    )
-
-    return obj_catch
 # ----------------------------------------------------------------------------------------------------------------------

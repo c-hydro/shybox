@@ -49,6 +49,9 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.generic_toolkit.lib_utils_code import deprecated
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
+# wrappers
+from shybox.io_toolkit.tiff_wrapper import write_tiff_watershed
+
 # manage logger
 try:
     from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -78,7 +81,7 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write a string to a {file_format} file.')
         
     elif isinstance(data, dict):
-        if file_format not in ['json', 'ascii', 'txt']:
+        if file_format not in ['json', 'ascii', 'txt', 'tiff', 'tif']:
             raise ValueError(f'Cannot write a dictionary to a {file_format} file.')
         
     elif 'gpd' in globals() and isinstance(data, gpd.GeoDataFrame):
@@ -111,37 +114,30 @@ def get_zip_from_path(path: str) -> (str, None):
 # method to get format from path
 @with_logger(var_name="logger_stream")
 def get_format_from_path(path: str) -> str:
+
     # get the file extension
     extension = path.split('.')[-1]
 
     # check if the file is a csv
     if extension == 'csv':
         return 'csv'
-
     # check if the file is a geotiff
     elif extension == 'tif' or extension == 'tiff':
         return 'geotiff'
-
     # check if the file is a netcdf
     elif extension in ['nc', 'nc4', 'netcdf']:
         return 'netcdf'
-
     # check if the file is a grib
     elif extension in ['grib', 'grb', 'grb2']:
         return 'grib'
-    
     elif extension in ['json', 'geojson']:
         return 'json'
-    
     elif extension == 'txt':
         return 'txt'
-    
     elif extension == 'shp':
         return 'shp'
-    
     elif extension in ['png', 'pdf']:
         return 'file'
-
     elif extension in ['tmp', 'temp']:
         return 'tmp'
 
@@ -459,6 +455,16 @@ def write_to_file(data, path,
     elif file_format == 'geotiff':
 
         data.rio.to_raster(path, compress = 'LZW')
+
+    elif file_format == 'tiff' or file_format == 'tif':
+        if file_type == 'geo_watershed':
+
+            # wrap the tiff base for watershed case
+            write_tiff_watershed(data, file_path=path, **kwargs)
+
+        else:
+            logger_stream.error(f'File type not supported for tiff writing: {file_type}')
+            raise ValueError(f'File type not supported for tiff writing: {file_type}')
 
     # write the data to a netcdf
     elif file_format == 'netcdf':
