@@ -6,7 +6,7 @@ Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20260309'
 Version:       '1.1.0'
 """
-import numpy as np
+
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import pandas as pd

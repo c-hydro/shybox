@@ -40,7 +40,7 @@ from shybox.io_toolkit.lib_io_ascii_points import read_points_1d
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
-from shybox.io_toolkit.lib_io_nc_hmc import read_datasets_hmc, write_dataset_hmc, write_ts_hmc
+from shybox.io_toolkit.lib_io_nc_hmc import read_forcing_hmc, read_results_hmc, write_dataset_hmc, write_ts_hmc
 from shybox.io_toolkit.lib_io_nc_other import read_dataset_itwater, write_dataset_itwater
 from shybox.geo_toolkit.lib_geo_watersheds import read_geo, create_grid
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
@@ -302,10 +302,15 @@ def read_from_file(
             data = xr.open_dataset(file)
         elif file_type == 'grid_s3m' or file_type == 'forcing_s3m':
             data = read_datasets_s3m(path=file)
-        elif file_type == 'grid_hmc' or file_type == 'forcing_hmc':
-            data = read_datasets_hmc(path=file)
+        elif file_type == 'results_hmc':
+            data = read_results_hmc(path=file)
+        elif file_type == 'forcing_hmc':
+            data = read_forcing_hmc(path=file)
         elif file_type == 'grid_itwater': # it_water project
             data = read_dataset_itwater(path=file)
+        elif file_type in ['grid_hmc']:
+            logger_stream.error(f'File type is not supported for netcdf reading: {file_type}. Check the avaiable readers.')
+            raise IOError('Reader is not supported for netcdf reading')
         else:
             logger_stream.warning(f'File type not defined for netcdf reading: {file_type}. Using default reader.')
             data = xr.open_dataset(file)
@@ -405,6 +410,8 @@ def write_to_file(data, path,
     # write the data to a ascii
     if file_format == 'ascii':
         if file_type == 'hydrograph_hmc':
+            write_sections_data(path=path, df=data)
+        elif file_type == 'time_series_hmc':
             write_sections_data(path=path, df=data)
         else:
             logger_stream.error(f'File type {file_type} not supported for format ascii writing.')

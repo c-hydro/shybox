@@ -74,16 +74,16 @@
         }
       },
       "flow_directions": {
-        "path": "{path_base_src}/maps/",
+        "path": "{path_base_src}/maps/src/",
         "file_name": "marche.pnt.txt"
       },
       "channels_network": {
-        "path": "{path_base_src}/maps/",
+        "path": "{path_base_src}/maps/src/",
         "file_name": "marche.choice.txt"
       }
     },
     "geo_data_dst": {
-      "path": "{path_base_dst}/",
+      "path": "{path_base_dst}/maps/dst/",
       "file_name": "mask.{section_name}_watershed.tiff",
       "format": "tiff",
       "type": null,

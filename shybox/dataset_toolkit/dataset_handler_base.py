@@ -68,7 +68,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
     # default attributes
     _defaults = {
         'type': None, 'time_signature' : 'end', "workflow": 'undefined', "layout": 'undefined',
-        'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}}
+        'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}, 'placeholder': {}}
 
     def __init__(self, **kwargs):
 
@@ -165,6 +165,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.file_workflow = self._defaults['workflow']
         if 'file_workflow' in kwargs:
             self.file_workflow = kwargs.pop('file_workflow')
+
+        self.file_placeholder = self._defaults['placeholder']
+        if 'file_placeholder' in kwargs:
+            self.file_placeholder = kwargs.pop('file_placeholder')
 
         self.warnings_on_reading = True
         if 'warnings_on_reading' in kwargs:

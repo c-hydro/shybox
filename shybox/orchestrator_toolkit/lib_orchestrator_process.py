@@ -15,10 +15,10 @@ from copy import deepcopy
 from typing import Callable
 from functools import partial
 
+import re
 import numpy as np
 import pandas as pd
 import xarray as xr
-
 
 from shybox.geo_toolkit.lib_geo_coords import match_coords_to_reference
 from shybox.geo_toolkit.lib_geo_watersheds import import_pysheds, is_pysheds_raster
@@ -37,6 +37,7 @@ class ProcessorContainer:
     def __init__(self,
                  function: Callable,
                  in_obj: DataLocal,
+                 datasets: dict = None,
                  args: dict = None, mapper: dict = None,
                  out_obj: (DataLocal, dict) = None,
                  in_deps: list = None, out_deps: list = None,
@@ -53,6 +54,13 @@ class ProcessorContainer:
         fx_args, fx_static = {}, {}
         for arg_name, arg_value in args.items():
             if isinstance(arg_value, DataLocal) or isinstance(arg_value, DataOnDemand):
+
+                loc_pattern = arg_value.loc_pattern
+                has_placeholder, _ = self._get_placeholders(arg_value)
+                if has_placeholder:
+                    fx_args[f"{arg_name}"] = arg_value
+                    continue
+
                 if not arg_value.is_static:
                     fx_args[arg_name] = arg_value
                 else:
@@ -73,9 +81,17 @@ class ProcessorContainer:
                         raise TypeError('Argument data object is not DataLocal or DataOnDemand instance')
 
             elif isinstance(arg_value, dict):
+
                 fx_static[arg_name] = {}
                 for key, value in arg_value.items():
                     if isinstance(value, DataLocal) or isinstance(value, DataOnDemand):
+
+                        loc_pattern = value.loc_pattern
+                        has_placeholder, _ = self._get_placeholders(loc_pattern)
+                        if has_placeholder:
+                            fx_args[f"{key}"] = value
+                            continue
+
                         if not value.is_static:
                             fx_args[f"{arg_name}_{key}"] = value
                         else:
@@ -121,6 +137,9 @@ class ProcessorContainer:
         self.in_obj, self.in_deps, self.in_opts = in_obj, in_deps, in_opts
         self.out_obj, self.out_deps, self.out_opts = out_obj, out_deps, out_opts
 
+        # set mapping datasets
+        self.mapping_datasets = datasets
+
         # set variables mapper
         self.mapper = mapper
         # set delimiter
@@ -131,6 +150,19 @@ class ProcessorContainer:
         # set debug state
         self.debug_state_in = False
         self.debug_state_out = False
+
+    # helper to get placeholders from string
+    def _get_placeholders(self, value):
+        # check value type
+        if not isinstance(value, str): return False, []
+
+        # get placeholders
+        placeholders = re.findall(r"\{([^{}]+)\}", value)
+        # print placeholders
+        if placeholders:
+            self.logger.info(f"Placeholders found: {placeholders}")
+            return True, placeholders
+        return False, []
 
     # method to represent the object
     def __repr__(self):
@@ -149,7 +181,7 @@ class ProcessorContainer:
         # get information about id and variable(s)
         fx_id = kwargs['id']
         fx_variable_name, fx_variable_wf = kwargs['reference'].split(':')
-        #fx_variable_wf, fx_variable_tag = kwargs['workflow'], kwargs['tag']
+        fx_variable_mapping_args = kwargs['mapping']
         fx_variable_trace = ':'.join([fx_variable_name, fx_variable_wf])
 
         # organize data raw and names (internal data object or from memory)
@@ -380,13 +412,35 @@ class ProcessorContainer:
             times_raw, obj_vars_raw = [], []
             for t, data_step in zip(time, data_raw):
 
-                # manage variable and data names
-                step_variable = data_step.file_namespace.get('variable')
-                step_workflow = data_step.file_namespace.get('workflow')
-                # store the variable for the data object
-                step_tag = ':'.join([step_variable, step_workflow])
+                # get file namespace
+                file_namespace = data_step.file_namespace
+                # normalize namespace to list
+                if not isinstance(file_namespace, (list, tuple)):
+                    file_namespace = [file_namespace]
+
+                # compose variable:workflow for each namespace
+                step_tags = []
+                for namespace in file_namespace:
+                    step_variable = namespace.get('variable')
+                    step_workflow = namespace.get('workflow')
+                    step_tags.append(':'.join([step_variable, step_workflow]))
+
+                # compose multiple namespaces using |
+                step_tag = '|'.join(step_tags)
+
+                # check variable trace
+                if fx_variable_trace is not None:
+                    # check if trace is available in composed tags
+                    if fx_variable_trace in step_tags:
+                        # reduce tags to selected trace
+                        step_tag = [fx_variable_trace]
+                    else:
+                        raise ValueError(f"Variable trace '{fx_variable_trace}' is not available in step tags: {step_tag}")
+
+                # store variable tag
                 obj_vars_raw.append(step_tag)
 
+                # store time
                 times_raw.append(f"{t.strftime('%Y%m%d%H%M')}" if hasattr(t, "strftime") else f"{str(t)}")
 
         else:
@@ -550,10 +604,50 @@ class ProcessorContainer:
                 # manage variable mapping
                 kwargs['variable'] = str_var_tmp
 
-                # variable definition (variable, workflow and tag)
-                step_variable = data_tmp.file_namespace.get('variable')
-                step_workflow = data_tmp.file_namespace.get('workflow')
-                step_tag = ':'.join([step_variable, step_workflow])
+                # organize workflow based on data
+                if type_tmp == 'data':
+
+                    # get file namespace
+                    file_namespace = data_tmp.file_namespace
+
+                    # normalize namespace to list
+                    if not isinstance(file_namespace, (list, tuple)):
+                        file_namespace = [file_namespace]
+
+                    # compose variable:workflow for each namespace
+                    step_tags = []
+                    for namespace in file_namespace:
+                        step_variable = namespace.get('variable')
+                        step_workflow = namespace.get('workflow')
+                        step_tags.append(':'.join([step_variable, step_workflow]))
+
+                    # compose multiple namespaces using |
+                    step_tag = '|'.join(step_tags)
+
+                elif type_tmp == 'deps':
+
+                    # get file namespace
+                    file_namespace = data_tmp.file_namespace
+
+                    step_variable = file_namespace.get('variable')
+                    step_workflow = file_namespace.get('workflow')
+                    step_tag = ':'.join([step_variable, step_workflow])
+
+                else:
+                    logger_stream.error(f'Data type {type_tmp} is not expected')
+                    raise RuntimeError(f'Data type {type_tmp} is not expected')
+
+                # check variable trace
+                if fx_variable_trace is not None:
+                    # check if trace is available in composed tags
+                    if fx_variable_trace in step_tags:
+                        # reduce tags to selected trace
+                        step_tag = [fx_variable_trace]
+                        # update variable and workflow
+                        step_variable, step_workflow = fx_variable_trace.split(":", 1)
+                    else:
+                        raise ValueError(
+                            f"Variable trace '{fx_variable_trace}' is not available in step tags: {step_tag}")
 
                 # store variable data
                 if type_tmp == 'data':
@@ -701,7 +795,9 @@ class ProcessorContainer:
         # add reference keys for method where input are not fixed
         fx_args["keys"] = fx_keys
         # add variable map
-        fx_args['mapping'] = fx_maps
+        fx_args['mapping_fx_vars'] = fx_maps
+        # add mapping args
+        fx_args['mapping_fx_args'] = fx_variable_mapping_args
 
         # manage reference argument (if available in fx_static) and add it to fx_args (if not already present)
         if 'ref' in self.fx_static:
@@ -763,6 +859,9 @@ class ProcessorContainer:
             # if add in data avoid to add in the args
             if add_other:
                 fx_args = {**fx_args, **fx_other}
+
+        # organize data using keys and mapping
+        fx_data = _organize_fx_data(fx_data, fx_args["keys"], fx_args['mapping_fx_args'])
 
         # run function to process data
         fx_save = self.fx_obj(data=fx_data, **fx_args)
@@ -1104,6 +1203,31 @@ class ProcessorContainer:
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
 from collections import OrderedDict
+
+# helper to organize data (related to keys and mapping settings)
+def _organize_fx_data(data_raw, keys, mapping):
+
+    data_upd = {}
+    for arg_name, variable_name in mapping.items():
+
+        values = [
+            data_step
+            for data_key, data_step in zip(keys, data_raw)
+            if data_key == variable_name
+        ]
+
+        if not values:
+            logger_stream.warning(
+                f'Variable "{variable_name}" mapped to argument "{arg_name}" '
+                f'was not found. Mapping will be ignored and standard '
+                f'argument organization will be used.'
+            )
+            return data_raw
+
+        data_upd[arg_name] = values
+
+    return data_upd
+
 
 def _check_list_of_list(x):
     return (

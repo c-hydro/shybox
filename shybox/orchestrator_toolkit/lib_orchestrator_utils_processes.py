@@ -9,6 +9,7 @@ Version:       '1.1.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import functools
+import re
 import warnings
 import inspect
 import pandas as pd
@@ -25,7 +26,9 @@ except Exception:  # pragma: no cover
 
 from osgeo import gdal
 from typing import Iterable
+from functools import wraps
 
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_registry import ADAPTERS_TYPE, ADAPTERS_FX_TS
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -41,11 +44,11 @@ _ext_map = {
     'shape': 'json', 'dict': 'json', 'geojson': 'json',
     'text': 'txt', 'txt': 'txt'
 }
-# ----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------- -----------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to decorate processing functions
-def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decorator_attrs):
+def as_process(input_type: str = 'xarray', adapter_type: dict = None, output_type: str = 'xarray', **decorator_attrs):
     """
     Decorate a processing function that has signature like:
         func(data, *args, **kwargs)
@@ -62,6 +65,7 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
         @with_logger(var_name='logger_stream')
         def wrapper(data, *args, **kwargs):
             created_temp_paths = []
+
 
             # normalize and convert input data
             def _to_gdal(obj):
@@ -93,6 +97,17 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
                     return _from_file(obj)
                 else:
                     return obj  # 'xarray' passthrough
+
+
+            if adapter_type is not None and adapter_type:
+
+                for arg_name, adapter_name in adapter_type.items():
+
+                    if arg_name in data:
+                        data[arg_name] = ADAPTERS[adapter_name](
+                            data[arg_name]
+                        )
+
 
             # handle different data structures: dict, list/tuple, or single object
             if isinstance(data, dict):
@@ -155,21 +170,26 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
 
                     # Find required positional parameters that have not been provided
                     params = []
-                    for index, param in enumerate(signature.parameters.values()):
+                    for index, (param, file_key) in enumerate(
+                            zip(signature.parameters.values(), file_keys)):
 
+                        # check if parameter is required
                         is_required = param.default is inspect.Parameter.empty
 
+                        # optional parameter explicitly associated with file key
                         if param.default is None:
-                            if param.name in file_keys:
+                            if param.name in re.split(r"[|:]", file_key):
                                 is_required = True
 
+                        # check positional parameter
                         is_positional = param.kind in (
                             inspect.Parameter.POSITIONAL_ONLY,
                             inspect.Parameter.POSITIONAL_OR_KEYWORD,
                         )
 
+                        # check if already provided
                         is_provided = index < len(args) or param.name in kwargs
-
+                        # collect parameter
                         if is_positional and is_required and not is_provided:
                             params.append(param)
 
@@ -314,8 +334,9 @@ def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decora
 
     return decorator
 # ----------------------------------------------------------------------------------------------------------------------
-from functools import wraps
+
 # ----------------------------------------------------------------------------------------------------------------------
+# helper to decorate other methods (start from dict)
 def with_dict_input(func):
     """
     Recursively walk through nested dictionaries.
@@ -363,10 +384,8 @@ def with_dict_input(func):
         return process(data)
 
     return wrapper
-# ----------------------------------------------------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------------------------------------------------------
-# methods to decorate other methods
+# helper to decorate other methods (start from list)
 def with_list_input(func):
     def wrapper(data, *args, **kwargs):
         if isinstance(data, Iterable) and not isinstance(data, str) and not isinstance(data, xr.DataArray):

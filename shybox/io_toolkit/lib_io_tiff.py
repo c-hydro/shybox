@@ -11,12 +11,84 @@ Version:       '1.0.0'
 # libraries
 from __future__ import annotations
 
+import os
 import numpy as np
+import xarray as xr
 import rasterio
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.io_toolkit.lib_io_utils import make_file_path
 # ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read tiff
+@with_logger(var_name='logger_stream')
+def read_tiff_base(
+        file_name: str, var_name: str = "data", file_mandatory: bool = False,
+        coord_name_x: str = "longitude", coord_name_y: str = "latitude",
+        no_data: float = None, dtype=None):
+
+    # check file
+    if file_name is None:
+        raise ValueError("'file_name' must be defined.")
+
+    # check file availability
+    if not os.path.exists(file_name):
+        if file_mandatory:
+            logger_stream.error(f'Mandatory file "{file_name}" was not found.')
+            raise FileNotFoundError('Mandatory file not found: "{file_name}"')
+        else:
+            logger_stream.warning(f'Optional file "{file_name}" was not found. File will be skipped.')
+            return None
+
+    # read raster
+    with rasterio.open(file_name) as src:
+
+        # read first band
+        data = src.read(1)
+
+        # get metadata
+        transform = src.transform
+        crs = src.crs
+        src_nodata = src.nodata
+
+        # cast dtype if requested
+        if dtype is not None:
+            data = data.astype(dtype)
+
+        # get raster shape
+        nrows, ncols = data.shape
+
+        # compute cell-center coordinates
+        x_coords = transform.c + (np.arange(ncols) + 0.5) * transform.a
+        y_coords = transform.f + (np.arange(nrows) + 0.5) * transform.e
+
+        # choose nodata
+        nodata_value = (no_data if no_data is not None else src_nodata)
+
+        # mask nodata
+        if nodata_value is not None:
+            data = np.where(data == nodata_value, np.nan, data)
+
+        # create DataArray
+        da = xr.DataArray(
+            data,
+            dims=(coord_name_y, coord_name_x),
+            coords={
+                coord_name_y: y_coords,
+                coord_name_x: x_coords,
+            },
+            name=var_name
+        )
+
+        # store raster metadata
+        da.attrs["transform"] = transform
+        da.attrs["crs"] = crs
+        da.attrs["nodata"] = nodata_value
+
+    return da
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write tiff file

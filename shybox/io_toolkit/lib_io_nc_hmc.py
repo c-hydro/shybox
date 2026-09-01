@@ -99,7 +99,7 @@ def _geo_is_complete(ds: xr.Dataset,
 
 # method to read hmc dataset from netcdf file
 @with_logger(var_name='logger_stream')
-def read_datasets_hmc(
+def read_results_hmc(
         path: str, debug: bool = False,
         y_dim: str = "south_north", x_dim: str = "west_east",
         lon_name: str = "Longitude", lat_name: str = "Latitude",
@@ -140,6 +140,7 @@ def read_datasets_hmc(
         ds_new[var] = ds[var]
     ds_new['Latitude'] = lat_da
     ds_new['Longitude'] = lon_da
+    ds_new['time'] = time
 
     # Flip dataset along latitude dimension
     ds_new = ds_new.isel(south_north=slice(None, None, -1))
@@ -169,6 +170,83 @@ def read_datasets_hmc(
         plot_data(ds_new['Latitude'].values)
         plot_data(ds_new['SM'].values)
         plot_data(ds_new['ET'].values)
+
+    return ds_new
+
+# method to read hmc dataset from netcdf file
+@with_logger(var_name='logger_stream')
+def read_forcing_hmc(
+        path: str, debug: bool = False,
+        y_dim: str = "south_north", x_dim: str = "west_east",
+        lon_name: str = "longitude", lat_name: str = "latitude",
+        mask_name: str = 'AirTemperature', mask_no_data: float = -9999) -> xr.Dataset:
+
+    # read dataset
+    ds = xr.open_dataset(path)
+
+    # check if geo is complete
+    if _geo_is_complete(ds, y_dim=y_dim, x_dim=x_dim, lon_name=lon_name, lat_name=lat_name):
+        lon_da, lat_da = ds[lon_name], ds[lat_name]
+    else:
+        logger_stream.error(f'Geographical coordinates are not defined by {lon_name, lat_name}. Check your datasets.')
+        raise RuntimeError('Geographical coordinates are not available')
+
+    # get time
+    time = np.atleast_1d(ds["time"].values)
+
+    # compute geo arrays from data
+    lat_1d = lat_da.isel({x_dim: 0}).values  # take first column -> varies along y
+    lon_1d = lon_da.isel({y_dim: 0}).values  # take first row    -> varies along x
+
+    # ensure increasing order
+    if lat_1d[0] > lat_1d[-1]:
+        lat_1d = lat_1d[::-1]
+    if lon_1d[0] > lon_1d[-1]:
+        lon_1d = lon_1d[::-1]
+
+    # create the update datasets
+    ds_new = xr.Dataset(
+        coords={
+            "time": ("time", time),
+            "latitude": ("south_north", lat_1d),
+            "longitude": ("west_east", lon_1d),
+        }
+    )
+    # store all variables in the new dataset
+    for var in ds.data_vars:
+        ds_new[var] = ds[var]
+    ds_new['latitude'] = lat_da
+    ds_new['longitude'] = lon_da
+    ds_new['time'] = time
+
+    # Flip dataset along latitude dimension
+    ds_new = ds_new.isel(south_north=slice(None, None, -1))
+
+    # apply reference mask
+    if mask_name is not None:
+        if mask_name not in ds_new:
+            logger_stream.warning(f"Mask variable '{mask_name}' is not available in dataset. Return dataset unmasked")
+        else:
+            # get reference mask:
+            mask_da = ds_new[mask_name]
+            # define reference mask
+            mask_valid = (np.isfinite(mask_da) & (mask_da != mask_no_data))
+
+            # apply mask to all spatial variables
+            for var_name, var_da in ds_new.data_vars.items():
+                # skip geographical variables
+                if var_name in [lat_name, lon_name]:
+                    continue
+
+                # apply only to variables sharing the spatial dimensions
+                if y_dim in var_da.dims and x_dim in var_da.dims:
+                    ds_new[var_name] = var_da.where(mask_valid, mask_no_data)
+
+    # debug testing variable(s)
+    if debug:
+        plot_data(ds_new['latitude'].values)
+        plot_data(ds_new['AirTemperature'].values)
+        plot_data(ds_new['Rain'].values)
 
     return ds_new
 

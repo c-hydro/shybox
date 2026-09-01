@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from shybox.io_toolkit.lib_io_utils import substitute_string_by_tags, make_file_path
-from shybox.io_toolkit.lib_io_decoretors import obj_to_array
+from shybox.io_toolkit.lib_io_decorators import obj_to_array
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

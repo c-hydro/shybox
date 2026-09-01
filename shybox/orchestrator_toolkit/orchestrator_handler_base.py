@@ -230,7 +230,8 @@ class OrchestratorBase:
         return out_obj
 
     # method to add a process to the orchestrator
-    def add_process(self, function, process_n: [int, None] = None, process_output: Union[DataLocal, xr.Dataset, dict] = None, **kwargs) -> None:
+    def add_process(self, function, datasets: dict = None,
+                    process_output: Union[DataLocal, xr.Dataset, dict] = None, **kwargs) -> None:
 
         # get process var tag
         if 'workflow' in kwargs:
@@ -301,7 +302,7 @@ class OrchestratorBase:
 
         # create the process container
         this_process = ProcessorContainer(
-            function = function,
+            function = function, datasets=datasets,
             in_obj = this_input, in_opts=self.options,
             in_deps=deps_input, out_deps=None,
             args = kwargs,
@@ -363,9 +364,43 @@ class OrchestratorBase:
                 # assign the output element(s)
                 if len(proc_bucket) == 1:
 
-                    # set the output object and dump state (to use the selected output format)
-                    self.processes[-1].out_obj = proc_bucket[0].copy()
-                    self.processes[-1].dump_state = True
+                    # get process out settings
+                    proc_out = proc_bucket[0]
+                    vars_out, wfs_out = proc_out.file_variable, proc_out.file_workflow
+                    placeholder_out = proc_out.file_placeholder
+
+                    # normalize to list
+                    if not isinstance(vars_out, (list, tuple)):
+                        vars_out = [vars_out]
+                    if not isinstance(wfs_out, (list, tuple)):
+                        wfs_out = [wfs_out]
+                    if not isinstance(placeholder_out, (list, tuple)):
+                        placeholder_out = [placeholder_out]
+
+                    # iterate over variables and workflows
+                    for var_step, wf_step in zip(vars_out, wfs_out):
+
+                        # identify last process for variable, workflow pair
+                        process_idx_last = next(
+                            (
+                                idx
+                                for idx in range(len(self.processes) - 1, -1, -1)
+                                if self.processes[idx].workflow == wf_step
+                            ),
+                            None
+                        )
+                        # if process idx last is not found
+                        if process_idx_last is None:
+                            raise RuntimeError(f'Workflow "{wf_step}" not found in processes.')
+
+                        # define output process
+                        proc_out_step = proc_out.copy()
+                        proc_out_step.file_variable = var_step
+                        proc_out_step.file_workflow = wf_step
+
+                        # set output object to save results
+                        self.processes[process_idx_last].out_obj = proc_out_step
+                        self.processes[process_idx_last].dump_state = True
 
                 elif len(proc_bucket) > 1:
 
@@ -489,6 +524,8 @@ class OrchestratorBase:
 
                 # check process dump state
                 proc_dump = proc_obj.dump_state
+                # get proc mapping
+                proc_mapping = getattr(proc_obj, "mapping_datasets", {})
 
                 try:
                     # if previous process returned None → skip
@@ -511,6 +548,7 @@ class OrchestratorBase:
                         #'workflow': proc_wf_previous,
                         'workflow': proc_previous,
                         'memory_active': self.memory_active,
+                        "mapping": proc_mapping,
                         **proc_vars_map
                     })
 

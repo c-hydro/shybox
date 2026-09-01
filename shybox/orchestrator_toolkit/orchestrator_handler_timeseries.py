@@ -9,19 +9,19 @@ Version:       '1.0.0'
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-
 from __future__ import annotations
 
 from copy import deepcopy
 from typing import Union
 
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_upd import PROCESSES as PROCESSES_UPD
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
-    as_list, remove_none, ensure_variables, normalize_deps)
+    as_list, remove_none, ensure_variables, normalize_deps, count_variables)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -32,7 +32,7 @@ class OrchestratorTimeSeries(OrchestratorBase):
     # ------------------------------------------------------------------------------------------------------------------
     # class method ts discharge
     @classmethod
-    def time_series_discharge(
+    def time_series(
             cls,
             data_package_in: Union[DataLocal, dict, list], data_package_out: Union[DataLocal, dict, list] = None,
             data_ref: (dict, DataLocal) = None,
@@ -53,6 +53,10 @@ class OrchestratorTimeSeries(OrchestratorBase):
         if workflow_fx is None:
             logger.error('Workflow functions must be provided in the configuration.')
             raise RuntimeError('Workflow functions must be provided in the configuration.')
+
+        # count input/output variables
+        data_count_in, data_count_out, data_count_code = count_variables(
+            data_package_in, data_package_out, options=workflow_options)
 
         # normalize input/output data packages
         if not isinstance(data_package_in, list):
@@ -164,7 +168,7 @@ class OrchestratorTimeSeries(OrchestratorBase):
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
 
         # method to remap variable tags, in and out
-        workflow_mapper = Mapper(data_collections_in, data_collections_out, logger=logger)
+        workflow_mapper = Mapper(data_collections_in, data_collections_out, data_count=data_count_code, logger=logger)
 
         # organize deps collections in
         deps_collections_in, args_collections_in = {}, {}
@@ -241,6 +245,37 @@ class OrchestratorTimeSeries(OrchestratorBase):
                 deps_collections_out[data_key] = data_args_common
                 deps_collections_out[data_key] = args_deps_common
 
+        vars_collections = {}
+        for wf_ref, wf_opts in workflow_fx.items():
+
+            wf_datasets_mapping = next((item["datasets"] for item in wf_opts if "datasets" in item),  None)
+            if wf_datasets_mapping is None:
+                continue
+
+            wf_summary = {}
+            for dataset_key, dataset_value in wf_datasets_mapping.items():
+
+                found_in = any(dataset_value == data_ref.split(":", 1)[1] for data_ref in data_collections_in.keys())
+                found_out = any(dataset_value == data_ref.split(":", 1)[1] for data_ref in data_collections_out.keys())
+
+                wf_summary[dataset_key] = {
+                    "workflow": wf_ref,
+                    "variable": dataset_value,
+                    "in": found_in,
+                    "out": found_out,
+                    "valid": found_in and found_out,
+                }
+
+            # store summary
+            vars_collections[wf_ref] = wf_summary
+
+            # check workflow validity
+            is_valid = all(item["valid"] for item in wf_summary.values())
+            # exit if not all variables checks are valid
+            if not is_valid:
+                missing = [dataset_key for dataset_key, item in wf_summary.items() if not item["valid"]]
+                raise RuntimeError(f"Workflow '{wf_ref}' has unresolved datasets: {missing}")
+
         # class to create workflow based using the orchestrator
         workflow_common = OrchestratorBase(
             data_in=data_collections_in, data_out=data_collections_out,
@@ -250,7 +285,7 @@ class OrchestratorTimeSeries(OrchestratorBase):
             mapper=workflow_mapper, logger=logger)
 
         # iterate over the defined input variables and their process(es)
-        workflow_configuration = workflow_mapper.get_rows_by_priority(priority_vars=priority, field="tag")
+        workflow_configuration = workflow_mapper.get_rows_by_priority(priority_vars=priority, field="tag", )
         for workflow_row in workflow_configuration:
 
             # get workflow information by tag
@@ -265,16 +300,17 @@ class OrchestratorTimeSeries(OrchestratorBase):
             process_fx_n = len(process_fx_var)
             for process_fx_tmp in process_fx_var:
 
-                # get process name and object
+                # get process name, datasets and object
                 process_fx_name = process_fx_tmp.pop("function")
-                process_fx_obj = PROCESSES[process_fx_name]
+                process_fx_datasets = process_fx_tmp.pop("datasets", None)
+                process_fx_obj = PROCESSES_UPD[process_fx_name]
 
                 # define process arguments
                 process_fx_args = {**process_fx_tmp, **workflow_row}
 
                 # add the process to the workflow
                 workflow_common.add_process(
-                    process_fx_obj, process_n=process_fx_n, ref=data_ref, **process_fx_args)
+                    process_fx_obj, datasets=process_fx_datasets, ref=data_ref, **process_fx_args)
 
             # info workflow end
             logger.info_down(f'Configure workflow "{workflow_name}" ... DONE', tag="ow")

@@ -207,6 +207,18 @@ class DataLocal(Dataset):
         else:
             file_workflow = variable_template.get("vars_wf") or self._default_vars_wf
 
+        # add placeholder for file (for example if output file needs some extra definitions to fill the string)
+        file_placeholder = kwargs.pop('file_placeholder', {})
+        if file_placeholder is not None:
+            # get default variable names preserving vars_data order
+            vars_values = iter(vars_data.values())
+            # replace "default" values
+            for placeholder, values in file_placeholder.items():
+                file_placeholder[placeholder] = [
+                    next(vars_values) if value == "default" else value
+                    for value in values
+                ]
+
         # ensure valid structure
         if not all(isinstance(x, dict) for x in (dims_geo, coords_geo, vars_data)):
             self.logger.error("File_template fields 'dims_geo', 'coords_geo', and 'vars_data' must be dicts.")
@@ -230,7 +242,8 @@ class DataLocal(Dataset):
             "data_as_is": self.data_as_is,
             "data_mandatory": self.data_mandatory,
             'file_variable': file_variable,
-            'file_workflow': file_workflow
+            'file_workflow': file_workflow,
+            'file_placeholder': file_placeholder
         })
 
         # initialize parent class

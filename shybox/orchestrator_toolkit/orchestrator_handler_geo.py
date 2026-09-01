@@ -20,7 +20,7 @@ from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
-    as_list, remove_none, ensure_variables, normalize_deps)
+    as_list, remove_none, ensure_variables, normalize_deps, count_variables)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -47,6 +47,10 @@ class OrchestratorGeo(OrchestratorBase):
         # get workflow functions and options
         workflow_fx = configuration.get("process_list", None)
         workflow_options = configuration.get("options", [])
+
+        # count input/output variables
+        data_count_in, data_count_out, data_count_code = count_variables(
+            data_package_in, data_package_out, options=workflow_options)
 
         # check workflow functions
         if workflow_fx is None:
@@ -163,7 +167,7 @@ class OrchestratorGeo(OrchestratorBase):
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
 
         # method to remap variable tags, in and out
-        workflow_mapper = Mapper(data_collections_in, data_collections_out, logger=logger)
+        workflow_mapper = Mapper(data_collections_in, data_collections_out, data_count=data_count_code,  logger=logger)
 
         # organize deps collections in
         deps_collections_in, args_collections_in = {}, {}
