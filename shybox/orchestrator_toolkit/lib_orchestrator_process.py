@@ -516,7 +516,7 @@ class ProcessorContainer:
 
             # iterate over the list of data objects
             id_other = 0
-            fx_data, fx_metadata, fx_deps, fx_keys, fx_maps = [], {}, [], [], {}
+            fx_data, fx_metadata, fx_deps, fx_keys, fx_maps, fx_type = [], {}, [], [], {}, []
             fx_other, fx_varid, fx_check = {}, [], [];
             for data_partial_id, data_global_id, data_tmp, name_tmp, type_tmp, time_tmp, time_step in (
                     zip(id_partial, id_global, data_list, data_names, type_list, time_list, time)):
@@ -624,6 +624,7 @@ class ProcessorContainer:
                     # compose multiple namespaces using |
                     step_tag = '|'.join(step_tags)
 
+
                 elif type_tmp == 'deps':
 
                     # get file namespace
@@ -642,7 +643,11 @@ class ProcessorContainer:
                     # check if trace is available in composed tags
                     if fx_variable_trace in step_tags:
                         # reduce tags to selected trace
-                        step_tag = [fx_variable_trace]
+                        if type_tmp == 'deps':
+                            pass
+                        elif type_tmp == 'data':
+                            step_tag = [fx_variable_trace]
+
                         # update variable and workflow
                         step_variable, step_workflow = fx_variable_trace.split(":", 1)
                     else:
@@ -669,6 +674,7 @@ class ProcessorContainer:
                     fx_tmp = data_tmp.get_data(time=time_step, name=step_tag, as_is=as_is ,**kwargs)
                     fx_deps.append(step_tag)
                     fx_keys.append(step_workflow)
+                    fx_type.append(type_tmp)
 
                     # convert to DataArray if single variable
                     fx_tmp = _to_dataarray_if_single_var(fx_tmp)
@@ -739,7 +745,7 @@ class ProcessorContainer:
 
             # get data
             fx_data = data_raw.get_data(time=time, name=var_name, **kwargs)
-            fx_deps, fx_keys = [], []
+            fx_deps, fx_keys, fx_type = [], [], []
 
             # convert to DataArray if single variable
             fx_data = _to_dataarray_if_single_var(fx_data)
@@ -790,10 +796,12 @@ class ProcessorContainer:
         # collect and prepare function arguments
         fx_args = {arg_name: arg_value for arg_name, arg_value in self.fx_args.items()}
         fx_args['time'] = time
-        # add reference time (in case of needed by the procedure)
+        # add reference time
         fx_args['time_reference'] = time_ref
-        # add reference keys for method where input are not fixed
+        # add reference keys
         fx_args["keys"] = fx_keys
+        # add reference types
+        fx_args["types"] = fx_type
         # add variable map
         fx_args['mapping_fx_vars'] = fx_maps
         # add mapping args
@@ -861,7 +869,9 @@ class ProcessorContainer:
                 fx_args = {**fx_args, **fx_other}
 
         # organize data using keys and mapping
-        fx_data = _organize_fx_data(fx_data, fx_args["keys"], fx_args['mapping_fx_args'])
+        fx_data = _organize_fx_data(
+            fx_data,
+            keys=fx_args["keys"], types=fx_args['types'], mapping=fx_args['mapping_fx_args'])
 
         # run function to process data
         fx_save = self.fx_obj(data=fx_data, **fx_args)
@@ -1204,30 +1214,54 @@ class ProcessorContainer:
 # helpers
 from collections import OrderedDict
 
-# helper to organize data (related to keys and mapping settings)
-def _organize_fx_data(data_raw, keys, mapping):
+# helper to organize data (related to keys, types and mapping settings)
+def _organize_fx_data(data_raw, keys, types, mapping):
 
+    # normalize metadata
+    keys_list = list(keys) if isinstance(keys, (list, tuple)) else [keys]
+    types_list = list(types) if isinstance(types, (list, tuple)) else [types]
+
+    # select positions associated with data objects
+    data_idx, data_keys = [], []
+    for idx, (data_key, data_type) in enumerate(zip(keys_list, types_list)):
+        if data_type != 'data':
+            continue
+        data_idx.append(idx)
+        data_keys.append(data_key)
+
+    # organize data as a flat list
+    data_list = []
+    if isinstance(data_raw, (list, tuple)):
+        for data_step in data_raw:
+            if isinstance(data_step, (list, tuple)):
+                data_list.extend(data_step)
+            else:
+                data_list.append(data_step)
+    else:
+        data_list.append(data_raw)
+
+    # select data objects using valid positions
+    data_selected = {}
+    for idx, data_key in zip(data_idx, data_keys):
+        if idx >= len(data_list):
+            continue
+        data_step = data_list[idx]
+        data_selected[data_key] = data_step
+
+    # apply argument mapping
     data_upd = {}
     for arg_name, variable_name in mapping.items():
 
-        values = [
-            data_step
-            for data_key, data_step in zip(keys, data_raw)
-            if data_key == variable_name
-        ]
-
-        if not values:
+        if variable_name not in data_selected:
             logger_stream.warning(
                 f'Variable "{variable_name}" mapped to argument "{arg_name}" '
-                f'was not found. Mapping will be ignored and standard '
-                f'argument organization will be used.'
+                f'was not found. Standard argument organization will be used.'
             )
             return data_raw
 
-        data_upd[arg_name] = values
+        data_upd[arg_name] = data_selected[variable_name]
 
     return data_upd
-
 
 def _check_list_of_list(x):
     return (

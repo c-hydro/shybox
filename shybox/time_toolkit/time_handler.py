@@ -305,15 +305,15 @@ class TimeManager:
 
         # Build cfg in the exact shape expected by from_dict()
         cfg: Dict[str, Any] = {
-            "time_run":          lut.get("time_run"),
-            "time_start":        lut.get("time_start"),
-            "time_end":          lut.get("time_end"),
-            "time_start_rounding":       lut.get("time_start_rounding", 'h'),
-            "time_end_rounding":         lut.get("time_end_rounding", 'h'),
-            "time_period":       time_period_str,           # e.g. '48H'
-            "time_frequency":    lut.get("time_frequency", "1H"),
-            "time_rounding":     lut.get("time_rounding"),
-            "start_days_before": start_days_before,         # <- integer, compatible
+            "time_run":             lut.get("time_run"),
+            "time_start":           lut.get("time_start"),
+            "time_end":             lut.get("time_end"),
+            "time_start_rounding":  lut.get("time_start_rounding", 'h'),
+            "time_end_rounding":    lut.get("time_end_rounding", 'h'),
+            "time_period":          time_period_str,           # e.g. '48H'
+            "time_frequency":       lut.get("time_frequency", "1H"),
+            "time_rounding":        lut.get("time_rounding"),
+            "start_days_before":    start_days_before,         # <- integer, compatible
         }
 
         # adjust cfg (priority based and update results)
@@ -1099,9 +1099,17 @@ class TimeManager:
                     UserWarning,
                 )
 
-        # round step to update times related to definitions
+        # get time start and time end
         ts_start, ts_end = pd.Timestamp(cfg["time_start"]), pd.Timestamp(cfg["time_end"])
-        ts_start, ts_end = ts_start.floor(cfg["time_start_rounding"]), ts_end.floor(cfg["time_end_rounding"])
+        # get time roundings (if defined)
+        time_start_rounding = cfg.get("time_start_rounding", None)
+        time_end_rounding = cfg.get("time_end_rounding", None)
+
+        # apply time roundings (if defined)
+        if time_start_rounding is not None and isinstance(time_start_rounding, str):
+            ts_start = ts_start.floor(time_start_rounding.lower())
+        if time_end_rounding is not None and isinstance(time_end_rounding, str):
+            ts_end = ts_end.floor(time_end_rounding.lower())
 
         # recompute steps
         ts_delta = ts_end - ts_start

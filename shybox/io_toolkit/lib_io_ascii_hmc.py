@@ -164,7 +164,7 @@ def _select_warn_and_cast(
 def read_sections_db(
     file_path: str, name: str = 'sections_db',
     lut_map: dict = None, lut_type: dict = None,
-    col_datafrom: str = "DATI_DA", col_filter: str = None, filter_value: str = None,
+    col_reference: str = "DATI_DA", col_filter: str = None, filter_value: str = None,
     sep: str = ";", encoding: str = "ISO-8859-1", case: bool = False, regex: bool = False,
     out_col: str = "tag",final_cols: list[str] = None, out_first: bool = True,) -> Hashable:
 
@@ -187,8 +187,9 @@ def read_sections_db(
     df = pd.read_csv(file_path, sep=sep, encoding=encoding)
 
     # check reference column (according to which the 'tag' is created)
-    if col_datafrom not in df.columns:
-        logger_stream.error(f"Required column '{col_datafrom}' not found in CSV.")
+    if col_reference not in df.columns:
+        logger_stream.error(f"Required column '{col_reference}' not found in CSV.")
+        raise RuntimeError(f'Column {col_reference} is mandatory. Check the registry file and change the column name.')
 
     # apply data types
     df_out = df.copy()
@@ -199,7 +200,7 @@ def read_sections_db(
         logger_stream.info(f"Filtered by {col_filter} = {filter_value} → {len(df_out)} rows")
 
     # cast column used for tagging datasets
-    df_out[out_col] = df_out[col_datafrom].map(_parse_tag_from_data_from)
+    df_out[out_col] = df_out[col_reference].map(_parse_tag_from_data_from)
 
     # rename variables, excluding out_col
     rename_map = {src: dst for dst, src in lut_map.items() if src in df_out.columns and dst != out_col}
@@ -236,7 +237,7 @@ def read_sections_db(
 
     # add name to the dataframe (to recognize its type)
     if name is not None:
-        df_out.name = name
+        df_out.attrs["name"] = name
 
     return df_out
 

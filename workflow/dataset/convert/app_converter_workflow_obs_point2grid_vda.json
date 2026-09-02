@@ -1,0 +1,141 @@
+{
+  "__comment__": "configuration file for the datasets information",
+  "configuration": {
+    "priority": {
+      "reference": "environment", "other": "user"
+    },
+    "flags": {
+      "update_namelist": true, "update_execution": true
+    },
+    "variables": {
+      "lut": {
+        "user": {
+          "path_time_source": null, "path_time_destination": null,
+          "time_rounding": "H", "time_frequency": "H",  "time_direction": "forward",
+          "time_start_rounding": "H", "time_end_rounding": "H",
+          "file_log": "{execution_name}_{domain_name}.log",
+          "execution_name": "converter_points2grid", "execution_mode": "history"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "path_geo": "PATH_GEO",
+          "path_dynamic_source": "PATH_SRC", "path_dynamic_destination": "PATH_DST",
+          "file_time_source": "TIME_RUN", "file_time_destination": "TIME_RUN",
+          "time_run": "TIME_RUN", "time_period" : "TIME_PERIOD",
+          "time_start": "TIME_START", "time_end": "TIME_END",
+          "path_app": "PATH_APP",
+          "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_dynamic_source": "string", "path_dynamic_destination": "string",
+        "path_time_source": "string", "path_time_destination": "string",
+        "file_time_source": "timestamp", "file_time_destination": "timestamp",
+        "time_direction": "string", "time_run": "string",
+        "time_start": "string", "time_end": "string",
+        "time_period": "int", "time_rounding": "string", "time_frequency": "string",
+        "time_start_rounding": "string", "time_end_rounding": "string",
+        "path_app": "string",
+        "path_log": "string", "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string", "execution_mode": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_dynamic_source": "string", "path_dynamic_destination": "string",
+        "path_time_source": "%Y%m%d", "path_time_destination": "%Y%m%d_%H",
+        "file_time_source": "%Y%m%d%H00", "file_time_destination": "%Y%m%d%H00",
+        "time_direction": "string", "time_run": "%Y%m%d%H00",
+        "time_start": "%Y%m%d%H00", "time_end": "%Y%m%d%H00",
+        "time_period": "int", "time_rounding": "string", "time_frequency": "string",
+        "time_start_rounding": "string", "time_end_rounding": "string",
+        "path_app": "string",
+        "path_log": "string", "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string", "execution_mode": "string"
+      }
+    }
+  },
+  "application": {
+    "time": {
+      "start": "{time_start}",
+      "end": "{time_end}",
+      "frequency": "H",
+      "format": "%Y-%m-%d %H:%M",
+      "analysis": "{time_period}",
+      "dataset": "{time_period}"
+    },
+    "static_data": {
+      "terrain": {
+        "path": "{path_geo}/land/",
+        "file_name": "vda.dem.txt"
+      },
+      "registry_weather_stations": {
+        "path": "{path_geo}/registry/",
+        "file_name": "Registry_AirTemperature_WeatherStations.csv",
+        "lut_map": {
+          "id": "ID", "code": "code", "name": "name",
+          "longitude": "longitude", "latitude": "latitude", "altitude": "quota",
+          "is_ott": "isOTT", "is_riscaldato": "isRISCALDATO",
+          "tag":  "tag"
+        },
+        "lut_type": {
+           "id": "int", "code": "int", "name": "str",
+          "longitude": "np.float64", "latitude": "np.float64", "altitude": "float",
+          "is_riscaldato": "int", "is_ott": "int",
+          "tag": "str"
+        }
+      }
+    },
+    "dynamic_data_src": {
+      "data": {
+        "path": "{path_dynamic_source}/{path_time_source}/",
+        "file_name": "AirTemperature_{file_time_source}.csv",
+        "format": "csv"
+      },
+      "code": {
+        "path": "{path_dynamic_source}/{path_time_source}/",
+        "file_name": "CalcCode_AirTemperature_{file_time_source}.csv",
+        "format": "csv"
+      }
+    },
+    "dynamic_data_dst": {
+      "path": "{path_dynamic_destination}/{path_time_destination}/",
+      "file_name": "AirTemperature_{file_time_destination}.tiff",
+      "format": "tiff",
+      "type": null,
+      "mode": "grid",
+      "variable": ["air_temperature"],
+      "dims_data": {"longitude": "longitude", "latitude": "longitude", "time": "time"},
+      "coord_data": {"longitude": "longitude", "latitude": "latitude"},
+      "vars_data": {"air_temperature": "air_t"}
+    }
+  },
+  "workflow": {
+    "options": {
+        "intermediate_output": "Tmp",
+        "tmp_dir": "{path_tmp}"
+    },
+    "process_list": {
+        "AIR_T": [
+          {
+            "function": "exec_interpolate_points",
+            "datasets": {"data": "air_temperature"},
+            "fill_value": -9999,
+            "no_data_value": -9999
+          }
+        ]
+    }
+  },
+  "log": {
+    "path": "{path_log}/{domain_name}", "file_name": "converter_point2grid_air_temperature.txt",
+    "handlers": ["file","stream"]
+  },
+  "tmp": {
+    "path": "{path_tmp}/{domain_name}",
+    "file_name": null
+  }
+}

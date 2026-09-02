@@ -59,6 +59,10 @@ def as_process(input_type=None, adapter_type=None, output_type=None, **process_a
             data_keys = []
             if 'keys' in kwargs:
                 data_keys = kwargs['keys']
+            # get data types
+            data_types = []
+            if 'types' in kwargs:
+                data_types = kwargs['types']
             # get mapping vars
             mapping_fx_vars = {}
             if 'mapping_fx_vars' in kwargs:

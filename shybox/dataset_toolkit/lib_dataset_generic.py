@@ -36,7 +36,7 @@ from typing import Optional, Dict
 
 from shybox.generic_toolkit.lib_utils_file import fix_file_path
 from shybox.io_toolkit.lib_io_ascii_grid import read_grid
-from shybox.io_toolkit.lib_io_ascii_points import read_points_1d
+from shybox.io_toolkit.lib_io_ascii_points import read_points_1d, read_points_2d, read_points_registry
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
@@ -198,6 +198,20 @@ def read_from_file(
             method_args = set_method_args(method=read_points_1d, args=file_args)
             # read data 1d format
             data = read_points_1d(file_path=path, header=True, **method_args)
+
+        elif file_type == 'points_2d':
+
+            # select args to configure method
+            method_args = set_method_args(method=read_points_2d, args=file_args)
+            # read section database (flood-proofs format)
+            data = read_points_2d(file_path=path, **method_args)
+
+        elif file_type == 'points_registry':
+
+            # select args to configure method
+            method_args = set_method_args(method=read_points_registry, args=file_args)
+            # read section database (flood-proofs format)
+            data = read_points_registry(file_path=path, **method_args)
 
         elif file_type == 'points_section_db':
 

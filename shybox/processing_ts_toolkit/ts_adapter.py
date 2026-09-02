@@ -1,3 +1,11 @@
+"""
+Library Features:
+
+Name:          ts_adapter
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '20260901'
+Version:       '1.0.0'
+"""
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries

@@ -367,6 +367,7 @@ class OrchestratorBase:
                     # get process out settings
                     proc_out = proc_bucket[0]
                     vars_out, wfs_out = proc_out.file_variable, proc_out.file_workflow
+                    pattern_out = proc_out.loc_pattern
                     placeholder_out = proc_out.file_placeholder
 
                     # normalize to list
@@ -374,11 +375,9 @@ class OrchestratorBase:
                         vars_out = [vars_out]
                     if not isinstance(wfs_out, (list, tuple)):
                         wfs_out = [wfs_out]
-                    if not isinstance(placeholder_out, (list, tuple)):
-                        placeholder_out = [placeholder_out]
 
                     # iterate over variables and workflows
-                    for var_step, wf_step in zip(vars_out, wfs_out):
+                    for var_id, (var_step, wf_step) in enumerate(zip(vars_out, wfs_out)):
 
                         # identify last process for variable, workflow pair
                         process_idx_last = next(
@@ -393,10 +392,24 @@ class OrchestratorBase:
                         if process_idx_last is None:
                             raise RuntimeError(f'Workflow "{wf_step}" not found in processes.')
 
+                        # update out_pattern using placeholders (if defined)
+                        if placeholder_out is not None and placeholder_out:
+                            # get placeholders
+                            placeholder_step = {
+                                key: values[var_id]
+                                for key, values in placeholder_out.items()
+                            }
+                            # solve placeholders
+                            pattern_step = pattern_out.format(**placeholder_step)
+                        else:
+                            # no placeholders
+                            pattern_step = pattern_out
+
                         # define output process
                         proc_out_step = proc_out.copy()
                         proc_out_step.file_variable = var_step
                         proc_out_step.file_workflow = wf_step
+                        proc_out_step.loc_pattern = pattern_step
 
                         # set output object to save results
                         self.processes[process_idx_last].out_obj = proc_out_step
