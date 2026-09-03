@@ -212,24 +212,6 @@ def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## DYNAMIC DATASETS MANAGEMENT
-    # source point data handler
-    source_point_data = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['data']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['data']['file_name'],
-        data_layout='points', data_mandatory=False,
-        file_deps={'registry': registry_ws},
-        file_type='points_2d', file_format='ascii', file_mode='local',
-        file_variable='AIR_T', file_io='input',
-        file_args={'delimiter': ',', 'time_format': '%Y-%m-%d %H:%M'},
-        variable_template={
-            "dims_data": {"x": "data", "y": "weather_stations"},
-            "vars_data": {"AIR_T": "air_temperature"}
-        },
-        time_signature='period',
-        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
-    )
-
     # source point codes handler
     source_point_code = DataLocal(
         path=alg_cfg_application['dynamic_data_src']['code']['path'],
@@ -237,10 +219,43 @@ def main(view_table: bool = False):
         data_layout='points', data_mandatory=False,
         file_deps={'registry': registry_ws},
         file_type='points_2d', file_format='ascii', file_mode='local',
-        file_variable='AIR_T', file_io='input',
+        file_variable='AIR_T_DATA_C', file_workflow='AIR_T_PROCESS', file_io='input',
         file_args={'delimiter': ',', 'time_format': '%Y-%m-%d %H:%M'},
         variable_template={
             "dims_data": {"x": "data", "y": "weather_stations"},
+            "vars_data": {"AIR_T_CODE": "air_temperature_code"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # source point data handler
+    source_point_data = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['data']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['data']['file_name'],
+        data_layout='points', data_mandatory=False,
+        file_deps={'registry': registry_ws},
+        file_type='points_2d', file_format='ascii', file_mode='local',
+        file_variable='AIR_T_DATA_V', file_workflow='AIR_T_PROCESS', file_io='input',
+        file_args={'delimiter': ',', 'time_format': '%Y-%m-%d %H:%M'},
+        variable_template={
+            "dims_data": {"x": "data", "y": "weather_stations"},
+            "vars_data": {"AIR_T_VALUE": "air_temperature_value"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # source point obj handler (derived)
+    source_point_obj = DataLocal(
+        path=None,
+        file_name=None,
+        file_type=None, file_format='tmp', file_mode='local', file_variable='AIR_T', file_io='derived',
+        file_deps={'data': source_point_data, 'code': source_point_code},
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
             "vars_data": {"AIR_T": "air_temperature"}
         },
         time_signature='period',
@@ -249,16 +264,18 @@ def main(view_table: bool = False):
     )
 
     # destination grid data handler
-    destination_grid_data = DataLocal(
+    destination_grid_obj = DataLocal(
         path=alg_cfg_application['dynamic_data_dst']['path'],
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
         data_layout='grid',
         file_type='grid_2d', file_format='tiff', file_mode='local',
-        file_variable='AIR_T', file_io='output',
+        file_variable='AIR_T_GRID', file_workflow='AIR_T_PROCESS', file_io='output',
         variable_template={
             "dims_data": {"longitude": "longitude", "latitude": "longitude", "time": "time"},
             "coord_data": {"longitude": "longitude", "latitude": "latitude"},
-            "vars_data": {"air_temperature": "air_t"}
+            "vars_data": {
+                "air_temperature": "air_t"
+            }
         },
         time_signature='end', time_reference=alg_reference_time,
         time_period=1, time_format='%Y%m%d%H%M',
@@ -270,7 +287,11 @@ def main(view_table: bool = False):
     ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
     orc_process = Orchestrator.points(
-        data_package_in=source_point_data, data_package_out=destination_grid_data,
+        data_package_in={
+            'AIR_T_DATA_V': source_point_data,
+            'AIR_T_DATA_C': source_point_code
+        },
+        data_package_out={'AIR_T_GRID': destination_grid_obj},
         data_ref={'terrain': geo_grid},
         priority=None,
         configuration=alg_cfg_workflow,

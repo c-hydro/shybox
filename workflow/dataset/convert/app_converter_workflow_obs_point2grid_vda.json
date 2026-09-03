@@ -98,7 +98,7 @@
       },
       "code": {
         "path": "{path_dynamic_source}/{path_time_source}/",
-        "file_name": "CalcCode_AirTemperature_{file_time_source}.csv",
+        "file_name": "CalCode_AirTemperature_{file_time_source}.csv",
         "format": "csv"
       }
     },
@@ -120,10 +120,11 @@
         "tmp_dir": "{path_tmp}"
     },
     "process_list": {
-        "AIR_T": [
+        "AIR_T_PROCESS": [
           {
             "function": "exec_interpolate_points",
-            "datasets": {"data": "air_temperature"},
+            "datasets": {"data": "air_temperature_value", "code": "air_temperature_code"},
+            "results": {"data":  "air_temperature"},
             "fill_value": -9999,
             "no_data_value": -9999
           }

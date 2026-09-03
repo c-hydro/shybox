@@ -516,7 +516,7 @@ class ProcessorContainer:
 
             # iterate over the list of data objects
             id_other = 0
-            fx_data, fx_metadata, fx_deps, fx_keys, fx_maps, fx_type = [], {}, [], [], {}, []
+            fx_data, fx_metadata, fx_deps, fx_keys, fx_maps, fx_type, fx_io = [], {}, [], [], {}, [], []
             fx_other, fx_varid, fx_check = {}, [], [];
             for data_partial_id, data_global_id, data_tmp, name_tmp, type_tmp, time_tmp, time_step in (
                     zip(id_partial, id_global, data_list, data_names, type_list, time_list, time)):
@@ -646,10 +646,10 @@ class ProcessorContainer:
                         if type_tmp == 'deps':
                             pass
                         elif type_tmp == 'data':
+                            # assign step tag
                             step_tag = [fx_variable_trace]
-
-                        # update variable and workflow
-                        step_variable, step_workflow = fx_variable_trace.split(":", 1)
+                            # update variable and workflow
+                            step_variable, step_workflow = fx_variable_trace.split(":", 1)
                     else:
                         raise ValueError(
                             f"Variable trace '{fx_variable_trace}' is not available in step tags: {step_tag}")
@@ -682,10 +682,15 @@ class ProcessorContainer:
                     fx_vars = _get_variable_name(fx_tmp, mandatory)
                     # store variable id
                     fx_varid.append(var_id)
+                    # get file io
+                    fx_io.append(data_tmp.file_io)
 
                     # debug data in
                     if self.debug_state_in: plot_data(fx_tmp)
                 else:
+                    # get file io
+                    fx_io.append(data_tmp.file_io)
+
                     # data is not readable (default)
                     fx_tmp = None
                     fx_vars = time_tmp
@@ -745,7 +750,7 @@ class ProcessorContainer:
 
             # get data
             fx_data = data_raw.get_data(time=time, name=var_name, **kwargs)
-            fx_deps, fx_keys, fx_type = [], [], []
+            fx_deps, fx_keys, fx_type, fx_io = [], [], [], []
 
             # convert to DataArray if single variable
             fx_data = _to_dataarray_if_single_var(fx_data)
@@ -802,6 +807,8 @@ class ProcessorContainer:
         fx_args["keys"] = fx_keys
         # add reference types
         fx_args["types"] = fx_type
+        # add reference io
+        fx_args["io"] = fx_io
         # add variable map
         fx_args['mapping_fx_vars'] = fx_maps
         # add mapping args
@@ -871,7 +878,8 @@ class ProcessorContainer:
         # organize data using keys and mapping
         fx_data = _organize_fx_data(
             fx_data,
-            keys=fx_args["keys"], types=fx_args['types'], mapping=fx_args['mapping_fx_args'])
+            keys=fx_args["keys"], types=fx_args['types'], io=fx_args['io'],
+            mapping=fx_args['mapping_fx_args'])
 
         # run function to process data
         fx_save = self.fx_obj(data=fx_data, **fx_args)
@@ -1215,21 +1223,20 @@ class ProcessorContainer:
 from collections import OrderedDict
 
 # helper to organize data (related to keys, types and mapping settings)
-def _organize_fx_data(data_raw, keys, types, mapping):
+def _organize_fx_data(data_raw, keys, types, io, mapping):
 
     # normalize metadata
     keys_list = list(keys) if isinstance(keys, (list, tuple)) else [keys]
     types_list = list(types) if isinstance(types, (list, tuple)) else [types]
+    io_list = list(io) if isinstance(io, (list, tuple)) else [io]
 
-    # select positions associated with data objects
-    data_idx, data_keys = [], []
-    for idx, (data_key, data_type) in enumerate(zip(keys_list, types_list)):
-        if data_type != 'data':
-            continue
-        data_idx.append(idx)
-        data_keys.append(data_key)
+    # check if derived objects are defined
+    has_derived = 'derived' in io_list
+    # remove derived from io list
+    if has_derived:
+        io_list = [data_io for data_io in io_list if data_io != 'derived']
 
-    # organize data as a flat list
+    # organize raw data as a flat list
     data_list = []
     if isinstance(data_raw, (list, tuple)):
         for data_step in data_raw:
@@ -1240,28 +1247,33 @@ def _organize_fx_data(data_raw, keys, types, mapping):
     else:
         data_list.append(data_raw)
 
-    # select data objects using valid positions
+    # remove derived objects
     data_selected = {}
-    for idx, data_key in zip(data_idx, data_keys):
-        if idx >= len(data_list):
+    for data_key, data_type, data_io, data_step in zip(keys_list, types_list, io_list, data_list):
+
+        # standard input data
+        if data_io == 'input' and data_type == 'data':
+            data_selected[data_key] = data_step
             continue
-        data_step = data_list[idx]
-        data_selected[data_key] = data_step
+        # dependencies used when derived data are defined
+        if data_io == 'input' and data_type == 'deps' and has_derived:
+            data_selected[data_key] = data_step
+            continue
 
     # apply argument mapping
-    data_upd = {}
+    fx_data = {}
     for arg_name, variable_name in mapping.items():
 
         if variable_name not in data_selected:
-            logger_stream.warning(
+            warnings.warn(
                 f'Variable "{variable_name}" mapped to argument "{arg_name}" '
                 f'was not found. Standard argument organization will be used.'
             )
-            return data_raw
+            return data_selected
 
-        data_upd[arg_name] = data_selected[variable_name]
+        fx_data[arg_name] = data_selected[variable_name]
 
-    return data_upd
+    return fx_data
 
 def _check_list_of_list(x):
     return (

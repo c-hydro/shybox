@@ -3,8 +3,8 @@ Class Features
 
 Name:          dataset_handler_local
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260123'
-Version:       '1.1.0'
+Date:          '20260903'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -70,8 +70,10 @@ class DataLocal(Dataset):
     _default_vars_wf = ["variable"]
 
     def __init__(self,
-                 path: Optional[str] = None, file_name: Optional[str] = None,
-                 logger: Optional[LoggingManager] = None, file_io: str = None,
+                 path: Optional[str] = None,
+                 file_name: Optional[str] = None, file_io: str = None,
+                 file_variable: str = None, file_workflow : str = None,
+                 logger: Optional[LoggingManager] = None,
                  message: bool = True,
                  **kwargs):
 
@@ -142,8 +144,10 @@ class DataLocal(Dataset):
             self.delimiter = ';'
 
         # handle file_template normalization
-        file_variable = kwargs.get('file_variable', 'variable')
-        n_vars = kwargs.pop('n_vars', 1) or 1
+        if file_variable is not None:
+            pass
+        else:
+            file_variable = kwargs.get('file_variable', 'variable')
 
         # variable template normalization
         variable_template = kwargs.pop('variable_template', None)
@@ -197,8 +201,10 @@ class DataLocal(Dataset):
         units = variable_template.get("units", {})
         units = {var_name: units.get(var_name, "NA") for var_name in vars_data}
 
-        # select file_workflow based on file_io (defined in calling code)
-        if self.file_io == 'input':
+        # select file_workflow based on args or file_io (defined in calling code)
+        if file_workflow is not None:
+            pass
+        elif self.file_io == 'input':
             file_workflow = list(vars_data.values())
         elif self.file_io == 'output':
             file_workflow = list(vars_data.keys())
@@ -271,7 +277,7 @@ class DataLocal(Dataset):
     @file_io.setter
     def file_io(self, value):
         """Set the file_io value, ensuring it is valid."""
-        if value not in {'input', 'output', 'derived','tmp'}:
+        if value not in {'input', 'output', 'derived', 'tmp'}:
             raise ValueError(f"Invalid file_io '{value}'. Must be one of {'input', 'output', 'derived', 'tmp'}.")
         self._file_io = value
 

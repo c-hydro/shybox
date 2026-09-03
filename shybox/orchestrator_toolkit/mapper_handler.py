@@ -1,147 +1,203 @@
+"""
+Class Features
+
+Name:          mapper_handler
+Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
+Date:          '202600903'
+Version:       '1.1.0'
+"""
+
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 from collections.abc import Mapping as AbcMapping
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
 from shybox.logging_toolkit.lib_logging_utils import with_logger
+# ----------------------------------------------------------------------------------------------------------------------
 
-
+# ----------------------------------------------------------------------------------------------------------------------
+# class Mapper
 class Mapper:
-    """
-    Build a flat mapping between input and output variable templates, and produce
-    compact or tag-specific rows.
-    """
 
+    # initialize class
     def __init__(
         self,
         data_collections_in: Mapping[str, Union[Any, List[Any]]],
         data_collections_out: Mapping[str, Union[Any, List[Any]]],
         data_count: Optional[int] = 1,
-        logger: LoggingManager = None,
-    ) -> None:
+        logger: LoggingManager = None,) -> None:
+
         self.logger = logger or LoggingManager(name="Mapper")
         self._data_in = data_collections_in
         self._data_out = data_collections_out
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
         self._data_count: int = data_count
 
+    # method to build mapping in/out
     def build_mapping(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
 
         # info start
         self.logger.info_up("Build input-output variables mapping ... ")
 
-        # check mapping
+        # check cached mapping
         if self._mapping is not None:
-            # info end
             self.logger.info_down("Build input-output variables mapping ... ALREADY AVAILABLE. SKIPPED.")
             return self._mapping
 
+        # initialize result
         result: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
-        # set keys in and out
-        keys_in, keys_out = set(self._data_in.keys()), set(self._data_out.keys())
+        # organize input data by workflow/process
+        data_in_by_process = {}
+        for data_key, data_obj in self._data_in.items():
 
-        missing_out = sorted(keys_in - keys_out)
-        if missing_out:
-            self.logger.warning(f"Keys present only in input: {missing_out}")
-        missing_in = sorted(keys_out - keys_in)
-        if missing_in:
-            self.logger.warning(f"Keys present only in output: {missing_in}")
+            # get process and variable
+            process_name, variable_name = data_key.split(":", 1)
+            # initialize process
+            if process_name not in data_in_by_process:
+                data_in_by_process[process_name] = {}
+            # store variable object
+            data_in_by_process[process_name][variable_name] = data_obj
 
-        # define shared keys
-        shared_keys = keys_in & keys_out
+        # organize output data by workflow/process
+        data_out_by_process = {}
+        for data_key, data_obj in self._data_out.items():
 
-        # if shared keys are not defined, group variable definitions
-        if not shared_keys:
+            # get process and variable
+            process_name, variable_name = data_key.split(":", 1)
+            # initialize process
+            if process_name not in data_out_by_process:
+                data_out_by_process[process_name] = {}
 
-            grouped = {}
-            # preserve original dictionary order:
-            # input definitions first, then output definitions
-            for key in list(self._data_in.keys()) + list(self._data_out.keys()):
-                var, defs = key.split(":", 1)
-                grouped.setdefault(var, [])
-                for def_name in defs.split("|"):
-                    if def_name not in grouped[var]:
-                        grouped[var].append(def_name)
+            # store variable object
+            data_out_by_process[process_name][variable_name] = data_obj
 
-            # map variable -> grouped workflow key
-            grouped_keys = {var: f"{var}:{'|'.join(defs)}" for var, defs in grouped.items()}
+        # get all available processes
+        processes_in, processes_out = set(data_in_by_process.keys()), set(data_out_by_process.keys())
+        all_processes = processes_in | processes_out
 
-            # update input keys
-            data_in_new = {}
-            for key, value in self._data_in.items():
-                var, _ = key.split(":", 1)
-                new_key = grouped_keys[var]
-                data_in_new[new_key] = value
+        # check incomplete processes
+        for process_name in all_processes:
+            if process_name not in data_in_by_process:
+                self.logger.warning(f"Process '{process_name}' has output variables but no input variables.")
+            if process_name not in data_out_by_process:
+                self.logger.warning(f"Process '{process_name}' has input variables but no output variables.")
 
-            # update output keys
-            data_out_new = {}
-            for key, value in self._data_out.items():
-                var, _ = key.split(":", 1)
-                new_key = grouped_keys[var]
-                data_out_new[new_key] = value
-
-            self._data_in = data_in_new
-            self._data_out = data_out_new
-
-            # grouped keys are now shared by input and output
-            shared_keys = set(grouped_keys.values())
-
-        # iterate over shared keys
-        for key in shared_keys:
+        # iterate over processes
+        for process_name in all_processes:
 
             # info start
-            self.logger.info_up(f"Build mapping for key: '{key}' ... ")
+            self.logger.info_up(f"Build mapping for process: '{process_name}' ... ")
 
-            obj_in = self._as_list(self._data_in.get(key))
-            obj_out = self._as_list(self._data_out.get(key))
+            # get process input/output objects
+            process_data_in = data_in_by_process.get(process_name, {})
+            process_data_out = data_out_by_process.get(process_name, {})
 
-            for side, objs in (("in", obj_in), ("out", obj_out)):
-                for idx, partial in enumerate(objs):
+            # check input/output availability
+            if not process_data_in:
+                self.logger.warning(f"Process '{process_name}' is not available in input data.")
+            if not process_data_out:
+                self.logger.warning(f"Process '{process_name}' is not available in output data.")
 
-                    # sort labels and items
-                    labels_sorted, workflow_sorted, items_sorted = self._sorted_labels_and_items(
-                        partial, key, side, idx, count=self._data_count)
+            # initialize process mapping
+            result[process_name] = {"in": {}, "out": {}}
+            # iterate over input/output sides
+            for side, process_data in (("in", process_data_in), ("out", process_data_out)):
 
-                    # check length mismatch
-                    if len(labels_sorted) != len(items_sorted):
-                        self.logger.warning(
-                            f"[{key}] {side.upper()} side mismatch: "
-                            f"{len(labels_sorted)} labels vs {len(items_sorted)} template items; "
-                            f"extra entries will be ignored."
-                        )
+                # skip empty side
+                if not process_data:
+                    continue
 
-                    # iterate over sorted labels and items
-                    for label, (tpl_key, tpl_val) in zip(labels_sorted, items_sorted):
+                # iterate over process variables
+                for variable_name, data_obj in process_data.items():
 
-                        label = str(label)
-                        tpl_key = str(tpl_key)
-                        if label not in result:
-                            result[label] = {"in": {}, "out": {}}
+                    # define complete key
+                    data_key = f"{process_name}:{variable_name}"
+                    # normalize objects
+                    obj_list = self._as_list(data_obj)
 
-                        if tpl_key in result[label][side] and result[label][side][tpl_key] != tpl_val:
-                            self.logger.warning(
-                                f"[{label}] {side.upper()} template key '{tpl_key}' is being overwritten."
-                            )
-                        result[label][side][tpl_key] = tpl_val
+                    # iterate over partial objects
+                    for idx, partial in enumerate(obj_list):
+
+                        # get partial mapping
+                        partial_mapping = self._get_partial_mapping(
+                            partial=partial, tag=data_key, side=side, index_in_tag=idx)
+
+                        # skip empty mapping
+                        if not partial_mapping:
+                            continue
+
+                        # merge partial mapping
+                        for label, label_mapping in partial_mapping.items():
+
+                            # initialize label
+                            if label not in result[process_name][side]:
+                                result[process_name][side][label] = {}
+
+                            # iterate over template pairs
+                            for tpl_key, tpl_value in label_mapping.items():
+
+                                # check existing value
+                                current_value = result[process_name][side][label].get(
+                                    tpl_key,
+                                    None
+                                )
+
+                                # warn about overwrite
+                                if (
+                                        current_value is not None
+                                        and current_value != tpl_value):
+                                    self.logger.warning(
+                                        f"[{process_name}:{label}] "
+                                        f"{side.upper()} template key '{tpl_key}' "
+                                        f"is being overwritten: "
+                                        f"'{current_value}' -> '{tpl_value}'."
+                                    )
+
+                                # store mapping
+                                result[process_name][side][label][tpl_key] = tpl_value
 
             # info end
-            self.logger.info_down(f"Build mapping for key: '{key}' ... DONE")
+            self.logger.info_down(
+                f"Build mapping for process: '{process_name}' ... DONE")
 
-        # print summary to check if mapping is correct
-        for wf_name, wf_struct in result.items():
-            self.logger.info(f"'{wf_name}' = {{dict: {len(wf_struct)}}} {wf_struct}")
+
+        # print mapping summary
+        for process_name, process_mapping in result.items():
+
+            self.logger.info(f"Process '{process_name}':")
+
+            # input mapping
+            self.logger.info(f"  IN [{len(process_mapping['in'])}]:")
+
+            for variable_name, variable_mapping in process_mapping["in"].items():
+                self.logger.info(
+                    f"    '{variable_name}' -> {variable_mapping}"
+                )
+
+            # output mapping
+            self.logger.info(f"  OUT [{len(process_mapping['out'])}]:")
+
+            for variable_name, variable_mapping in process_mapping["out"].items():
+                self.logger.info(
+                    f"    '{variable_name}' -> {variable_mapping}"
+                )
 
         # cache mapping
         self._mapping = result
 
         # info end
-        self.logger.info_down("Build input-output variables mapping ... DONE")
+        self.logger.info_down(
+            "Build input-output variables mapping ... DONE"
+        )
 
         return result
+    # ----------------------------------------------------------------------------------------------------------------------
 
+    # method to create a compact rows
     def compact_rows(self, start_id: int = 1) -> List[Dict[str, Any]]:
 
         mapping = self.build_mapping()
@@ -172,6 +228,7 @@ class Mapper:
                 next_id += 1
         return rows
 
+    # method to collect rows by priority (variable first of all)
     def get_rows_by_priority(
         self,
         priority_vars: Optional[List[str]] = None,
@@ -207,6 +264,7 @@ class Mapper:
 
         return priority_part + others_part
 
+    # method to get pairs
     def get_pairs(self, name: str, type: str = "workflow") -> Union[List[Dict[str, Any]], Dict[str, Any]]:
         if type not in ("tag", "workflow", "reference"):
             raise ValueError("type must be 'tag', 'workflow' or 'reference'.")
@@ -302,159 +360,100 @@ class Mapper:
             return partial.get(key, default)
         return getattr(partial, key, default)
 
-    def _sorted_labels_and_items(
-        self,
-        partial: Any,
-        tag: str,
-        side: str,
-        index_in_tag: int,
-        count: int = 1,
-    ) -> Tuple[
-        List[str],
-        List[str],
-        List[Tuple[str, Any]],
-    ]:
+    # method to get partial mapping
+    def _get_partial_mapping(
+            self,
+            partial: Any,
+            tag: str,
+            side: str,
+            index_in_tag: int):
 
-        # get file variables
-        file_vars = self._getattr_or_key(partial, "file_variable", None)
+        # check side
+        if side not in ("in", "out"):
+            raise ValueError(
+                f"Unsupported side '{side}'. Expected 'in' or 'out'."
+            )
+
+        # get variables
+        file_vars = self._getattr_or_key(
+            partial,
+            "file_variable",
+            None
+        )
+
         if file_vars is None:
             self.logger.warning(
                 f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                "missing 'file_variable'; skipping."
+                f"missing 'file_variable'; skipping."
             )
-            return [], [], []
+            return {}
 
-        # get file workflows
-        file_wf = self._getattr_or_key(partial, "file_workflow", None)
-        if file_wf is None:
+        # get workflows
+        file_workflows = self._getattr_or_key(
+            partial,
+            "file_workflow",
+            None
+        )
+
+        if file_workflows is None:
             self.logger.warning(
                 f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                "missing 'file_workflow'; skipping."
+                f"missing 'file_workflow'; skipping."
             )
-            return [], [], []
-
-        # normalize variables
-        labels = (
-            [str(x) for x in file_vars]
-            if isinstance(file_vars, (list, tuple, set))
-            else [str(file_vars)]
-        )
-
-        # normalize workflows
-        workflows = (
-            [str(x) for x in file_wf]
-            if isinstance(file_wf, (list, tuple, set))
-            else [str(file_wf)]
-        )
-
-        # deterministic order
-        labels_sorted = sorted(labels)
-
-        # manage workflow according to variable count relation
-        if count == 1:
-            # same number of input/output variables:
-            # keep workflow and labels separated, one-to-one
-            workflow_sorted = list(workflows)
-            labels_sorted = list(labels_sorted)
-        elif count in (2, 3):
-            # different number of input/output variables:
-            # workflow belongs to the whole variable group
-            workflow = "|".join(workflows)
-            # same grouped workflow associated with every variable
-            workflow_sorted = [workflow] * len(labels_sorted)
-        else:
-            raise ValueError(f"Unsupported data_count '{data_count}'. Expected 1, 2 or 3.")
+            return {}
 
         # get variable template
         variable_template = self._getattr_or_key(
-            partial, "variable_template", None
+            partial,
+            "variable_template",
+            None
         )
 
         if not isinstance(variable_template, (dict, AbcMapping)):
             self.logger.warning(
                 f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                "missing 'variable_template'; skipping."
+                f"missing 'variable_template'; skipping."
             )
-            return [], [], []
+            return {}
 
-        vars_data = variable_template.get("vars_data")
+        # get vars data
+        vars_data = variable_template.get("vars_data", None)
 
         if not isinstance(vars_data, (dict, AbcMapping)):
             self.logger.warning(
                 f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                "'vars_data' is not a mapping; skipping."
+                f"'vars_data' is not a mapping; skipping."
             )
-            return [], [], []
+            return {}
 
-        items_map = {name: i for i, name in enumerate(file_wf)}
-        items_tmp = sorted(
-            ((str(k), v) for k, v in vars_data.items()),
-            key=lambda kv: items_map.get(kv[0], len(items_map)),
-        )
+        # normalize variables
+        if not isinstance(file_vars, (list, tuple)):
+            file_vars = [file_vars]
 
-        # get unique items
-        items_keys_unique = [k for k, _ in items_tmp]
-        items_values_unique = [v for _, v in items_tmp]
+        # normalize workflows
+        if not isinstance(file_workflows, (list, tuple)):
+            file_workflows = [file_workflows]
 
-        # get order based on side
-        if side == "in":
-            # order using values
-            idx_order = sorted(
-                range(len(items_values_unique)),
-                key=lambda i: workflows.index(items_values_unique[i])
-            )
+        # convert to strings
+        file_vars = [str(var) for var in file_vars]
+        file_workflows = [str(workflow) for workflow in file_workflows]
 
-        elif side == "out":
-            # order using keys
-            idx_order = sorted(
-                range(len(items_keys_unique)),
-                key=lambda i: workflows.index(items_keys_unique[i])
-            )
+        # initialize mapping
+        partial_mapping = {}
 
-        else:
-            raise ValueError(f"Unsupported side: {side}")
+        # organize mapping
+        for variable in file_vars:
 
-        # items keys
-        items_keys_unique = [items_keys_unique[i] for i in idx_order]
-        items_keys_merged = ["|".join(items_keys_unique)]
-        items_keys_common = items_keys_unique + items_keys_merged
-        # items values
-        items_values_unique = [items_values_unique[i] for i in idx_order]
-        items_values_merged = ["|".join(items_values_unique)]
-        items_values_common = items_values_unique + items_values_merged
+            partial_mapping[variable] = {}
 
-        item_selected, keys_selected = [], []
-        for label, workflow in zip(labels_sorted, workflow_sorted):
+            for template_key, template_value in vars_data.items():
 
-            if side == "in":
-                items_search = items_values_common
-            elif side == "out":
-                items_search = items_keys_common
-            else:
-                raise ValueError(f"Unsupported side: '{side}'")
+                template_key = str(template_key)
+                template_value = str(template_value)
 
-            if workflow in items_search:
-                # get workflow position
-                idx = items_search.index(workflow)
+                partial_mapping[variable][template_key] = template_value
 
-                # select workflow and corresponding key
-                item_selected.append(items_values_common[idx])
-                keys_selected.append(items_keys_common[idx])
-
-            else:
-                self.logger.warning(
-                    f"Workflow '{workflow}' for label '{label}' "
-                    f"not found in variable template; skipping."
-                )
-
-        if item_selected is None:
-            self.logger.warning(f"Item is not selected for workflow '{workflow}'; skipping.")
-            return labels_sorted, workflow_sorted, []
-
-        # same selected item applies to all variables only when needed
-        items_sorted = list(zip(keys_selected, item_selected))
-
-        return labels_sorted, workflow_sorted, items_sorted
+        return partial_mapping
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -483,82 +482,97 @@ def extract_tag_value(data, tag):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-def build_pairs_and_process(process_list, file_variable, dataset_namespace, str_separator=':'):
-    """
-    Build variable-workflow pairs from DatasetNamespace entries and gather diagnostics.
+# helper to build check variables and processes pairs
 
-    Parameters
-    ----------
-    process_list : dict
-        {var_name: process_info}
-    file_variable : list[str]
-        Variable names (order matters if dataset_namespace is a list/tuple)
-    dataset_namespace : DatasetNamespace | dict[str, DatasetNamespace] | list[DatasetNamespace] | tuple[...]
-        Each DatasetNamespace exposes .variable and .workflow
-    str_separator : str, optional
-        Separator for compact "key:workflow" strings (default ':')
+# check namespace fields
+@with_logger(var_name='logger_stream')
+def _ns_has_fields(ns):
+    # namespace is not defined
+    if ns is None:
+        logger_stream.warning("Namespace is not defined.")
+        return None
+    # variable field is not defined
+    if not hasattr(ns, "variable"):
+        logger_stream.warning("Namespace does not contain the required field 'variable'.")
+        return None
+    # workflow field is not defined
+    if not hasattr(ns, "workflow"):
+        logger_stream.warning("Namespace does not contain the required field 'workflow'.")
+        return None
+    return ns
 
-    Returns
-    -------
-    pairs_list_str    : list[str]             # ["key:workflow", ...]
-    pairs_list_tuple  : list[tuple[str,str]]  # [(key, workflow), ...]
-    process_found     : list                  # [process_list[key], ...]
-    process_dict      : dict[str, any]        # {"key:workflow": process_info, ...}
-    info              : dict                  # diagnostics + {"workflow_tags": {key: workflow or None}}
-    """
-
-    def _ns_has_fields(ns):
-        return ns is not None and hasattr(ns, "variable") and hasattr(ns, "workflow")
-
-    def _resolve_ns(name, idx):
-        if isinstance(dataset_namespace, dict):
-            return dataset_namespace.get(name)
-        if isinstance(dataset_namespace, (list, tuple)):
-            return dataset_namespace[idx] if 0 <= idx < len(dataset_namespace) else None
-        return dataset_namespace  # single namespace used for all
-
-    def _dataset_keys():
-        if isinstance(dataset_namespace, dict):
-            return list(dataset_namespace.keys())
-        if isinstance(dataset_namespace, (list, tuple)):
-            return [ns.variable for ns in dataset_namespace if _ns_has_fields(ns)]
-        return [dataset_namespace.variable] if _ns_has_fields(dataset_namespace) else []
-
-    process_found = []
-    pairs_list_tuple = []
-    pairs_list_str = []
-    process_dict = {}
-    workflow_tags = {}
+@with_logger(var_name='logger_stream')
+def build_pairs_and_process(process_list, dataset_namespace,
+                            key_separator=':', key_order='workflow_and_variable'):
 
     # check file variable as a list
-    if not isinstance(file_variable, list):
-        file_variable = [file_variable]
+    if not isinstance(dataset_namespace, list):
+        dataset_namespace = [dataset_namespace]
 
-    for i, var_name in enumerate(file_variable):
-        if var_name not in process_list:
+    # iterate over namespace(s)
+    process_selection, process_collections = [], {}
+    pairs_list_str, pairs_list_tuple = [], []
+    workflow_found, workflow_missed, workflow_collections, workflow_tags = [], [], {}, []
+    for i, step_namespace in enumerate(dataset_namespace):
+
+        # check namespace fields
+        step_namespace = _ns_has_fields(step_namespace)
+        if step_namespace is None:
+            logger_stream.error('Namespace obj is defined by NoneType')
+            raise TypeError("Namespace obj must be defined as (variable, workflow) pair")
+
+        # get variable and workflow
+        step_var, step_workflow = step_namespace.variable, step_namespace.workflow
+
+        # warn if step workflow is not defined in process list
+        if step_workflow not in process_list:
+            workflow_missed.append(step_workflow)
+            logger_stream.warning(
+                f"Namespace workflow '{step_workflow}' for variable '{step_var}' not in process_list {process_list} ")
             continue
-
-        ns = _resolve_ns(var_name, i)
-        if _ns_has_fields(ns):
-            tag_workflow = ns.workflow
         else:
-            tag_workflow = var_name  # fallback if namespace missing
+            workflow_found.append(step_workflow)
 
-        key = f"{var_name}{str_separator}{tag_workflow}"
+        # get key(s) by a default order
+        if key_order == 'workflow_and_variable':
+            step_key_str = f"{step_workflow}{key_separator}{step_var}"
+            step_key_tuple = (step_workflow, step_var)
+        elif key_order == 'variable_and_workflow':
+            step_key_str = f"{step_var}{key_separator}{step_workflow}"
+            step_key_tuple = (step_var, step_workflow)
+        else:
+            logger_stream.error('key order in define pairs must be "workflow_and_variable" or "variable_and_workflow"')
+            raise NotImplementedError('Case not implemented yet')
 
-        pairs_list_tuple.append((var_name, tag_workflow))
-        pairs_list_str.append(key)
-        process_found.append(process_list[var_name])
-        process_dict[key] = process_list[var_name]
-        workflow_tags[var_name] = tag_workflow if _ns_has_fields(ns) else None
+        # get process(s)
+        step_process = process_list[step_workflow]
 
-    dataset_keys = _dataset_keys()
+        # organize pairs object(s)
+        pairs_list_tuple.append(step_key_tuple)
+        pairs_list_str.append(step_key_str)
+        # organize process object(s)
+        process_selection.append(step_process)
+        process_collections[step_key_str] = step_process
+        # organize workflow object(s)
+        workflow_tags.append(step_workflow)
+        workflow_collections[step_key_str] = step_workflow
+
+    # check workflows available in process_list but not used by namespaces
+    workflow_unused = []
+    for process_workflow in process_list.keys():
+        if process_workflow not in workflow_found:
+            workflow_unused.append(process_workflow)
+
+            logger_stream.warning(
+                f"Process '{process_workflow}' is available in process_list but is not available in namespaces.")
+
+    # info object
     info = {
-        "missing_in_dataset": [v for v in file_variable if v not in dataset_keys],
-        "missing_in_process": [v for v in file_variable if v not in process_list],
-        "extras_in_process": [k for k in process_list if k not in file_variable],
+        "available_in_process_list": workflow_found,
+        "missing_in_process_list": workflow_missed,
+        "extras_in_process_list": workflow_unused,
         "workflow_tags": workflow_tags,
     }
 
-    return pairs_list_str, pairs_list_tuple, process_found, info
+    return pairs_list_str, pairs_list_tuple, process_selection, info
 # ----------------------------------------------------------------------------------------------------------------------

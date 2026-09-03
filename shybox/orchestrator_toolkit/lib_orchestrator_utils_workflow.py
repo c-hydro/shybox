@@ -31,11 +31,27 @@ def normalize_deps(deps):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to count variables in package
+def _count_vars(data_packages):
+
+    # normalize packages
+    if isinstance(data_packages, dict):
+        packages = data_packages.values()
+    elif isinstance(data_packages, (list, tuple)):
+        packages = data_packages
+    else:
+        packages = [data_packages]
+    # count variables
+    n_vars = 0
+    for data_package in packages:
+        n_vars += len(data_package.variable_template['vars_data'])
+
+    return n_vars
+
 @with_logger(var_name='logger_stream')
 def count_variables(data_package_in, data_package_out, options):
 
-    n_vars_in = len(data_package_in.variable_template['vars_data'].keys())
-    n_vars_out = len(data_package_out.variable_template['vars_data'].keys())
+    n_vars_in = _count_vars(data_package_in)
+    n_vars_out = _count_vars(data_package_out)
 
     expected = options.get("variables", {})
     expected_in, expected_out = expected.get("in", None), expected.get("out", None)
