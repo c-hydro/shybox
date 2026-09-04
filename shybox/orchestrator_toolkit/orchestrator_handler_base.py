@@ -55,8 +55,8 @@ class OrchestratorBase:
         data_out: Union[DataLocal, Dict[str, Any], None] = None,
         deps_in: Union[DataLocal, Dict[str, Any], None] = None,
         deps_out: Union[DataLocal, Dict[str, Any], None] = None,
-        args_in: dict = None,
-        args_out: dict = None,
+        args_in: dict = None, args_out: dict = None,
+        maps_in: dict = None, maps_out: dict = None,
         options: Union[dict, None] = None,
         mapper: Any = None,
         logger: LoggingManager = None,
@@ -72,6 +72,9 @@ class OrchestratorBase:
 
         self.args_in = args_in
         self.args_out = args_out
+
+        self.maps_in = maps_in
+        self.maps_out = maps_out
 
         self.processes: List[ProcessorContainer] = []
         self.break_points: List[int] = []
@@ -230,22 +233,25 @@ class OrchestratorBase:
         return out_obj
 
     # method to add a process to the orchestrator
-    def add_process(self, function, datasets: dict = None,
+    def add_process(self, function_obj, function_name, datasets: dict = None,
                     process_output: Union[DataLocal, xr.Dataset, dict] = None, **kwargs) -> None:
 
         # get process var tag
-        if 'workflow' in kwargs:
-            process_wf = kwargs['workflow']
+        if 'workflow_name' in kwargs:
+            process_wf = kwargs['workflow_name']
         else:
-            self.logger.error('Process variable "workflow" must be provided in the process arguments.')
+            self.logger.error('Process variable "workflow_name" must be provided in the process arguments.')
             raise RuntimeError('Process variable "workflow" must be provided in the process arguments.')
 
         # get process map
-        process_map = self.mapper.get_pairs(name=process_wf, type='workflow') if self.mapper is not None else {}
+        process_map = self.mapper.get_pairs(field_value=function_name, field_key='fx')
+
         # get process variable in/out
         process_var_in, process_var_out = process_map['in'], process_map['out']
-        process_var_tag, process_var_workflow = process_map['tag'], process_map['workflow']
-        process_var_reference = ':'.join([process_var_tag, process_var_workflow])
+        process_var_tag, process_var_workflow = process_map['tag'], process_map['workflow_name']
+        process_process_ref, process_fx_ref = process_map['process_reference'], process_map['reference']
+        process_links_in, process_links_out = process_map['links_in'], process_map['links_out']
+       #process_var_reference = ':'.join([process_var_tag, process_var_workflow])
         # update kwargs with process map
         kwargs = {**kwargs, **process_map}
 
@@ -298,11 +304,11 @@ class OrchestratorBase:
 
         # create the process output
         this_output = self.make_output(
-            tmp_input, process_output, function, message=False, **kwargs)
+            tmp_input, process_output, function_obj, message=False, **kwargs)
 
         # create the process container
         this_process = ProcessorContainer(
-            function = function, datasets=datasets,
+            function = function_obj, datasets=datasets,
             in_obj = this_input, in_opts=self.options,
             in_deps=deps_input, out_deps=None,
             args = kwargs,
@@ -622,19 +628,21 @@ class OrchestratorBase:
 
             # re-assign current workflow to workspace
             proc_wf_current = proc_wf_tmp
-            #proc_ws[proc_wf_current] = proc_return[-1]
-            #proc_ws[proc_current] = proc_return[-1]
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# helpers
+# helper to merge by times
 def _merge_by_time(times):
     return [times]
 
+# helper to merge by process
 def _merge_by_process(containers):
     merged = {}
 
     for pc in containers:
-        process, key, variable, sources = pc.args  # adapt if attribute name differs
 
+        process, key, variable, sources = pc.args  # adapt if attribute name differs
         base_key = (process, variable)
 
         # split existing sources
@@ -649,15 +657,10 @@ def _merge_by_process(containers):
     for (process, variable), src_set in merged.items():
         src_str = ",".join(sorted(src_set))
         key = f"{variable}:{src_str}"
-
-        result.append(
-            ProcessorContainer((process, key, variable, src_str))
-        )
+        result.append(ProcessorContainer((process, key, variable, src_str)))
 
     return result
 
-
-# ----------------------------------------------------------------------------------------------------------------------
 # helper to format time for logging
 def pretty_time(ts):
 

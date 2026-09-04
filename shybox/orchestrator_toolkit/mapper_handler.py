@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 from collections.abc import Mapping as AbcMapping
 
+from shybox.orchestrator_toolkit.mapper_linker import Data
 from shybox.logging_toolkit.logging_handler import LoggingManager
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
@@ -27,12 +28,16 @@ class Mapper:
         self,
         data_collections_in: Mapping[str, Union[Any, List[Any]]],
         data_collections_out: Mapping[str, Union[Any, List[Any]]],
+        fx_collections_in: Union(dict, None) = None,
+        fx_collections_out: Union(dict, None) = None,
         data_count: Optional[int] = 1,
         logger: LoggingManager = None,) -> None:
 
         self.logger = logger or LoggingManager(name="Mapper")
         self._data_in = data_collections_in
         self._data_out = data_collections_out
+        self._fx_in = fx_collections_in
+        self._fx_out = fx_collections_out
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
         self._data_count: int = data_count
 
@@ -42,10 +47,16 @@ class Mapper:
         # info start
         self.logger.info_up("Build input-output variables mapping ... ")
 
+        # get fx configuration
+        fx_in_by_process, fx_out_by_process = self._fx_in, self._fx_out
+
         # check cached mapping
         if self._mapping is not None:
             self.logger.info_down("Build input-output variables mapping ... ALREADY AVAILABLE. SKIPPED.")
             return self._mapping
+
+        # get fx configuration
+        fx_in_by_process, fx_out_by_process = self._fx_in or {}, self._fx_out or {}
 
         # initialize result
         result: Dict[str, Dict[str, Dict[str, Any]]] = {}
@@ -76,8 +87,8 @@ class Mapper:
             data_out_by_process[process_name][variable_name] = data_obj
 
         # get all available processes
-        processes_in, processes_out = set(data_in_by_process.keys()), set(data_out_by_process.keys())
-        all_processes = processes_in | processes_out
+        all_processes = (set(data_in_by_process) | set(data_out_by_process) |
+                         set(fx_in_by_process) | set(fx_out_by_process))
 
         # check incomplete processes
         for process_name in all_processes:
@@ -92,18 +103,29 @@ class Mapper:
             # info start
             self.logger.info_up(f"Build mapping for process: '{process_name}' ... ")
 
-            # get process input/output objects
+            # get process input/output data
             process_data_in = data_in_by_process.get(process_name, {})
             process_data_out = data_out_by_process.get(process_name, {})
+            # get process input/output fx
+            process_fx_in = fx_in_by_process.get(process_name, {})
+            process_fx_out = fx_out_by_process.get(process_name, {})
 
-            # check input/output availability
+            # check input/output data availability
             if not process_data_in:
                 self.logger.warning(f"Process '{process_name}' is not available in input data.")
             if not process_data_out:
                 self.logger.warning(f"Process '{process_name}' is not available in output data.")
+            # check input/output fx availability
+            if not process_fx_in:
+                self.logger.warning(f"Process '{process_name}' is not available in input fx.")
+            if not process_fx_out:
+                self.logger.warning(f"Process '{process_name}' is not available in output fx.")
 
             # initialize process mapping
-            result[process_name] = {"in": {}, "out": {}}
+            result[process_name] = {
+                "in": {"data": {}, "fx": {},},
+                "out": {"data": {}, "fx": {},},
+            }
             # iterate over input/output sides
             for side, process_data in (("in", process_data_in), ("out", process_data_out)):
 
@@ -111,20 +133,22 @@ class Mapper:
                 if not process_data:
                     continue
 
+                # destination data branch
+                mapping_data = result[process_name][side]["data"]
                 # iterate over process variables
                 for variable_name, data_obj in process_data.items():
 
                     # define complete key
                     data_key = f"{process_name}:{variable_name}"
+
                     # normalize objects
                     obj_list = self._as_list(data_obj)
-
                     # iterate over partial objects
                     for idx, partial in enumerate(obj_list):
 
                         # get partial mapping
                         partial_mapping = self._get_partial_mapping(
-                            partial=partial, tag=data_key, side=side, index_in_tag=idx)
+                            partial=partial,tag=data_key, side=side,index_in_tag=idx,)
 
                         # skip empty mapping
                         if not partial_mapping:
@@ -134,17 +158,13 @@ class Mapper:
                         for label, label_mapping in partial_mapping.items():
 
                             # initialize label
-                            if label not in result[process_name][side]:
-                                result[process_name][side][label] = {}
+                            mapping_data.setdefault(label, {})
 
                             # iterate over template pairs
                             for tpl_key, tpl_value in label_mapping.items():
 
-                                # check existing value
-                                current_value = result[process_name][side][label].get(
-                                    tpl_key,
-                                    None
-                                )
+                                # get existing value
+                                current_value = mapping_data[label].get(tpl_key,None,)
 
                                 # warn about overwrite
                                 if (
@@ -152,200 +172,281 @@ class Mapper:
                                         and current_value != tpl_value):
                                     self.logger.warning(
                                         f"[{process_name}:{label}] "
-                                        f"{side.upper()} template key '{tpl_key}' "
-                                        f"is being overwritten: "
+                                        f"{side.upper()} DATA template key "
+                                        f"'{tpl_key}' is being overwritten: "
                                         f"'{current_value}' -> '{tpl_value}'."
                                     )
 
                                 # store mapping
-                                result[process_name][side][label][tpl_key] = tpl_value
+                                mapping_data[label][tpl_key] = tpl_value
+
+            # store fx mappings
+            result[process_name]["in"]["fx"] = dict(process_fx_in)
+            result[process_name]["out"]["fx"] = dict(process_fx_out)
 
             # info end
-            self.logger.info_down(
-                f"Build mapping for process: '{process_name}' ... DONE")
-
+            self.logger.info_down(f"Build mapping for process: '{process_name}' ... DONE")
 
         # print mapping summary
         for process_name, process_mapping in result.items():
 
-            self.logger.info(f"Process '{process_name}':")
+            # info summary start
+            self.logger.info_up(f"Process '{process_name}' ... ")
 
-            # input mapping
-            self.logger.info(f"  IN [{len(process_mapping['in'])}]:")
+            # iterate over sides
+            for side in ("in", "out"):
 
-            for variable_name, variable_mapping in process_mapping["in"].items():
-                self.logger.info(
-                    f"    '{variable_name}' -> {variable_mapping}"
-                )
+                # get mappings
+                data_mapping = process_mapping[side]["data"]
+                fx_mapping = process_mapping[side]["fx"]
 
-            # output mapping
-            self.logger.info(f"  OUT [{len(process_mapping['out'])}]:")
+                # data mapping
+                self.logger.info(f"  {side.upper()} DATA [{len(data_mapping)}]:")
+                for variable_name, variable_mapping in data_mapping.items():
+                    self.logger.info(f"    '{variable_name}' -> {variable_mapping}")
+                # fx mapping
+                self.logger.info(f"  {side.upper()} FX [{len(fx_mapping)}]:")
+                for variable_name, variable_mapping in fx_mapping.items():
+                    self.logger.info(f"    '{variable_name}' -> {variable_mapping}")
 
-            for variable_name, variable_mapping in process_mapping["out"].items():
-                self.logger.info(
-                    f"    '{variable_name}' -> {variable_mapping}"
-                )
+            # info summary end
+            self.logger.info_down(f"Process '{process_name}' ... DEFINED")
 
         # cache mapping
         self._mapping = result
-
         # info end
-        self.logger.info_down(
-            "Build input-output variables mapping ... DONE"
-        )
+        self.logger.info_down("Build input-output variables mapping ... DONE")
 
         return result
-    # ----------------------------------------------------------------------------------------------------------------------
 
-    # method to create a compact rows
-    def compact_rows(self, start_id: int = 1) -> List[Dict[str, Any]]:
+    # method to create compact rows
+    def compact_rows(
+            self,
+            start_id: int = 1,
+            process_tag: Optional[str] = "process") -> List[Dict[str, Any]]:
 
+        # build input/output mapping
         mapping = self.build_mapping()
-        rows: List[Dict[str, Any]] = []
-        next_id = start_id
 
-        for tag in sorted(mapping.keys(), key=str):
-            in_map = mapping[tag].get("in", {}) or {}
-            out_map = mapping[tag].get("out", {}) or {}
+        # initialize links
+        links: Dict[str, Data] = {}
 
-            for in_key, workflow in sorted(in_map.items(), key=lambda kv: str(kv[0])):
-                out_val: Optional[Any] = out_map.get(workflow)
-                if out_val is None:
-                    self.logger.warning(
-                        f"[{tag}] No matching OUT for workflow '{workflow}'. "
-                        f"Available OUT keys: {list(out_map.keys())}"
-                    )
-                rows.append(
-                    {
-                        "tag": str(tag),
-                        "in": str(in_key),
-                        "workflow": str(workflow),
-                        "out": (str(out_val) if out_val is not None else None),
-                        "id": next_id,
-                        "reference": f"{tag}:{workflow}",
-                    }
+        # initialize process id
+        process_id = start_id
+
+        # iterate over workflows
+        for workflow_id, (workflow_name, workflow_mapping) in enumerate(
+                mapping.items(), start=1):
+
+            # normalize workflow name
+            workflow_name = str(workflow_name)
+
+            # get input/output sections
+            in_section = workflow_mapping.get("in", {}) or {}
+            out_section = workflow_mapping.get("out", {}) or {}
+
+            # get data mappings
+            in_data = in_section.get("data", {}) or {}
+            out_data = out_section.get("data", {}) or {}
+
+            # get fx mappings
+            in_fx = in_section.get("fx", {}) or {}
+            out_fx = out_section.get("fx", {}) or {}
+
+            # collect all methods available for current workflow
+            fx_names = list(dict.fromkeys([*in_fx.keys(),*out_fx.keys(),]))
+
+            # collect workflow input keys
+            variables_in = []
+            # iterate over input variables
+            for variable_key, variable_mapping in in_data.items():
+                # skip empty mapping
+                if not variable_mapping:
+                    continue
+                if variable_key not in variables_in:
+                    variables_in.append(variable_key)
+                else:
+                    raise RuntimeError(f"Variable IN key '{variable_key}' is already defined. Change name in settings")
+            # collect workflow output keys
+            variables_out = []
+            # iterate over input variables
+            for variable_key, variable_mapping in out_data.items():
+                # skip empty mapping
+                if not variable_mapping:
+                    continue
+                if variable_key not in variables_out:
+                    variables_out.append(variable_key)
+                else:
+                    raise RuntimeError(f"Variable OUT key '{variable_key}' is already defined. Change name in settings")
+
+            # iterate over methods/processes
+            for fx_name in fx_names:
+
+                # get fx input/output mappings
+                fx_mapping_in = in_fx.get(fx_name, {}) or {}
+                fx_mapping_out = out_fx.get(fx_name, {}) or {}
+
+                # define process tag
+                tag = (str(process_tag) if process_tag is not None else str(fx_name))
+                # define process name
+                process_name = f"{tag}.{process_id}"
+                # define link reference
+                root_key = f"{workflow_name}:{fx_name}"
+
+                # initialize link
+                link = Data(
+                    workflow_id=workflow_id,
+                    workflow_name=workflow_name,
+                    process_id=process_id,
+                    process_name=process_name,
+                    variables_in=variables_in.copy(),
+                    variables_out=variables_out.copy(),
+                    fx=str(fx_name),
+                    fx_in=dict(fx_mapping_in),
+                    fx_out=dict(fx_mapping_out),
                 )
-                next_id += 1
+
+                # store link
+                links[root_key] = link
+
+                # update global process id
+                process_id += 1
+
+        # convert objects to compact rows
+        rows = [link.to_dict() for link in links.values()]
+
         return rows
 
-    # method to collect rows by priority (variable first of all)
+    # method to collect rows by priority (workflow first of all)
     def get_rows_by_priority(
-        self,
-        priority_vars: Optional[List[str]] = None,
-        rows: Optional[List[Dict[str, Any]]] = None,
-        code: Optional[int] = 1,
-        *,
-        sort_others: bool = True,
-        start_id: int = 1,
-        field: str = "in",
-    ) -> List[Dict[str, Any]]:
+            self,
+            priority: Optional[List[str]] = None,
+            rows: Optional[List[Dict[str, Any]]] = None,
+            *,
+            sort_others: bool = True,
+            start_id: int = 1,
+            field: str = "workflow_name",) -> List[Dict[str, Any]]:
 
+        # check rows (and create them if not available)
         if rows is None:
             rows = self.compact_rows(start_id=start_id)
-        if not priority_vars:
+
+        # no priority defined
+        if not priority:
             return rows
 
-        priority_vars_str = [str(v) for v in priority_vars]
-        priority_part: List[Dict[str, Any]] = []
-        others_part: List[Dict[str, Any]] = []
+        # normalize priority workflows
+        priority_workflows = [str(workflow) for workflow in priority]
 
+        # initialize collections
+        priority_rows: List[Dict[str, Any]] = []
+        other_rows: List[Dict[str, Any]] = []
+
+        # split rows by workflow priority
         for row in rows:
-            var_name = str(row.get(field, ""))
-            (priority_part if var_name in priority_vars_str else others_part).append(row)
+            # get workflow name
+            workflow_name = str(row.get(field, ""))
+            # collect priority rows
+            if workflow_name in priority_workflows:
+                priority_rows.append(row)
+            else:
+                other_rows.append(row)
 
-        priority_part.sort(
-            key=lambda r: priority_vars_str.index(str(r.get(field, "")))
-            if str(r.get(field, "")) in priority_vars_str
-            else len(priority_vars_str)
-        )
+        # sort priority rows according to requested workflow order
+        priority_rows.sort(key=lambda row: priority_workflows.index(str(row.get(field, ""))))
 
+        # optionally sort remaining workflows
         if sort_others:
-            others_part.sort(key=lambda r: str(r.get(field, "")))
+            other_rows.sort(key=lambda row: str(row.get(field, "")))
 
-        return priority_part + others_part
+        # merge priority + remaining rows
+        rows_sorted = priority_rows + other_rows
 
-    # method to get pairs
-    def get_pairs(self, name: str, type: str = "workflow") -> Union[List[Dict[str, Any]], Dict[str, Any]]:
-        if type not in ("tag", "workflow", "reference"):
-            raise ValueError("type must be 'tag', 'workflow' or 'reference'.")
+        return rows_sorted
+    # ------------------------------------------------------------------------------------------------------------------
 
-        mapping = self.build_mapping()
-        rows: List[Dict[str, Any]] = []
+    # ------------------------------------------------------------------------------------------------------------------
+    # method to get pairs based on reference fields
+    def get_pairs(
+            self,
+            field_value,
+            field_key: str = "fx",
+            rows: Optional[list] = None,) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
 
-        if type == "tag":
-            if name not in mapping:
-                raise ValueError(f"Tag '{name}' not found.")
-            tag = name
-            in_map = mapping[tag].get("in", {}) or {}
-            out_map = mapping[tag].get("out", {}) or {}
+        # map reference type to row field
+        field_map = {
+            "tag": "tag",
+            "workflow": "workflow_name",
+            "process": "process_name",
+            "reference": "reference",
+            "fx": "fx",
+        }
 
-            for in_key, wf_name in sorted(in_map.items(), key=lambda kv: str(kv[0])):
-                out_val = out_map.get(wf_name)
-                rows.append(
-                    {
-                        "tag": str(tag),
-                        "in": str(in_key),
-                        "workflow": str(wf_name),
-                        "reference": f"{tag}:{wf_name}",
-                        "out": (str(out_val) if out_val is not None else None),
-                    }
-                )
+        # check type
+        if field_key not in field_map:
+            raise ValueError(f"Type '{field_key}' is not supported. Expected one of {tuple(field_map.keys())}.")
+        field_name = field_map[field_key]
 
-        elif type == "reference":
+        # get rows
+        if rows is None:
+            rows = self.compact_rows()
 
-            if ":" not in name:
-                raise ValueError("Invalid reference. Expected 'tag:workflow'.")
-            tag, wf_name = name.split(":", 1)
+        rows_selected = []
+        for row in rows:
+            # filter rows by fx, if defined
+            if field_name is not None:
+                if row[field_name] == field_value:
+                    rows_selected.append(row)
+            else:
+                rows_selected.append(row)
 
-            if tag not in mapping:
-                raise ValueError(f"Tag '{tag}' not found.")
+        if len(rows_selected) == 1:
+            return rows_selected[0]
+        else:
+            raise RuntimeError('Selected process must be singleton at each step')
 
-            in_map = mapping[tag].get("in", {}) or {}
-            out_map = mapping[tag].get("out", {}) or {}
+    # ------------------------------------------------------------------------------------------------------------------
 
-            matched_in_keys = [k for k, v in in_map.items() if v == wf_name]
-            if not matched_in_keys:
-                raise ValueError(f"No IN entries found for workflow '{wf_name}' under tag '{tag}'.")
+    # ------------------------------------------------------------------------------------------------------------------
+    # method to get dictionary information by field and value
+    @with_logger(var_name="logger_stream")
+    def get_rows_by_field(self, data: Dict[str, Any],field: str, value: Any) -> Optional[Dict[str, Any]]:
 
-            for in_key in sorted(matched_in_keys, key=str):
-                out_val = out_map.get(wf_name)
-                rows.append(
-                    {
-                        "tag": str(tag),
-                        "in": str(in_key),
-                        "workflow": str(wf_name),
-                        "reference": f"{tag}:{wf_name}",
-                        "out": (str(out_val) if out_val is not None else None),
-                    }
-                )
+        # check data
+        if not data:
+            logger_stream.warning("No data available")
+            return None
 
-        else:  # workflow
-            target_wf = name
-            for tag in sorted(mapping.keys(), key=str):
-                in_map = mapping[tag].get("in", {}) or {}
-                out_map = mapping[tag].get("out", {}) or {}
-                for in_key, wf_name in sorted(in_map.items(), key=lambda kv: (str(tag), str(kv[0]))):
-                    if wf_name != target_wf:
-                        continue
-                    out_val = out_map.get(wf_name)
-                    rows.append(
-                        {
-                            "tag": str(tag),
-                            "in": str(in_key),
-                            "workflow": str(wf_name),
-                            "reference": f"{tag}:{wf_name}",
-                            "out": (str(out_val) if out_val is not None else None),
-                        }
-                    )
+        # check current dictionary
+        if data.get(field) == value:
+            return data
 
-            if not rows:
-                raise ValueError(f"No mapping rows found for workflow '{name}'.")
+        # search nested objects
+        for item in data.values():
 
-        return rows[0] if len(rows) == 1 else rows
+            # nested dictionary
+            if isinstance(item, dict):
+                result = self.get_by_field(data=item, field=field,value=value)
 
-    # -----------------------------
-    # Internals
-    # -----------------------------
+                if result is not None:
+                    return result
+
+            # nested list or tuple
+            elif isinstance(item, (list, tuple)):
+                for element in item:
+
+                    if isinstance(element, dict):
+                        result = self.get_by_field(data=element, field=field, value=value)
+                        if result is not None:
+                            return result
+
+        # field/value not found
+        return None
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------------------------------------------------------
+    # helpers
+    # method to return list
     @staticmethod
     def _as_list(obj: Union[Any, List[Any]]) -> List[Any]:
         if obj is None:
@@ -354,6 +455,7 @@ class Mapper:
             return list(obj)
         return [obj]
 
+    # method to get attributes or key
     @staticmethod
     def _getattr_or_key(partial: Any, key: str, default=None):
         if isinstance(partial, (dict, AbcMapping)):
@@ -361,69 +463,35 @@ class Mapper:
         return getattr(partial, key, default)
 
     # method to get partial mapping
-    def _get_partial_mapping(
-            self,
-            partial: Any,
-            tag: str,
-            side: str,
-            index_in_tag: int):
+    def _get_partial_mapping(self, partial: Any, tag: str, side: str, index_in_tag: int):
 
         # check side
         if side not in ("in", "out"):
-            raise ValueError(
-                f"Unsupported side '{side}'. Expected 'in' or 'out'."
-            )
+            raise ValueError(f"Unsupported side '{side}'. Expected 'in' or 'out'.")
 
         # get variables
-        file_vars = self._getattr_or_key(
-            partial,
-            "file_variable",
-            None
-        )
-
+        file_vars = self._getattr_or_key(partial,"file_variable",None)
         if file_vars is None:
-            self.logger.warning(
-                f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                f"missing 'file_variable'; skipping."
-            )
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_variable'; skipping.")
             return {}
 
         # get workflows
-        file_workflows = self._getattr_or_key(
-            partial,
-            "file_workflow",
-            None
-        )
-
+        file_workflows = self._getattr_or_key(partial,"file_workflow",None)
         if file_workflows is None:
-            self.logger.warning(
-                f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                f"missing 'file_workflow'; skipping."
-            )
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'file_workflow'; skipping.")
             return {}
 
         # get variable template
-        variable_template = self._getattr_or_key(
-            partial,
-            "variable_template",
-            None
-        )
+        variable_template = self._getattr_or_key(partial,"variable_template",None)
 
         if not isinstance(variable_template, (dict, AbcMapping)):
-            self.logger.warning(
-                f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                f"missing 'variable_template'; skipping."
-            )
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} missing 'variable_template'; skipping.")
             return {}
 
         # get vars data
         vars_data = variable_template.get("vars_data", None)
-
         if not isinstance(vars_data, (dict, AbcMapping)):
-            self.logger.warning(
-                f"[{tag}] {side.upper()} partial #{index_in_tag} "
-                f"'vars_data' is not a mapping; skipping."
-            )
+            self.logger.warning(f"[{tag}] {side.upper()} partial #{index_in_tag} 'vars_data' is not a mapping; skipping.")
             return {}
 
         # normalize variables
@@ -440,17 +508,14 @@ class Mapper:
 
         # initialize mapping
         partial_mapping = {}
-
         # organize mapping
         for variable in file_vars:
 
             partial_mapping[variable] = {}
-
             for template_key, template_value in vars_data.items():
 
                 template_key = str(template_key)
                 template_value = str(template_value)
-
                 partial_mapping[variable][template_key] = template_value
 
         return partial_mapping

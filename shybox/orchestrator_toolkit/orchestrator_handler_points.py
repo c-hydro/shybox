@@ -166,9 +166,6 @@ class OrchestratorPoints(OrchestratorBase):
             raise RuntimeError(
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
 
-        # method to remap variable tags, in and out
-        workflow_mapper = Mapper(data_collections_in, data_collections_out, data_count=data_count_code, logger=logger)
-
         # organize deps collections in
         deps_collections_in, args_collections_in = {}, {}
         for data_key, data_config in data_collections_in.items():
@@ -244,42 +241,48 @@ class OrchestratorPoints(OrchestratorBase):
                 deps_collections_out[data_key] = data_args_common
                 deps_collections_out[data_key] = args_deps_common
 
-        # define variables_mapping_in (datasets)
-        variables_mapping_in = _check_method_mapping(
+        # define fx in (datasets)
+        fx_collections_in = _check_method_mapping(
             workflow_fx=workflow_fx,
             data_collections=data_collections_in,
             mapping_key='datasets', mandatory=True,
         )
 
-        # define variables_mapping_out (results)
-        datasets_mapping_out = _check_method_mapping(
+        # define fx out (results)
+        fx_collections_out = _check_method_mapping(
             workflow_fx=workflow_fx,
             data_collections=data_collections_out,
             mapping_key='results', mandatory=False
         )
+
+        # method to remap variable tags, in and out
+        workflow_mapper = Mapper(
+            data_collections_in=data_collections_in, data_collections_out=data_collections_out,
+            fx_collections_in=fx_collections_in, fx_collections_out=fx_collections_out,
+            data_count=data_count_code, logger=logger)
 
         # class to create workflow based using the orchestrator
         workflow_common = OrchestratorBase(
             data_in=data_collections_in, data_out=data_collections_out,
             deps_in=deps_collections_in, deps_out=deps_collections_out,
             args_in=args_collections_in, args_out=args_collections_out,
+            maps_in=fx_collections_in, maps_out=fx_collections_out,
             options=workflow_options,
             mapper=workflow_mapper, logger=logger)
 
         # iterate over the defined input variables and their process(es)
-        workflow_configuration = workflow_mapper.get_rows_by_priority(priority_vars=priority, field="tag", )
+        workflow_configuration = workflow_mapper.get_rows_by_priority(priority=priority, field="tag", )
         for workflow_row in workflow_configuration:
 
             # get workflow information by tag
             workflow_tag = workflow_row["tag"]
-            workflow_name = workflow_row["workflow"]
+            workflow_name = workflow_row["workflow_name"]
 
             # info workflow start
             logger.info_up(f'Configure workflow "{workflow_name}" ... ', tag="ow")
 
             # iterate over the defined process(es)
-            process_fx_var = deepcopy(workflow_fx[workflow_tag])
-            process_fx_n = len(process_fx_var)
+            process_fx_var = deepcopy(workflow_fx[workflow_name])
             for process_fx_tmp in process_fx_var:
 
                 # get process name, datasets and object
@@ -292,7 +295,8 @@ class OrchestratorPoints(OrchestratorBase):
 
                 # add the process to the workflow
                 workflow_common.add_process(
-                    process_fx_obj, datasets=process_fx_datasets, ref=data_ref, **process_fx_args)
+                    function_name=process_fx_name, function_obj=process_fx_obj,
+                    datasets=process_fx_datasets, ref=data_ref, **process_fx_args)
 
             # info workflow end
             logger.info_down(f'Configure workflow "{workflow_name}" ... DONE', tag="ow")
@@ -308,8 +312,10 @@ class OrchestratorPoints(OrchestratorBase):
 # ----------------------------------------------------------------------------------------------------------------------
 # method to check methods data args
 def _check_method_mapping(
-        workflow_fx,data_collections,
-        mapping_key='datasets', mandatory=True,
+        workflow_fx,
+        data_collections,
+        mapping_key='datasets',
+        mandatory=True,
         logger: LoggingManager = None):
 
     # define logger (local or external)
@@ -324,124 +330,126 @@ def _check_method_mapping(
     # iterate over workflows
     for wf_ref, wf_opts in workflow_fx.items():
 
-        # get function
-        wf_function = next((item["function"] for item in wf_opts if "function" in item), None)
-        # get selected mapping: datasets or results
-        wf_mapping = next((item[mapping_key] for item in wf_opts if mapping_key in item), None)
-
-        # skip if function or mapping is not defined
-        if wf_function is None or wf_mapping is None:
-            continue
-
-        # initialize workflow/function
+        # initialize workflow summary
         dataset_summary[wf_ref] = {}
-        dataset_summary[wf_ref][wf_function] = {"mapping": {}, "valid": True}
-        # shortcuts
-        function_summary = dataset_summary[wf_ref][wf_function]
-        function_mapping = function_summary["mapping"]
+        # normalize workflow options
+        if not isinstance(wf_opts, (list, tuple)):
+            wf_opts = [wf_opts]
 
-        # collect available variables
-        variables_available = []
-        # iterate over mapping pairs
-        for dataset_key, dataset_value in wf_mapping.items():
+        # iterate over methods belonging to workflow
+        for fx_opts in wf_opts:
 
-            # initialize dataset as unresolved
-            function_mapping[dataset_key] = None
+            # skip invalid method configuration
+            if not isinstance(fx_opts, dict):
+                continue
 
-            # iterate over data collections
-            for data_key, data_obj in data_collections.items():
+            # get function
+            wf_function = fx_opts.get("function", None)
+            # get selected mapping
+            wf_mapping = fx_opts.get(mapping_key, None)
 
-                # get workflow and variable
-                data_workflow, data_variable = data_key.split(":", 1)
+            # skip if function or mapping is not defined
+            if wf_function is None or wf_mapping is None:
+                continue
 
-                # use only data related to current workflow
-                if data_workflow != wf_ref:
-                    continue
+            # initialize function summary
+            dataset_summary[wf_ref][wf_function] = {"mapping": {},"valid": True,}
 
-                # normalize data objects
-                if isinstance(data_obj, (list, tuple)):
-                    data_list = data_obj
-                else:
-                    data_list = [data_obj]
+            # shortcuts
+            function_summary = dataset_summary[wf_ref][wf_function]
+            function_mapping = function_summary["mapping"]
 
-                # iterate over data objects
-                for step_data in data_list:
+            # iterate over mapping pairs
+            variables_available = []
+            for dataset_key, dataset_value in wf_mapping.items():
 
-                    # get available variables
-                    step_vars_obj = step_data.variable_template["vars_data"]
+                # initialize dataset as unresolved
+                function_mapping[dataset_key] = None
 
-                    # select input or output variable namespace
-                    if mapping_key == "datasets":
-                        step_vars_list = list(step_vars_obj.values())
+                # iterate over data collections
+                for data_key, data_obj in data_collections.items():
 
-                    elif mapping_key == "results":
-                        step_vars_list = list(step_vars_obj.keys())
+                    # get workflow and variable
+                    data_workflow, data_variable = data_key.split(":", 1)
+                    # use only data related to current workflow
+                    if data_workflow != wf_ref:
+                        continue
 
+                    # normalize data objects
+                    if isinstance(data_obj, (list, tuple)):
+                        data_list = data_obj
                     else:
-                        raise ValueError(
-                            f"Mapping key '{mapping_key}' is not supported. "
-                            f"Expected 'datasets' or 'results'."
-                        )
+                        data_list = [data_obj]
 
-                    # collect available variables
-                    for step_var in step_vars_list:
-                        if step_var not in variables_available:
-                            variables_available.append(step_var)
+                    # iterate over data objects
+                    for step_data in data_list:
 
-                    # check dataset availability
-                    if dataset_value in step_vars_list:
-                        function_mapping[dataset_key] = dataset_value
+                        # get available variables
+                        step_vars_obj = (step_data.variable_template.get("vars_data", {}))
+
+                        # select variable namespace
+                        if mapping_key == "datasets":
+                            # datasets refers to internal variable names
+                            step_vars_list = list(step_vars_obj.values())
+                        else:
+                            # results refers to external/output variable names
+                            step_vars_list = list(step_vars_obj.keys())
+
+                        # collect available variables
+                        for step_var in step_vars_list:
+                            if step_var not in variables_available:
+                                variables_available.append(step_var)
+
+                        # check variable availability
+                        if dataset_value in step_vars_list:
+                            function_mapping[dataset_key] = dataset_value
+                            break
+
+                    # stop collection search if found
+                    if function_mapping[dataset_key] is not None:
                         break
 
-                # stop collection search if found
-                if function_mapping[dataset_key] is not None:
-                    break
+            # check function validity
+            is_valid = all(dataset_value is not None for dataset_value in function_mapping.values())
+            # store validity
+            function_summary["valid"] = is_valid
 
-        # check function validity
-        is_valid = all(
-            dataset_value is not None
-            for dataset_value in function_mapping.values()
-        )
+            # check unresolved mappings
+            if not is_valid:
 
-        # store validity
-        function_summary["valid"] = is_valid
+                # unresolved argument keys
+                missing_keys = [
+                    dataset_key
+                    for dataset_key, dataset_value
+                    in function_mapping.items()
+                    if dataset_value is None
+                ]
 
-        # check unresolved mappings
-        if not is_valid:
+                # unresolved variable names declared in JSON
+                missing_variables = [wf_mapping[dataset_key] for dataset_key in missing_keys]
 
-            # unresolved argument keys
-            missing_keys = [
-                dataset_key
-                for dataset_key, dataset_value in function_mapping.items()
-                if dataset_value is None
-            ]
+                # variables declared in datasets/results
+                variables_declared = list(wf_mapping.values())
+                # warning message
+                warning_msg = (
+                    f"Workflow '{wf_ref}', function '{wf_function}' "
+                    f"has unresolved '{mapping_key}'. "
+                    f"Missing variables: {missing_variables}. "
+                    f"Variables declared in '{mapping_key}': "
+                    f"{variables_declared}. "
+                    f"Variables available from data collections: "
+                    f"{variables_available}. "
+                    f"Check and edit the '{mapping_key}' mapping "
+                    f"in the JSON configuration."
+                )
 
-            # unresolved variable names declared in JSON
-            missing_variables = [
-                wf_mapping[dataset_key]
-                for dataset_key in missing_keys
-            ]
+                # always warn
+                logger.warning(warning_msg)
 
-            # variables declared in datasets/results
-            variables_declared = list(wf_mapping.values())
-
-            # warning message
-            warning_msg = (
-                f"Workflow '{wf_ref}', function '{wf_function}' has unresolved "
-                f"'{mapping_key}'. "
-                f"Missing variables: {missing_variables}. "
-                f"Variables declared in '{mapping_key}': {variables_declared}. "
-                f"Variables available from data collections: {variables_available}. "
-                f"Check and edit the '{mapping_key}' mapping in the JSON configuration."
-            )
-
-            # always warn
-            logger.warning(warning_msg)
-
-            # raise only if mandatory
-            if mandatory:
-                logger.error(f'Define dataset mapping is mandatory for {mapping_key}.')
-                raise RuntimeError(warning_msg)
+                # raise only if mandatory
+                if mandatory:
+                    logger.error(f"Define data mapping is mandatory for '{mapping_key}'.")
+                    raise RuntimeError(warning_msg)
 
     return dataset_summary
 # ----------------------------------------------------------------------------------------------------------------------

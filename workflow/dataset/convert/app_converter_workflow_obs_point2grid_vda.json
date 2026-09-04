@@ -120,11 +120,18 @@
         "tmp_dir": "{path_tmp}"
     },
     "process_list": {
-        "AIR_T_PROCESS": [
+        "AIR_T_WORKFLOW": [
           {
             "function": "exec_interpolate_points",
             "datasets": {"data": "air_temperature_value", "code": "air_temperature_code"},
-            "results": {"data":  "air_temperature"},
+            "results": {"data": "air_temperature"},
+            "fill_value": -9999,
+            "no_data_value": -9999
+          },
+          {
+            "function": "exec_mask_grid",
+            "datasets": {"data1": "air_temperature_value", "code1": "air_temperature_code"},
+            "results": {"data": "air_temperature1"},
             "fill_value": -9999,
             "no_data_value": -9999
           }
