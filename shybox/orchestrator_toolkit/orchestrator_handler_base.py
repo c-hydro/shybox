@@ -214,9 +214,9 @@ class OrchestratorBase:
             # ensure variable template and file variable attributes
             if 'variable_template' not in kwargs:
                 kwargs['variable_template'] = {}
-            kwargs['variable_template']['vars_data'] = {kwargs['workflow']: kwargs['workflow']}
+            kwargs['variable_template']['vars_data'] = {kwargs['workflow_name']: kwargs['fx']}
             if 'file_variable' not in kwargs:
-                kwargs['file_variable'] = kwargs['workflow']
+                kwargs['file_variable'] = kwargs['workflow_name']
 
             # create the temporary output object (for making tmp files in a list of processes)
             out_obj = DataLocal(
@@ -233,7 +233,7 @@ class OrchestratorBase:
         return out_obj
 
     # method to add a process to the orchestrator
-    def add_process(self, function_obj, function_name, datasets: dict = None,
+    def add_process(self, function_obj, datasets: dict = None,
                     process_output: Union[DataLocal, xr.Dataset, dict] = None, **kwargs) -> None:
 
         # get process var tag
@@ -243,6 +243,20 @@ class OrchestratorBase:
             self.logger.error('Process variable "workflow_name" must be provided in the process arguments.')
             raise RuntimeError('Process variable "workflow" must be provided in the process arguments.')
 
+        if not isinstance(self.data_in, dict):
+            self.logger.error('Datasets input must be a Dataset.')
+            raise RuntimeError('Datasets input must be a Dataset.')
+        if not isinstance(self.data_out, dict):
+            self.logger.error('Datasets output must be a Dataset.')
+            raise RuntimeError('Datasets output must be a Dataset.')
+
+        # get function name
+        function_name = function_obj.__name__
+
+        # get deps in/out
+        deps_input = self.deps_in
+        deps_output = self.deps_out
+
         # get process map
         process_map = self.mapper.get_pairs(field_value=function_name, field_key='fx')
 
@@ -251,14 +265,13 @@ class OrchestratorBase:
         process_var_tag, process_var_workflow = process_map['tag'], process_map['workflow_name']
         process_process_ref, process_fx_ref = process_map['process_reference'], process_map['reference']
         process_links_in, process_links_out = process_map['links_in'], process_map['links_out']
-       #process_var_reference = ':'.join([process_var_tag, process_var_workflow])
         # update kwargs with process map
         kwargs = {**kwargs, **process_map}
 
         # ensure the state of the process (initial or not)
         process_obj = self.processes
         process_previous = self.processes[-1] if len(process_obj) > 0 else None
-        if (process_previous is not None) and (process_wf not in process_previous.workflow):
+        if (process_previous is not None) and (process_wf not in process_previous.workflow_name):
             process_init = True
         elif len(process_obj) == 0:
             process_init = True
@@ -267,30 +280,21 @@ class OrchestratorBase:
 
         # create the process input
         if process_init:
-            if isinstance(self.data_in, dict):
-                in_keys = list(self.data_in.keys())
-                if process_var_reference in in_keys:
-                    this_input = self.data_in[process_var_reference]
-                else:
-                    self.logger.error(
-                        f'Input data for variable "{process_var_reference}" not found in the input data collection.'
-                    )
-                    raise RuntimeError(
-                        f'Input data for variable "{process_var_reference}" not found in the input data collection.')
-            elif isinstance(self.data_in, DataLocal):
-                this_input = self.data_in
-            else:
-                self.logger.error('Input data must be DataLocal or dictionary of DataLocal instance.')
-                raise RuntimeError('Input data must be DataLocal or dictionary of DataLocal instance.')
+            in_keys = list(self.data_in.keys())
+            if all(link in in_keys for link in process_links_in):
+                this_input = []
+                for links_step in process_links_in:
+                    tmp_input = self.data_in[links_step]
+                    if isinstance(tmp_input, list) and len(tmp_input) == 1:
+                        tmp_input = tmp_input[0]
+                    this_input.append(tmp_input)
 
-            if self.deps_in is not None:
-                if isinstance(self.deps_in, dict):
-                    deps_input = self.deps_in[process_var_reference]
-                else:
-                    self.logger.error('Input deps must be dictionary instance.')
-                    raise RuntimeError('Input deps must be dictionary instance.')
             else:
-                deps_input = None
+                self.logger.error(
+                    f'Links input "{process_links_in}" not found in the data input collection.')
+                raise RuntimeError(
+                    f'Links input "{process_links_in}" not found in the data input collection.')
+
         else:
             deps_input = process_previous.out_deps
             process_previous = self.processes[-1]
@@ -310,9 +314,9 @@ class OrchestratorBase:
         this_process = ProcessorContainer(
             function = function_obj, datasets=datasets,
             in_obj = this_input, in_opts=self.options,
-            in_deps=deps_input, out_deps=None,
+            in_deps=deps_input, out_deps=deps_output,
             args = kwargs,
-            out_obj = this_output, out_opts=self.options, logger=self.logger, tag=process_var_reference,)
+            out_obj = this_output, out_opts=self.options, logger=self.logger, tag=process_var_tag,)
 
         # check if break point is required
         if this_process.break_point:
@@ -335,7 +339,7 @@ class OrchestratorBase:
             time = pd.Timestamp.now()
 
         # group process by variable
-        proc_group = group_process(self.processes, proc_tag='reference')
+        proc_group = group_process(self.processes, proc_tag='tag')
 
         # manage process execution and process output
         if len(self.processes) == 0:
@@ -385,15 +389,18 @@ class OrchestratorBase:
                     # iterate over variables and workflows
                     for var_id, (var_step, wf_step) in enumerate(zip(vars_out, wfs_out)):
 
-                        # identify last process for variable, workflow pair
-                        process_idx_last = next(
-                            (
-                                idx
-                                for idx in range(len(self.processes) - 1, -1, -1)
-                                if self.processes[idx].workflow == wf_step
-                            ),
-                            None
-                        )
+                        # identify last process for variable/workflow pair
+                        process_idx_last = None
+                        for process_idx in reversed(range(len(self.processes))):
+
+                            # get process info
+                            process_obj = self.processes[process_idx]
+                            process_wf, process_var_in, process_var_out = process_obj.split_tag()
+
+                            if process_wf == wf_step and var_step in process_var_out:
+                                process_idx_last = process_idx
+                                break
+
                         # if process idx last is not found
                         if process_idx_last is None:
                             raise RuntimeError(f'Workflow "{wf_step}" not found in processes.')
@@ -520,8 +527,8 @@ class OrchestratorBase:
         # return if no processes
         if not processes: return None
 
-        # group process by variable
-        proc_group = group_process(processes)
+        # group process by tag
+        proc_group = group_process(processes, proc_tag='tag')
 
         # iterate over all variable groups
         proc_memory, proc_ws = None, {}

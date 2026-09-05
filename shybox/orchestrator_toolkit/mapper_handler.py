@@ -400,48 +400,12 @@ class Mapper:
             else:
                 rows_selected.append(row)
 
+        # define rows for process start and row for process
         if len(rows_selected) == 1:
             return rows_selected[0]
         else:
             raise RuntimeError('Selected process must be singleton at each step')
 
-    # ------------------------------------------------------------------------------------------------------------------
-
-    # ------------------------------------------------------------------------------------------------------------------
-    # method to get dictionary information by field and value
-    @with_logger(var_name="logger_stream")
-    def get_rows_by_field(self, data: Dict[str, Any],field: str, value: Any) -> Optional[Dict[str, Any]]:
-
-        # check data
-        if not data:
-            logger_stream.warning("No data available")
-            return None
-
-        # check current dictionary
-        if data.get(field) == value:
-            return data
-
-        # search nested objects
-        for item in data.values():
-
-            # nested dictionary
-            if isinstance(item, dict):
-                result = self.get_by_field(data=item, field=field,value=value)
-
-                if result is not None:
-                    return result
-
-            # nested list or tuple
-            elif isinstance(item, (list, tuple)):
-                for element in item:
-
-                    if isinstance(element, dict):
-                        result = self.get_by_field(data=element, field=field, value=value)
-                        if result is not None:
-                            return result
-
-        # field/value not found
-        return None
     # ------------------------------------------------------------------------------------------------------------------
 
     # ----------------------------------------------------------------------------------------------------------------------

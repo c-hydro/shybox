@@ -272,34 +272,46 @@ class OrchestratorPoints(OrchestratorBase):
 
         # iterate over the defined input variables and their process(es)
         workflow_configuration = workflow_mapper.get_rows_by_priority(priority=priority, field="tag", )
-        for workflow_row in workflow_configuration:
+        for workflow_id, workflow_row in enumerate(workflow_configuration):
 
             # get workflow information by tag
             workflow_tag = workflow_row["tag"]
             workflow_name = workflow_row["workflow_name"]
 
-            # info workflow start
-            logger.info_up(f'Configure workflow "{workflow_name}" ... ', tag="ow")
-
             # iterate over the defined process(es)
-            process_fx_var = deepcopy(workflow_fx[workflow_name])
-            for process_fx_tmp in process_fx_var:
+            process_fx_info = deepcopy(workflow_fx[workflow_name][workflow_id])
+            # get process name, datasets and object
+            process_fx_name = process_fx_info.pop("function")
+            process_fx_datasets = process_fx_info.pop("datasets", None)
 
-                # get process name, datasets and object
-                process_fx_name = process_fx_tmp.pop("function")
-                process_fx_datasets = process_fx_tmp.pop("datasets", None)
+            # info workflow and process start
+            logger.info_up(
+                f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... ', tag="ow")
+
+            # check process in process registry
+            if process_fx_name in PROCESSES_UPD:
+
+                # get process obj
                 process_fx_obj = PROCESSES_UPD[process_fx_name]
 
                 # define process arguments
-                process_fx_args = {**process_fx_tmp, **workflow_row}
+                process_fx_args = {**process_fx_info, **workflow_row}
 
                 # add the process to the workflow
                 workflow_common.add_process(
-                    function_name=process_fx_name, function_obj=process_fx_obj,
+                    function_obj=process_fx_obj,
                     datasets=process_fx_datasets, ref=data_ref, **process_fx_args)
 
-            # info workflow end
-            logger.info_down(f'Configure workflow "{workflow_name}" ... DONE', tag="ow")
+                # info workflow and process end (done)
+                logger.info_down(
+                    f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... DONE', tag="ow")
+
+            else:
+
+                # info function end (failed)
+                logger.warning(f'Process "{process_fx_name}" not found in {PROCESSES_UPD}"')
+                logger.info_down(
+                    f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... FAILED', tag="ow")
 
         # info orchestrator end
         logger.info_down(f'Organize orchestrator [{tag_orchestrator}] ... DONE', tag="ow")
@@ -325,6 +337,8 @@ def _check_method_mapping(
     if mapping_key not in ['datasets', 'results']:
         raise RuntimeError(f"Mapping key '{mapping_key}' is invalid. Select 'datasets' or 'results'.")
 
+    # initialize mapping
+    previous_mapping = None
     # initialize collection
     dataset_summary = {}
     # iterate over workflows
@@ -337,7 +351,7 @@ def _check_method_mapping(
             wf_opts = [wf_opts]
 
         # iterate over methods belonging to workflow
-        for fx_opts in wf_opts:
+        for fx_id, fx_opts in enumerate(wf_opts):
 
             # skip invalid method configuration
             if not isinstance(fx_opts, dict):
@@ -390,10 +404,18 @@ def _check_method_mapping(
                         # select variable namespace
                         if mapping_key == "datasets":
                             # datasets refers to internal variable names
-                            step_vars_list = list(step_vars_obj.values())
-                        else:
+                            if fx_id ==  0:
+                                step_vars_list = list(step_vars_obj.values())
+                            else:
+                                step_vars_list = list(wf_mapping.values())
+                        elif mapping_key == "results":
                             # results refers to external/output variable names
-                            step_vars_list = list(step_vars_obj.keys())
+                            if fx_id == 0:
+                                step_vars_list = list(wf_mapping.keys())
+                            else:
+                                step_vars_list = list(step_vars_obj.keys())
+                        else:
+                            raise RuntimeError(f"Mapping key '{mapping_key}' is invalid.")
 
                         # collect available variables
                         for step_var in step_vars_list:

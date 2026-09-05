@@ -117,14 +117,13 @@ class ProcessorContainer:
                 fx_static[arg_name] = arg_value
 
         # set process tag and workflow
-        self.tag = 'generic_tag'
-        if 'tag' in args:
-            self.tag = args.pop('tag')
-        self.workflow = 'generic_workflow'
-        if 'workflow' in args:
-            self.workflow = args.pop('workflow')
+        self.tag = args.pop('tag', 'generic_tag')
+        # set workflow reference
+        self.workflow_name = args.pop('workflow_name', 'generic_workflow_name')
+        # set workflow reference
+        self.workflow_reference = args.pop('workflow_reference', 'generic_workflow_reference')
         # set process reference
-        self.reference = ':'.join([self.tag, self.workflow])
+        self.process_reference = args.pop('process_reference', 'generic_process_reference')
 
         # set function object
         self.fx_name = function.__name__
@@ -143,13 +142,27 @@ class ProcessorContainer:
         # set variables mapper
         self.mapper = mapper
         # set delimiter
-        self.variable_delimiter = '#'
+        self.variable_delimiter = ':'
+        # set attrs (from not used args)
+        self.attrs = args
 
         # set dump state
         self.dump_state = False
         # set debug state
         self.debug_state_in = False
         self.debug_state_out = False
+
+    # helper to split tag
+    def split_tag(self, field_separator="|", variable_separator=":"):
+
+        # split workflow, input and output
+        workflow, vars_in, vars_out = self.tag.split(field_separator)
+
+        # split variables
+        vars_in = vars_in.split(variable_separator) if vars_in else []
+        vars_out = vars_out.split(variable_separator) if vars_out else []
+
+        return workflow, vars_in, vars_out
 
     # helper to get placeholders from string
     def _get_placeholders(self, value):
