@@ -14,8 +14,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Union
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_upd import PROCESSES as PROCESSES_UPD
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_OLD import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES as PROCESSES_UPD
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 

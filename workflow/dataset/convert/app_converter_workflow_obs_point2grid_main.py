@@ -47,7 +47,7 @@ from shybox.config_toolkit.config_handler import ConfigManager
 from shybox.time_toolkit.time_handler import TimeManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_points_toolkit.points_adapter import exec_interpolate_points
+from shybox.processing_points_toolkit.points_adapter import exec_interpolate_points, exec_mask_grid, exec_set_null
 
 from shybox.orchestrator_toolkit.orchestrator_handler_points import OrchestratorPoints as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -179,8 +179,10 @@ def main(view_table: bool = False):
     # geographical grid
     geo_grid = DataLocal(
         path=alg_cfg_application['static_data']['terrain']['path'],
+        data_role='auxiliary',
         file_name=alg_cfg_application['static_data']['terrain']['file_name'],
-        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_io='input',
+        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain',
+        file_io='input',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -193,7 +195,7 @@ def main(view_table: bool = False):
     registry_ws = DataLocal(
         path=alg_cfg_application['static_data']['registry_weather_stations']['path'],
         file_name=alg_cfg_application['static_data']['registry_weather_stations']['file_name'],
-        data_layout='points',
+        data_layout='points', data_role='auxiliary',
         file_type='points_registry', file_format='ascii', file_mode='local',
         file_args={
             'sep':',', 'col_reference': 'tag',
@@ -216,7 +218,7 @@ def main(view_table: bool = False):
     source_point_code = DataLocal(
         path=alg_cfg_application['dynamic_data_src']['code']['path'],
         file_name=alg_cfg_application['dynamic_data_src']['code']['file_name'],
-        data_layout='points', data_mandatory=False,
+        data_layout='points', data_mandatory=False, data_role='data',
         file_deps={'registry': registry_ws},
         file_type='points_2d', file_format='ascii', file_mode='local',
         file_variable='AIR_T_DATA_C', file_workflow='AIR_T_WORKFLOW', file_io='input',
@@ -234,7 +236,7 @@ def main(view_table: bool = False):
     source_point_data = DataLocal(
         path=alg_cfg_application['dynamic_data_src']['data']['path'],
         file_name=alg_cfg_application['dynamic_data_src']['data']['file_name'],
-        data_layout='points', data_mandatory=False,
+        data_layout='points', data_mandatory=False, data_role='data',
         file_deps={'registry': registry_ws},
         file_type='points_2d', file_format='ascii', file_mode='local',
         file_variable='AIR_T_DATA_V', file_workflow='AIR_T_WORKFLOW', file_io='input',
@@ -252,7 +254,7 @@ def main(view_table: bool = False):
     destination_grid_obj = DataLocal(
         path=alg_cfg_application['dynamic_data_dst']['path'],
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
-        data_layout='grid',
+        data_layout='grid', data_role='data',
         file_type='grid_2d', file_format='tiff', file_mode='local',
         file_variable='AIR_T_GRID', file_workflow='AIR_T_WORKFLOW', file_io='output',
         variable_template={

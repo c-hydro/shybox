@@ -150,8 +150,16 @@
         "tmp_dir": "{path_tmp}"
     },
     "process_list": {
-        "VARS_TS": [
-            {"function": "join_time_series_by_registry", "fill_value": -9999, "no_data_value": -9999}
+        "TIME_SERIES_WORKFLOW": [
+            {"function": "join_time_series_by_registry",
+              "datasets": {
+                "data|data_1": "discharge_sim_openloop",
+                "data|data_2": "discharge_sim_analysis",
+                "data|data_3": "discharge_obs",
+                "data|data_4": "air_temperature_obs"
+              },
+              "results": {"data|data_1:data_2:data_3:data_4": "time_series"},
+              "fill_value": -9999, "no_data_value": -9999}
         ]
     }
   },

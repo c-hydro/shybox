@@ -43,7 +43,7 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_toolkit.lib_proc_merge import merge_data_by_time
+from shybox.processing_grid_toolkit.lib_proc_merge import merge_data_by_time
 
 from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_format
 # ----------------------------------------------------------------------------------------------------------------------

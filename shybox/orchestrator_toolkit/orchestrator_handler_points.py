@@ -14,8 +14,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Union
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_upd import PROCESSES as PROCESSES_UPD
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_OLD import PROCESSES
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES as PROCESSES_UPD
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
@@ -241,24 +241,10 @@ class OrchestratorPoints(OrchestratorBase):
                 deps_collections_out[data_key] = data_args_common
                 deps_collections_out[data_key] = args_deps_common
 
-        # define fx in (datasets)
-        fx_collections_in = _check_method_mapping(
-            workflow_fx=workflow_fx,
-            data_collections=data_collections_in,
-            mapping_key='datasets', mandatory=True,
-        )
-
-        # define fx out (results)
-        fx_collections_out = _check_method_mapping(
-            workflow_fx=workflow_fx,
-            data_collections=data_collections_out,
-            mapping_key='results', mandatory=False
-        )
-
         # method to remap variable tags, in and out
         workflow_mapper = Mapper(
             data_collections_in=data_collections_in, data_collections_out=data_collections_out,
-            fx_collections_in=fx_collections_in, fx_collections_out=fx_collections_out,
+            workflow_collections=workflow_fx,
             data_count=data_count_code, logger=logger)
 
         # class to create workflow based using the orchestrator
@@ -266,52 +252,50 @@ class OrchestratorPoints(OrchestratorBase):
             data_in=data_collections_in, data_out=data_collections_out,
             deps_in=deps_collections_in, deps_out=deps_collections_out,
             args_in=args_collections_in, args_out=args_collections_out,
-            maps_in=fx_collections_in, maps_out=fx_collections_out,
             options=workflow_options,
             mapper=workflow_mapper, logger=logger)
 
         # iterate over the defined input variables and their process(es)
-        workflow_configuration = workflow_mapper.get_rows_by_priority(priority=priority, field="tag", )
-        for workflow_id, workflow_row in enumerate(workflow_configuration):
+        workflows_configuration = workflow_mapper.order_workflows_by_priority(priority=priority)
 
-            # get workflow information by tag
-            workflow_tag = workflow_row["tag"]
-            workflow_name = workflow_row["workflow_name"]
+        # iterate over workflow(s)
+        for workflow_id, (workflow_name, workflow_obj) in enumerate(workflows_configuration.items()):
 
-            # iterate over the defined process(es)
-            process_fx_info = deepcopy(workflow_fx[workflow_name][workflow_id])
-            # get process name, datasets and object
-            process_fx_name = process_fx_info.pop("function")
-            process_fx_datasets = process_fx_info.pop("datasets", None)
+            # iterate over process(es)
+            for process_id, process_obj in enumerate(workflow_obj):
 
-            # info workflow and process start
-            logger.info_up(
-                f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... ', tag="ow")
+                # get process and workflows information
+                process_fx_name =  process_obj["function"]
+                workflow_name, workflow_id = process_obj["workflow_name"], process_obj["workflow_id"]
 
-            # check process in process registry
-            if process_fx_name in PROCESSES_UPD:
+                # info workflow and process start
+                logger.info_up(
+                    f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... ', tag="ow")
 
-                # get process obj
-                process_fx_obj = PROCESSES_UPD[process_fx_name]
+                # check process in process registry
+                if process_fx_name in PROCESSES_UPD:
 
-                # define process arguments
-                process_fx_args = {**process_fx_info, **workflow_row}
+                    # get process obj
+                    process_fx_obj = PROCESSES_UPD[process_fx_name]
 
-                # add the process to the workflow
-                workflow_common.add_process(
-                    function_obj=process_fx_obj,
-                    datasets=process_fx_datasets, ref=data_ref, **process_fx_args)
+                    # define process arguments
+                    process_fx_args = {**process_obj}
 
-                # info workflow and process end (done)
-                logger.info_down(
-                    f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... DONE', tag="ow")
+                    # add the process to the workflow
+                    workflow_common.add_process(
+                        function_obj=process_fx_obj, ref=data_ref, **process_fx_args)
 
-            else:
+                    # info workflow and process end (done)
+                    logger.info_down(
+                        f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... DONE', tag="ow")
 
-                # info function end (failed)
-                logger.warning(f'Process "{process_fx_name}" not found in {PROCESSES_UPD}"')
-                logger.info_down(
-                    f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... FAILED', tag="ow")
+                else:
+
+                    # info function end (failed)
+                    logger.error(f'Process "{process_fx_name}" not found in {PROCESSES_UPD}"')
+                    logger.info_down(
+                        f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... FAILED', tag="ow")
+                    raise RuntimeError('All process(es) must be correctly configured. Exit')
 
         # info orchestrator end
         logger.info_down(f'Organize orchestrator [{tag_orchestrator}] ... DONE', tag="ow")
@@ -319,161 +303,6 @@ class OrchestratorPoints(OrchestratorBase):
         return workflow_common
     # ------------------------------------------------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
-# method to check methods data args
-def _check_method_mapping(
-        workflow_fx,
-        data_collections,
-        mapping_key='datasets',
-        mandatory=True,
-        logger: LoggingManager = None):
-
-    # define logger (local or external)
-    logger = logger or LoggingManager(name="_check_method_mapping")
-
-    # check mapping key value
-    if mapping_key not in ['datasets', 'results']:
-        raise RuntimeError(f"Mapping key '{mapping_key}' is invalid. Select 'datasets' or 'results'.")
-
-    # initialize mapping
-    previous_mapping = None
-    # initialize collection
-    dataset_summary = {}
-    # iterate over workflows
-    for wf_ref, wf_opts in workflow_fx.items():
-
-        # initialize workflow summary
-        dataset_summary[wf_ref] = {}
-        # normalize workflow options
-        if not isinstance(wf_opts, (list, tuple)):
-            wf_opts = [wf_opts]
-
-        # iterate over methods belonging to workflow
-        for fx_id, fx_opts in enumerate(wf_opts):
-
-            # skip invalid method configuration
-            if not isinstance(fx_opts, dict):
-                continue
-
-            # get function
-            wf_function = fx_opts.get("function", None)
-            # get selected mapping
-            wf_mapping = fx_opts.get(mapping_key, None)
-
-            # skip if function or mapping is not defined
-            if wf_function is None or wf_mapping is None:
-                continue
-
-            # initialize function summary
-            dataset_summary[wf_ref][wf_function] = {"mapping": {},"valid": True,}
-
-            # shortcuts
-            function_summary = dataset_summary[wf_ref][wf_function]
-            function_mapping = function_summary["mapping"]
-
-            # iterate over mapping pairs
-            variables_available = []
-            for dataset_key, dataset_value in wf_mapping.items():
-
-                # initialize dataset as unresolved
-                function_mapping[dataset_key] = None
-
-                # iterate over data collections
-                for data_key, data_obj in data_collections.items():
-
-                    # get workflow and variable
-                    data_workflow, data_variable = data_key.split(":", 1)
-                    # use only data related to current workflow
-                    if data_workflow != wf_ref:
-                        continue
-
-                    # normalize data objects
-                    if isinstance(data_obj, (list, tuple)):
-                        data_list = data_obj
-                    else:
-                        data_list = [data_obj]
-
-                    # iterate over data objects
-                    for step_data in data_list:
-
-                        # get available variables
-                        step_vars_obj = (step_data.variable_template.get("vars_data", {}))
-
-                        # select variable namespace
-                        if mapping_key == "datasets":
-                            # datasets refers to internal variable names
-                            if fx_id ==  0:
-                                step_vars_list = list(step_vars_obj.values())
-                            else:
-                                step_vars_list = list(wf_mapping.values())
-                        elif mapping_key == "results":
-                            # results refers to external/output variable names
-                            if fx_id == 0:
-                                step_vars_list = list(wf_mapping.keys())
-                            else:
-                                step_vars_list = list(step_vars_obj.keys())
-                        else:
-                            raise RuntimeError(f"Mapping key '{mapping_key}' is invalid.")
-
-                        # collect available variables
-                        for step_var in step_vars_list:
-                            if step_var not in variables_available:
-                                variables_available.append(step_var)
-
-                        # check variable availability
-                        if dataset_value in step_vars_list:
-                            function_mapping[dataset_key] = dataset_value
-                            break
-
-                    # stop collection search if found
-                    if function_mapping[dataset_key] is not None:
-                        break
-
-            # check function validity
-            is_valid = all(dataset_value is not None for dataset_value in function_mapping.values())
-            # store validity
-            function_summary["valid"] = is_valid
-
-            # check unresolved mappings
-            if not is_valid:
-
-                # unresolved argument keys
-                missing_keys = [
-                    dataset_key
-                    for dataset_key, dataset_value
-                    in function_mapping.items()
-                    if dataset_value is None
-                ]
-
-                # unresolved variable names declared in JSON
-                missing_variables = [wf_mapping[dataset_key] for dataset_key in missing_keys]
-
-                # variables declared in datasets/results
-                variables_declared = list(wf_mapping.values())
-                # warning message
-                warning_msg = (
-                    f"Workflow '{wf_ref}', function '{wf_function}' "
-                    f"has unresolved '{mapping_key}'. "
-                    f"Missing variables: {missing_variables}. "
-                    f"Variables declared in '{mapping_key}': "
-                    f"{variables_declared}. "
-                    f"Variables available from data collections: "
-                    f"{variables_available}. "
-                    f"Check and edit the '{mapping_key}' mapping "
-                    f"in the JSON configuration."
-                )
-
-                # always warn
-                logger.warning(warning_msg)
-
-                # raise only if mandatory
-                if mandatory:
-                    logger.error(f"Define data mapping is mandatory for '{mapping_key}'.")
-                    raise RuntimeError(warning_msg)
-
-    return dataset_summary
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

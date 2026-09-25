@@ -9,7 +9,7 @@ Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-import warnings
+from typing import Union
 import xarray as xr
 
 import rioxarray as rxr
@@ -27,68 +27,151 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# adapter to convert source obj to data function
-@with_logger(var_name='logger_stream')
-def adapter_source_obj(obj_data, obj_type=None, obj_undefined=None):
+# adapter to convert object to dictionary
+def obj_to_dict(obj_data, obj_keys=None, logger_stream=None, **kwargs):
 
-    # check if obj is defined or not
-    if obj_data is None:
-        logger_stream.warning("The 'obj_data' is defined by NoneType. Object will be returned defined by NoneType.")
-        return obj_undefined
-
-    # check obj type
-    if obj_type == 'file':
-        return file_to_xarray(obj_data)
-    elif obj_type == 'gdal':
-        return xarray_to_gdal(obj_data)
-    elif obj_type in ('pandas', 'xarray', None):
-        return obj_data
-    elif obj_type == 'as_is':
-        return obj_data
-    elif obj_type is None:
-        logger_stream.warning("The 'obj_type' is defined by NoneType. Object will be returned unchanged.")
-        return obj_data
+    # normalize input object to list of values
+    if isinstance(obj_data, dict):
+        obj_values = list(obj_data.values())
+    elif isinstance(obj_data, (list, tuple)):
+        obj_values = list(obj_data)
     else:
-        logger_stream.warning(f"Unknown 'obj_type' '{obj_type}'. Object will be returned unchanged.")
-        return obj_data
+        obj_values = [obj_data]
+
+    # check mapping (if exists)
+    if obj_keys is None:
+        if 'mapping' in kwargs:
+            mapping = kwargs['mapping']
+            # get mapping keys
+            obj_keys = []
+            for map_key, map_value in mapping.items():
+                # use sub-dictionary keys
+                if isinstance(map_value, dict):
+                    obj_keys.extend(map_value.keys())
+                # use root key
+                else:
+                    obj_keys.append(map_key)
+        else:
+            obj_keys = [str(idx + 1) for idx in range(len(obj_values))]
+    elif isinstance(obj_keys, str):
+        obj_keys = [obj_keys]
+    elif isinstance(obj_keys, (list, tuple)):
+        obj_keys = list(obj_keys)
+    else:
+        raise TypeError(f"`obj_keys` must be None, str, list or tuple. Got {type(obj_keys)}")
+
+    # check if number of values is greater than number of keys
+    if len(obj_values) > len(obj_keys):
+
+        msg = (
+            f"Number of objects ({len(obj_values)}) is greater than "
+            f"number of keys ({len(obj_keys)}). "
+            f"Only the first {len(obj_keys)} objects will be added."
+        )
+
+        if logger_stream is not None:
+            logger_stream.warning(msg)
+
+    # create output dictionary
+    obj_dict = {
+        key: value
+        for key, value in zip(obj_keys, obj_values)
+    }
+
+    return obj_dict
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# adapter to convert dict to list
+def dict_to_list(obj_data, flat_list_one_element=True, **kwargs):
+
+    # check if dictionary contains nested dictionaries
+    has_subdict = any(isinstance(root_value, dict)for root_value in obj_data.values())
+
+    # case of flat dictionary
+    if not has_subdict:
+        # get dictionary values
+        obj = list(obj_data.values())
+        # flatten one-element list
+        if flat_list_one_element and len(obj) == 1:
+            obj = obj[0]
+
+    # case of nested dictionary
+    else:
+
+        # initialize output
+        obj = {}
+        # iterate over root dictionary
+        for root_key, root_value in obj_data.items():
+            # nested dictionary
+            if isinstance(root_value, dict):
+                # get nested values
+                values = list(root_value.values())
+                # flatten one-element list
+                if flat_list_one_element and len(values) == 1:
+                    values = values[0]
+                # keep root key
+                obj[root_key] = values
+            else:
+                # keep standard value
+                obj[root_key] = root_value
+
+    return obj
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# adapter to results function to data destination
+# helper to normalize `data` to dataset
 @with_logger(var_name='logger_stream')
-def adapter_destination_obj(obj_results, obj_type=None, obj_undefined=None):
-
-    # check if obj is defined or not
-    if obj_results is None:
-        logger_stream.warning("The 'obj_results' is defined by NoneType. Object will be returned defined by NoneType.")
-        return obj_undefined
-
-    # check obj type
-    if obj_type == 'xarray':
-
-        if gdal and isinstance(obj_results, gdal.Dataset):
-            return gdal_to_xarray(obj_results)
-        elif isinstance(obj_results, (str, bytes)):
-            return file_to_xarray(obj_results)
-
-    elif obj_type in ('gdal', 'tif', 'tiff'):
-
-        if isinstance(obj_results, (xr.DataArray, xr.Dataset)):
-            return xarray_to_gdal(obj_results)
-
-    elif obj_type == 'file':
-
-        if isinstance(obj_results, (xr.DataArray, xr.Dataset)):
-            return xarray_to_file(obj_results)
-
-    elif obj_type in ('table', 'csv', 'pandas', 'shape', 'dict', 'geojson', 'text', 'txt', None):
-        return obj_results
-    elif obj_type == 'as_is':
-        return obj_results
+def xarray_to_dataset(obj: Union[None, xr.DataArray, xr.Dataset]) -> Union[None, xr.Dataset]:
+    # check obj format
+    if obj is None:
+        return None
+    elif isinstance(obj, xr.Dataset):
+        return obj
+    elif isinstance(obj, xr.DataArray):
+        name = obj.name or 'var'
+        return obj.rename(name).to_dataset(name=name)
     else:
-        logger_stream.warning(f"Unknown output_type '{obj_type}'. Result will be returned unchanged.")
-        return obj_results
+        logger_stream.error(f"Unsupported element in data: {type(obj)}")
+        raise TypeError(f"Unsupported element in data: {type(obj)}")
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to normalize `data` to DataArray
+@with_logger(var_name='logger_stream')
+def xarray_to_dataarray(obj: Union[None, xr.DataArray, xr.Dataset]) -> Union[None, xr.DataArray]:
+
+    # check obj format
+    if obj is None:
+        return None
+    elif isinstance(obj, xr.DataArray):
+        return obj
+    elif isinstance(obj, xr.Dataset):
+        # check number of data variables
+        if len(obj.data_vars) != 1:
+            logger_stream.error(
+                f"Dataset must contain exactly one data variable. "
+                f"Found {len(obj.data_vars)} variables: {list(obj.data_vars)}"
+            )
+            raise ValueError(
+                f"Dataset must contain exactly one data variable. "
+                f"Found {len(obj.data_vars)} variables: {list(obj.data_vars)}"
+            )
+
+        # get the only data variable
+        var_name = next(iter(obj.data_vars))
+
+        # convert Dataset to DataArray
+        obj = obj[var_name]
+        # set name
+        obj.name = var_name
+
+        return obj
+
+    else:
+        logger_stream.error(f"Unsupported element in data: {type(obj)}")
+        raise TypeError(f"Unsupported element in data: {type(obj)}")
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

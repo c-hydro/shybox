@@ -28,21 +28,19 @@ class Mapper:
         self,
         data_collections_in: Mapping[str, Union[Any, List[Any]]],
         data_collections_out: Mapping[str, Union[Any, List[Any]]],
-        fx_collections_in: Union(dict, None) = None,
-        fx_collections_out: Union(dict, None) = None,
-        data_count: Optional[int] = 1,
+        workflow_collections: Mapping[str, Mapping[str, Mapping[str, Mapping[str, Any]]]],
+        data_count: Optional[int] = 1, # remove?
         logger: LoggingManager = None,) -> None:
 
         self.logger = logger or LoggingManager(name="Mapper")
         self._data_in = data_collections_in
         self._data_out = data_collections_out
-        self._fx_in = fx_collections_in
-        self._fx_out = fx_collections_out
+        self._workflow = workflow_collections
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
         self._data_count: int = data_count
 
     # method to build mapping in/out
-    def build_mapping(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    def build_mapping_OLD(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
 
         # info start
         self.logger.info_up("Build input-output variables mapping ... ")
@@ -66,7 +64,7 @@ class Mapper:
         for data_key, data_obj in self._data_in.items():
 
             # get process and variable
-            process_name, variable_name = data_key.split(":", 1)
+            process_name, variable_name = data_key.split("|", 1)
             # initialize process
             if process_name not in data_in_by_process:
                 data_in_by_process[process_name] = {}
@@ -78,7 +76,7 @@ class Mapper:
         for data_key, data_obj in self._data_out.items():
 
             # get process and variable
-            process_name, variable_name = data_key.split(":", 1)
+            process_name, variable_name = data_key.split("|", 1)
             # initialize process
             if process_name not in data_out_by_process:
                 data_out_by_process[process_name] = {}
@@ -147,7 +145,7 @@ class Mapper:
                     for idx, partial in enumerate(obj_list):
 
                         # get partial mapping
-                        partial_mapping = self._get_partial_mapping(
+                        partial_mapping = self._get_partial_mapping_OLD(
                             partial=partial,tag=data_key, side=side,index_in_tag=idx,)
 
                         # skip empty mapping
@@ -219,155 +217,715 @@ class Mapper:
 
         return result
 
-    # method to create compact rows
-    def compact_rows(
+    # ----------------------------------------------------------------------------------------------------------------------
+    # method to validate workflow
+    def validate_workflows(
             self,
-            start_id: int = 1,
-            process_tag: Optional[str] = "process") -> List[Dict[str, Any]]:
+            sep_root: str = '|', sep_sub: str = ':', ) -> Dict[str, List[Dict[str, Any]]]:
 
-        # build input/output mapping
-        mapping = self.build_mapping()
+        # -------------------------------------------------------------------------
+        # get data from commons
+        workflow_fx = self._workflow
+        data_collections_in = self._data_in
+        data_collections_out = self._data_out
+        # -------------------------------------------------------------------------
 
-        # initialize links
-        links: Dict[str, Data] = {}
+        # -------------------------------------------------------------------------
+        # method to search a workflow variable in data collections
+        def find_in_collection(
+                workflow_name: str, variable_name: str, data_collections: Dict[str, Any],
+                mode: Union[str, None] = None, side: Union[str, None] = None,) -> Dict[str, Any]:
 
-        # initialize process id
-        process_id = start_id
+            # initialize variable information
+            variable_info = {"key_var": None, "dataset": None, "collection": None, "valid": False,}
 
+            # check args
+            if mode is None:
+                raise RuntimeError("Mode must be specified by string")
+
+            if side is None:
+                raise RuntimeError("Side must be specified by string")
+
+            # iterate over collections
+            for collection_key, data_objects in data_collections.items():
+
+                # normalize data objects to list
+                if not isinstance(data_objects, (list, tuple)):
+                    data_objects = [data_objects]
+
+                # iterate over data objects
+                for data_obj in data_objects:
+
+                    # get workflow
+                    data_workflow = getattr(data_obj, "file_workflow",None,)
+
+                    # skip objects belonging to another workflow
+                    if data_workflow != workflow_name:
+                        continue
+
+                    # get dataset
+                    data_variable = getattr(data_obj, "file_variable", None,)
+                    # get variable template
+                    variable_template = getattr(data_obj, "variable_template", {},) or {}
+
+                    # get data variables
+                    vars_data = variable_template.get("vars_data", {},) or {}
+
+                    # search workflow variable
+                    key_var = next(
+                        (variable_key
+                         for variable_key, workflow_variable in vars_data.items() if workflow_variable == variable_name),
+                        None,
+                    )
+
+                    # (1) standard case
+                    # variable must exist inside vars_data
+                    if key_var is not None:
+                        variable_info.update(
+                            {"key_var": key_var, "dataset": data_variable, "collection": collection_key, "valid": True,}
+                        )
+                        return variable_info
+
+                    # (2) special output case
+                    # In unique mode an output variable can be new and therefore
+                    # not yet available inside vars_data. The output is still valid because the unique collection
+                    # identifies the destination dataset.
+                    if mode == "unique" and side == "out":
+                        variable_info.update(
+                            {"key_var": None, "dataset": data_variable, "collection": collection_key, "valid": True,}
+                        )
+
+                        return variable_info
+
+            return variable_info
+
+        # method to create input mapping
+        def create_mapping_in(
+                mapping_type: str = None,
+                var_in: Any = None, var_workflow: Any = None, var_fx: Any = None,
+                dataset: Any = None, collection: Any = None, valid: Any = None,) -> Dict[str, Any]:
+
+            return {
+                "type": mapping_type,
+                "var_in": var_in, "var_workflow": var_workflow, "var_fx": var_fx,
+                "dataset": dataset, "collection": collection, "valid": valid,
+            }
+
+        # method to create output mapping
+        def create_mapping_out(
+                mapping_type: str = None,
+                var_fx: Any = None, var_workflow: Any = None, var_out: Any = None,
+                dataset: Any = None, collection: Any = None, valid: Any = None,) -> Dict[str, Any]:
+
+            return {
+                "type": mapping_type,
+                "var_fx": var_fx, "var_workflow": var_workflow, "var_out": var_out,
+                "dataset": dataset, "collection": collection, "valid": valid,
+            }
+
+        # initialize workflow summary and errors
+        variable_workflow, workflow_errors = {}, {}
         # iterate over workflows
-        for workflow_id, (workflow_name, workflow_mapping) in enumerate(
-                mapping.items(), start=1):
+        for workflow_id, (workflow_key, workflow_structure) in enumerate(
+                workflow_fx.items(), start=1):
 
-            # normalize workflow name
-            workflow_name = str(workflow_name)
+            # check workflow structure
+            if not isinstance(workflow_structure, list):
+                raise TypeError(f'Workflow "{workflow_key}" must be defined by a list.')
 
-            # get input/output sections
-            in_section = workflow_mapping.get("in", {}) or {}
-            out_section = workflow_mapping.get("out", {}) or {}
+            # initialize workflow collections
+            workflow_steps = []
+            workflow_errors[workflow_key] = []
 
-            # get data mappings
-            in_data = in_section.get("data", {}) or {}
-            out_data = out_section.get("data", {}) or {}
+            # get number of steps
+            n_steps = len(workflow_structure)
+            # iterate over methods in declared order
+            for step_id, step_obj in enumerate(workflow_structure):
 
-            # get fx mappings
-            in_fx = in_section.get("fx", {}) or {}
-            out_fx = out_section.get("fx", {}) or {}
+                # get function
+                fx_name = step_obj.get("function")
+                # get datasets
+                datasets = step_obj.get("datasets", {}) or {}
+                # get results
+                results = step_obj.get("results", {}) or {}
 
-            # collect all methods available for current workflow
-            fx_names = list(dict.fromkeys([*in_fx.keys(),*out_fx.keys(),]))
+                # identify step position
+                is_first = step_id == 0
+                is_last = step_id == n_steps - 1
 
-            # collect workflow input keys
-            variables_in = []
-            # iterate over input variables
-            for variable_key, variable_mapping in in_data.items():
-                # skip empty mapping
-                if not variable_mapping:
-                    continue
-                if variable_key not in variables_in:
-                    variables_in.append(variable_key)
+                # define mode for each step
+                step_tot = n_steps - 1
+                if step_id == 0 == step_tot == 0:
+                    mode = 'unique'
+                elif step_id == step_tot:
+                    mode = 'end'
+                elif step_id == 0:
+                    mode = 'start'
                 else:
-                    raise RuntimeError(f"Variable IN key '{variable_key}' is already defined. Change name in settings")
-            # collect workflow output keys
-            variables_out = []
-            # iterate over input variables
-            for variable_key, variable_mapping in out_data.items():
-                # skip empty mapping
-                if not variable_mapping:
-                    continue
-                if variable_key not in variables_out:
-                    variables_out.append(variable_key)
-                else:
-                    raise RuntimeError(f"Variable OUT key '{variable_key}' is already defined. Change name in settings")
+                    mode = 'intermediate'
 
-            # iterate over methods/processes
-            for fx_name in fx_names:
-
-                # get fx input/output mappings
-                fx_mapping_in = in_fx.get(fx_name, {}) or {}
-                fx_mapping_out = out_fx.get(fx_name, {}) or {}
-
-                # define process tag
-                tag = (str(process_tag) if process_tag is not None else str(fx_name))
                 # define process name
-                process_name = f"{tag}.{process_id}"
-                # define link reference
-                root_key = f"{workflow_name}:{fx_name}"
+                step_tag = f"workflow.{workflow_key}{sep_root}process.{fx_name}"
 
-                # initialize link
-                link = Data(
-                    workflow_id=workflow_id,
-                    workflow_name=workflow_name,
-                    process_id=process_id,
-                    process_name=process_name,
-                    variables_in=variables_in.copy(),
-                    variables_out=variables_out.copy(),
-                    fx=str(fx_name),
-                    fx_in=dict(fx_mapping_in),
-                    fx_out=dict(fx_mapping_out),
-                )
+                # initialize step summary
+                step_summary = {
+                    "mode": mode,
+                    "workflow_id": workflow_id, "workflow_name": workflow_key,
+                    "tag": step_tag, "step": step_id + 1,
+                    "function": fx_name,
+                    "datasets": datasets, "results": results,
+                    "mapping_in": {}, "mapping_out": {},
+                    "variables_in_structure": {}, "variables_out_structure": {},
+                    "variables_in_left": [], "variables_in_right": [],
+                    "variables_out_left": [], "variables_out_left": [],
+                    "links": [], "valid": True,
+                }
 
-                # store link
-                links[root_key] = link
+                # FIRST STEP - MAPPING IN
+                if is_first:
 
-                # update global process id
-                process_id += 1
+                    # iterate over datasets
+                    for var_id, (key_var_fx, key_var_workflow) in enumerate(
+                            datasets.items(), start=1):
 
-        # convert objects to compact rows
-        rows = [link.to_dict() for link in links.values()]
+                        # define mapping key
+                        mapping_key = f"var{var_id}"
 
-        return rows
+                        # search variable in input collections
+                        data_info = find_in_collection(
+                            workflow_name=workflow_key, variable_name=key_var_workflow,
+                            data_collections=data_collections_in,
+                            mode=mode, side='in',
+                        )
 
-    # method to collect rows by priority (workflow first of all)
-    def get_rows_by_priority(
+                        # organize input mapping
+                        step_summary["mapping_in"][mapping_key] = create_mapping_in(
+                            mapping_type="input",
+                            var_in=data_info["key_var"],
+                            var_workflow=key_var_workflow,
+                            var_fx=key_var_fx,
+                            dataset=data_info["dataset"],
+                            collection=data_info["collection"],
+                            valid=data_info["valid"],
+                        )
+
+                        # add link
+                        if data_info["valid"]:
+                            step_summary["links"].append(
+                                {
+                                    "type": "input",
+                                    "collection": data_info["collection"],
+                                    "dataset": data_info["dataset"],
+                                    "var_in": data_info["key_var"],
+                                    "var_workflow": key_var_workflow,
+                                    "var_fx": key_var_fx,
+                                }
+                            )
+
+                    # all first-step variables must be resolved
+                    mapping_in_valid = all(
+                        mapping_obj["valid"] is True
+                        for mapping_obj
+                        in step_summary["mapping_in"].values()
+                    )
+
+                    # check input mapping
+                    if not mapping_in_valid:
+                        step_summary["valid"] = False
+
+                        # get unresolved mappings
+                        missing_variables = {
+                            mapping_key: mapping_obj
+                            for mapping_key, mapping_obj
+                            in step_summary["mapping_in"].items()
+                            if mapping_obj["valid"] is not True
+                        }
+
+                        # collect error
+                        workflow_errors[workflow_key].append(
+                            {
+                                "type": "input_mapping",
+                                "step": step_id + 1,
+                                "function": fx_name,
+                                "mapping": missing_variables,
+                            }
+                        )
+
+                # INTERMEDIATE AND LAST STEPS
+                else:
+
+                    # get previous step
+                    previous_obj = workflow_structure[step_id - 1]
+
+                    # get previous function
+                    previous_fx = previous_obj.get("function")
+
+                    # get previous results
+                    previous_results = previous_obj.get("results", {}) or {}
+
+                    # iterate over expected current datasets
+                    for var_id, (key_var_fx, key_var_workflow) in enumerate(datasets.items(), start=1):
+
+                        # define mapping key
+                        mapping_key = f"var{var_id}"
+
+                        # search workflow variable in previous results
+                        previous_key = next(
+                            (
+                                result_key
+                                for result_key, result_value
+                                in previous_results.items()
+                                if result_value == key_var_workflow
+                            ),
+                            None,
+                        )
+
+                        # check internal link
+                        variable_valid = previous_key is not None
+
+                        # organize mapping
+                        step_summary["mapping_in"][mapping_key] = create_mapping_in(
+                            mapping_type="workflow",
+                            var_in=key_var_workflow, var_workflow=key_var_workflow, var_fx=key_var_fx,
+                            dataset=None, collection=None, valid=variable_valid,
+                        )
+
+                        # add workflow link
+                        if variable_valid:
+                            step_summary["links"].append(
+                                {
+                                    "type": "workflow",
+                                    "function_previous": previous_fx,
+                                    "var_previous": previous_key,
+                                    "var_in": key_var_workflow,
+                                    "var_workflow": key_var_workflow,
+                                    "var_fx": key_var_fx,
+                                }
+                            )
+
+                    # all expected datasets must be linked
+                    mapping_in_valid = all(
+                        mapping_obj["valid"] is True
+                        for mapping_obj
+                        in step_summary["mapping_in"].values()
+                    )
+
+                    # check internal workflow mapping
+                    if not mapping_in_valid:
+                        step_summary["valid"] = False
+
+                        # get unresolved variables
+                        missing_variables = {
+                            mapping_key: mapping_obj
+                            for mapping_key, mapping_obj
+                            in step_summary["mapping_in"].items()
+                            if mapping_obj["valid"] is not True
+                        }
+
+                        # collect error
+                        workflow_errors[workflow_key].append(
+                            {
+                                "type": "workflow_link",
+                                "step_from": step_id, "step_to": step_id + 1,
+                                "function_from": previous_fx, "function_to": fx_name,
+                                "previous_results": previous_results,
+                                "mapping": missing_variables,
+                            }
+                        )
+
+                # MAPPING OUT
+                # define output mapping type
+                mapping_out_type = ("output" if is_last else "workflow")
+
+                # iterate over results
+                for var_id, (key_var_fx, key_var_workflow) in enumerate(results.items(), start=1):
+
+                    # define mapping key
+                    mapping_key = f"var{var_id}"
+
+                    # create mapping
+                    step_summary["mapping_out"][mapping_key] = create_mapping_out(
+                        mapping_type=mapping_out_type,
+                        var_fx=key_var_fx,
+                        var_workflow=key_var_workflow,
+                        var_out=key_var_workflow,
+                        dataset=None,
+                        collection=None,
+                        valid=(None if is_last else True),
+                    )
+
+                # LAST STEP
+                if is_last:
+
+                    # iterate over last-step outputs
+                    for mapping_key, mapping_obj in (step_summary["mapping_out"].items()):
+
+                        # get workflow variable
+                        key_var_workflow = mapping_obj["var_workflow"]
+
+                        # search variable in output collections
+                        data_info = find_in_collection(
+                            workflow_name=workflow_key,
+                            variable_name=key_var_workflow,
+                            data_collections=data_collections_out,
+                            mode=mode, side='out'
+                        )
+
+                        # update mapping
+                        mapping_obj.update(
+                            {
+                                "var_out": key_var_workflow,
+                                "dataset": data_info["dataset"], "collection": data_info["collection"],
+                                "valid": data_info["valid"],
+                            }
+                        )
+
+                        # add output link
+                        if data_info["valid"]:
+                            step_summary["links"].append(
+                                {
+                                    "type": "output",
+                                    "var_fx": mapping_obj["var_fx"], "var_workflow": key_var_workflow,
+                                    "var_out": key_var_workflow,
+                                    "dataset": data_info["dataset"], "collection": data_info["collection"],
+                                }
+                            )
+
+                    # at least one result must be available
+                    # in output collections
+                    mapping_out_valid = any(mapping_obj["valid"] is True for mapping_obj
+                                            in step_summary["mapping_out"].values())
+
+                    # check output mapping
+                    if not mapping_out_valid:
+                        step_summary["valid"] = False
+
+                        # collect error
+                        workflow_errors[workflow_key].append(
+                            {
+                                "type": "output_mapping",
+                                "step": step_id + 1, "function": fx_name,
+                                "mapping": step_summary["mapping_out"],
+                            }
+                        )
+
+                # create the variable maps
+                mapping_variables = self._mapping_variables(
+                    datasets=step_summary['datasets'], results=step_summary['results'])
+                step_summary['variables_in_structure'] = mapping_variables['in']
+                step_summary['variables_out_structure'] = mapping_variables['out']
+
+                # create the variable names in right/left
+                variable_in_left, variable_in_right = self._listing_variables(mapping_variables['in'])
+                step_summary['variables_in_left'] = variable_in_left
+                step_summary['variables_in_right'] = variable_in_right
+                # create the variable names out right/left
+                variable_out_left, variable_out_right = self._listing_variables(mapping_variables['out'])
+                step_summary['variables_out_left'] = variable_out_left
+                step_summary['variables_out_right'] = variable_out_right
+
+                # store current step
+                workflow_steps.append(step_summary)
+
+            # store workflow
+            variable_workflow[workflow_key] = workflow_steps
+
+        # remove workflows without errors
+        workflow_errors = {workflow_key: errors for workflow_key, errors in workflow_errors.items() if errors}
+        # block execution if workflows are invalid
+        if workflow_errors:
+
+            # initialize messages
+            error_messages = []
+            # iterate over workflow errors
+            for workflow_key, errors in workflow_errors.items():
+
+                # iterate over errors
+                for error in errors:
+
+                    # input mapping error
+                    if error["type"] == "input_mapping":
+
+                        missing_msg = "; ".join(
+                            (
+                                f'{mapping_key}: '
+                                f'"{mapping_obj["var_fx"]}" -> '
+                                f'"{mapping_obj["var_workflow"]}"'
+                            )
+                            for mapping_key, mapping_obj in error["mapping"].items()
+                        )
+
+                        error_messages.append(
+                            f'Workflow "{workflow_key}", '
+                            f'Step {error["step"]} '
+                            f'({error["function"]}): '
+                            f'input variable(s) not found in '
+                            f'data_collections_in: {missing_msg}'
+                        )
+
+                    # internal workflow error
+                    elif error["type"] == "workflow_link":
+
+                        missing_msg = "; ".join(
+                            (
+                                f'{mapping_key}: '
+                                f'"{mapping_obj["var_fx"]}" expects '
+                                f'"{mapping_obj["var_workflow"]}"'
+                            )
+                            for mapping_key, mapping_obj in error["mapping"].items()
+                        )
+
+                        # available previous results
+                        previous_msg = ", ".join(
+                            (
+                                f'"{result_key}" -> '
+                                f'"{result_value}"'
+                            )
+                            for result_key, result_value
+                            in error["previous_results"].items()
+                        )
+
+                        error_messages.append(
+                            f'Workflow "{workflow_key}": '
+                            f'Step {error["step_from"]} '
+                            f'({error["function_from"]}) -> '
+                            f'Step {error["step_to"]} '
+                            f'({error["function_to"]}) is not linked. '
+                            f'Missing: {missing_msg}. '
+                            f'Available previous results: {previous_msg}'
+                        )
+
+                    # output mapping error
+                    elif error["type"] == "output_mapping":
+
+                        output_msg = "; ".join(
+                            (
+                                f'{mapping_key}: '
+                                f'"{mapping_obj["var_fx"]}" -> '
+                                f'"{mapping_obj["var_out"]}"'
+                            )
+                            for mapping_key, mapping_obj in error["mapping"].items()
+                        )
+
+                        error_messages.append(
+                            f'Workflow "{workflow_key}", '
+                            f'Step {error["step"]} '
+                            f'({error["function"]}): '
+                            f'none of the function outputs are available in '
+                            f'data_collections_out: {output_msg}'
+                        )
+
+            # raise error
+            raise RuntimeError("Workflow variables are not consistently linked:\n ".join(error_messages))
+
+        return variable_workflow
+
+    # ----------------------------------------------------------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------------------------------------------------------
+    # method to collect workflow by priority
+    def order_workflows_by_priority(
             self,
             priority: Optional[List[str]] = None,
-            rows: Optional[List[Dict[str, Any]]] = None,
-            *,
-            sort_others: bool = True,
-            start_id: int = 1,
-            field: str = "workflow_name",) -> List[Dict[str, Any]]:
+            workflows: Optional[Dict[str, Any]] = None,
+            sort_others: bool = True,) -> Dict[str, Any]:
 
-        # check rows (and create them if not available)
-        if rows is None:
-            rows = self.compact_rows(start_id=start_id)
+        # get workflows if not provided
+        if workflows is None:
+            workflows = self.validate_workflows(sep_root='|',sep_sub=':',)
 
         # no priority defined
         if not priority:
-            return rows
+            return workflows
 
-        # normalize priority workflows
-        priority_workflows = [str(workflow) for workflow in priority]
+        # normalize priority keys
+        priority_keys = [str(workflow) for workflow in priority]
 
-        # initialize collections
-        priority_rows: List[Dict[str, Any]] = []
-        other_rows: List[Dict[str, Any]] = []
+        # split workflows
+        priority_workflows, other_workflows = [], []
+        for workflow_key in workflows.keys():
 
-        # split rows by workflow priority
-        for row in rows:
-            # get workflow name
-            workflow_name = str(row.get(field, ""))
-            # collect priority rows
-            if workflow_name in priority_workflows:
-                priority_rows.append(row)
+            workflow_name = str(workflow_key)
+
+            if workflow_name in priority_keys:
+                priority_workflows.append(workflow_name)
             else:
-                other_rows.append(row)
+                other_workflows.append(workflow_name)
 
-        # sort priority rows according to requested workflow order
-        priority_rows.sort(key=lambda row: priority_workflows.index(str(row.get(field, ""))))
+        # sort priority workflows according to requested order
+        priority_workflows.sort(key=lambda workflow_name: priority_keys.index(workflow_name))
 
         # optionally sort remaining workflows
         if sort_others:
-            other_rows.sort(key=lambda row: str(row.get(field, "")))
+            other_workflows.sort(key=str)
 
-        # merge priority + remaining rows
-        rows_sorted = priority_rows + other_rows
+        # merge workflow order
+        workflow_order = (priority_workflows+ other_workflows)
+        # rebuild ordered dictionary
+        workflows_sorted = {workflow_key: workflows[workflow_key] for workflow_key in workflow_order}
 
-        return rows_sorted
+        return workflows_sorted
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # method to create map of the variables
+    @staticmethod
+    def _mapping_variables(
+            datasets: dict, results: dict,
+            root_separator: str = '|', variable_separator: str = ':') -> dict:
+
+        # initialize mapping object
+        mapping_variables = {'in': {'groups': {},}, 'out': {'groups': {},}, 'valid': True,}
+
+        # organize input groups
+        for dataset_key, dataset_name in datasets.items():
+
+            # split group and variable
+            try:
+                group_name, variable_name = dataset_key.split(root_separator, 1)
+            except ValueError:
+                raise ValueError(f'Dataset key "{dataset_key}" must have format "group{root_separator}variable".')
+
+            # initialize input group
+            if group_name not in mapping_variables['in']['groups']:
+                mapping_variables['in']['groups'][group_name] = {'behaviour': None, 'mapping': {},}
+
+            # store variable mapping
+            mapping_variables['in']['groups'][group_name]['mapping'][dataset_key] = dataset_name
+
+        # define input group behaviours
+        for group_info in mapping_variables['in']['groups'].values():
+
+            # get number of variables
+            n_variables = len(group_info['mapping'])
+            # define behaviour
+            if n_variables == 1:
+                group_info['behaviour'] = 'one_to_one'
+            elif n_variables > 1:
+                group_info['behaviour'] = 'multi_to_one'
+            else:
+                group_info['behaviour'] = None
+                mapping_variables['valid'] = False
+
+        # create input variable lookup
+        input_lookup = {}
+        for group_info in mapping_variables['in']['groups'].values():
+
+            for dataset_key, workflow_variable in group_info['mapping'].items():
+
+                # check duplicated variable
+                if dataset_key in input_lookup:
+                    if input_lookup[dataset_key] != workflow_variable:
+                        mapping_variables['valid'] = False
+                # store variable
+                input_lookup[dataset_key] = workflow_variable
+
+        # organize output groups
+        for result_key, result_name in results.items():
+
+            # split group and variables
+            try:
+                group_name, variables_name = result_key.split(root_separator, 1)
+            except ValueError:
+                raise ValueError(f'Result key "{result_key}" must have format "group{root_separator}variable".')
+
+            # split output variables
+            variables_name = [variable_name
+                              for variable_name in variables_name.split(variable_separator) if variable_name
+            ]
+
+            # initialize output group
+            if group_name not in mapping_variables['out']['groups']:
+                mapping_variables['out']['groups'][group_name] = {'behaviour': None, 'mapping': {},}
+
+            # check variables
+            if not variables_name:
+                mapping_variables['valid'] = False
+                continue
+
+            # organize output variables
+            for variable_name in variables_name:
+
+                dataset_key = root_separator.join([group_name,variable_name])
+
+                # get workflow variable from input mapping
+                workflow_variable = input_lookup.get(dataset_key)
+
+                # create output reference
+                # example: time_series:data_1
+                variable_reference = (f'{result_name}{root_separator}{variable_name}')
+
+                # store output mapping
+                mapping_variables['out']['groups'][group_name]['mapping'][variable_reference] = workflow_variable
+
+                # variable is not linked to an input variable
+                if workflow_variable is None:
+                    mapping_variables['valid'] = False
+
+        # define output group behaviours
+        for group_info in mapping_variables['out']['groups'].values():
+
+            # get output mapping
+            group_mapping = group_info['mapping']
+
+            # check empty mapping
+            if not group_mapping:
+                group_info['behaviour'] = None
+                mapping_variables['valid'] = False
+                continue
+
+            # get function result names
+            result_names = {variable_reference.split(variable_separator, 1)[0] for variable_reference in group_mapping}
+
+            # get number of results and variables
+            n_results = len(result_names)
+            n_variables = len(group_mapping)
+
+            # define behaviour
+            if n_results == 1 and n_variables == 1:
+                group_info['behaviour'] = 'one_to_one'
+            elif n_results == 1 and n_variables > 1:
+                group_info['behaviour'] = 'one_to_multi'
+            elif n_results > 1:
+                group_info['behaviour'] = 'multi_to_multi'
+            else:
+                group_info['behaviour'] = None
+                mapping_variables['valid'] = False
+
+        # check input/output definitions
+        if not mapping_variables['in']['groups']:
+            mapping_variables['valid'] = False
+
+        if not mapping_variables['out']['groups']:
+            mapping_variables['valid'] = False
+
+        return mapping_variables
+
+    # method to create list of variables
+    @staticmethod
+    def _listing_variables(variable_obj: dict) -> tuple[list, list]:
+
+        # initialize lists
+        variable_keys, variable_names = [], []
+
+        # get groups
+        groups = variable_obj.get('groups', {})
+        # iterate over groups
+        for group_info in groups.values():
+            # get mapping
+            mapping = group_info.get('mapping', {})
+            # preserve key/value position
+            for variable_key, variable_name in mapping.items():
+                variable_keys.append(variable_key)
+                variable_names.append(variable_name)
+
+        return variable_keys, variable_names
+
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     # method to get pairs based on reference fields
-    def get_pairs(
+    def get_pairs_OLD(
             self,
             field_value,
             field_key: str = "fx",
@@ -376,10 +934,8 @@ class Mapper:
         # map reference type to row field
         field_map = {
             "tag": "tag",
-            "workflow": "workflow_name",
-            "process": "process_name",
-            "reference": "reference",
-            "fx": "fx",
+            "workflow": "workflow_name", "process": "process_name",
+            "reference": "reference", "fx": "fx",
         }
 
         # check type
@@ -404,7 +960,10 @@ class Mapper:
         if len(rows_selected) == 1:
             return rows_selected[0]
         else:
-            raise RuntimeError('Selected process must be singleton at each step')
+            if field_key == 'tag':
+                return rows_selected
+            else:
+                raise RuntimeError('Selected process must be singleton at each step')
 
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -412,7 +971,7 @@ class Mapper:
     # helpers
     # method to return list
     @staticmethod
-    def _as_list(obj: Union[Any, List[Any]]) -> List[Any]:
+    def _as_list_OLD(obj: Union[Any, List[Any]]) -> List[Any]:
         if obj is None:
             return []
         if isinstance(obj, (list, tuple, set)):
@@ -421,13 +980,13 @@ class Mapper:
 
     # method to get attributes or key
     @staticmethod
-    def _getattr_or_key(partial: Any, key: str, default=None):
+    def _getattr_or_key_OLD(partial: Any, key: str, default=None):
         if isinstance(partial, (dict, AbcMapping)):
             return partial.get(key, default)
         return getattr(partial, key, default)
 
     # method to get partial mapping
-    def _get_partial_mapping(self, partial: Any, tag: str, side: str, index_in_tag: int):
+    def _get_partial_mapping_OLD(self, partial: Any, tag: str, side: str, index_in_tag: int):
 
         # check side
         if side not in ("in", "out"):
@@ -532,7 +1091,7 @@ def _ns_has_fields(ns):
 
 @with_logger(var_name='logger_stream')
 def build_pairs_and_process(process_list, dataset_namespace,
-                            key_separator=':', key_order='workflow_and_variable'):
+                            key_separator='|', key_order='workflow_and_variable'):
 
     # check file variable as a list
     if not isinstance(dataset_namespace, list):

@@ -38,9 +38,7 @@ def ensure_folder_tmp(folder_tmp: str = None, prefix_tmp: str = "shybox_") -> st
         # placeholder not resolved -> invalid
         elif folder_tmp_str.startswith("{") and folder_tmp_str.endswith("}"):
             logger_stream.warning(
-                f"Temp folder '{folder_tmp_str}' looks like an unresolved placeholder: "
-                f"using system temp folder instead."
-            )
+                f"Temp folder '{folder_tmp_str}' looks like an unresolved placeholder: using system temp folder instead.")
             folder_tmp = None
 
     # try to use custom folder
@@ -51,14 +49,10 @@ def ensure_folder_tmp(folder_tmp: str = None, prefix_tmp: str = "shybox_") -> st
         except Exception as exc:
             folder_def = tempfile.mkdtemp(prefix=prefix_tmp)
             logger_stream.warning(
-                f"Temp folder '{folder_tmp}' cannot be created/used ({exc}). "
-                f"Using system temp folder '{folder_def}'."
-            )
+                f"Temp folder '{folder_tmp}' cannot be created/used ({exc}). Using system temp folder '{folder_def}'.")
     else:
         folder_def = tempfile.mkdtemp(prefix=prefix_tmp)
-        logger_stream.warning(
-            f"Using system temp folder '{folder_def}'."
-        )
+        logger_stream.warning(f"Using system temp folder '{folder_def}'.")
 
     if folder_def is None:
         logger_stream.error("Failed to create a temporary folder.")

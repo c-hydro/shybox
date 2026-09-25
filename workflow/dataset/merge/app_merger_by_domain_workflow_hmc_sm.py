@@ -2,8 +2,8 @@
 """
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - MERGER BY DOMAIN - SOIL MOISTURE
 
-__date__ = '20260326'
-__version__ = '1.4.0'
+__date__ = '20260923'
+__version__ = '1.5.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
@@ -24,6 +24,7 @@ PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/log/;
 PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/merger_hmc_by_domain/tmp/
 
 Version(s):
+20260923 (1.5.0) --> Update codes to connect to the shybox structure
 20260326 (1.4.0) --> Extend to compute the soil moisture layer
 20260209 (1.3.0) --> Set the algorithm for merging soil moisture and discharge variables
 20260129 (1.2.0) --> Add class method to create data on demand
@@ -40,13 +41,14 @@ import time
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
+#from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_hydro_toolkit.lib_proc_compute_sm import compute_soil_moisture
+from shybox.processing_hydro_toolkit.hydro_adapter import exec_soil_moisture
 
 from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_format
 # ----------------------------------------------------------------------------------------------------------------------
@@ -172,10 +174,12 @@ def main(view_table: bool = False):
     # geographic reference
     ref_data = DataOnDemand(
         info=alg_cfg_application['geo']['grid'],
-        file_type='grid_2d', file_format=None, file_mode='local', file_variable='grid', file_io='input',
+        data_role='auxiliary', data_id=-1,
+        file_type='grid_2d', file_format=None, file_mode='local', file_variable='GRID', file_io='input',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
-            "vars_geo": {"x": "longitude", "y": "latitude"}
+            "vars_geo": {"x": "longitude", "y": "latitude"},
+            "vars_data": {"grid": "deps_grid"}
         },
         time_signature=None, time_direction=None,
         logger=logging_handle, message=False
@@ -200,32 +204,33 @@ def main(view_table: bool = False):
         alg_cfg_obj.view(section=alg_cfg_step, table_name='application [cfg step]', table_print=view_table)
 
         # iterate over src datasets
-        dset_src_handler_list = []
+        dset_src_handler_common = {}
         for alg_data_id, (alg_data_src_key, alg_data_src_settings) in enumerate(alg_cfg_step['data_source'].items()):
 
             # deps watermark handler
             dset_src_handler_deps_watermark = DataLocal(
                 path=alg_data_src_settings['file_watermark']['path'],
                 file_name=alg_data_src_settings['file_watermark']['file_name'],
+                data_role='auxiliary', data_id=alg_data_id,
                 file_type='grid_2d', file_format='ascii', file_mode='local',
-                file_variable=['WATERMARK'], file_io='input',
-                data_id=alg_data_id,
+                file_variable='WATERMARK', file_io='input',
                 variable_template={
                     "dims_geo": {"x": "longitude", "y": "latitude"},
+                    "vars_geo": {"x": "longitude", "y": "latitude"},
                     "vars_data": {"watermark": "deps_watermark"}
                 },
                 time_signature=None, time_direction=None,
-                logger=logging_handle
+                logger=logging_handle, message=False
             )
 
             # dataset handler
             dset_src_handler_data = DataLocal(
                 path=alg_data_src_settings['file_data']['path'],
                 file_name=alg_data_src_settings['file_data']['file_name'],
-                file_type='grid_hmc', file_format='netcdf', file_mode='local',
-                file_variable=['SOIL_MOISTURE'], file_io='input',
-                file_deps={'watermark': dset_src_handler_deps_watermark},
-                data_id=alg_data_id,
+                data_role='data', data_id=alg_data_id,
+                file_type='results_hmc', file_format='netcdf', file_mode='local',
+                file_variable='SOIL_MOISTURE_PARTIAL', file_workflow='SOIL_MOISTURE_WORKFLOW', file_io='input',
+                file_deps={f'watermark|{alg_data_id}': dset_src_handler_deps_watermark},
                 variable_template={
                     "dims_geo": {"west_east": "longitude", "south_north": "latitude", "time": "time"},
                     "vars_data": {"SM": "soil_moisture"}
@@ -236,7 +241,7 @@ def main(view_table: bool = False):
             )
 
             # append to src list
-            dset_src_handler_list.append(dset_src_handler_data)
+            dset_src_handler_common[f'SOIL_MOISTURE_PARTIAL|{alg_data_id}'] = dset_src_handler_data
 
         ## DESTINATION DATA MANAGEMENT
         # dataset handler 'grid_2d' or 'grid' for geotiff
@@ -244,7 +249,7 @@ def main(view_table: bool = False):
             path=alg_cfg_step['data_destination']['path'],
             file_name=alg_cfg_step['data_destination']['file_name'],
             file_type='grid_2d', file_format='geotiff', file_mode='local',
-            file_variable=['SOIL_MOISTURE'], file_io='output',
+            file_variable='SOIL_MOISTURE_MERGED', file_workflow='SOIL_MOISTURE_WORKFLOW', file_io='output',
             variable_template={
                 "dims_geo": alg_cfg_step['data_destination']['dims_geo'],
                 "vars_data": alg_cfg_step['data_destination']['vars_data']
@@ -257,13 +262,14 @@ def main(view_table: bool = False):
         # ------------------------------------------------------------------------------------------------------------------
         ## ORCHESTRATOR MANAGEMENT
         # orchestrator settings
-        orc_process = Orchestrator.multi_tile(
-            data_package_in=dset_src_handler_list,
-            data_package_out=dset_dst_handler_obj,
-            data_ref=ref_data,
+        orc_process = Orchestrator.configure(
+            data_package_in={**dset_src_handler_common},
+            data_package_out={'SOIL_MOISTURE_MERGED': dset_dst_handler_obj},
+            data_ref={'terrain': ref_data},
             priority=None,
             configuration=alg_cfg_workflow,
-            logger=logging_handle
+            logger=logging_handle,
+            tag_orchestrator = 'multi_tile', tag_logger = 'OrchestratorGrid',
         )
         # orchestrator exec
         orc_process.run(time=time_step)

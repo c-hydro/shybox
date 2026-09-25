@@ -19,6 +19,33 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# method to adapt vars to arg (datasets
+@with_logger(var_name='logger_stream')
+def adapter_variables_to_group(data: dict, separator: str = '|', **kwargs) -> dict:
+
+    # initialize organized data
+    data_organized = {}
+    # iterate over input data
+    for data_key, data_value in data.items():
+
+        # split group and variable
+        try:
+            group_name, variable_name = data_key.split(separator, 1)
+        except ValueError:
+            raise ValueError(
+                f'Key "{data_key}" must have format group{separator}variable".')
+
+        # initialize group
+        if group_name not in data_organized:
+            data_organized[group_name] = {}
+
+        # store variable
+        data_organized[group_name][variable_name] = data_value
+
+    return data_organized
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
 # adapter to convert list of xarray objects to xarray object
 @with_logger(var_name='logger_stream')
 def adapter_list_to_xarray(

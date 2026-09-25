@@ -68,7 +68,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
     # default attributes
     _defaults = {
         'type': None, 'time_signature' : 'end', "workflow": 'undefined', "layout": 'undefined',
-        'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}, 'placeholder': {}}
+        'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}, 'placeholder': {},
+        'data_id': -1, 'data_role': 'data'}
 
     def __init__(self, **kwargs):
 
@@ -126,9 +127,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'nan_value' in kwargs:
             self.nan_value = kwargs.pop('nan_value')
 
-        self.data_id = -1
+        self.data_id = self._defaults['data_id']
         if 'data_id' in kwargs:
             self.data_id = kwargs.pop('data_id')
+
+        self.data_role = self._defaults['data_role']
+        if 'data_role' in kwargs:
+            self.data_role = kwargs.pop('data_role')
 
         self.data_as_is = False
         if 'data_as_is' in kwargs:
@@ -146,6 +151,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'variable_template' in kwargs:
             self.variable_template = kwargs.pop('variable_template')
 
+        self.variable_role = {'ND': 'NA'}
+        if 'variable_role' in kwargs:
+            self.variable_role = kwargs.pop('variable_role')
+
+        # manage time information
         self.time_reference, self.time_freq, self.time_period, self.time_direction = None, None, None, None
         if 'time_reference' in kwargs:
             self.time_reference = kwargs.pop('time_reference')
@@ -205,7 +215,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return (f"{self.__class__.__name__}("
                 f"{self.file_name!r}, {self.file_mode!r}, {self.data_layout!r}, {self.file_type!r}, "
                 f"{self.file_format!r}, {self.file_variable!r}, {self.file_namespace!r},"
-                f"status={self.status!r}, id={self.data_id!r})")
+                f"role:{self.data_role!r}, status={self.status!r}, id={self.data_id!r})")
 
     # method to extract information from string representation
     def __str__(self):
@@ -369,18 +379,22 @@ class Dataset(ABC, metaclass=DatasetMeta):
     # method to update data object
     def update(self, in_place = False, **kwargs):
 
+        new_file_variable = self.file_variable
         new_file_name = substitute_string(self.file_name, kwargs)
         new_loc_pattern = substitute_string(self.loc_pattern, kwargs)
 
         if in_place:
             self.file_name = new_file_name
+            self.file_variable = new_file_variable
             self.loc_pattern = self.get_key(**kwargs)
             self.tags.update(kwargs)
             return self
         else:
             new_options = self.options.copy()
             new_options.update(
-                {'loc_pattern': new_loc_pattern, 'file_name': new_file_name, 'logger': self.logger})
+                {'loc_pattern': new_loc_pattern,
+                 'file_name': new_file_name, 'file_variable': new_file_variable,
+                 'logger': self.logger})
 
             new_dataset = self.__class__(**new_options)
             new_dataset.__dict__.update(self.__dict__)
@@ -611,11 +625,16 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return all_tags
 
     # method to get attribute
-    def get_attribute(self, attribute: str) -> (str, int, float, dict, list, pd.Timestamp, None):
+    def get_attribute(self, attribute: str, default: Union[str, None] = None) \
+            -> Union[str, int, float, dict, list, pd.Timestamp, None]:
+        # normalize attribute name
+        attribute = attribute.lstrip("_")
+        # check public and private attribute names
         if attribute in self.__dict__:
             return self.__dict__[attribute]
-        else:
-            return None
+        if f"_{attribute}" in self.__dict__:
+            return self.__dict__[f"_{attribute}"]
+        return default
 
     # method to check if time step available in the datasets
     def check_time_step(self, time: (pd.Timestamp, None)) -> (int, bool):
@@ -1056,6 +1075,23 @@ class Dataset(ABC, metaclass=DatasetMeta):
         out_file = self.get_key(time, **kwargs)
         out_path, out_name = os.path.dirname(out_file), os.path.basename(out_file)
 
+        # update variable from metadata (if available)
+        if 'variables_names' in list(metadata.keys()):
+            variable = metadata.pop('variables_names')
+
+        # flatten single-key dictionary
+        if isinstance(data, dict):
+            if len(data) == 1:
+                data = next(iter(data.values()))
+            else:
+                self.logger.error(
+                    f"Writing dictionary data with multiple keys is not implemented "
+                    f"for '{self.file_format}' format. Available keys: {list(data.keys())}"
+                )
+                raise NotImplementedError(
+                    f"Multiple-key dictionary writing is not implemented for '{self.file_format}' format."
+                )
+
         # case of file-like data
         if self.file_format == 'file':
             self._write_data(data, out_file)
@@ -1063,13 +1099,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # case of csv, json, txt, shp afiles
         if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
+
             append = kwargs.pop('append', False)
             self._write_data(data, out_file, append = append)
             return
-
-        # update variable from metadata (if available)
-        if 'variables' in list(metadata.keys()):
-            variable = metadata.pop('variables')
 
         # case of pandas DataFrame
         if isinstance(data, pd.DataFrame):
@@ -1477,17 +1510,11 @@ def log_data(stage, name=None, time=None, from_memory=False, reference=None):
     # Stage: START
     if stage == "start":
         logger_stream.info_up(f'[{tag}] {base} ...')
-
     # Stage: END
     elif stage == "end":
         logger_stream.info_down(f'[{tag}] {base} ... DONE')
-
     # Stage: SKIP
     elif stage == "skip":
-        logger_stream.warning(
-            f'Data is defined by NoneType after selecting by variables {reference}.'
-        )
-        logger_stream.info_down(
-            f'[{tag}] {base} ... SKIPPED. Variables are not available'
-        )
+        logger_stream.warning(f'Data is defined by NoneType after selecting by variables {reference}.')
+        logger_stream.info_down(f'[{tag}] {base} ... SKIPPED. Variables are not available')
 # ----------------------------------------------------------------------------------------------------------------------

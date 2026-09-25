@@ -14,7 +14,7 @@ import xarray as xr
 
 from typing import Union
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_upd import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 

@@ -45,7 +45,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_ts_toolkit.lib_proc_join import join_time_series_by_registry
 
-from shybox.orchestrator_toolkit.orchestrator_handler_timeseries import OrchestratorTimeSeries as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -182,7 +182,7 @@ def main(view_table: bool = False):
         file_args={
             'lut_map': alg_cfg_application['static_data']['registry_sections']['lut_map'],
             'lut_type': alg_cfg_application['static_data']['registry_sections']['lut_type'],
-            'sep':',', 'col_datafrom': 'SEC_TAG'},
+            'sep':',', 'col_reference': 'SEC_TAG'},
         file_variable='registry_db', file_io='input',
         variable_template={
             "dims_point": {"x": "fields", "y": "sections"},
@@ -217,7 +217,7 @@ def main(view_table: bool = False):
         data_layout='time_series',
         file_deps=None,
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE_SIM_OL', file_io='input',
+        file_variable='DISCHARGE_SIM_OL', file_workflow='TIME_SERIES_WORKFLOW', file_io='input',
         variable_template={
             "dims_data": {"y": "time", "x": "sections"},
             "vars_data": {"DISCHARGE_SIM_OL": "discharge_sim_openloop"}
@@ -233,7 +233,7 @@ def main(view_table: bool = False):
         data_layout='time_series',
         file_deps=None,
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE_SIM_ANLS', file_io='input',
+        file_variable='DISCHARGE_SIM_ANLS', file_workflow='TIME_SERIES_WORKFLOW', file_io='input',
         variable_template={
             "dims_data": {"y": "time", "x": "sections"},
             "vars_data": {"DISCHARGE_SIM_ANLS": "discharge_sim_analysis"}
@@ -250,7 +250,7 @@ def main(view_table: bool = False):
         data_layout='time_series', data_mandatory=False,
         file_deps=None,
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE_OBS', file_io='input',
+        file_variable='DISCHARGE_OBS', file_workflow='TIME_SERIES_WORKFLOW', file_io='input',
         variable_template={
             "dims_data": {"y": "time", "x": "sections"},
             "vars_data": {"DISCHARGE_OBS": "discharge_obs"}
@@ -267,7 +267,7 @@ def main(view_table: bool = False):
         data_layout='time_series', data_mandatory=False,
         file_deps=None,
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='AIR_TEMPERATURE_OBS', file_io='input',
+        file_variable='AIR_TEMPERATURE_OBS', file_workflow='TIME_SERIES_WORKFLOW', file_io='input',
         variable_template={
             "dims_data": {"y": "time", "x": "sections"},
             "vars_data": {"AIR_TEMPERATURE_OBS": "air_temperature_obs"}
@@ -277,57 +277,30 @@ def main(view_table: bool = False):
         logger=logging_handle, message=False
     )
 
-    # source data variables handler (example of derived variable with dependencies)
-    source_data_time_series = DataLocal(
-        path=None,
-        file_name=None,
-        file_type=None, file_format='tmp', file_mode='local',
-        file_variable='VARS_TS' , file_io='derived',
-        file_deps=[
-            source_data_discharge_hmc_openloop,
-            source_data_discharge_hmc_analysis,
-            source_data_discharge_obs,
-            source_data_airt_obs],
-        variable_template={
-            "dims_data": {"time": "time", "sections": "n"},
-            "coord_data": {"time": "time", "sections": "n"},
-            "vars_data": {
-                "discharge_sim_openloop": "discharge_sim_ol",
-                "discharge_sim_analysis": "discharge_sim_anls",
-                "discharge_obs": "discharge_obs",
-                "air_temperature_obs": "air_temperature_obs",
-            }
-        },
-        time_signature='period',
-        time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
-        logger=logging_handle
-    )
-
     # destination data discharge handler
     destination_data_time_series = DataLocal(
         path=alg_cfg_application['dynamic_data_dst']['path'],
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
         data_layout='time_series', file_args={},
         file_type='time_series_hmc', file_format='netcdf', file_mode='local',
-        file_variable='VARS_TS', file_io='output',
+        file_variable='VARS_TS', file_workflow='TIME_SERIES_WORKFLOW', file_io='output',
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
             "vars_data": {
-                "discharge_sim_ol": "discharge_simulated_openloop",
-                "discharge_sim_anls": "discharge_simulated_analysis",
+                "discharge_sim_openloop": "discharge_simulated_openloop",
+                "discharge_sim_analysis": "discharge_simulated_analysis",
                 "discharge_obs": "discharge_observed",
-                "air_temperature_obs": "air_temperature_observed",
+                "air_temperature_obs": "air_temperature_obs",
             },
             "units": {
-                "discharge_sim_ol": "m^3/s",
-                "discharge_sim_anls": "m^3/s",
+                "discharge_sim_openloop": "m^3/s",
+                "discharge_sim_analysis": "m^3/s",
                 "discharge_obs": "m^3/s",
                 "air_temperature_obs": "C",
             }
         },
-        time_signature='step',
-        time_period=1, time_format='%Y%m%d%H%M',
+        time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
         logger=logging_handle, message=False
     )
     # ------------------------------------------------------------------------------------------------------------------
@@ -335,9 +308,14 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
-    orc_process = Orchestrator.time_series_discharge(
-        data_package_in=source_data_time_series,
-        data_package_out=destination_data_time_series,
+    orc_process = Orchestrator.configure(
+        data_package_in={
+            'DISCHARGE_SIM_OL': source_data_discharge_hmc_openloop,
+            'DISCHARGE_SIM_ANLS': source_data_discharge_hmc_analysis,
+            'AIR_TEMPERATURE_OBS': source_data_airt_obs,
+            'DISCHARGE_OBS': source_data_discharge_obs
+        },
+        data_package_out={'VARS_TS': destination_data_time_series},
         data_ref={'sections_hmc': registry_sections_hmc, 'sections_db': registry_sections_data},
         priority=None,
         configuration=alg_cfg_workflow,

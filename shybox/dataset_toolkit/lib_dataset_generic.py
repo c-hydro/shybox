@@ -81,9 +81,10 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write a string to a {file_format} file.')
         
     elif isinstance(data, dict):
-        if file_format not in ['json', 'ascii', 'txt', 'tiff', 'tif']:
+
+        if file_format not in ['json', 'ascii', 'txt', 'tiff', 'tif', 'csv', 'netcdf', 'geotiff']:
             raise ValueError(f'Cannot write a dictionary to a {file_format} file.')
-        
+
     elif 'gpd' in globals() and isinstance(data, gpd.GeoDataFrame):
         if file_format not in ['shp', 'json']:
             raise ValueError(f'Cannot write a geopandas dataframe to a {file_format} file.')

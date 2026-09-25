@@ -102,29 +102,6 @@ def remove_none(obj: (list, dict) = None) -> (list, dict):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# method to group processes by attribute
-@with_logger(var_name='logger_stream')
-def group_process(proc_list, proc_tag="reference"):
-    proc_group = defaultdict(list)
-    for proc in proc_list:
-        if proc_tag == "reference":
-            if not hasattr(proc, "reference") or proc.reference is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'reference' attribute.")
-            proc_group[proc.reference].append(proc)
-        elif proc_tag == "workflow":
-            if not hasattr(proc, "workflow") or proc.workflow is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'workflow' attribute.")
-            proc_group[proc.workflow].append(proc)
-        elif proc_tag == "tag":
-            if not hasattr(proc, "tag") or proc.tag is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'tag' attribute.")
-            proc_group[proc.tag].append(proc)
-        else:
-            logger_stream.error(f"Invalid proc_tag '{proc_tag}'. Must be 'reference', 'workflow' or 'tag'.")
-    return dict(proc_group)
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
 # method to check compatibility between data and fx dicts
 @with_logger(var_name='logger_stream')
 def ensure_variables(data_collections, fx_collections, mode='strict'):

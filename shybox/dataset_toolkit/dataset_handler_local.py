@@ -67,6 +67,11 @@ class DataLocal(Dataset):
         "point": "points",
     }
 
+    # default property
+    _defaults_property = {
+        'data_role': {'NA', 'NA'}
+    }
+
     _default_vars_wf = ["variable"]
 
     def __init__(self,
@@ -108,6 +113,11 @@ class DataLocal(Dataset):
             self.data_id = kwargs.pop('data_id')
         else:
             self.data_id = -1
+        # check data_role (to define if Data is data, deps, auxiliary ... )
+        if 'data_role' in kwargs:
+            self.data_role = kwargs.pop('data_role')
+        else:
+            self.data_role = 'data'
 
         # determine directory name
         if path is not None:
@@ -143,11 +153,14 @@ class DataLocal(Dataset):
         else:
             self.delimiter = ';'
 
-        # handle file_template normalization
-        if file_variable is not None:
-            pass
-        else:
-            file_variable = kwargs.get('file_variable', 'variable')
+        # check file variable not NoneType obj
+        if file_variable is None:
+            self.logger.error("The file_variable is defined by NoneType.")
+            raise RuntimeError("The file_variable must be defined by string.")
+        # check file variable type
+        if not isinstance(file_variable, str):
+            self.logger.error(f"The file_variable must be a string. Found type: {type(file_variable).__name__}.")
+            raise RuntimeError("The file_variable must be defined by string.")
 
         # variable template normalization
         variable_template = kwargs.pop('variable_template', None)
@@ -156,6 +169,13 @@ class DataLocal(Dataset):
         elif not isinstance(variable_template, dict):
             self.logger.error("Variable template must be a dict if provided.")
             raise ValueError("Variable template must be a dict if provided.")
+
+        # variable role normalization
+        if isinstance(self.data_role, str):
+            variable_role = {file_variable: self.data_role}
+        else:
+            self.logger.error("Attribute data_role must be a str")
+            raise RuntimeError("Check your settings in the DataObject definition")
 
         # define dims and vars - layout handling (backward compatible)
         layout_raw = getattr(self, "data_layout", "geo") or "geo"
@@ -243,8 +263,10 @@ class DataLocal(Dataset):
             'message': message,
             'units': units,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
+            'variable_role': variable_role,
             "data_layout": layout_norm,
             "data_id": self.data_id,
+            "data_role": self.data_role,
             "data_as_is": self.data_as_is,
             "data_mandatory": self.data_mandatory,
             'file_variable': file_variable,
@@ -255,12 +277,12 @@ class DataLocal(Dataset):
         # initialize parent class
         super().__init__(**kwargs)
 
+    # LOC PATTERS MANAGEMENT
     @property
     def loc_pattern(self):
         if self.dir_name is None or self.file_name is None:
             return None
         return os.path.join(self.dir_name, self.file_name)
-
     @loc_pattern.setter
     def loc_pattern(self, path):
         if path is not None:
@@ -269,11 +291,11 @@ class DataLocal(Dataset):
         else:
             self.dir_name, self.file_name = None, None
 
+    # FILE IO MANAGEMENT
     @property
     def file_io(self):
         """Get the file_io value."""
         return self._file_io
-
     @file_io.setter
     def file_io(self, value):
         """Set the file_io value, ensuring it is valid."""
@@ -281,6 +303,20 @@ class DataLocal(Dataset):
             raise ValueError(f"Invalid file_io '{value}'. Must be one of {'input', 'output', 'derived', 'tmp'}.")
         self._file_io = value
 
+    ## DATA MANAGEMENT
+    @property
+    def data_role(self):
+        if not hasattr(self, '_data_role'):
+            self._data_role = self._defaults_property['data_role']
+        return self._data_role
+    @data_role.setter
+    def data_role(self, value):
+        if value not in ['data', 'deps', 'ancillary', 'auxiliary']:
+            self.logger.error(f'Invalid data role: {value}')
+            raise ValueError(f"Invalid data_role: {value}")
+        self._data_role = value
+
+    # method to apply time to path
     def path(self, time: Optional[pd.Timestamp] = None, **kwargs):
         return self.get_key(time, **kwargs)
 

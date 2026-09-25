@@ -130,7 +130,7 @@
           },
           {
             "function": "exec_mask_grid",
-            "datasets": {"data_raw": "air_temperature_value"},
+            "datasets": {"data_raw": "air_temperature"},
             "results": {"data_masked": "air_temperature_masked"},
             "fill_value": -9999, "masked": "by_terrain",
             "no_data_value": -9999
@@ -138,7 +138,7 @@
           {
             "function": "exec_set_null",
             "datasets": {"data_in": "air_temperature_masked"},
-            "results": {"data_avg": "air_temperature_avg"},
+            "results": {"data_avg": "air_t"},
             "fill_value": -9999,
             "no_data_value": -9999
           }

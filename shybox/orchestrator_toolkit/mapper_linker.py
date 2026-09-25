@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
-
 # ----------------------------------------------------------------------------------------------------------------------
 @dataclass
 class Data:
@@ -56,22 +55,44 @@ class Data:
     def reference(self) -> str:
         return f"{self.workflow_name}:{self.fx}"
 
+    def create_mappings(self, side='in'):
+
+        # get variable name
+        workflow_name = self.workflow_name
+
+        # organize input/output variable links
+        if side == 'in':
+            links = [
+                f"{workflow_name}{self.root_separator}{var_name}"
+                for var_name in self.variables_in
+            ]
+        elif side == 'out':
+            links = [
+                f"{workflow_name}{self.root_separator}{var_name}"
+                for var_name in self.variables_out
+            ]
+        else:
+            links = []
+
+        return links
+
+
+
     # method to create links
     def create_links(self, side='in') -> list:
 
         # get variable name
         workflow_name = self.workflow_name
 
-        # organize input/output links
         # organize input/output variable links
         if side == 'in':
             links = [
-                f"{workflow_name}{self.variable_separator}{var_name}"
+                f"{workflow_name}{self.root_separator}{var_name}"
                 for var_name in self.variables_in
             ]
         elif side == 'out':
             links = [
-                f"{workflow_name}{self.variable_separator}{var_name}"
+                f"{workflow_name}{self.root_separator}{var_name}"
                 for var_name in self.variables_out
             ]
         else:
@@ -87,11 +108,9 @@ class Data:
         out_tag = self.variable_separator.join(self.variables_out)
 
         # create process tag
-        return self.root_separator.join([
-            self.workflow_name,
-            in_tag,
-            out_tag,
-        ])
+        process_tag = self.root_separator.join([self.workflow_name, in_tag, out_tag])
+
+        return process_tag
 
     # method to add input variable
     def add_in(self, variable: str) -> None:

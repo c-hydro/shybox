@@ -9,359 +9,258 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import numpy as np
-import pandas as pd
+import numpy as np
 
+from pyresample import geometry
+from pyresample import kd_tree
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
 @with_logger(var_name='logger_stream')
-def interpolate_points_to_grid(
-        data: list,
-        ref: pd.DataFrame,
-        time: list,
-        name: str = "points_time_series",
-        fill_missing_step: (float, int) = -9998.0,
-        fill_no_data_step: (float, int) = -9999.0,
-        fill_missing_tag: (float, int) = -9999.0,
-        time_fmt: str = "%Y%m%d%H%M",
-        time_reference: pd.Timestamp = None,
-        fixed_width: bool = True,
-        decimals: int = 2,
-        col_width: int = 12,
-        **kwargs):
+def interpolate_point2grid_base(
+        point_values: np.ndarray,
+        point_lons: np.ndarray,
+        point_lats: np.ndarray,
+        grid_lons: np.ndarray,
+        grid_lats: np.ndarray,
+        method: str = "idw",
+        radius_of_influence: float = 50000.0,
+        neighbours: int = 8,
+        sigma: float = 25000.0,
+        power: float = 2.0,
+        epsilon: float = 0.0,
+        fill_value: float = np.nan,
+        nprocs: int = 1,
+        **kwargs) -> np.ndarray:
 
-    # helper: create tag from reference row
-    def make_tag(row):
-        parts = [
-            str(row["catchment_name"]).strip(),
-            str(row["section_name"]).strip()
-        ]
+    """
+    Interpolate scattered point data to a geographical grid using pyresample.
 
-        extra = row.get("extra", np.nan)
+    Parameters
+    ----------
+    point_values : np.ndarray
+        Point values, shape (n_points,).
 
-        if pd.notna(extra):
-            extra_s = str(extra).strip()
+    point_lons : np.ndarray
+        Point longitudes, shape (n_points,).
 
-            if extra_s and extra_s.lower() != "nan":
-                parts.append(extra_s)
+    point_lats : np.ndarray
+        Point latitudes, shape (n_points,).
 
-        return " ".join(parts)
+    grid_lons : np.ndarray
+        Grid longitudes, shape (ny, nx).
 
-    # helper: normalize tag/key
-    def normalize_tag(value):
-        return " ".join(str(value).strip().split()).lower()
+    grid_lats : np.ndarray
+        Grid latitudes, shape (ny, nx).
 
-    # check input lengths
-    if len(data) != len(time):
-        raise ValueError(
-            f"'data' and 'time' must have the same length. "
-            f"Got data={len(data)}, time={len(time)}"
+    method : str
+        Interpolation method:
+            - "nearest"
+            - "idw"
+            - "gauss"
+
+    radius_of_influence : float
+        Maximum search distance in meters.
+
+    neighbours : int
+        Maximum number of neighbours used for interpolation.
+
+    sigma : float
+        Gaussian sigma in meters.
+
+    power : float
+        IDW exponent.
+
+    epsilon : float
+        Allowed uncertainty in KD-tree search, in meters.
+
+    fill_value : float
+        Value assigned where interpolation is not possible.
+
+    nprocs : int
+        Number of processes used by pyresample.
+
+    Returns
+    -------
+    np.ndarray
+        Interpolated grid, shape equal to grid_lons/grid_lats.
+    """
+
+    # -------------------------------------------------------------------------------------
+    # Convert inputs to numpy arrays
+    point_values = np.asarray(point_values, dtype=float).ravel()
+    point_lons = np.asarray(point_lons, dtype=float).ravel()
+    point_lats = np.asarray(point_lats, dtype=float).ravel()
+
+    grid_lons = np.asarray(grid_lons, dtype=float)
+    grid_lats = np.asarray(grid_lats, dtype=float)
+
+    # -------------------------------------------------------------------------------------
+    # Check point dimensions
+    if not (
+            point_values.size ==
+            point_lons.size ==
+            point_lats.size
+    ):
+        raise RuntimeError(
+            "Point values, longitude and latitude arrays must have "
+            "the same number of elements."
         )
 
-    # check data availability
-    if len(data) == 0:
-        logger_stream.warning(
-            "Empty data for the whole time series. Return None"
-        )
-        return None
-
-    # find first available dataframe
-    template = None
-
-    for step_data in data:
-
-        if step_data is not None:
-
-            if not isinstance(step_data, pd.DataFrame):
-                raise TypeError(
-                    f"Per-step data must be a pd.DataFrame or None. "
-                    f"Got {type(step_data)}"
-                )
-
-            template = step_data
-            break
-
-    # all timesteps are None
-    if template is None:
-        logger_stream.warning(
-            "All data steps are None. Return None"
-        )
-        return None
-
-    # recover time_reference from kwargs
-    if time_reference is None:
-
-        for key in (
-                "time_reference",
-                "time_ref",
-                "time_run",
-                "time_now",
-                "time",
-                "reference_time",
-                "run_time",
-                "date_reference"):
-
-            if key in kwargs and kwargs[key] is not None:
-
-                time_reference = kwargs[key]
-
-                logger_stream.info(
-                    f"Using '{key}' from kwargs as "
-                    f"time_reference: {time_reference}"
-                )
-
-                break
-
-    # define tags using reference dataframe
-    if "tag" in ref.columns:
-
-        tags = ref["tag"].tolist()
-
-        logger_stream.info(
-            "Tags found in reference data"
+    # check output grid
+    if grid_lons.shape != grid_lats.shape:
+        raise RuntimeError(
+            "Grid longitude and latitude arrays must have the same shape."
         )
 
-    else:
+    # -------------------------------------------------------------------------------------
+    # Remove invalid source points
+    valid_points = (
+        np.isfinite(point_values)
+        & np.isfinite(point_lons)
+        & np.isfinite(point_lats)
+    )
 
-        tags = [
-            make_tag(row)
-            for _, row in ref.iterrows()
-        ]
+    point_values = point_values[valid_points]
+    point_lons = point_lons[valid_points]
+    point_lats = point_lats[valid_points]
 
-        ref["tag"] = tags
-
-        logger_stream.info(
-            "Tags not found: created using make_tag()"
+    if point_values.size == 0:
+        return np.full(
+            grid_lons.shape,
+            fill_value,
+            dtype=float,
         )
 
-    # normalize reference tags once
-    tags_normalized = {
-        normalize_tag(tag): tag
-        for tag in tags
+    # -------------------------------------------------------------------------------------
+    # Normalize interpolation method
+    method = str(method).lower().strip()
+
+    method_aliases = {
+        "nn": "nearest",
+        "nearest_neighbour": "nearest",
+        "nearest_neighbor": "nearest",
+        "gaussian": "gauss",
+        "inverse_distance": "idw",
+        "inverse_distance_weighting": "idw",
     }
 
-    # iterate over timesteps
-    rows = []
+    method = method_aliases.get(method, method)
 
-    for step_data, step_time in zip(data, time):
+    methods_supported = [
+        "nearest",
+        "idw",
+        "gauss",
+    ]
 
-        # format timestep
-        ts = pd.to_datetime(step_time).strftime(time_fmt)
-
-        # completely missing timestep
-        if step_data is None:
-
-            logger_stream.warning(
-                f"Adding missing step for time: {step_time}"
-            )
-
-            rows.append(
-                [ts] + [fill_missing_step] * len(tags)
-            )
-
-            continue
-
-        # validate timestep data
-        if not isinstance(step_data, pd.DataFrame):
-
-            logger_stream.error(
-                f"Per-step data must be a pd.DataFrame or None. "
-                f"Got {type(step_data)}"
-            )
-
-            raise TypeError(
-                f"Per-step data must be a pd.DataFrame or None. "
-                f"Got {type(step_data)}"
-            )
-
-        # empty dataframe
-        if step_data.empty:
-
-            logger_stream.warning(
-                f"Empty dataframe at time '{ts}'. "
-                f"Using {fill_missing_step}."
-            )
-
-            rows.append(
-                [ts] + [fill_missing_step] * len(tags)
-            )
-
-            continue
-
-        # normalize dataframe index
-        normalized_index = {
-            normalize_tag(index_value): index_value
-            for index_value in step_data.index
-        }
-
-        # extract values according to reference tag order
-        vals = []
-
-        for tag in tags:
-
-            key = normalize_tag(tag)
-
-            # point exists in dataframe
-            if key in normalized_index:
-
-                original_index = normalized_index[key]
-
-                # recover row
-                value = step_data.loc[original_index]
-
-                # if loc returns a dataframe because of duplicate indexes
-                if isinstance(value, pd.DataFrame):
-
-                    logger_stream.warning(
-                        f"Duplicate point '{tag}' at time '{ts}'. "
-                        f"Using first row."
-                    )
-
-                    value = value.iloc[0]
-
-                # if row is a Series, get first value
-                if isinstance(value, pd.Series):
-
-                    if value.empty:
-
-                        vals.append(fill_missing_tag)
-                        continue
-
-                    value = value.iloc[0]
-
-                # numpy array
-                if isinstance(value, np.ndarray):
-
-                    if value.size == 0:
-
-                        vals.append(fill_missing_tag)
-                        continue
-
-                    elif value.size == 1:
-
-                        value = value.item()
-
-                    else:
-
-                        logger_stream.warning(
-                            f"Array value for '{tag}' at time '{ts}' "
-                            f"has shape {value.shape}. "
-                            f"Using first element."
-                        )
-
-                        value = value.flat[0]
-
-                # None
-                if value is None:
-
-                    vals.append(fill_missing_tag)
-                    continue
-
-                # NaN
-                try:
-
-                    if pd.isna(value):
-
-                        vals.append(fill_missing_tag)
-                        continue
-
-                except (TypeError, ValueError):
-                    pass
-
-                # convert to float
-                try:
-
-                    value = float(value)
-
-                except (TypeError, ValueError):
-
-                    logger_stream.warning(
-                        f"Invalid value '{value}' for point '{tag}' "
-                        f"at time '{ts}'. "
-                        f"Using {fill_missing_tag}."
-                    )
-
-                    value = fill_missing_tag
-
-                vals.append(value)
-
-            # point missing
-            else:
-
-                logger_stream.warning(
-                    f"Missing point '{tag}' at time '{ts}'. "
-                    f"Using {fill_missing_tag}."
-                )
-
-                vals.append(fill_missing_tag)
-
-        # append timestep
-        rows.append(
-            [ts] + vals
+    if method not in methods_supported:
+        raise ValueError(
+            f'Interpolation method "{method}" is not supported. '
+            f"Available methods: {methods_supported}"
         )
 
-    # create output dataframe
-    df = pd.DataFrame(
-        rows,
-        columns=["time"] + tags
+    # -------------------------------------------------------------------------------------
+    # Create source geometry
+    #
+    # Point observations are represented as a SwathDefinition.
+    source_geometry = geometry.SwathDefinition(
+        lons=point_lons,
+        lats=point_lats,
     )
 
-    # set future values to no-data
-    if time_reference is not None:
-
-        time_reference = pd.to_datetime(time_reference)
-
-        # remove timezone
-        if time_reference.tzinfo is not None:
-            time_reference = time_reference.tz_localize(None)
-
-        time_check = pd.to_datetime(
-            df["time"],
-            format=time_fmt,
-            errors="coerce"
-        )
-
-        # remove timezone if needed
-        if getattr(time_check.dt, "tz", None) is not None:
-            time_check = time_check.dt.tz_localize(None)
-
-        mask_after_reference = (
-            time_check > time_reference
-        )
-
-        if mask_after_reference.any():
-
-            logger_stream.warning(
-                f"Setting values after time_reference "
-                f"'{time_reference}' to no_data "
-                f"'{fill_no_data_step}'"
-            )
-
-            df.loc[
-                mask_after_reference,
-                df.columns[1:]
-            ] = fill_no_data_step
-
-    # fill remaining NaN values
-    df.iloc[:, 1:] = (
-        df.iloc[:, 1:]
-        .fillna(fill_no_data_step)
+    # target grid is also represented by its geographical coordinates
+    target_geometry = geometry.SwathDefinition(
+        lons=grid_lons,
+        lats=grid_lats,
     )
 
-    # fixed-width formatting
-    if fixed_width:
+    # -------------------------------------------------------------------------------------
+    # Nearest-neighbour interpolation
+    if method == "nearest":
 
-        for column in df.columns[1:]:
+        grid_values = kd_tree.resample_nearest(
+            source_geo_def=source_geometry,
+            data=point_values,
+            target_geo_def=target_geometry,
+            radius_of_influence=radius_of_influence,
+            epsilon=epsilon,
+            fill_value=fill_value,
+            nprocs=nprocs,
+        )
 
-            df[column] = df[column].map(
-                lambda value:
-                f"{float(value):{col_width}.{decimals}f}"
+    # -------------------------------------------------------------------------------------
+    # Gaussian interpolation
+    elif method == "gauss":
+
+        grid_values = kd_tree.resample_gauss(
+            source_geo_def=source_geometry,
+            data=point_values,
+            target_geo_def=target_geometry,
+            radius_of_influence=radius_of_influence,
+            sigmas=sigma,
+            neighbours=neighbours,
+            epsilon=epsilon,
+            fill_value=fill_value,
+            nprocs=nprocs,
+        )
+
+    # -------------------------------------------------------------------------------------
+    # Inverse Distance Weighting
+    elif method == "idw":
+
+        # avoid division by zero for grid cells located exactly
+        # at the same position as an input point
+        min_distance = kwargs.get("min_distance", 1.0)
+
+        def idw_weights(distance):
+
+            distance = np.asarray(
+                distance,
+                dtype=float,
             )
 
-    # dataframe name
-    df.name = name
+            distance = np.maximum(
+                distance,
+                min_distance,
+            )
 
-    return df
+            return 1.0 / np.power(
+                distance,
+                power,
+            )
+
+        grid_values = kd_tree.resample_custom(
+            source_geo_def=source_geometry,
+            data=point_values,
+            target_geo_def=target_geometry,
+            radius_of_influence=radius_of_influence,
+            weight_funcs=idw_weights,
+            neighbours=neighbours,
+            epsilon=epsilon,
+            fill_value=fill_value,
+            nprocs=nprocs,
+        )
+
+    # -------------------------------------------------------------------------------------
+    # Convert masked output if needed
+    if np.ma.isMaskedArray(grid_values):
+
+        grid_values = grid_values.filled(
+            fill_value
+        )
+
+    grid_values = np.asarray(
+        grid_values,
+        dtype=float,
+    )
+
+    # ensure expected grid shape
+    grid_values = grid_values.reshape(
+        grid_lons.shape
+    )
+
+    return grid_values
 # ----------------------------------------------------------------------------------------------------------------------
