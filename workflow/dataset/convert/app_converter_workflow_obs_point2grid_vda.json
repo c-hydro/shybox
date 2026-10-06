@@ -123,10 +123,11 @@
         "AIR_T_WORKFLOW": [
           {
             "function": "exec_interpolate_points",
-            "datasets": {"data": "air_temperature_value", "code": "air_temperature_code"},
+            "datasets": {
+              "data": "air_temperature_value",
+              "code": "air_temperature_code"},
             "results": {"data": "air_temperature"},
-            "fill_value": -9999,
-            "no_data_value": -9999
+            "fill_value": -9999, "no_data_value": -9999
           },
           {
             "function": "exec_mask_grid",
@@ -137,7 +138,7 @@
           },
           {
             "function": "exec_set_null",
-            "datasets": {"data_in": "air_temperature_masked"},
+            "datasets": {"data_raw": "air_temperature_masked"},
             "results": {"data_avg": "air_t"},
             "fill_value": -9999,
             "no_data_value": -9999

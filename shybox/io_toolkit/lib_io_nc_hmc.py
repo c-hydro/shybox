@@ -14,6 +14,7 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 
+from typing import Optional
 from datetime import datetime
 from netCDF4 import Dataset, date2num, num2date, stringtochar
 
@@ -656,29 +657,62 @@ def write_ts_hmc(
 
 # ----------------------------------------------------------------------------------------------------------------------
 
+from typing import Union
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_fx_single import xarray_to_dict
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (netcdf library for hmc dataset)
 @with_logger(var_name='logger_stream')
 def write_dataset_hmc(
-        path, data, time: (pd.DatetimeIndex, pd.Timestamp) = None,
+        path: str,
+        data: dict, ref: xr.DataArray,
+        time: pd.DatetimeIndex | pd.Timestamp | None = None,
         attrs_data: dict = None, attrs_system: dict = None, attrs_x: dict = None, attrs_y: dict = None,
         file_format: str = 'NETCDF4', time_format: str ='%Y%m%d%H%M',
         compression_flag: bool =True, compression_level: (int, None) = 5,
         file_compression: bool =True, file_update: bool = True,
-        time_units: str = time_default_units, time_calendar: str = time_default_calendar,
+        var_units: Optional[dict] = None, var_mapping: Optional[dict] = None,
+        ref_dim_x: str = 'longitude', ref_dim_y: str = 'latitude',
         var_system: str ='crs',
-        var_time: str = 'time', var_x: str = 'longitude', var_y: str = 'latitude',
-        dim_time: str = 'time', dim_x: str = 'west_east', dim_y: str = 'south_north',
-        type_time: str = 'float64', type_x: str = 'float64', type_y: str = 'float64',
+        var_time_units: str = time_default_units, var_time_calendar: str = time_default_calendar,
+        var_name_time: str = 'time', var_name_x: str = 'longitude', var_name_y: str = 'latitude',
+        force_3d: bool = True,
+        var_dim_time: str = 'time', var_dim_x: str = 'west_east', var_dim_y: str = 'south_north',
+        var_type_time: str = 'float64', var_type_x: str = 'float64', var_type_y: str = 'float64',
         debug_geo: bool = False, debug_data: bool = False, **kwargs):
 
     # check file format
     if not isinstance(file_format, str):
-        logger_stream.warning(' ===> File format is not defined as string type! Using default format NETCDF4')
+        logger_stream.warning('File format is not defined as string type! Using default format NETCDF4')
         file_format = 'NETCDF4'
 
-    # manage file path
+    # check data type (and try to convert from xarray formats)
+    if not isinstance(data, dict):
+        logger_stream.warning('Variable data should be in dictionary format. Try to use DataArray or Dataset')
+        if isinstance(data, (xr.DataArray, xr.Dataset)):
+            data = xarray_to_dict(obj=data)
+        else:
+            logger_stream.error('Variable data is not in expected format. Exit')
+            raise RuntimeError('Variable data is not in expected format. Exit')
+
+    # manage var names
+    var_names = list(data.keys())
+    # managing variable units and mapping
+    var_units = var_units or {}
+    var_mapping = var_mapping or {}
+
+    # complete variable units using mapping
+    for var_key, var_name in var_mapping.items():
+        # check if one of the mapped variables is available in data
+        if var_key in var_names or var_name in var_names:
+            # get unit from key or mapped name
+            unit = var_units.get(var_key, var_units.get(var_name))
+            # add unit for both mapped names
+            if unit is not None:
+                var_units[var_key] = unit
+                var_units[var_name] = unit
+
+    # managing file path
     path_unzip = path
     path_zip = define_compress_filename(path, remove_ext=False, uncompress_ext='.nc', compress_ext='.gz')
     if file_update:
@@ -692,49 +726,32 @@ def write_dataset_hmc(
     if attrs_system is None: attrs_system = {}
     if attrs_x is None: attrs_x = {}
     if attrs_y is None: attrs_y = {}
+
     # managing reference object
-    ref = None
-    if 'ref' in kwargs: ref = kwargs['ref']
+    if ref is None:
+        ref = kwargs.pop('ref', None)
+    if ref is None:
+        logger_stream.error('Reference object must be defined')
+        raise RuntimeError('Reference object must be defined')
 
-    # adapt data object
-    if isinstance(data, xr.DataArray):
-        data = da_to_dset(data)
-    elif isinstance(data, xr.Dataset):
-        pass
-    else:
-        logger_stream.error('Data obj not expected. Case not implemented yet')
+    # get geographical dimensions (from xr.Dataset and xr.DataArray objects)
+    ref_dims = get_dims_by_object(ref)
+    ref_value_x, ref_value_y = ref[ref_dim_x].values, ref[ref_dim_y].values
 
-    # get dimensions (from xr.Dataset and xr.DataArray objects)
-    dset_dims = get_dims_by_object(data)
+    # get geographical and time dimensions
+    n_cols, n_rows, n_time = ref_dims[ref_dim_x], ref_dims[ref_dim_y], 1
 
-    # select temporary dimension names
-    tmp_x = dim_x
-    if 'X' in list(dset_dims.keys()):
-        tmp_x = 'X'
-    tmp_y = dim_y
-    if 'Y' in list(dset_dims.keys()):
-        tmp_y = 'Y'
-
-    if dim_time in list(dset_dims.keys()):
-        n_cols, n_rows, n_time = dset_dims[tmp_x], dset_dims[tmp_y], dset_dims[dim_time]
-    else:
-        n_cols, n_rows, n_time = dset_dims[tmp_x], dset_dims[tmp_y], 1
-
-    # get geographical coordinates
-    try:
-        x, y = data[var_x].values, data[var_y].values
-    except KeyError:
-        x, y = data[tmp_x].values, data[tmp_y].values
-
-    if len(x.shape) == 1 and len(y.shape) == 1:
-        x, y = np.meshgrid(x, y)
-    elif len(x.shape) == 2 and len(y.shape) == 2:
+    # define reference x and y
+    if len(ref_value_x.shape) == 1 and len(ref_value_y.shape) == 1:
+        ref_value_x, ref_value_y = np.meshgrid(ref_value_x, ref_value_y)
+    elif len(ref_value_x.shape) == 2 and len(ref_value_y.shape) == 2:
         pass
     else:
         logger_stream.error('Geographical object not expected. Case not implemented yet')
+        raise NotImplementedError('Geographical object not expected. Case not implemented yet')
 
     # debug geo information
-    if debug_geo: plot_data(x, var_name='longitude/west_east'); plot_data(y, name='latitude/south_north')
+    if debug_geo: plot_data(ref_value_x, var_name='longitude/west_east'); plot_data(ref_value_y, name='latitude/south_north')
 
     # Define time dimension
     if time is not None:
@@ -788,31 +805,31 @@ def write_dataset_hmc(
     handle.project_info = file_project_info
     handle.algorithm = file_algorithm
 
-    if ref is not None:
-        key_to_search = 'xllcorner'
-        if hasattr(ref, key_to_search):
-            handle.xllcorner = float(ref.xllcorner)
-        key_to_search = 'yllcorner'
-        if hasattr(ref, key_to_search):
-            handle.yllcorner = float(ref.yllcorner)
-        key_to_search = 'cellsize'
-        if hasattr(ref, key_to_search):
-            handle.cellsize = float(ref.cellsize)
-        key_to_search = 'ncols'
-        if hasattr(ref, key_to_search):
-            handle.ncols = int(ref.ncols)
-        key_to_search = 'nrows'
-        if hasattr(ref, key_to_search):
-            handle.nrows = int(ref.nrows)
-        key_to_search = 'NODATA_value'
-        if hasattr(ref, key_to_search):
-            handle.nodata_value = float(ref.NODATA_value)
+    # add reference information
+    key_to_search = 'xllcorner'
+    if hasattr(ref, key_to_search):
+        handle.xllcorner = float(ref.xllcorner)
+    key_to_search = 'yllcorner'
+    if hasattr(ref, key_to_search):
+        handle.yllcorner = float(ref.yllcorner)
+    key_to_search = 'cellsize'
+    if hasattr(ref, key_to_search):
+        handle.cellsize = float(ref.cellsize)
+    key_to_search = 'ncols'
+    if hasattr(ref, key_to_search):
+        handle.ncols = int(ref.ncols)
+    key_to_search = 'nrows'
+    if hasattr(ref, key_to_search):
+        handle.nrows = int(ref.nrows)
+    key_to_search = 'NODATA_value'
+    if hasattr(ref, key_to_search):
+        handle.nodata_value = float(ref.NODATA_value)
 
     # variable time
     variable_time = handle.createVariable(
-        varname=var_time, dimensions=(dim_time,), datatype=type_time)
-    variable_time.calendar = time_calendar
-    variable_time.units = time_units
+        varname=var_name_time, dimensions=(var_dim_time,), datatype=var_type_time)
+    variable_time.calendar = var_time_calendar
+    variable_time.units = var_time_units
     variable_time.time_date = time_labels
     variable_time.time_start = time_start
     variable_time.time_end = time_end
@@ -827,7 +844,7 @@ def write_dataset_hmc(
     # variable geo x
     set_scale_factor = False
     variable_x = handle.createVariable(
-        varname='longitude', dimensions=(dim_y, dim_x), datatype=type_x,
+        varname='longitude', dimensions=(var_dim_y, var_dim_x), datatype=var_type_x,
         zlib=compression_flag, complevel=compression_level)
     if attrs_x is not None:
         for attr_key, attr_value in attrs_x.items():
@@ -841,7 +858,7 @@ def write_dataset_hmc(
             else:
                 variable_x.setncattr(attr_key.lower(), str(attr_value).lower())
 
-    variable_x[:, :] = np.transpose(np.rot90(x, -1))
+    variable_x[:, :] = np.transpose(np.rot90(ref_value_x, -1))
 
     if not set_scale_factor:
         variable_x.setncattr('scale_factor', 1)
@@ -849,7 +866,7 @@ def write_dataset_hmc(
     # variable geo y
     set_scale_factor = False
     variable_y = handle.createVariable(
-        varname='latitude', dimensions=(dim_y, dim_x), datatype=type_y,
+        varname='latitude', dimensions=(var_dim_y, var_dim_x), datatype=var_type_y,
         zlib=compression_flag, complevel=compression_level)
     if attrs_y is not None:
         for attr_key, attr_value in attrs_y.items():
@@ -863,7 +880,7 @@ def write_dataset_hmc(
             else:
                 variable_y.setncattr(attr_key.lower(), str(attr_value).lower())
 
-    variable_y[:, :] = np.transpose(np.rot90(y, -1))
+    variable_y[:, :] = np.transpose(np.rot90(ref_value_y, -1))
 
     if not set_scale_factor:
         variable_y.setncattr('scale_factor', 1)
@@ -881,106 +898,90 @@ def write_dataset_hmc(
             else:
                 variable_system.setncattr(attr_key.lower(), str(attr_value).lower())
 
-    # iterate over variables
-    for variable_name in data.data_vars:
+    # iterate over data variables
+    for variable_name, variable_data in data.items():
 
-        variable_data = data[variable_name].values
+        # copy data to avoid modifying original object
+        variable_data = np.array(variable_data, copy=True)
+        # get variable dimensions
         variable_dims = variable_data.ndim
 
+        # force to manage 3d variable
+        if force_3d:
+            if variable_dims == 2:
+                variable_dims = 3
+                variable_data = variable_data[np.newaxis, :, :]
+
         # debug data
-        if debug_data: plot_data(variable_data, var_name=variable_name)
+        if debug_data:
+            plot_data(variable_data, var_name=variable_name)
 
-        attrs_variable = {}
-        if variable_name in list(attrs_data.keys()):
-            attrs_variable = attrs_data[variable_name]
+        # get variable attributes
+        attrs_variable = attrs_data.get(variable_name, {})
 
-        variable_format = 'f4'
-        if 'format' in list(attrs_data.keys()):
-            variable_format = attrs_data['format']
+        # get default attributes
+        variable_format = attrs_data.get('format', 'f4')
+        fill_value = attrs_data.get('fill_value', -9999.0)
+        scale_factor = attrs_data.get('scale_factor', 1)
+        # get units
+        units = var_units.get(variable_name, 'NA')
 
-        fill_value = -9999.0
-        if 'fill_value' in list(attrs_data.keys()):
-            fill_value = attrs_data['fill_value']
-        scale_factor = 1
-        if 'scale_factor' in list(attrs_data.keys()):
-            scale_factor = attrs_data['scale_factor']
-
+        # manage no-data values
         variable_data[np.isnan(variable_data)] = fill_value
         variable_data[variable_data <= fill_value] = fill_value
 
-        '''
-        import matplotlib
-        matplotlib.use('TkAgg')
-        import matplotlib.pylab as plt
-        plt.figure()
-        plt.imshow(variable_data); plt.colorbar()
-        plt.show()
-        '''
-
+        # create netcdf variable 2D/3D
         if variable_dims == 3:
-            var_handle = handle.createVariable(
-                varname=variable_name, datatype=variable_format, fill_value=fill_value,
-                dimensions=(dim_time, dim_y, dim_x),
-                zlib=compression_flag, complevel=compression_level)
-        elif variable_dims == 2:
-            var_handle = handle.createVariable(
-                varname=variable_name, datatype=variable_format, fill_value=fill_value,
-                dimensions=(dim_y, dim_x),
-                zlib=compression_flag, complevel=compression_level)
-        else:
-            logger_stream.error('Variable dimensions not expected. Case not implemented yet')
 
-        set_scale_factor = False
+            var_handle = handle.createVariable(
+                varname=variable_name,datatype=variable_format,
+                fill_value=fill_value, dimensions=(var_dim_time, var_dim_y, var_dim_x),
+                zlib=compression_flag,complevel=compression_level)
+
+        elif variable_dims == 2:
+
+            var_handle = handle.createVariable(
+                varname=variable_name, datatype=variable_format,
+                fill_value=fill_value, dimensions=(var_dim_y, var_dim_x),
+                zlib=compression_flag, complevel=compression_level)
+
+        else:
+            logger_stream.error(f'Variable "{variable_name}" has unsupported dimensions: {variable_dims}')
+            raise NotImplementedError(f'Variable "{variable_name}" has unsupported dimensions: {variable_dims}')
+
+        # set variable attributes
+        set_scale_factor, set_units = False, False
         for attr_key, attr_value in attrs_variable.items():
+
             if attr_key == 'scale_factor':
                 var_handle.setncattr('scale_factor', float(attr_value))
                 set_scale_factor = True
             elif attr_key == 'units':
-                var_handle.setncattr(attr_key.lower(), str(attr_value))
+                var_handle.setncattr('units', str(attr_value))
+                set_units = True
             elif attr_key == 'format':
-                var_handle.setncattr(attr_key.lower(), str(attr_value))
+                var_handle.setncattr('format', str(attr_value))
             else:
                 var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
 
-        if not set_scale_factor:
-            if scale_factor is not None:
-                var_handle.setncattr('scale_factor', scale_factor)
+        # set default scale factor
+        if not set_scale_factor and scale_factor is not None:
+            var_handle.setncattr('scale_factor', scale_factor)
+        # set default units
+        if not set_units and units is not None:
+            var_handle.setncattr('units', str(units))
 
+        # write variable data 2D/3D
         if variable_dims == 3:
-
-            variable_tmp = np.zeros((n_time, n_rows, n_cols))
-            for i, t in enumerate(time.values):
-                tmp_data = variable_data[i, :, :]
-                tmp_data = np.transpose(np.rot90(tmp_data, -1))
-                variable_tmp[i, :, :] = tmp_data
-
-                '''
-                import matplotlib
-                matplotlib.use('TkAgg')
-                plt.figure()
-                plt.imshow(dset_data[variable_name].values[i, :, :])
-                plt.colorbar(); plt.clim(2, 20)
-                plt.figure()
-                plt.imshow(variable_data[i, :, :])
-                plt.colorbar(); plt.clim(2, 20)
-                plt.figure()
-                plt.imshow(tmp_data)
-                plt.colorbar(); plt.clim(2, 20)
-                plt.figure()
-                plt.imshow(variable_tmp[i, :, :])
-                plt.colorbar(); plt.clim(2, 20)
-                plt.show()
-                '''
-
+            variable_tmp = np.empty((n_time, n_rows, n_cols), dtype=variable_data.dtype)
+            for i in range(n_time):
+                variable_tmp[i, :, :] = np.transpose(np.rot90(variable_data[i, :, :], -1))
             variable_tmp[np.isnan(variable_tmp)] = fill_value
             var_handle[:, :, :] = variable_tmp
-
-        elif variable_dims == 2:
+        else:
             variable_tmp = np.transpose(np.rot90(variable_data, -1))
             variable_tmp[np.isnan(variable_tmp)] = fill_value
             var_handle[:, :] = variable_tmp
-        else:
-            logger_stream.error('Data dimensions not expected. Case not implemented yet')
 
     # close file
     handle.close()

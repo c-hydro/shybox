@@ -26,21 +26,21 @@ from shybox.processing_hydro_toolkit.lib_proc_compute_sm import merge_soil_moist
                 'data': [
                     {'method': 'mapping_keys_by_separator', 'kwargs': {'key_separator':'|', 'other_separator':'::'}},
                     {'method': 'adapter_variables_to_group', 'kwargs': {}},
-                    {'method': 'dict_to_list', 'kwargs': {}},
+                    {'method': 'dict_to_fx', 'kwargs': {}},
                 ]
             },
             args_adapter={
                 'watermark': {
-                    'method': 'dict_to_list',
+                    'method': 'dict_to_fx',
                     'kwargs': {'flat_list_one_element': False},
                 },
                 'ref': {
-                    'method': 'dict_to_list',
+                    'method': 'dict_to_fx',
                     'kwargs': {'flat_list_one_element': True},
                 },
             },
             output_adapter={
-                'data': {"method": "obj_to_dict", "kwargs": {}},
+                'data': {"method": "fx_to_dict", "kwargs": {}},
             }
         )
 @with_logger(var_name='logger_stream')

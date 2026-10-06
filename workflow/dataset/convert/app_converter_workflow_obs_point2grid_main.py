@@ -49,7 +49,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_points_toolkit.points_adapter import exec_interpolate_points, exec_mask_grid, exec_set_null
 
-from shybox.orchestrator_toolkit.orchestrator_handler_points import OrchestratorPoints as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -181,8 +181,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['terrain']['path'],
         data_role='auxiliary',
         file_name=alg_cfg_application['static_data']['terrain']['file_name'],
-        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain',
-        file_io='input',
+        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_io='input',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -273,7 +272,7 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
-    orc_process = Orchestrator.points(
+    orc_process = Orchestrator.configure(
         data_package_in={
             'AIR_T_DATA_V': source_point_data,
             'AIR_T_DATA_C': source_point_code

@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_utils_code
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260122'
-Version:       '1.0.0'
+Date:          '20260930'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -15,55 +15,64 @@ from functools import wraps
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to deprecate old methods
-def deprecated(*, use: str | None = None, since: str | None = None, use_new: bool = False):
+def deprecated(
+        *,
+        use: str | None = None,
+        since: str | None = None,
+        use_new: bool = False):
+
     """
-    Deprecation decorator with optional redirection to a new method.
+    Deprecation decorator with optional redirection to a new implementation.
 
     Parameters
     ----------
     use : str | None
-        Name of the new method to call instead (same class).
+        Name of the new function/method to use instead.
+
     since : str | None
-        Version/date info for the warning.
+        Version/date information for the warning.
+
     use_new : bool
-        If True, call the new method instead of executing the old code.
-
-    Example
-    -------
-    class MyClass:
-
-    def compute(self, x):
-        # NEW implementation
-        return x * 2
-
-    @deprecated(use="compute", since="2.0", use_new=False)
-    def compute_old(self, x):
-        # OLD implementation
-        return x + x
+        If True, call the new implementation instead of executing the old code.
+        If False, execute the old implementation and only emit a warning.
     """
+
     def decorator(old_func):
-        msg = f"{old_func.__qualname__} is deprecated"
+
+        # build warning message
+        msg = f'{old_func.__qualname__} is deprecated'
         if since:
-            msg += f" (since {since})"
+            msg += f' (since {since})'
         if use:
-            msg += f"; use {use} instead"
+            msg += f'; use {use} instead'
 
         @wraps(old_func)
-        def wrapper(self, *args, **kwargs):
-            warnings.warn(msg, category=DeprecationWarning, stacklevel=2)
+        def wrapper(*args, **kwargs):
 
-            # 🔥 switch implementation here
+            # emit warning
+            warnings.warn(msg,category=DeprecationWarning,stacklevel=2)
+            # optionally redirect to new implementation
             if use_new:
+
                 if not use:
-                    raise RuntimeError(
-                        f"{old_func.__qualname__}: use_new=True requires `use='new_method_name'`"
-                    )
-                new_func = getattr(self, use)
+                    raise RuntimeError(f'{old_func.__qualname__}: use_new=True requires use="new_function_name"')
+
+                # try class method first
+                if args and hasattr(args[0], use):
+                    new_func = getattr(args[0], use)
+                    return new_func(*args[1:], **kwargs)
+
+                # otherwise try function in same module
+                new_func = old_func.__globals__.get(use)
+                if new_func is None:
+                    raise RuntimeError(f'{old_func.__qualname__}: replacement "{use}" was not found')
+
                 return new_func(*args, **kwargs)
 
-            # default: run old implementation
-            return old_func(self, *args, **kwargs)
+            # default: execute old implementation
+            return old_func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 # ----------------------------------------------------------------------------------------------------------------------

@@ -24,7 +24,9 @@ from shybox.io_toolkit.lib_io_tiff import read_tiff_base
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to execute average over mask
-@as_process(input_type='pandas', adapter_type={'data': 'list_to_darray'}, output_type='pandas')
+@as_process(input_type='pandas',
+            input_adapter={'data': 'list_to_darray'}, args_adapter=None, output_adapter=None,
+            output_type='pandas')
 @with_logger(var_name='logger_stream')
 def exec_average_over_mask(
         data: xr.DataArray, sections_db: Union[pd.DataFrame, None],

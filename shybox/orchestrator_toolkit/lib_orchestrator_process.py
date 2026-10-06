@@ -11,7 +11,7 @@ Version:       '1.0.0'
 # libraries
 import warnings
 import datetime as dt
-from copy import deepcopy
+from copy import copy, deepcopy
 from typing import Callable, Any, Dict, Iterable, List, Tuple, Union, Optional
 from functools import partial
 from collections import defaultdict
@@ -21,11 +21,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from shybox.geo_toolkit.lib_geo_coords import match_coords_to_reference
-from shybox.geo_toolkit.lib_geo_watersheds import import_pysheds, is_pysheds_raster
+from shybox.dataset_toolkit.dataset_handler_collections import DataCollection
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_memory import DataMemory
 from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
@@ -39,6 +39,7 @@ from shybox.orchestrator_toolkit.lib_orchestrator_data import ProcessorCollectio
 # ----------------------------------------------------------------------------------------------------------------------
 # class to handle the process
 class ProcessorContainer:
+
     def __init__(self,
                  function: Callable,
                  args: dict = None,
@@ -48,6 +49,7 @@ class ProcessorContainer:
                  logger: LoggingManager = None) -> None:
 
         # set attributes needed by the environment
+        self.ref = None
         self.workflow_name, self.workflow_id = None, None
         self.tag, self.mode, self.step = None, None, None
         self.valid = None
@@ -124,12 +126,18 @@ class ProcessorContainer:
 
         # set original arguments as attributes
         args_common = {**args_static, **args_dynamic}
+        # collect updated attributes
+        updated_args = []
         for arg_name, arg_value in args_common.items():
-            # warn if attribute already exists
             if hasattr(self, arg_name):
-                self.logger.info(f'Attribute "{arg_name}" is updated by the args value.')
+                updated_args.append((arg_name, type(arg_value).__name__))
             # keep original object, including DataLocal / DataOnDemand
             setattr(self, arg_name, arg_value)
+
+        # print updated attributes
+        if updated_args:
+            updated_keys = ' | '.join(name for name, _ in updated_args)
+            self.logger.info(f'Attributes updated by args: {updated_keys}')
 
         self.separator_root = '|'
         self.separator_sub = ':'
@@ -220,7 +228,7 @@ class ProcessorContainer:
             -> tuple[Optional[Union[dict, list, None, bool]], Optional[bool]]:
 
         # parse timestamps
-        time = _parse_timestamps(time)
+        time = _parse_time_stamps(time)
 
         # adjust list if only one timestamp is provided
         if isinstance(time, list):
@@ -235,13 +243,45 @@ class ProcessorContainer:
         fx_variables_in_right, fx_variables_in_left = self.variables_in_right, self.variables_in_left
         fx_variables_out_right, fx_variables_out_left = self.variables_out_right, self.variables_out_left
 
-        ## CHECK MEMORUY BLOCK AND ACTIVE ...
-        # organize data raw and names (internal data object or from memory)
-        if fx_id == 0 and 'memory_block' in kwargs:
-            if (fx_workflow_name is not None) and (fx_workflow_name in kwargs['memory']):
-                data_raw = kwargs['memory_block'][fx_workflow_name]
+        # get output dump mode
+        fx_dump_mode = self.out_opts.get('dump_mode', 'one_var_to_one_file')
+
+        # memory is active only for start process
+        if fx_id > 1:
+            kwargs['memory_active'] = False
+
+        # organize data raw and names
+        # use internal input object for first processes, otherwise use the output from previous processes
+        if fx_id > 1:
+
+            # check collection history key
+            if 'collections_history' in kwargs:
+
+                # get collections history
+                collections_history = kwargs['collections_history']
+
+                # get last collection step in insertion order
+                collections_step = {}
+                if isinstance(collections_history, dict) and collections_history:
+                    collection_key = next(reversed(collections_history))
+                    collections_step[collection_key] = collections_history[collection_key]
+                if not collections_step:
+                    self.logger.warning('Variable collection_step is undefined. Some errors may occur.')
+
+                # select only objects belonging to the current workflow
+                data_raw = {key: value for key, value in collections_step.items()
+                            if key.startswith(f"{fx_workflow_name}")}
+
+                # check workflow data availability
+                if not data_raw:
+                    raise RuntimeError(
+                        f'Workflow "{fx_workflow_name}" is not available '
+                        f'in collections_history. '
+                        f'Available keys: {list(collections_history.keys())}'
+                    )
+
             else:
-                data_raw = self.in_obj
+                raise RuntimeError('Previous process did not return anything. Exit')
         else:
             data_raw = self.in_obj
 
@@ -267,16 +307,26 @@ class ProcessorContainer:
         # info process start
         self.logger.info_up(f"Run :: {fx_tag} - {message}  ... ")
 
-        # memory is active only for start process
-        if fx_id != 0:
-            kwargs['memory_active'] = False
+        # get fx data names
+        data_names = [
+            mapping_obj.get('var_fx')
+            for mapping_obj in fx_mapping_in.values()
+            if mapping_obj.get('var_fx') is not None
+        ]
 
         # iterate over collections
         fx_data, fx_deps, fx_metadata, fx_roles = {}, {}, {}, []
-        for group_key, group_collections in data_groups.items():
+        for data_id, (data_key, data_collections) in enumerate(data_groups.items()):
 
+            # get fx name
+            data_name = data_names[data_id]
             # group datasets
-            group_objects = ProcessorCollection.extract_group(group=group_collections)
+            group_objects = ProcessorCollection.extract_group(group=data_collections)
+
+            # define data flag(s)
+            collection_flag = False
+            if 'collections' in data_name:
+                collection_flag = True
 
             # iterate over groups
             data_id, deps_id = 0, 0
@@ -306,7 +356,7 @@ class ProcessorContainer:
 
                     # check dataset readability
                     status_tag, status_readable = dset_obj.is_readable()
-                    folder_name, file_name = dset_obj.dir_name, dset_obj.file_name
+                    status_io = dset_obj.file_io
 
                     # define object availability
                     is_available = (status_readable or status_tag == "template")
@@ -316,13 +366,20 @@ class ProcessorContainer:
                         self.logger.info(
                             f"Object for variable '{dset_var}' is a template. The template will be filled according to the available times.")
                     elif not status_readable:
-                        self.logger.warning(
-                            f"Object for variable '{dset_var}' is not readable. File is not available.")
+                        if status_io == 'derived':
+                            self.logger.info(
+                                f"Object for variable '{dset_var}' is derived by other variables.")
+                        else:
+                            self.logger.warning(
+                                f"Object for variable '{dset_var}' is not readable. File is not available.")
                     # store general check
                     if is_available:
                         self.logger.info(f"Check object for variable '{dset_var}' ... PASS")
                     else:
-                        self.logger.info(f"Check object for variable '{dset_var}' ... SKIP")
+                        if status_io == 'derived':
+                            self.logger.info(f"Check object for variable '{dset_var}' ... DERIVED FROM OTHERS")
+                        else:
+                            self.logger.info(f"Check object for variable '{dset_var}' ... SKIP")
 
                     # iterate over dataset times
                     for time_step in group_time:
@@ -342,9 +399,15 @@ class ProcessorContainer:
                             fx_tmp = dset_obj.get_data(time=time_step, name=dset_tag, as_is=as_is ,**kwargs)
 
                             if dset_role == 'data':
-                                fx_data[f'{dset_tag}::{data_id}'] = fx_tmp
+                                if collection_flag:
+                                    fx_data[f'{dset_tag}::{data_id}'] = fx_tmp
+                                else:
+                                    fx_data[f'{dset_tag}'] = fx_tmp
                             elif dset_role == 'deps':
-                                fx_deps[f'{dset_tag}::{deps_id}'] = fx_tmp
+                                if collection_flag:
+                                    fx_deps[f'{dset_tag}::{deps_id}'] = fx_tmp
+                                else:
+                                    fx_deps[f'{dset_tag}'] = fx_tmp
                             else:
                                 raise RuntimeError(f"Unknown dset_type '{dset_role}'")
 
@@ -355,9 +418,15 @@ class ProcessorContainer:
                             self.logger.info(f"Object '{time_step}' is not readable ... SKIP")
 
                             if dset_role == 'data':
-                                fx_data[f'{dset_tag}::{data_id}'] = None
+                                if collection_flag:
+                                    fx_data[f'{dset_tag}::{data_id}'] = None
+                                else:
+                                    fx_data[f'{dset_tag}'] = None
                             elif dset_role == 'deps':
-                                fx_deps[f'{dset_tag}::{deps_id}'] = None
+                                if collection_flag:
+                                    fx_deps[f'{dset_tag}::{deps_id}'] = None
+                                else:
+                                    fx_deps[f'{dset_tag}'] = None
                             else:
                                 raise RuntimeError(f"Unknown dset_type '{dset_role}'")
 
@@ -392,7 +461,7 @@ class ProcessorContainer:
                 fx_memory = _get_memory_data(data_raw)
 
         # collect and prepare function arguments
-        fx_args = {
+        fx_deps_args = {
             'time': time, 'time_reference': time_ref,
             'keys': None, 'roles': fx_roles,
             'mapping_in': fx_mapping_in, 'mapping_out': fx_mapping_out,
@@ -405,11 +474,13 @@ class ProcessorContainer:
         # check reference object
         if isinstance(ref_obj, dict):
             # remove generic ref argument because its content will be expanded
-            fx_args.pop('ref', None)
+            fx_deps_args.pop('ref', None)
             # add reference arguments
             for key, value in ref_obj.items():
-                if key not in fx_args:
-                    fx_args[key] = value
+                if key not in fx_deps_args:
+                    if isinstance(value, DataLocal):
+                        value = value.get_data()
+                    fx_deps_args[key] = value
                 else:
                     self.logger.warning(
                         f"Key '{key}' in 'ref' is already present in fx_args. The value from 'ref' will be ignored.")
@@ -419,7 +490,9 @@ class ProcessorContainer:
             raise TypeError("Reference value cannot be a list, tuple, or set.")
         else:
             # add single reference object (also None if not defined)
-            fx_args['ref'] = ref_obj
+            if isinstance(ref_obj, DataLocal):
+                ref_obj = ref_obj.get_data()
+            fx_deps_args['ref'] = ref_obj
 
         # add deps
         for deps_key, deps_data in fx_deps.items():
@@ -429,18 +502,19 @@ class ProcessorContainer:
             # check multiple variable suffix, e.g. variable::1
             if '::' in deps_variable:
 
+                # get variable name and counter (if exists)
                 deps_variable_base, deps_counter = deps_variable.rsplit('::', 1)
                 if deps_counter.isdigit():
-                    # initialize variable container
-                    if deps_variable_base not in fx_args:
-                        fx_args[deps_variable_base] = {}
-                    # store dependency by counter
-                    fx_args[deps_variable_base][deps_counter] = deps_data
-
+                    # get variable nested
+                    deps_variable_nested = f'collections::{deps_counter}'
+                    # initialize root container
+                    fx_deps_args.setdefault(deps_variable_base, {})
+                    # store dependency using split keys
+                    fx_deps_args[deps_variable_base][deps_variable_nested] = deps_data
                 else:
-                    fx_args[deps_variable] = deps_data
+                    fx_deps_args[deps_variable] = deps_data
             else:
-                fx_args[deps_variable] = deps_data
+                fx_deps_args[deps_variable] = deps_data
 
         # remap fx data keys using mapping information
         fx_variable_workflow, fx_data_remapped = {}, {}
@@ -453,6 +527,10 @@ class ProcessorContainer:
 
             # search collection in fx_data keys
             for fx_data_key, fx_data_obj in fx_data.items():
+
+                # iterate over processes (fill collection previously ... )
+                if mapping_collection is None:
+                    mapping_collection = fx_data_key
 
                 if mapping_collection in fx_data_key:
                     # check for indexed key, e.g. "...::1", "...::2", ...
@@ -475,49 +553,95 @@ class ProcessorContainer:
         fx_data = fx_data_remapped
 
         # get variables args and workflow
-        fx_variable_in = fx_args['variable_in']
-        fx_variable_out = fx_args['variable_out']
+        fx_variable_in = fx_deps_args['variable_in']
+        fx_variable_out = fx_deps_args['variable_out']
+
+        # manage None data using dependencies
+        deps_to_data = False
+        if isinstance(fx_data, dict):
+            for fx_key, fx_value in list(fx_data.items()):
+                # check NoneType values
+                if fx_value is None and fx_key in fx_deps_args:
+                    if deps_to_data:
+                        # move dependency value into data
+                        fx_data[fx_key] = fx_deps_args.pop(fx_key)
+                    else:
+                        # remove from data and keep dependency in fx_deps_args
+                        fx_data.pop(fx_key)
 
         # run function to process data
-        fx_save = self.fx_obj(data=fx_data, **fx_args)
+        fx_result = self.fx_obj(data=fx_data, **fx_deps_args)
+
+        # manage output object
+        if isinstance(fx_result, dict):
+
+            # iterate over output variables
+            fx_collections_results, variable_collections_result = {}, []
+            for id_out, (fx_key, fx_step) in enumerate(fx_result.items()):
+
+                # get variable name
+                if len(fx_variables_out_right) == 1:
+                    fx_variable_out = fx_variables_out_right[0]
+                else:
+                    fx_variable_out = fx_variables_out_right[id_out]
+
+                # compose attrs
+                obj_attrs = {"workflow": fx_workflow_name, "variable_names": fx_variable_out,}
+
+                # DataArray
+                if isinstance(fx_step, xr.DataArray):
+                    # organize object
+                    fx_step.attrs.update(obj_attrs)
+                    fx_step.name = fx_variable_out
+                    # organize collections
+                    fx_collections_results[fx_key] = copy(fx_step)
+                    variable_collections_result.append(fx_variable_out)
+                # DataFrame
+                elif isinstance(fx_step, pd.DataFrame):
+                    # organize object
+                    fx_step.attrs.update(obj_attrs)
+                    fx_step.name = fx_variable_out
+                    # organize collections
+                    fx_collections_results[fx_key] = copy(fx_step)
+                    variable_collections_result.append(fx_variable_out)
+                # Dataset
+                elif isinstance(fx_step, xr.Dataset):
+                    # organize object
+                    fx_step.attrs.update(obj_attrs)
+                    # organize collections
+                    fx_collections_results[fx_key] = copy(fx_step)
+                    variable_collections_result.append(fx_variable_out)
+                # Collection
+                elif isinstance(fx_step, dict):
+                    # organize object
+                    fx_step["attrs"] = obj_attrs
+                    if fx_collections_results is None:
+                        fx_collections_results = {}
+                    # organize collections
+                    fx_collections_results[fx_key] = fx_step
+                    variable_collections_result.append(fx_variable_out)
+
+                # Unsupported
+                else:
+                    # get object type
+                    obj_type = type(fx_step).__name__
+                    # exit with errors
+                    self.logger.error(f'Variable output "{fx_key}" has unsupported type "{obj_type}".')
+                    raise TypeError(f'Variable output "{fx_key}" has unsupported type "{obj_type}".')
+
+        else:
+
+            # get result type
+            result_type = type(fx_result).__name__
+            # error for unknown type
+            self.logger.error(f"Variable result has unsupported type {result_type}.")
+            raise TypeError("Variable result must be an dictionary")
 
         # organize attributes
         fx_attrs = {
-            'variable_names': fx_variables_out_right,
+            'variable_names': variable_collections_result,
             'workflow': fx_variable_in, "variable_out": fx_variable_out,
         }
-
-        # manage output object
-        if isinstance(fx_save, xr.DataArray):
-            # update attributes
-            fx_save.attrs.update(fx_attrs)
-        elif isinstance(fx_save, xr.Dataset):
-            # update attributes
-            fx_save.attrs.update(fx_attrs)
-        elif isinstance(fx_save, pd.DataFrame):
-            # update attributes
-            fx_save.attrs.update(fx_attrs)
-        elif isinstance(fx_save, dict):
-
-            # iterate over output variables
-            for fx_key, fx_obj in fx_save.items():
-                # manage supported objects
-                if isinstance(fx_obj, (xr.DataArray, xr.Dataset, pd.DataFrame)):
-                    # define object-specific attributes
-                    obj_attrs = {"workflow": fx_workflow_name, "variable_names": fx_variables_out_right,}
-                    # update attributes
-                    fx_obj.attrs.update(obj_attrs)
-                else:
-                    self.logger.error(
-                        f'Output variable "{fx_key}" has unsupported type {type(fx_obj).__name__}".')
-                    raise TypeError(
-                        f'Output variable "{fx_key}" must be an xarray DataArray, xarray Dataset or pandas DataFrame.')
-        else:
-
-            # error for unknown type
-            self.logger.error(f"fx_save has unsupported type {type(fx_save).__name__}.")
-            raise TypeError("fx_save must be an xarray DataArray, xarray Dataset, "
-                            "pandas DataFrame or dictionary of supported objects.")
 
         # check output object
         if not isinstance(self.out_obj, dict):
@@ -531,13 +655,6 @@ class ProcessorContainer:
         # flatten output object
         out_key, out_handler = next(iter(self.out_obj.items()))
 
-        # organize extra args
-        kwargs['time_format'] = out_handler.get_attribute('time_format')
-        if getattr(self, 'ref', None) is not None:
-            kwargs['ref'] = self.ref
-        if getattr(self, 'out_opts', None) is not None:
-            kwargs['out_opts'] = self.out_opts
-
         # info process end
         self.logger.info_down(f"Run :: {fx_tag} - {message} ... DONE")
 
@@ -547,40 +664,46 @@ class ProcessorContainer:
             # info dump variable start
             self.logger.info_up(f"Dump :: step :: {fx_tag} - {message} [mode: {self.mode}] ... ")
 
+            # add time_format to kwargs
+            kwargs['time_format'] = out_handler.get_attribute('time_format')
+            # add reference object(s) to kwargs
+            if getattr(self, 'ref', None) is not None:
+                ref_obj = self.ref
+                if isinstance(ref_obj, dict):
+                    for key, value in ref_obj.items():
+                        kwargs[key] = value
+                elif ref_obj is not None:
+                    kwargs['ref'] = ref_obj
+            # add out_options to kwargs
+            if getattr(self, 'out_opts', None) is not None:
+                kwargs['out_opts'] = self.out_opts
+
             # save the data
-            out_handler.write_data(fx_save, time, metadata=fx_attrs, **kwargs)
+            out_handler.write_data(fx_collections_results, time, metadata=fx_attrs, **kwargs)
 
-            # arrange data to keep the data array format
-            if isinstance(fx_save, xr.DataArray):
-                fx_out = deepcopy(fx_save)
-                fx_names = [fx_save.name] if fx_save.name else ["unnamed_var"]
+            # create data memory objects
+            fx_collections_history = {}
+            for fx_variable_step, (fx_key, fx_data) in zip(variable_collections_result, fx_collections_results.items()):
 
-            elif isinstance(fx_save, xr.Dataset):
+                # create memory object
+                fx_obj_tmp = DataMemory(
+                    data=fx_data,
+                    file_variable=fx_variable_step,
+                    file_workflow=fx_workflow_name,
+                    file_io='memory',
+                    data_role='data',
+                    logger=self.logger
+                )
 
-                fx_var_list = list(fx_save.data_vars)
-                if len(fx_var_list) == 1:
-                    var_name = fx_variables_out_right[0]
-                    fx_out = fx_save[var_name]
-                    fx_out.name = var_name
-                    fx_names = [var_name]
-                else:
-                    fx_out = fx_save[fx_var_list]
-                    fx_names = fx_var_list
-
-            elif isinstance(fx_save, pd.DataFrame):
-                fx_names = fx_save.name
-
-            else:
-                self.logger.error("Unknown fx output type")
-                raise ValueError("Unknown fx output type")
-
-            # save variable names
-            fx_out.attrs["variable_names"] = fx_attrs['variable_names']
+                # create tag step
+                fx_tag_step = fx_workflow_name + '|' + fx_variable_step
+                # store object by variable name
+                fx_collections_history[fx_tag_step] = fx_obj_tmp
 
             # info dump variable end
             self.logger.info_down(f"Dump :: step :: {fx_tag} - {message} [mode: {self.mode}] ... DONE")
 
-            return fx_out, fx_memory
+            return fx_collections_history, fx_memory
 
         # dump state if required from the process (if collections are available)
         elif self.dump_state:
@@ -596,54 +719,96 @@ class ProcessorContainer:
             # check fx mode
             if fx_mode == 'end' or fx_mode == 'unique':
 
+                # check fx_save format
+                if not isinstance(fx_collections_results, dict):
+                    raise RuntimeError('Dataset in fx_collections_results must be defined by dictionary. Check fx decorators.')
+
+                # check if unique variable names match the number of results
+                use_key = (len(set(variable_collections_result)) != len(fx_collections_results))
+
+                # remove old workflow items
+                fx_collections_history = {
+                    key: value
+                    for key, value in fx_collections_history.items()
+                    if key.split("|", 1)[0] != fx_workflow_name
+                }
+
                 # add results directly to collections
-                fx_collections_history.update(fx_save)
+                for fx_variable_step, (fx_key_step, fx_data_step) in zip(variable_collections_result, fx_collections_results.items()):
+
+                    # create name step
+                    fx_name_step = fx_workflow_name + '|' + fx_variable_step
+
+                    # manage key subdict
+                    if use_key:
+                        fx_collections_step = {fx_key_step: fx_data_step}
+                    else:
+                        fx_collections_step = fx_data_step
+
+                    # create key if not exists
+                    if fx_name_step not in list(fx_collections_history.keys()):
+                        fx_collections_history[fx_name_step] = {}
+
+                    # store object by variable name
+                    fx_collections_history[fx_name_step] = fx_collections_step
+
+                # add results directly to collections
                 fx_collections_tags.append(fx_tag)
 
-                # collections kwargs
-                kwargs['time_format'] = getattr(self.out_obj, 'time_format', '%Y-%m-%d %H:%M:%S')
-                kwargs['units'] = getattr(self.out_obj, 'units', {})
-
-                variable_template = getattr(self.out_obj, 'variable_template', {}) or {}
+                # get args from out kwargs
+                out_kwargs = {}
+                if fx_tag in self.out_obj:
+                    out_kwargs = self.out_obj[fx_tag]
+                kwargs['time_format'] = getattr(out_kwargs, 'time_format', '%Y-%m-%d %H:%M:%S')
+                kwargs['units'] = getattr(out_kwargs, 'units', {})
+                variable_template = getattr(out_kwargs, 'variable_template', {}) or {}
                 kwargs['map'] = variable_template.get('vars_data', {})
-                kwargs['ref'] = getattr(self, 'ref', None)
+
+                # add reference object(s) to kwargs from self
+                if getattr(self, 'ref', None) is not None:
+                    ref_obj = self.ref
+                    if isinstance(ref_obj, dict):
+                        for key, value in ref_obj.items():
+                            if isinstance(value, DataMemory) or isinstance(ref_obj, DataLocal):
+                                value = value.get_data()
+                            kwargs[key] = value
+                    elif ref_obj is not None:
+                        if isinstance(ref_obj, DataMemory) or isinstance(ref_obj, DataLocal):
+                            ref_obj = ref_obj.get_data()
+                        kwargs['ref'] = ref_obj
+                # add out_options to kwargs from self
                 kwargs['out_opts'] = getattr(self, 'out_opts', {}) or {}
 
-                fx_collections_metadata['variable_names'] = fx_attrs['variable_names']
+                # organize data and variable(s)
+                fx_collections_output, fx_variable_output = {}, []
+                for fx_key, fx_obj in fx_collections_history.items():
+                    fx_var = fx_key.split('|')[-1]
+                    if isinstance(fx_obj, DataMemory):
+                        fx_data = fx_obj.get_data()
+                    else:
+                        fx_data = copy(fx_obj)
+                    fx_collections_output[fx_var] = fx_data
+                    fx_variable_output.append(fx_var)
+
+                # define collections metadata
+                fx_collections_metadata['variable_names'] = list(set(fx_variable_output))
 
                 # save the data
-                if not len(fx_collections_history) == 0:
+                if not len(fx_collections_output) == 0:
 
                     # get signature to use in write_data (if time signature is defined in the output object)
                     time_signature = out_handler.get_attribute('time_signature')
                     if time_signature is None:
                         raise RuntimeError('The time_signature is not defined in the data object.')
 
-                    # parse timestamps
-                    time = _parse_timestamps(time)
-
-                    # check time mode
-                    if time_signature in ('step', 'current'):
-                        pass
-                    elif time_signature in ('range', 'start/end', 'period'):
-                        if not time:
-                            raise ValueError(f'Time cannot be empty for time signature "{time_signature}".')
-                        time = (time[0], time[-1])
-                    elif time_signature == 'start':
-                        if not time:
-                            raise ValueError('Time cannot be empty for time signature "start".')
-                        time = time[0]
-                    elif time_signature == 'end':
-                        if not time:
-                            raise ValueError('Time cannot be empty for time signature "end".')
-                        time = time[-1]
-                    else:
-                        self.logger.error(f'Unknown time signature "{time_signature}" in output object.')
-                        raise ValueError(f'Unknown time signature "{time_signature}" in output object.')
+                    # parse time by type
+                    time = _parse_time_stamps(time)
+                    # parse time by signature
+                    time = _parser_time_signature(time, time_signature=time_signature)
 
                     # write collections
                     out_handler.write_data(
-                        fx_collections_history, time,
+                        fx_collections_output, time,
                         metadata=fx_collections_metadata, **kwargs)
 
                     # info dump end
@@ -653,8 +818,17 @@ class ProcessorContainer:
                     return True, False
 
                 else:
+
+                    # define empty collection source
+                    if not fx_collections_history:
+                        collection_source = 'history'
+                    elif not fx_collections_output:
+                        collection_source = 'selection'
+                    else:
+                        collection_source = 'unknown'
+
                     # info dump end - skipped - collections empty
-                    self.logger.warning('Collections is empty. Nothing to dump.')
+                    self.logger.warning(f'Collections {collection_source} is empty. Nothing to dump.')
                     self.logger.info_down(f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... SKIPPED")
 
                 # end of processes
@@ -678,105 +852,6 @@ class ProcessorContainer:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
-from collections import OrderedDict
-
-# helper to organize data (related to keys, types and mapping settings)
-def _organize_fx_data_OLD(data_raw, keys, types, io, mapping):
-
-    # normalize metadata
-    keys_list = list(keys) if isinstance(keys, (list, tuple)) else [keys]
-    types_list = list(types) if isinstance(types, (list, tuple)) else [types]
-    io_list = list(io) if isinstance(io, (list, tuple)) else [io]
-
-    # check if derived objects are defined
-    has_derived = 'derived' in io_list
-    # remove derived from io list
-    if has_derived:
-        io_list = [data_io for data_io in io_list if data_io != 'derived']
-
-    # organize raw data as a flat list
-    data_list = []
-    if isinstance(data_raw, (list, tuple)):
-        for data_step in data_raw:
-            if isinstance(data_step, (list, tuple)):
-                data_list.extend(data_step)
-            else:
-                data_list.append(data_step)
-    else:
-        data_list.append(data_raw)
-
-    # remove derived objects
-    data_selected = {}
-    for data_key, data_type, data_io, data_step in zip(keys_list, types_list, io_list, data_list):
-
-        # standard input data
-        if data_io == 'input' and data_type == 'data':
-            data_selected[data_key] = data_step
-            continue
-        # dependencies used when derived data are defined
-        if data_io == 'input' and data_type == 'deps' and has_derived:
-            data_selected[data_key] = data_step
-            continue
-
-    # apply argument mapping
-    fx_data = {}
-    for arg_name, variable_name in mapping.items():
-
-        if variable_name not in data_selected:
-            warnings.warn(
-                f'Variable "{variable_name}" mapped to argument "{arg_name}" '
-                f'was not found. Standard argument organization will be used.'
-            )
-            return data_selected
-
-        fx_data[arg_name] = data_selected[variable_name]
-
-    return fx_data
-
-def _check_list_of_list_OLD(x):
-    return (
-        isinstance(x, list) and
-        all(
-            isinstance(i, list) and
-            all(isinstance(j, list) for j in i) or isinstance(i, list)
-            for i in x
-        )
-    )
-
-def _group_by_time_OLD(time_list, data_list, data_names):
-    if not (len(time_list) == len(data_list) == len(data_names)):
-        raise ValueError("time_list, data_list, data_names must have same length")
-
-    # time -> name -> list_of_data (preserves insertion order)
-    grouped = OrderedDict()
-
-    for t, d, n in zip(time_list, data_list, data_names):
-        if t not in grouped:
-            grouped[t] = OrderedDict()
-        if n not in grouped[t]:
-            grouped[t][n] = []
-        grouped[t][n].append(d)
-
-    time_unique = list(grouped.keys())
-
-    # For each time: list of names (stable order) and corresponding list of data-lists
-    names_grouped = []
-    data_grouped = []
-    has_repeats = False
-
-    for t in time_unique:
-        names_t = list(grouped[t].keys())                 # stable order of first appearance
-        data_t = [grouped[t][n] for n in names_t]         # each is a list (may have repeats)
-
-        # repeats exist if any (time, name) has >1 data
-        if any(len(v) > 1 for v in data_t):
-            has_repeats = True
-
-        names_grouped.append(names_t)
-        data_grouped.append(data_t)
-
-    return has_repeats, time_unique, data_grouped, names_grouped
-
 def _get_memory_data(obj):
     if hasattr(obj, "memory_data"):
         return obj.memory_data
@@ -787,7 +862,6 @@ def _get_memory_data(obj):
 # method to normalize local data
 def _normalize_local_data(data_raw):
     normalized = []
-
     if isinstance(data_raw, (list, tuple)):
         for item in data_raw:
             if isinstance(item, (list, tuple)):
@@ -798,118 +872,6 @@ def _normalize_local_data(data_raw):
         normalized.append(data_raw)
 
     return normalized
-
-# method to sync variable names
-@with_logger(var_name="logger_stream")
-def _sync_variable_name_OLD(data, vars):
-
-    # adjust fx_vars to list
-    if not isinstance(vars, list):
-        vars = [vars]
-
-    # xr.DataArray
-    if isinstance(data, xr.DataArray):
-        data_vars = [data.name]
-    elif isinstance(data, xr.Dataset):  # xr.Dataset
-        data_vars = list(data.data_vars)
-    elif isinstance(data, pd.DataFrame):
-        if hasattr(data, "name") and data.name is not None:
-            data_vars = [data.name]
-        else:
-            logger_stream.error(f"Object fx_data DataFrame has no attribute 'name' or it is None.")
-            raise TypeError("Object fx_data DataFrame has no attribute 'name' or it is None.")
-    elif isinstance(data, dict):
-        data_vars = list(data.keys())
-    elif data is None:
-        logger_stream.warning(f"Object fx_data DataFrame is None. Datasets are not available.")
-        data_vars = []
-    else:
-        logger_stream.error("Object fx_data must be an xarray [DataArray, Dataset] or pandas [DataFrame].")
-        raise NotImplementedError('Case not implemented yet')
-
-    select_vars = []
-    for tmp_var in data_vars:
-        if tmp_var in vars:
-            if tmp_var not in select_vars:
-                select_vars.append(tmp_var)
-        else:
-            if isinstance(data, pd.DataFrame):
-                select_vars = data_vars
-            else:
-                logger_stream.warning(f"Variable '{tmp_var}' found in data but not in fx_vars list")
-
-    return select_vars
-
-# method to get variable name(s)
-@with_logger(var_name="logger_stream")
-def _get_variable_name_OLD(obj, mandatory = True,
-                       default="undefined", indexed_default="undefined_{}"):
-
-    # Case 1: DataArray -- grid format -- single variable
-    if isinstance(obj, xr.DataArray):
-        return obj.name if obj.name is not None else default
-
-    # Case 2: Dataset -- grid format -- multiple variables
-    elif isinstance(obj, xr.Dataset):
-
-        names = []
-        for i, name in enumerate(obj.data_vars):
-            if name is None:
-                names.append(indexed_default.format(i))
-            else:
-                names.append(name)
-        return names
-
-    # Case 3: DataFrame -- time-series format
-    elif isinstance(obj, pd.DataFrame):
-
-        if getattr(obj, "name", None) is None:
-            obj.name = default
-            logger_stream.warning(f"DataFrame name is not defined; setting default='{default}'")
-
-        names = [obj.name]
-
-        return names
-
-    elif is_pysheds_raster(obj):
-
-        # get metadata from raster object (pysheds)
-        metadata = obj.metadata
-
-        name = 'Raster'
-        if 'name' in list(metadata.keys()):
-            name = metadata['name']
-
-        return name
-
-    # Case 4: None or unknown type
-    elif obj is None:
-
-        # if variable name is mandatory, raise an error or return NoneType
-        if mandatory:
-            logger_stream.error("Object is None but variable name is mandatory. Cannot proceed.")
-            raise ValueError("Object is None but variable name is mandatory. Cannot proceed.")
-        else:
-            logger_stream.warning("Object is None. Variable name will be set to 'undefined'.")
-            return default
-
-    else:
-        logger_stream.error("Input must be an xarray DataArray, Dataset, DataFrame or None.")
-        raise TypeError("Input must be an xarray DataArray, Dataset, DataFrame or None.")
-
-# filter to convert dataset to dataarray if single variable
-@with_logger(var_name="logger_stream")
-def _to_dataarray_if_single_var_OLD(ds: xr.Dataset) -> xr.Dataset | xr.DataArray:
-    """
-    If `ds` has only one data variable, return it as a DataArray.
-    Otherwise, return the original Dataset.
-    """
-    if isinstance(ds, xr.Dataset) and len(ds.data_vars) == 1:
-        var_name = list(ds.data_vars)[0]
-        da = ds[var_name]
-        da.name = var_name  # ensure name is set
-        return da
-    return ds
 
 # check if data is available
 @with_logger(var_name="logger_stream")
@@ -940,49 +902,49 @@ def _is_empty_fx_data(fx_data):
         return True
     return False
 
-# method to set name and attributes
+# helper to parse time
 @with_logger(var_name="logger_stream")
-def _set_name_and_attrs_OLD(obj, name, ws, tag):
-    """Set name (if missing) and attach metadata attributes."""
-    if hasattr(obj, "name") and obj.name is None:
-        obj.name = name
-    obj.attrs["workflow"] = ws
-    obj.attrs["tag"] = tag
+def _parse_time_stamps(time: Union[pd.Timestamp, list[pd.Timestamp]]) -> list[pd.Timestamp]:
 
-# method to reduce timestamps if they are the same
-@with_logger(var_name="logger_stream")
-def _reduce_if_same_timestamps_OLD(timestamps):
-    if not timestamps:
-        return []
-
-    if not isinstance(timestamps, list):
-        timestamps = [timestamps]
-
-    # Ensure input is a list of pd.Timestamp
-    timestamps = [pd.Timestamp(ts) for ts in timestamps]
-    first = timestamps[0]
-
-    if all(ts == first for ts in timestamps):
-        return first  # All elements are the same
-    else:
-        return timestamps  # Elements differ, return as-is
-
-# method to parse time stamps
-@with_logger(var_name="logger_stream")
-def _parse_timestamps(time):
-
-    # check time information
     if isinstance(time, pd.Timestamp):
-        time = [time]
-    elif isinstance(time, list):
-        if isinstance(time[0], pd.Timestamp):
-            pass
-        else:
-            logger_stream.error('Time format is not pd.Timestamp in the time list')
-            raise ValueError('Time format is not pd.Timestamp in the time list')
-    else:
-        logger_stream.error('Time format is not pd.Timestamp in the time step')
-        raise ValueError('Time format is not pd.Timestamp in the time step')
+        return [time]
 
-    return time
+    if isinstance(time, list):
+        if not time:
+            logger_stream.error('Time list is empty')
+            raise ValueError('Time list is empty')
+        if not all(isinstance(time_step, pd.Timestamp) for time_step in time):
+            logger_stream.error('One or more time values are not pd.Timestamp')
+            raise ValueError('All time values must be pd.Timestamp')
+        return time
+
+    logger_stream.error(f'Time format "{type(time).__name__}" is not supported')
+    raise TypeError('Time must be a pd.Timestamp or a list of pd.Timestamp')
+
+# helper to parse time according to signature
+@with_logger(var_name='logger_stream')
+def _parser_time_signature(time: list[pd.Timestamp], time_signature: str) \
+        -> pd.Timestamp | tuple[pd.Timestamp, pd.Timestamp] | list[pd.Timestamp]:
+
+    # signatures keeping original time
+    if time_signature in ('step', 'current'):
+        return time
+
+    # signatures requiring time values
+    if time_signature in ('range', 'start/end', 'period', 'start', 'end'):
+        if not time:
+            logger_stream.error(f'Time cannot be empty for time signature "{time_signature}".')
+            raise ValueError(f'Time cannot be empty for time signature "{time_signature}".')
+
+    # organize time
+    if time_signature in ('range', 'start/end', 'period'):
+        return time[0], time[-1]
+    elif time_signature == 'start':
+        return time[0]
+    elif time_signature == 'end':
+        return time[-1]
+
+    # unsupported signature
+    logger_stream.error(f'Unknown time signature "{time_signature}" in output object.')
+    raise ValueError(f'Unknown time signature "{time_signature}" in output object.')
 # ----------------------------------------------------------------------------------------------------------------------

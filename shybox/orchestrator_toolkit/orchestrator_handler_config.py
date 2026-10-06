@@ -64,6 +64,9 @@ class OrchestratorConfig(OrchestratorBase):
         data_package_in = _normalize_data_package(data_package_in)
         data_package_out = _normalize_data_package(data_package_out)
 
+        # info build process and workflow IN
+        logger.info_up(f'Building process and workflows pairs for side IN ... ')
+
         # ensure data collections in
         fx_collections = {}
         if isinstance(data_package_in, dict):
@@ -116,6 +119,12 @@ class OrchestratorConfig(OrchestratorBase):
             raise RuntimeError(
                 'Input data collections do not cover the workflow variables as defined by the check rule.')
 
+        # info build process and workflow IN
+        logger.info_down(f'Building process and workflows pairs for side IN ... DONE')
+
+        # info build process and workflow OUT
+        logger.info_up(f'Building process and workflows pairs for side OUT ... ')
+
         # ensure data collections out
         if isinstance(data_package_out, dict):
 
@@ -165,6 +174,9 @@ class OrchestratorConfig(OrchestratorBase):
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
             raise RuntimeError(
                 'Output data collections do not cover the workflow variables as defined by the check rule.')
+
+        # info build process and workflow OUT
+        logger.info_down(f'Building process and workflows pairs for side OUT ... DONE')
 
         # organize deps collections in
         deps_collections_in, args_collections_in = {}, {}

@@ -20,7 +20,7 @@ except ImportError:
     warnings.warn("pysheds is not available; Raster support will be skipped.", ImportWarning)
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_OLD import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 
 from shybox.geo_toolkit.lib_geo_watersheds import (
     DIRMAP, create_channel_mask, compute_grid2coords,
@@ -29,11 +29,26 @@ from shybox.geo_toolkit.lib_geo_watersheds import (
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
-@as_process(input_type='psndas', output_type='pandas',
-            lazy_undefined_obj=False, lazy_undefined_args=False, lazy_undefined_value=None)
+@as_process(input_type='pandas',
+            input_adapter=None, output_adapter=None,
+            args_adapter={
+                'fdir': {
+                    'method': 'dict_to_fx',
+                    'kwargs': {'flat_list_one_element': True},
+                    },
+                'cnet': {
+                    'method': 'dict_to_fx',
+                    'kwargs': {'flat_list_one_element': True},
+                },
+                'ref': {
+                    'method': 'dict_to_fx',
+                    'kwargs': {'flat_list_one_element': True},
+                },
+            },
+            output_type='pandas')
 @with_logger(var_name='logger_stream')
 def delineate_watershed(
-        cnet: Raster,fdir: Raster, sections: pd.DataFrame = None,
+        cnet: Raster, fdir: Raster, sections: pd.DataFrame = None,
         grid: sGrid = None, map_fdir=DIRMAP,
         longitude_tag: str = "longitude", latitude_tag: str = "latitude",
         x_tag: str = "x", y_tag: str = "y",

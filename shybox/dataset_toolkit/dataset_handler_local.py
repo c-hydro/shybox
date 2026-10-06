@@ -96,7 +96,7 @@ class DataLocal(Dataset):
         if 'file_deps' in kwargs:
             self.file_deps = kwargs.pop('file_deps')
         else:
-            self.file_deps = []
+            self.file_deps = {}
         # check data layout
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
@@ -131,7 +131,7 @@ class DataLocal(Dataset):
         else:
             self.dir_name = ensure_folder_tmp()
 
-        self._file_io = None  # internal storage
+        self._file_io = 'undefined'  # internal storage
         if file_io is not None:
             self.file_io = file_io  # triggers the setter
 
@@ -222,16 +222,12 @@ class DataLocal(Dataset):
         units = {var_name: units.get(var_name, "NA") for var_name in vars_data}
 
         # select file_workflow based on args or file_io (defined in calling code)
-        if file_workflow is not None:
-            pass
-        elif self.file_io == 'input':
-            file_workflow = list(vars_data.values())
-        elif self.file_io == 'output':
-            file_workflow = list(vars_data.keys())
-        elif self.file_io == 'derived':
-            file_workflow = list(vars_data.values())
-        else:
-            file_workflow = variable_template.get("vars_wf") or self._default_vars_wf
+        if file_workflow is None:
+            if layout_norm == 'geo':
+                file_workflow = 'GEO'
+            else:
+                self.logger.error("Attribute file_workflow must be defined by string.")
+                raise ValueError("Attribute file_workflow must be defined by string.")
 
         # add placeholder for file (for example if output file needs some extra definitions to fill the string)
         file_placeholder = kwargs.pop('file_placeholder', {})
@@ -269,6 +265,7 @@ class DataLocal(Dataset):
             "data_role": self.data_role,
             "data_as_is": self.data_as_is,
             "data_mandatory": self.data_mandatory,
+            'file_io': self.file_io,
             'file_variable': file_variable,
             'file_workflow': file_workflow,
             'file_placeholder': file_placeholder
@@ -299,8 +296,9 @@ class DataLocal(Dataset):
     @file_io.setter
     def file_io(self, value):
         """Set the file_io value, ensuring it is valid."""
-        if value not in {'input', 'output', 'derived', 'tmp'}:
-            raise ValueError(f"Invalid file_io '{value}'. Must be one of {'input', 'output', 'derived', 'tmp'}.")
+        if value not in {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}:
+            raise ValueError(f"Invalid file_io '{value}'. "
+                             f"Must be one of {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}.")
         self._file_io = value
 
     ## DATA MANAGEMENT

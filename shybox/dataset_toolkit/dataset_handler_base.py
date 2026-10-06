@@ -33,7 +33,7 @@ from shybox.default.lib_default_geo import crs_wkt as default_crs_wkt
 from shybox.dataset_toolkit.lib_dataset_parse import substitute_string, extract_date_and_tags
 from shybox.dataset_toolkit.lib_dataset_generic import (
     get_format_from_path, map_dims, map_coords, map_vars, flat_dims,
-    straighten_data, straighten_time, straighten_dims, select_by_time, rename_da_by_template, select_da_by_mapping,
+    straighten_data, straighten_time, straighten_dims, select_by_time, select_da_by_mapping,
     set_type, check_data_format, select_variable)
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -69,7 +69,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
     _defaults = {
         'type': None, 'time_signature' : 'end', "workflow": 'undefined', "layout": 'undefined',
         'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}, 'placeholder': {},
-        'data_id': -1, 'data_role': 'data'}
+        'data_id': -1, 'data_role': 'data', 'io': 'undefined'}
 
     def __init__(self, **kwargs):
 
@@ -80,14 +80,26 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # ensure message (active or not)
         self.message = kwargs.pop('message', True)
 
-        # info dataset initialization start
-        if self.message:
-            self.logger.info(f'Dataset obj {self.__str__()} ... ')
-
         # define loc_pattern BEFORE using it
         self.loc_pattern = None
         if 'loc_pattern' in kwargs:
             self.loc_pattern = kwargs.pop('loc_pattern', None)
+        # define variable
+        self.file_variable = self._defaults['variable']
+        if 'file_variable' in kwargs:
+            self.file_variable = kwargs.pop('file_variable')
+
+        # define variable list for info
+        variable_list = (
+            ', '.join(self.file_variable)
+            if isinstance(self.file_variable, (list, tuple))
+            else self.file_variable
+        )
+
+        # info dataset initialization start
+        if self.message:
+            self.logger.info(f'Configure dataset for variables [{variable_list}] from {self.loc_pattern} ... ')
+            self.logger.info_up(f'Initialize dataset object ... ')
 
         # substitute "now" with the current time
         if self.loc_pattern is not None:
@@ -111,9 +123,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'file_type' in kwargs:
             self.file_type = kwargs.pop('file_type')
 
-        self.file_variable = self._defaults['variable']
-        if 'file_variable' in kwargs:
-            self.file_variable = kwargs.pop('file_variable')
+        self.file_io = self._defaults['io']
+        if 'file_io' in kwargs:
+            self.file_io = kwargs.pop('file_io')
+        else:
+            print()
 
         self.units = self._defaults['units']
         if 'units' in kwargs:
@@ -208,7 +222,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # info dataset initialization end
         if self.message:
-            self.logger.info(f'Dataset obj {self.__str__()} ... INITIALIZED')
+            self.logger.info_down(f'Initialize dataset object {self.__str__()} ... DONE')
+            self.logger.info(f'Configure dataset for variables [{variable_list}] from {self.loc_pattern} ... DONE')
 
     # method to return information as a string representation
     def __repr__(self):
@@ -299,7 +314,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # 2) Size sanity
             try:
                 if p.stat().st_size < min_size_bytes:
-                    self.warnings.append(f"File is empty (<{min_size_bytes} bytes).")
+                    if self.file_io == 'derived':
+                        self.logger.info(f"File derived from other variables.")
+                    else:
+                        self.warnings.append(f"File is empty (<{min_size_bytes} bytes).")
                     readable = False
             except OSError as e:
                 self.warnings.append(f"Could not stat file: {e}")
@@ -307,7 +325,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # 3) Required type present
         if require_type and (self.file_type is None):
-            self.warnings.append("file_type is None.")
+            if self.file_io == 'derived':
+                pass
+            else:
+                self.warnings.append("file_type is None.")
             readable = False
 
         # 4) Temporary markers
@@ -315,18 +336,27 @@ class Dataset(ABC, metaclass=DatasetMeta):
         fmt_lower = (self.file_format or "").lower()
         if any(re.search(rf"(^|[^a-z]){re.escape(m)}([^a-z]|$)", name_lower)
                for m in temp_markers) or (fmt_lower in temp_markers):
-            self.warnings.append("Temporary file detected (name/format contains tmp/temp).")
+            if self.file_io == 'derived':
+                self.logger.info("Temporary file detected (name/format contains tmp/temp).")
+            else:
+                self.warnings.append("Temporary file detected (name/format contains tmp/temp).")
             readable = False
 
         # 5) Allowed format set
         if fmt_lower and (fmt_lower not in allowed_formats):
-            self.warnings.append(f"Format '{self.file_format}' is not in allowed_formats={allowed_formats}.")
+            if self.file_io == 'derived':
+                pass
+            else:
+                self.warnings.append(f"Format '{self.file_format}' is not in allowed_formats={allowed_formats}.")
 
         # 6) Extension vs declared format
         ext = p.suffix.lower().lstrip(".")
         if ext and (ext not in allowed_formats):
             if ext not in allowed_compressions:
-                self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
+                if self.file_io == 'derived':
+                    pass
+                else:
+                    self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
 
         # 7) Expected mode
         if expected_mode and (self.file_mode != expected_mode):
@@ -1076,21 +1106,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
         out_path, out_name = os.path.dirname(out_file), os.path.basename(out_file)
 
         # update variable from metadata (if available)
-        if 'variables_names' in list(metadata.keys()):
-            variable = metadata.pop('variables_names')
+        if 'variable_names' in list(metadata.keys()):
+            variable = metadata.pop('variable_names')
 
         # flatten single-key dictionary
         if isinstance(data, dict):
             if len(data) == 1:
                 data = next(iter(data.values()))
-            else:
-                self.logger.error(
-                    f"Writing dictionary data with multiple keys is not implemented "
-                    f"for '{self.file_format}' format. Available keys: {list(data.keys())}"
-                )
-                raise NotImplementedError(
-                    f"Multiple-key dictionary writing is not implemented for '{self.file_format}' format."
-                )
 
         # case of file-like data
         if self.file_format == 'file':
@@ -1117,8 +1139,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # case of dictionary
         if isinstance(data, dict):
             if data:
-                append = kwargs.pop('append', False)
-                self._write_data(data, out_file, append=append, **kwargs)
+                # define output options
+                out_opt = {'time': time, 'ref': kwargs.pop('ref', None), **kwargs}
+                # write output datasets
+                self._write_data(data, out_file, **out_opt)
                 return
             else:
                 self.logger.warning('Output Dictionary is empty and writing data is not activated.')
@@ -1152,15 +1176,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self.logger.warning('Output object is defined by NoneType before adjusting data orientation.')
         if out_obj is None:
             self.logger.warning('Output object is defined by NoneType after adjusting data orientation.')
-
-        # map the data variables
-        if out_obj is not None:
-            out_obj = rename_da_by_template(out_obj, variable_template=self.variable_template)
-            out_obj = map_vars(out_obj, **self.variable_template)
-        else:
-            self.logger.warning('Output object is defined by NoneType before mapping data variables.')
-        if out_obj is None:
-            self.logger.warning('Output object is defined by NoneType after mapping data variables.')
 
         # map the data dimensions
         if out_obj is not None:

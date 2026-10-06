@@ -10,18 +10,26 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # library
 from shybox.io_toolkit.lib_io_tiff import write_tiff_base
-from shybox.io_toolkit.tiff_adapter import adapt_watershed_to_tiff
+from shybox.io_toolkit.tiff_adapter import adapt_watershed_to_tiff, adapt_grid2d_to_tiff
 from shybox.io_toolkit.lib_io_decorators import iterate_obj, adapt_obj, compose_decorators
+
+from shybox.generic_toolkit.lib_utils_code import deprecated
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
 # example of logger decoretor @with_logger(var_name='logger_stream')
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# composer to set decorators to the base method
+# composer to set decorators to the base method - watershed
 write_tiff_watershed = compose_decorators(
     write_tiff_base,
     iterate_obj,
     adapt_obj(adapt_watershed_to_tiff),
+)
+
+# composer to set decorators to the base method - grid 2d
+write_tiff_grid2d = compose_decorators(
+    write_tiff_base,
+    adapt_obj(adapt_grid2d_to_tiff),
 )
 # ----------------------------------------------------------------------------------------------------------------------

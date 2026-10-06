@@ -19,7 +19,17 @@ from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_proc
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
 @as_process(
-    input_type='pandas', input_adapter='adapter_variables_to_group', output_type='pandas',
+    input_type='pandas',
+    input_adapter={
+        'data':[
+            {'method': 'mapping_keys_by_separator', 'kwargs': {'key_separator':'|', 'other_separator':'::'}},
+            {'method': 'adapter_variables_to_group', 'kwargs': {}}]
+    },
+    args_adapter=None,
+    output_adapter={
+        'data': {"method": "obj_to_dict", "kwargs": {}},
+    },
+    output_type='pandas',
     lazy_undefined_args=True, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
 def join_time_series_by_registry(

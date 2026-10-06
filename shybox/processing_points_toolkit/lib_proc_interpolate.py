@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_proc_interpolate
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260902'
-Version:       '1.0.0'
+Date:          '20260928'
+Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -13,27 +13,21 @@ import numpy as np
 
 from pyresample import geometry
 from pyresample import kd_tree
+
+from shybox.io_toolkit.lib_io_utils import create_darray
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
 @with_logger(var_name='logger_stream')
 def interpolate_point2grid_base(
-        point_values: np.ndarray,
-        point_lons: np.ndarray,
-        point_lats: np.ndarray,
-        grid_lons: np.ndarray,
-        grid_lats: np.ndarray,
+        point_values: np.ndarray, point_lons: np.ndarray, point_lats: np.ndarray,
+        grid_lons: np.ndarray, grid_lats: np.ndarray,
         method: str = "idw",
-        radius_of_influence: float = 50000.0,
-        neighbours: int = 8,
-        sigma: float = 25000.0,
-        power: float = 2.0,
-        epsilon: float = 0.0,
-        fill_value: float = np.nan,
-        nprocs: int = 1,
+        radius_of_influence: float = 50000.0, neighbours: int = 8,
+        sigma: float = 25000.0, power: float = 2.0, epsilon: float = 0.0,
+        fill_value: float = np.nan, nprocs: int = 1,
         **kwargs) -> np.ndarray:
 
     """
@@ -89,178 +83,100 @@ def interpolate_point2grid_base(
         Interpolated grid, shape equal to grid_lons/grid_lats.
     """
 
-    # -------------------------------------------------------------------------------------
-    # Convert inputs to numpy arrays
+    # define inputs to numpy arrays
     point_values = np.asarray(point_values, dtype=float).ravel()
     point_lons = np.asarray(point_lons, dtype=float).ravel()
     point_lats = np.asarray(point_lats, dtype=float).ravel()
 
+    # define grid lons and latts
     grid_lons = np.asarray(grid_lons, dtype=float)
     grid_lats = np.asarray(grid_lats, dtype=float)
 
-    # -------------------------------------------------------------------------------------
     # Check point dimensions
-    if not (
-            point_values.size ==
-            point_lons.size ==
-            point_lats.size
-    ):
-        raise RuntimeError(
-            "Point values, longitude and latitude arrays must have "
-            "the same number of elements."
-        )
-
+    if not (point_values.size == point_lons.size == point_lats.size):
+        raise RuntimeError("Point values, longitude and latitude arrays must have the same number of elements.")
     # check output grid
     if grid_lons.shape != grid_lats.shape:
-        raise RuntimeError(
-            "Grid longitude and latitude arrays must have the same shape."
-        )
+        raise RuntimeError("Grid longitude and latitude arrays must have the same shape.")
 
-    # -------------------------------------------------------------------------------------
     # Remove invalid source points
-    valid_points = (
-        np.isfinite(point_values)
-        & np.isfinite(point_lons)
-        & np.isfinite(point_lats)
-    )
-
+    valid_points = (np.isfinite(point_values) & np.isfinite(point_lons) & np.isfinite(point_lats))
+    # fitler valid points, longitudes and latitudes
     point_values = point_values[valid_points]
     point_lons = point_lons[valid_points]
     point_lats = point_lats[valid_points]
 
+    # check points availability
     if point_values.size == 0:
-        return np.full(
-            grid_lons.shape,
-            fill_value,
-            dtype=float,
-        )
+        return np.full(grid_lons.shape, fill_value, dtype=float,)
 
-    # -------------------------------------------------------------------------------------
     # Normalize interpolation method
     method = str(method).lower().strip()
-
+    # method aliases
     method_aliases = {
-        "nn": "nearest",
-        "nearest_neighbour": "nearest",
-        "nearest_neighbor": "nearest",
+        "nn": "nearest", "nearest_neighbour": "nearest", "nearest_neighbor": "nearest",
         "gaussian": "gauss",
-        "inverse_distance": "idw",
-        "inverse_distance_weighting": "idw",
+        "inverse_distance": "idw", "inverse_distance_weighting": "idw",
     }
 
-    method = method_aliases.get(method, method)
+    method_selected = method_aliases.get(method, method)
+    methods_supported = ["nearest", "idw", "gauss",]
 
-    methods_supported = [
-        "nearest",
-        "idw",
-        "gauss",
-    ]
-
-    if method not in methods_supported:
+    if method_selected not in methods_supported:
         raise ValueError(
-            f'Interpolation method "{method}" is not supported. '
-            f"Available methods: {methods_supported}"
-        )
+            f'Interpolation method "{method_selected}" is not supported. Available methods: {methods_supported}')
 
-    # -------------------------------------------------------------------------------------
-    # Create source geometry
-    #
-    # Point observations are represented as a SwathDefinition.
-    source_geometry = geometry.SwathDefinition(
-        lons=point_lons,
-        lats=point_lats,
-    )
+    # Point geometry observations are represented as a SwathDefinition.
+    source_geometry = geometry.SwathDefinition(lons=point_lons, lats=point_lats,)
+    # target geometry grid is also represented by its geographical coordinates
+    target_geometry = geometry.SwathDefinition(lons=grid_lons, lats=grid_lats,)
 
-    # target grid is also represented by its geographical coordinates
-    target_geometry = geometry.SwathDefinition(
-        lons=grid_lons,
-        lats=grid_lats,
-    )
-
-    # -------------------------------------------------------------------------------------
-    # Nearest-neighbour interpolation
+    # (1) Nearest-neighbours interpolation
     if method == "nearest":
 
         grid_values = kd_tree.resample_nearest(
-            source_geo_def=source_geometry,
-            data=point_values,
-            target_geo_def=target_geometry,
-            radius_of_influence=radius_of_influence,
-            epsilon=epsilon,
-            fill_value=fill_value,
-            nprocs=nprocs,
+            source_geo_def=source_geometry, data=point_values, target_geo_def=target_geometry,
+            radius_of_influence=radius_of_influence, epsilon=epsilon,
+            fill_value=fill_value, nprocs=nprocs,
         )
 
-    # -------------------------------------------------------------------------------------
-    # Gaussian interpolation
+    # (2) Gaussian interpolation
     elif method == "gauss":
 
         grid_values = kd_tree.resample_gauss(
-            source_geo_def=source_geometry,
-            data=point_values,
-            target_geo_def=target_geometry,
-            radius_of_influence=radius_of_influence,
-            sigmas=sigma,
-            neighbours=neighbours,
-            epsilon=epsilon,
-            fill_value=fill_value,
-            nprocs=nprocs,
+            source_geo_def=source_geometry, data=point_values, target_geo_def=target_geometry,
+            radius_of_influence=radius_of_influence, sigmas=sigma, neighbours=neighbours, epsilon=epsilon,
+            fill_value=fill_value, nprocs=nprocs,
         )
 
-    # -------------------------------------------------------------------------------------
-    # Inverse Distance Weighting
+    # (3) Inverse Distance Weighting
     elif method == "idw":
 
         # avoid division by zero for grid cells located exactly
         # at the same position as an input point
         min_distance = kwargs.get("min_distance", 1.0)
 
+        # compute idw weights
         def idw_weights(distance):
-
-            distance = np.asarray(
-                distance,
-                dtype=float,
-            )
-
-            distance = np.maximum(
-                distance,
-                min_distance,
-            )
-
-            return 1.0 / np.power(
-                distance,
-                power,
-            )
+            distance = np.asarray(distance, dtype=float,)
+            distance = np.maximum(distance, min_distance,)
+            return 1.0 / np.power(distance, power,)
 
         grid_values = kd_tree.resample_custom(
-            source_geo_def=source_geometry,
-            data=point_values,
-            target_geo_def=target_geometry,
-            radius_of_influence=radius_of_influence,
-            weight_funcs=idw_weights,
-            neighbours=neighbours,
-            epsilon=epsilon,
-            fill_value=fill_value,
-            nprocs=nprocs,
+            source_geo_def=source_geometry, data=point_values, target_geo_def=target_geometry,
+            radius_of_influence=radius_of_influence, weight_funcs=idw_weights,
+            neighbours=neighbours, epsilon=epsilon,
+            fill_value=fill_value, nprocs=nprocs,
         )
 
-    # -------------------------------------------------------------------------------------
     # Convert masked output if needed
     if np.ma.isMaskedArray(grid_values):
+        grid_values = grid_values.filled(fill_value)
 
-        grid_values = grid_values.filled(
-            fill_value
-        )
-
-    grid_values = np.asarray(
-        grid_values,
-        dtype=float,
-    )
-
+    # convert to float
+    grid_values = np.asarray(grid_values,dtype=float,)
     # ensure expected grid shape
-    grid_values = grid_values.reshape(
-        grid_lons.shape
-    )
+    grid_values = grid_values.reshape(grid_lons.shape)
 
     return grid_values
 # ----------------------------------------------------------------------------------------------------------------------

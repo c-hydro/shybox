@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_proc_compute_humidity
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251118'
-Version:       '1.1.0'
+Date:          '20261005'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -14,29 +14,19 @@ import logging
 import numpy as np
 import xarray as xr
 
-from shybox.io_toolkit.lib_io_utils import create_darray
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_OLD import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 from shybox.logging_toolkit.lib_logging_utils import with_logger
-
-import matplotlib
-import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to compute Relative Humidity from specific humidity, dew point and air temperature
 @as_process(input_type='xarray', output_type='xarray')
 def compute_data_rh(
-        q: xr.DataArray,
-        td: xr.DataArray,
-        t: xr.DataArray,
-        p: (xr.DataArray, float, int) = 1013.25,
-        mask_format: str = 'float',
-        mask_no_data: (float, int) = -9999.0,
-        clip: bool = True,
-        return_diag: bool = False,
-        p_units: str = 'hPa',  # 'hPa' or 'Pa'
-        **kwargs
-    ):
+        q: xr.DataArray, td: xr.DataArray, t: xr.DataArray, p: (xr.DataArray, float, int) = 1013.25,
+        mask_format: str = 'float', mask_no_data: (float, int) = -9999.0, clip: bool = True,
+        return_diag: bool = False, p_units: str = 'hPa',  # 'hPa' or 'Pa'
+        **kwargs):
+
     """
     Compute Relative Humidity (%) from specific humidity (kg/kg), dew point (K), and air temperature (K),
     following the same structure and masking logic of your template function.
@@ -75,13 +65,20 @@ def compute_data_rh(
         e_from_td - e_from_q.
     """
 
-    # ---- Input checks mirroring your structure ----
+    # check mandatory argument(s)
+    variables_required = {'q': q, 'td': td, 't': t,}
+    for var_name, var_data in variables_required.items():
+        if var_data is None:
+            raise ValueError(f'Variable "{var_name}" is defined by NoneType.')
+        if not isinstance(var_data, xr.DataArray):
+            raise TypeError(f'Variable "{var_name}" must be an xarray.DataArray. Got "{type(var_data).__name__}".')
+
+    # checks mirroring your structure
     if mask_format is not None:
         if mask_format == 'integer':
             if mask_no_data == np.nan:
                 raise RuntimeError('Change the no_data value or the grid format')
-
-    # Coerce dtypes per mask_format
+    # coerce dtypes per mask_format
     if mask_format is not None:
         if mask_format == 'integer':
             out_dtype = int
@@ -92,17 +89,14 @@ def compute_data_rh(
     else:
         out_dtype = float
 
-    # ---- Core computation (vectorized with xarray) ----
+    # core computation (vectorized with xarray) ----
     # Convert K -> °C for Magnus/Tetens
     td_c = td - 273.15
     t_c  = t  - 273.15
-
     # Vapor pressure from dew point (hPa); common constants (17.67, 243.5) over water
     e_td = 6.112 * xr.ufuncs.exp((17.67 * td_c) / (td_c + 243.5))
-
     # Saturation vapor pressure at air temperature (hPa)
     es_t = 6.112 * xr.ufuncs.exp((17.67 * t_c) / (t_c + 243.5))
-
     # Relative humidity (%)
     rh = 100.0 * (e_td / es_t)
 
@@ -137,6 +131,7 @@ def compute_data_rh(
     rh.attrs.update({'units': '%', 'long_name': 'Relative Humidity'})
 
     """ debug plot
+    import matplotlib.pyplot as plt
     plt.figure()
     plt.imshow(rh.values, cmap='viridis')
     plt.colorbar(label='RH [%]')

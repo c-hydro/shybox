@@ -13,7 +13,7 @@ import warnings
 import inspect
 import pandas as pd
 
-
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_checker import check_data_type
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_registry import (
     ADAPTERS_TYPE, ADAPTERS_FX_TS, ADAPTERS_FX_MAPS)
 from shybox.logging_toolkit.lib_logging_utils import with_logger
@@ -130,9 +130,6 @@ def as_process(
         def wrapper(data, *args, **kwargs):
 
             # ----------------------------------------------------------------------------------------------------------
-            # get logger
-            logger_stream = kwargs.get('logger_stream', None)
-
             # get map and behaviour in
             variable_in = kwargs.pop('variable_in', None)
             in_map, in_behaviour = __get_variables_object(variable_in)
@@ -141,6 +138,15 @@ def as_process(
             variable_out = kwargs.pop('variable_out', None)
             out_map, out_behaviour = __get_variables_object(variable_out)
             out_kwargs = {'mapping': out_map, 'behaviour': out_behaviour}
+            # ----------------------------------------------------------------------------------------------------------
+
+            # ----------------------------------------------------------------------------------------------------------
+            # check data format
+            if not isinstance(data, dict):
+                data = __try_to_adjust_data(data, in_map)
+
+            # check input (if expected or not)
+            input_check = check_data_type(obj_data=data, string_data=input_type)
             # ----------------------------------------------------------------------------------------------------------
 
             # ----------------------------------------------------------------------------------------------------------
@@ -259,6 +265,13 @@ def as_process(
             # ----------------------------------------------------------------------------------------------------------
 
             # ----------------------------------------------------------------------------------------------------------
+            # check output (if expected or not)
+            output_check = check_data_type(obj_data=result, string_data=output_type)
+
+            # check output format
+            if not isinstance(result, dict):
+                result = __try_to_adjust_result(result, out_map)
+
             # return result
             return result
             # ----------------------------------------------------------------------------------------------------------
@@ -288,6 +301,7 @@ def as_process(
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+# HELPERS
 # helper to configure adapter(s)
 def __configure_adapter(adapter_obj):
 
@@ -320,9 +334,7 @@ def __configure_adapter(adapter_obj):
         adapter_configs.append({'method': adapter_name,'kwargs': adapter_kwargs})
 
     return adapter_configs
-# ----------------------------------------------------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------------------------------------------------------
 # helper to get variables objects
 def __get_variables_object(variable_mapping: dict) -> tuple[dict, dict]:
 
@@ -336,4 +348,61 @@ def __get_variables_object(variable_mapping: dict) -> tuple[dict, dict]:
         behaviour[group_name] = group_info.get('behaviour', None)
 
     return mapping, behaviour
+
+# helper to try to adjust data object(s)
+@with_logger(var_name='logger_stream')
+def __try_to_adjust_data(data, mapping):
+
+    # info warning
+    logger_stream.warning(
+        'Method as_process expected "data" in dictionary format. '
+        'Trying to normalize "data" using output mapping. Method not implemented yet.'
+    )
+
+    return data
+
+# helper to try to adjust result object(s)
+@with_logger(var_name='logger_stream')
+def __try_to_adjust_result(result, mapping):
+
+    # info warning
+    logger_stream.warning(
+        'Method as_process expected "result" in dictionary format. '
+        'Trying to normalize "result" using output mapping.'
+    )
+
+    # check mapping
+    if not isinstance(mapping, dict) or not mapping:
+        logger_stream.error('Output mapping is not defined or is not a dictionary')
+        raise RuntimeError('Unable to normalize result without a valid output mapping')
+
+    # normalize result to list
+    if isinstance(result, (list, tuple)):
+        result_values = list(result)
+    else:
+        result_values = [result]
+
+    # get final mapped output variables
+    result_keys = [
+        mapped_value
+        for mapping_obj in mapping.values()
+        if isinstance(mapping_obj, dict)
+        for mapped_value in mapping_obj.values()
+    ]
+
+    # check number of returned objects
+    if len(result_values) != len(result_keys):
+        logger_stream.error(
+            f'Unable to normalize process result: '
+            f'{len(result_values)} returned object(s), '
+            f'{len(result_keys)} expected output variable(s). '
+            f'Expected variables: {result_keys}'
+        )
+
+        raise RuntimeError('Process result size does not match expected output variables')
+
+    # organize result
+    result = dict(zip(result_keys, result_values))
+
+    return result
 # ----------------------------------------------------------------------------------------------------------------------

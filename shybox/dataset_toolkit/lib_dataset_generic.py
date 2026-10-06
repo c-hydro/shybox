@@ -50,7 +50,7 @@ from shybox.generic_toolkit.lib_utils_code import deprecated
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 # wrappers
-from shybox.io_toolkit.tiff_wrapper import write_tiff_watershed
+from shybox.io_toolkit.tiff_wrapper import write_tiff_watershed, write_tiff_grid2d
 
 # manage logger
 try:
@@ -404,9 +404,8 @@ def write_to_file(data, path,
                   file_format: Optional[str] = None, file_type: Optional[str] = None,
                   append = False, **kwargs) -> None:
 
-    time = None
-    if 'time' in kwargs:
-        time = kwargs.pop('time')
+    # get time info (if available)
+    time = kwargs.pop('time', None)
 
     # check path
     path = fix_file_path(path)
@@ -415,9 +414,9 @@ def write_to_file(data, path,
     if file_format is None:
         file_format = get_format_from_path(path)
 
-    # manage dir name
-    dir = os.path.dirname(path)
-    if len(dir) > 0:
+    # manage folder name
+    folder = os.path.dirname(path)
+    if len(folder) > 0:
         os.makedirs(os.path.dirname(path), exist_ok = True)
     if not os.path.exists(path):
         append = False
@@ -430,7 +429,7 @@ def write_to_file(data, path,
             write_sections_data(path=path, df=data)
         else:
             logger_stream.error(f'File type {file_type} not supported for format ascii writing.')
-            raise NotImplemented(f'File type {file_type} not supported for format ascii writing.')
+            raise NotImplementedError(f'File type {file_type} not supported for format ascii writing.')
 
     # write the data to a csv
     elif file_format == 'csv':
@@ -484,6 +483,11 @@ def write_to_file(data, path,
             # wrap the tiff base for watershed case
             write_tiff_watershed(data, file_path=path, **kwargs)
 
+        elif file_type == 'grid_2d':
+
+            # wrap the tiff base for watershed case
+            write_tiff_grid2d(data, file_path=path, **kwargs)
+
         else:
             logger_stream.error(f'File type not supported for tiff writing: {file_type}')
             raise ValueError(f'File type not supported for tiff writing: {file_type}')
@@ -492,17 +496,25 @@ def write_to_file(data, path,
     elif file_format == 'netcdf':
 
         if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
-            write_dataset_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
+
+            # get units and mapping
+            variable_units = kwargs.pop('units', None)
+            variable_mapping = kwargs.pop('map', None)
+
+            # write hmc forcing datasets
+            write_dataset_hmc(path=path, data=data, time=time, attrs_data=None,
+                              var_units=variable_units, var_mapping=variable_mapping,
+                              **kwargs)
+
         elif file_type in ['time_series_hmc', 'ts_hmc']:
 
-            units, map = None, None
-            if 'units' in kwargs:
-                units = kwargs.pop('units')
-            if 'map' in kwargs:
-                map = kwargs.pop('map')
+            # get units and mapping
+            variable_units = kwargs.pop('units', None)
+            variable_mapping = kwargs.pop('map', None)
+            # write hmc time-series datasets
+            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None,
+                         data_units=variable_units, data_map=variable_mapping, **kwargs)
 
-            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None, data_units=units, data_map=map,
-                         **kwargs)
         elif file_type in ['grid_s3m', 'forcing_s3m']:
             write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
@@ -516,11 +528,11 @@ def write_to_file(data, path,
     # write the data to a png or pdf (i.e. move the file)
     elif file_format == 'file':
         os.rename(data, path)
-
     else:
         logger_stream.error(f'File format not supported: {file_format}')
         raise ValueError(f'File format not supported: {file_format}')
 
+# method to remove file
 def rm_file(path) -> None:
     os.remove(path)
 # ----------------------------------------------------------------------------------------------------------------------
@@ -566,6 +578,7 @@ def withxrds(func):
             return func(*args, **kwargs)
     return wrapper
 
+@deprecated(since='2026-10-06')
 def with_dict(func):
     def wrapper(*args, **kwargs):
         if isinstance(args[0], dict):
@@ -631,8 +644,8 @@ def map_dims_OLD(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataA
 
 @withxrds
 def map_dims(data: xr.DataArray,
-             dims_geo: dict | None = None, *, create_dim_coords: bool = True,
-             **kwargs) -> xr.DataArray:
+             dims_geo: dict | None = None, *, create_dim_coords: bool = True, **kwargs) -> xr.DataArray:
+
     if not dims_geo:
         return data
 
@@ -755,7 +768,84 @@ def map_coords(data: xr.DataArray, coords_geo: dict = None, *, drop_in: bool = F
 
 # method to map vars
 @withxrds
-def map_vars(
+def map_vars(data: xr.DataArray, vars_data: Optional[Dict[str, str]] = None, **kwargs) -> xr.DataArray | None:
+
+    """
+    Rename DataArray.name based on vars_data.
+
+    Dimensions and coordinates are preserved unchanged.
+
+    Behavior:
+    - If vars_data is None -> return data unchanged.
+    - If data.name is None -> set to the first mapping value.
+    - If data.name matches a key -> rename key -> value.
+    - If data.name matches a value -> rename value -> key.
+    - Otherwise -> return None.
+    """
+
+    # no variable mapping
+    if vars_data is None:
+        return data
+
+    # get current variable name
+    name = data.name
+    # missing variable name
+    if name is None:
+
+        try:
+            var_out = next(iter(vars_data.values()))
+        except StopIteration:
+            return None
+
+        if isinstance(var_out, str):
+            data.name = var_out
+        elif isinstance(var_out, dict):
+            data.name = var_out.get('var_out')
+        else:
+            raise RuntimeError(f"Unsupported vars_data definition: {var_out}")
+
+        return data
+
+    # forward mapping: var_in -> var_out
+    if name in vars_data:
+
+        var_out = vars_data[name]
+
+        if isinstance(var_out, str):
+            data.name = var_out
+        elif isinstance(var_out, dict):
+            data.name = var_out.get('var_out')
+        else:
+            raise RuntimeError(f"Unsupported vars_data definition: {var_out}")
+
+        return data
+
+    # reverse mapping: var_out -> var_in
+    for var_in, var_out in vars_data.items():
+
+        if isinstance(var_out, str):
+            if var_out == name:
+                data.name = var_in
+                return data
+
+        elif isinstance(var_out, dict):
+
+            var_name = var_out.get('var_out')
+            if var_name == name:
+                data.name = var_in
+                return data
+
+        else:
+            raise RuntimeError(f"Unsupported vars_data definition: {var_out}")
+
+    # no mapping found
+    return None
+
+
+# method to map vars
+@deprecated(use="map_vars", since="2026-01-27", use_new=True)
+@withxrds
+def map_vars_OLD(
     data: xr.DataArray,
     vars_data: Optional[Dict[str, str]] = None,
     **kwargs
@@ -793,14 +883,21 @@ def map_vars(
 
     # Reverse mapping: var_out -> var_in
     for var_in, var_out in vars_data.items():
-        if var_out == name:
-            data.name = var_in
+        if isinstance(var_out, str):
+            if var_out == name:
+                data.name = var_in
+                return data
+        elif isinstance(var_out, dict):
+            var_name = var_out['var_out']
+            data.name = var_name
             return data
+        else:
+            raise RuntimeError(f"Unsupported vars_data: {var_out}")
 
     # No rule matched
     return None
 
-
+@deprecated(since="2026-09-30")
 @withxrds
 def select_by_vars(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (xr.DataArray, None):
     if vars_data is not None:
@@ -975,6 +1072,7 @@ def straighten_data(
 
     return da
 
+@deprecated(since="2026-09-30")
 @withxrds
 def reset_nan(data: xr.DataArray, nan_value = None) -> xr.DataArray:
     """
@@ -1156,9 +1254,10 @@ def select_da_by_mapping(data: xr.DataArray,
         raise ValueError(f"Invalid mapping_use: {mapping_use!r}")
 
 # method to rename da variables use variable template
+@deprecated(since="2026-09-30")
 @with_logger(var_name="logger_stream")
 @withxrds
-def rename_da_by_template(
+def rename_da_by_template_OLD(
     da: xr.DataArray,
     variable_template: dict = None,
     sep: str =":",
@@ -1210,7 +1309,7 @@ def rename_da_by_template(
 
     if target_name == old_name:
         info = {"status": "no_op", "old_name": old_name, "new_name": target_name}
-        return da
+        return da, info
 
     da_new = da.rename(target_name)
     info_new = {
@@ -1219,7 +1318,7 @@ def rename_da_by_template(
         "mode": "value" if use_value else "key",
         "case_sensitive": case_sensitive}
 
-    return da_new
+    return da_new, info
 
 @withxrds
 def set_type(data: xr.DataArray, nan_value = None) -> xr.DataArray:
@@ -1287,4 +1386,3 @@ def set_method_args(
 
     return selected_args
 # ----------------------------------------------------------------------------------------------------------------------
-

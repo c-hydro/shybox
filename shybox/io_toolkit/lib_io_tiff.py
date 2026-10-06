@@ -17,6 +17,7 @@ import xarray as xr
 import rasterio
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
+from shybox.generic_toolkit.lib_utils_code import deprecated
 from shybox.io_toolkit.lib_io_utils import make_file_path
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -46,7 +47,6 @@ def read_tiff_base(
 
         # read first band
         data = src.read(1)
-
         # get metadata
         transform = src.transform
         crs = src.crs

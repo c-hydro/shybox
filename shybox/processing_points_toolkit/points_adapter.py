@@ -15,24 +15,36 @@ import xarray as xr
 from typing import Union
 
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
-from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.io_toolkit.lib_io_utils import create_darray
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
 from shybox.processing_points_toolkit.lib_proc_interpolate import interpolate_point2grid_base
-from shybox.io_toolkit.lib_io_tiff import read_tiff_base
 # ----------------------------------------------------------------------------------------------------------------------
 
-@as_process(input_type='tiff', adapter_type=None, output_type='tiff')
-def exec_mask_grid(data_in, ref):
+@as_process(input_type='tiff',
+            input_adapter=None, args_adapter=None, output_adapter=None,
+            output_type='tiff')
+def exec_mask_grid(data_raw, ref=None, **kwargs):
+
+    data_in = data_raw
+
     return data_in
 
-@as_process(input_type='tiff', adapter_type=None, output_type='tiff')
-def exec_set_null(data_raw, ref):
+@as_process(input_type='tiff',
+            input_adapter=None, args_adapter=None, output_adapter=None,
+            output_type='tiff')
+def exec_set_null(data_raw, ref=None, **kwargs):
     return data_raw
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to execute average over mask
-@as_process(input_type='pandas', adapter_type=None, output_type='tiff')
+@as_process(input_type='pandas',
+            input_adapter=None,
+            args_adapter=None,
+            output_adapter={
+                'data': {"method": "fx_to_dict", "kwargs": {}},
+            },
+            output_type='xarray')
 @with_logger(var_name='logger_stream')
 def exec_interpolate_points(
         data: Union[pd.DataFrame, None] = None,
@@ -40,6 +52,8 @@ def exec_interpolate_points(
         time: pd.Timestamp = None,
         registry: Union[pd.DataFrame, None] = None,
         ref: xr.DataArray = None, terrain: xr.DataArray = None,
+        variable_name: str = 'data',
+        longitude_coord: str = 'longitude', latitude_coord: str = 'latitude',
         longitude_dim: str = 'longitude', latitude_dim: str = 'latitude',
         time_dim: str = "time",
         **kwargs):
@@ -62,6 +76,9 @@ def exec_interpolate_points(
         raise RuntimeError("Dataset 'registry' must be defined.")
     if terrain is None:
         raise RuntimeError("Dataset 'terrain' must be defined.")
+
+    # get attrs
+    common_attrs = {**data.attrs, **code.attrs}
 
     # Select only requested time
     data_step = _select_by_time(data,time=time,time_dim=time_dim,)
@@ -104,7 +121,7 @@ def exec_interpolate_points(
 
         # skip invalid data
         if pd.isna(point_value) or pd.isna(point_code):
-            print('warn')
+            logger_stream.warning(f'Station {station_name} has invalid values. Remove them from interpolate')
 
         # get registry information
         registry_step = registry_lookup.loc[station_code]
@@ -135,33 +152,37 @@ def exec_interpolate_points(
     # check points
     if point_values.size == 0:
         raise RuntimeError(f"No valid points are available for time '{time}'.")
-    # -------------------------------------------------------------------------
 
-    # -------------------------------------------------------------------------
     # Ready for interpolate_point2grid_base
-    logger_stream.info(f' ---> Time: "{time}"')
-    logger_stream.info(f' ---> Points available: {point_values.size}')
+    logger_stream.info(f' ::: Time: "{time}"')
+    logger_stream.info(f' ::: Points available: {point_values.size}')
 
     # method to interpolate points
     grid_values = interpolate_point2grid_base(
         point_values, point_lons, point_lats,
         grid_lons=grid_lons, grid_lats=grid_lats)
 
+    # convert to data array obj
+    grid_da = create_darray(
+        grid_values, grid_lons[0, :], grid_lats[:, 0], name=variable_name,
+        coord_name_x=longitude_coord, coord_name_y=latitude_coord,
+        dim_name_x=longitude_dim, dim_name_y=latitude_dim)
+    grid_da.attrs = common_attrs
+
     # info method end
     logger_stream.info_down('Interpolate points to grid ... DONE')
 
+    ''' debug grid
     import matplotlib.pylab as plt
     plt.figure()
-    plt.imshow(grid_values)
+    plt.imshow(grid_da.values)
     plt.colorbar()
     plt.show(block=True)
+    '''
 
-    return grid_values
-# ----------------------------------------------------------------------------------------------------------------------
+    return grid_da
 
-
-
-# method to select dataframe by time
+# helper to select dataframe by time
 def _select_by_time(
         dframe: pd.DataFrame,
         time: pd.Timestamp,
@@ -174,9 +195,7 @@ def _select_by_time(
     if isinstance(dframe.index, pd.DatetimeIndex):
 
         # dataframe index
-        time_index = pd.DatetimeIndex(
-            pd.to_datetime(dframe.index)
-        )
+        time_index = pd.DatetimeIndex(pd.to_datetime(dframe.index))
 
         # align timezone information
         if time.tzinfo is not None and time_index.tz is None:
@@ -184,9 +203,7 @@ def _select_by_time(
 
         # check time
         if time not in time_index:
-            raise RuntimeError(
-                f"Time '{time}' is not available in dataframe index."
-            )
+            raise RuntimeError(f"Time '{time}' is not available in dataframe index.")
 
         # select time
         dframe_step = dframe.loc[time]
@@ -195,34 +212,23 @@ def _select_by_time(
     elif time_dim in dframe.columns:
 
         time_values = pd.to_datetime(dframe[time_dim])
-
         time_mask = time_values == time
 
         if not time_mask.any():
-            raise RuntimeError(
-                f"Time '{time}' is not available in column '{time_dim}'."
-            )
+            raise RuntimeError(f"Time '{time}' is not available in column '{time_dim}'.")
 
         dframe_step = dframe.loc[time_mask]
 
         # only one row is expected
         if dframe_step.shape[0] > 1:
-            raise RuntimeError(
-                f"Multiple rows found for time '{time}'."
-            )
+            raise RuntimeError(f"Multiple rows found for time '{time}'.")
 
         dframe_step = dframe_step.iloc[0]
-
         # remove time from station data
-        dframe_step = dframe_step.drop(
-            labels=time_dim,
-            errors="ignore"
-        )
+        dframe_step = dframe_step.drop(labels=time_dim,errors="ignore")
 
     else:
-        raise RuntimeError(
-            f"Time information is not available. "
-            f"Expected a DatetimeIndex or column '{time_dim}'."
-        )
+        raise RuntimeError(f"Time information is not available. Expected a DatetimeIndex or column '{time_dim}'.")
 
     return dframe_step
+# ----------------------------------------------------------------------------------------------------------------------

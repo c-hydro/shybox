@@ -14,7 +14,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 from collections.abc import Mapping as AbcMapping
 
-from shybox.orchestrator_toolkit.mapper_linker import Data
 from shybox.logging_toolkit.logging_handler import LoggingManager
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
@@ -39,183 +38,27 @@ class Mapper:
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
         self._data_count: int = data_count
 
-    # method to build mapping in/out
-    def build_mapping_OLD(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    @staticmethod
+    def _normalize_variables(mapping: dict) -> dict:
+        mapping_flat = {}
+        for root_name, mapping_obj in mapping.items():
+            # simple variable
+            if isinstance(mapping_obj, str):
+                mapping_flat[root_name] = mapping_obj
+            # structured variable/container
+            elif isinstance(mapping_obj, dict):
+                for sub_name, variable_name in mapping_obj.items():
+                    variable_key = f'{root_name}|{sub_name}'
+                    mapping_flat[variable_key] = variable_name
 
-        # info start
-        self.logger.info_up("Build input-output variables mapping ... ")
+            else:
+                raise TypeError(
+                    f'Mapping "{root_name}" must be defined by '
+                    f'string or dictionary. '
+                    f'Found "{type(mapping_obj).__name__}".'
+                )
 
-        # get fx configuration
-        fx_in_by_process, fx_out_by_process = self._fx_in, self._fx_out
-
-        # check cached mapping
-        if self._mapping is not None:
-            self.logger.info_down("Build input-output variables mapping ... ALREADY AVAILABLE. SKIPPED.")
-            return self._mapping
-
-        # get fx configuration
-        fx_in_by_process, fx_out_by_process = self._fx_in or {}, self._fx_out or {}
-
-        # initialize result
-        result: Dict[str, Dict[str, Dict[str, Any]]] = {}
-
-        # organize input data by workflow/process
-        data_in_by_process = {}
-        for data_key, data_obj in self._data_in.items():
-
-            # get process and variable
-            process_name, variable_name = data_key.split("|", 1)
-            # initialize process
-            if process_name not in data_in_by_process:
-                data_in_by_process[process_name] = {}
-            # store variable object
-            data_in_by_process[process_name][variable_name] = data_obj
-
-        # organize output data by workflow/process
-        data_out_by_process = {}
-        for data_key, data_obj in self._data_out.items():
-
-            # get process and variable
-            process_name, variable_name = data_key.split("|", 1)
-            # initialize process
-            if process_name not in data_out_by_process:
-                data_out_by_process[process_name] = {}
-
-            # store variable object
-            data_out_by_process[process_name][variable_name] = data_obj
-
-        # get all available processes
-        all_processes = (set(data_in_by_process) | set(data_out_by_process) |
-                         set(fx_in_by_process) | set(fx_out_by_process))
-
-        # check incomplete processes
-        for process_name in all_processes:
-            if process_name not in data_in_by_process:
-                self.logger.warning(f"Process '{process_name}' has output variables but no input variables.")
-            if process_name not in data_out_by_process:
-                self.logger.warning(f"Process '{process_name}' has input variables but no output variables.")
-
-        # iterate over processes
-        for process_name in all_processes:
-
-            # info start
-            self.logger.info_up(f"Build mapping for process: '{process_name}' ... ")
-
-            # get process input/output data
-            process_data_in = data_in_by_process.get(process_name, {})
-            process_data_out = data_out_by_process.get(process_name, {})
-            # get process input/output fx
-            process_fx_in = fx_in_by_process.get(process_name, {})
-            process_fx_out = fx_out_by_process.get(process_name, {})
-
-            # check input/output data availability
-            if not process_data_in:
-                self.logger.warning(f"Process '{process_name}' is not available in input data.")
-            if not process_data_out:
-                self.logger.warning(f"Process '{process_name}' is not available in output data.")
-            # check input/output fx availability
-            if not process_fx_in:
-                self.logger.warning(f"Process '{process_name}' is not available in input fx.")
-            if not process_fx_out:
-                self.logger.warning(f"Process '{process_name}' is not available in output fx.")
-
-            # initialize process mapping
-            result[process_name] = {
-                "in": {"data": {}, "fx": {},},
-                "out": {"data": {}, "fx": {},},
-            }
-            # iterate over input/output sides
-            for side, process_data in (("in", process_data_in), ("out", process_data_out)):
-
-                # skip empty side
-                if not process_data:
-                    continue
-
-                # destination data branch
-                mapping_data = result[process_name][side]["data"]
-                # iterate over process variables
-                for variable_name, data_obj in process_data.items():
-
-                    # define complete key
-                    data_key = f"{process_name}:{variable_name}"
-
-                    # normalize objects
-                    obj_list = self._as_list(data_obj)
-                    # iterate over partial objects
-                    for idx, partial in enumerate(obj_list):
-
-                        # get partial mapping
-                        partial_mapping = self._get_partial_mapping_OLD(
-                            partial=partial,tag=data_key, side=side,index_in_tag=idx,)
-
-                        # skip empty mapping
-                        if not partial_mapping:
-                            continue
-
-                        # merge partial mapping
-                        for label, label_mapping in partial_mapping.items():
-
-                            # initialize label
-                            mapping_data.setdefault(label, {})
-
-                            # iterate over template pairs
-                            for tpl_key, tpl_value in label_mapping.items():
-
-                                # get existing value
-                                current_value = mapping_data[label].get(tpl_key,None,)
-
-                                # warn about overwrite
-                                if (
-                                        current_value is not None
-                                        and current_value != tpl_value):
-                                    self.logger.warning(
-                                        f"[{process_name}:{label}] "
-                                        f"{side.upper()} DATA template key "
-                                        f"'{tpl_key}' is being overwritten: "
-                                        f"'{current_value}' -> '{tpl_value}'."
-                                    )
-
-                                # store mapping
-                                mapping_data[label][tpl_key] = tpl_value
-
-            # store fx mappings
-            result[process_name]["in"]["fx"] = dict(process_fx_in)
-            result[process_name]["out"]["fx"] = dict(process_fx_out)
-
-            # info end
-            self.logger.info_down(f"Build mapping for process: '{process_name}' ... DONE")
-
-        # print mapping summary
-        for process_name, process_mapping in result.items():
-
-            # info summary start
-            self.logger.info_up(f"Process '{process_name}' ... ")
-
-            # iterate over sides
-            for side in ("in", "out"):
-
-                # get mappings
-                data_mapping = process_mapping[side]["data"]
-                fx_mapping = process_mapping[side]["fx"]
-
-                # data mapping
-                self.logger.info(f"  {side.upper()} DATA [{len(data_mapping)}]:")
-                for variable_name, variable_mapping in data_mapping.items():
-                    self.logger.info(f"    '{variable_name}' -> {variable_mapping}")
-                # fx mapping
-                self.logger.info(f"  {side.upper()} FX [{len(fx_mapping)}]:")
-                for variable_name, variable_mapping in fx_mapping.items():
-                    self.logger.info(f"    '{variable_name}' -> {variable_mapping}")
-
-            # info summary end
-            self.logger.info_down(f"Process '{process_name}' ... DEFINED")
-
-        # cache mapping
-        self._mapping = result
-        # info end
-        self.logger.info_down("Build input-output variables mapping ... DONE")
-
-        return result
+        return mapping_flat
 
     # ----------------------------------------------------------------------------------------------------------------------
     # method to validate workflow
@@ -267,9 +110,18 @@ class Mapper:
                     data_variable = getattr(data_obj, "file_variable", None,)
                     # get variable template
                     variable_template = getattr(data_obj, "variable_template", {},) or {}
-
                     # get data variables
                     vars_data = variable_template.get("vars_data", {},) or {}
+
+                    # get data deps
+                    data_deps = getattr(data_obj, "file_deps", {},)
+                    for deps_key, deps_obj in data_deps.items():
+                        # get variable template
+                        deps_template = getattr(deps_obj, "variable_template", {}, ) or {}
+                        # get data variables
+                        vars_deps = deps_template.get("vars_data", {}, ) or {}
+                        # add deps to variable data
+                        vars_data.update(vars_deps)
 
                     # search workflow variable
                     key_var = next(
@@ -327,7 +179,7 @@ class Mapper:
         variable_workflow, workflow_errors = {}, {}
         # iterate over workflows
         for workflow_id, (workflow_key, workflow_structure) in enumerate(
-                workflow_fx.items(), start=1):
+                workflow_fx.items(), start=0):
 
             # check workflow structure
             if not isinstance(workflow_structure, list):
@@ -344,10 +196,14 @@ class Mapper:
 
                 # get function
                 fx_name = step_obj.get("function")
-                # get datasets
-                datasets = step_obj.get("datasets", {}) or {}
-                # get results
-                results = step_obj.get("results", {}) or {}
+
+                # get datasets and results
+                datasets_raw = step_obj.get("datasets", {}) or {}
+                results_raw = step_obj.get("results", {}) or {}
+
+                # normalize datasets and results
+                datasets = self._normalize_variables(datasets_raw)
+                results = self._normalize_variables(results_raw)
 
                 # identify step position
                 is_first = step_id == 0
@@ -456,10 +312,8 @@ class Mapper:
 
                     # get previous step
                     previous_obj = workflow_structure[step_id - 1]
-
                     # get previous function
                     previous_fx = previous_obj.get("function")
-
                     # get previous results
                     previous_results = previous_obj.get("results", {}) or {}
 
@@ -482,12 +336,15 @@ class Mapper:
 
                         # check internal link
                         variable_valid = previous_key is not None
+                        # define collection and dataset (for intermediate step)
+                        variable_collection = f'{workflow_key}{sep_root}{key_var_workflow}'
+                        variable_dataset = key_var_workflow
 
                         # organize mapping
                         step_summary["mapping_in"][mapping_key] = create_mapping_in(
                             mapping_type="workflow",
                             var_in=key_var_workflow, var_workflow=key_var_workflow, var_fx=key_var_fx,
-                            dataset=None, collection=None, valid=variable_valid,
+                            dataset=variable_dataset, collection=variable_collection, valid=variable_valid,
                         )
 
                         # add workflow link
@@ -767,10 +624,158 @@ class Mapper:
         return workflows_sorted
     # ------------------------------------------------------------------------------------------------------------------
 
-    # ------------------------------------------------------------------------------------------------------------------
     # method to create map of the variables
     @staticmethod
     def _mapping_variables(
+            datasets: dict,
+            results: dict) -> dict:
+
+        # initialize mapping object
+        mapping_variables = {
+            'in': {'groups': {}},
+            'out': {'groups': {}},
+            'valid': True,
+        }
+
+        # ---------------------------------------------------------------------------------
+        # organize INPUT variables
+        for group_name, group_obj in datasets.items():
+
+            # initialize group
+            group_info = {
+                'behaviour': None,
+                'mapping': {},
+            }
+
+            # case 1: one variable
+            #
+            # "data": "air_temperature"
+            if isinstance(group_obj, str):
+
+                group_info['behaviour'] = 'one_to_one'
+                group_info['mapping'][group_name] = group_obj
+
+            # case 2: structured/grouped variables
+            #
+            # "data": {
+            #     "data_1": "discharge_sim_openloop",
+            #     "data_2": "discharge_sim_analysis"
+            # }
+            #
+            # or:
+            #
+            # "data": {
+            #     "collections": "soil_moisture"
+            # }
+            elif isinstance(group_obj, dict):
+
+                if not group_obj:
+                    mapping_variables['valid'] = False
+
+                else:
+
+                    group_info['mapping'] = dict(group_obj)
+
+                    # collection of the same logical variable
+                    if (
+                            len(group_obj) == 1
+                            and 'collections' in group_obj
+                    ):
+                        group_info['behaviour'] = 'collections'
+
+                    # multiple variables packed into one fx argument
+                    elif len(group_obj) > 1:
+                        group_info['behaviour'] = 'multi_to_one'
+
+                    # explicit single nested variable
+                    else:
+                        group_info['behaviour'] = 'one_to_one'
+
+            else:
+                mapping_variables['valid'] = False
+                continue
+
+            # store group
+            mapping_variables['in']['groups'][group_name] = group_info
+
+        # ---------------------------------------------------------------------------------
+        # organize OUTPUT variables
+        for group_name, group_obj in results.items():
+
+            # initialize group
+            group_info = {
+                'behaviour': None,
+                'mapping': {},
+            }
+
+            # case 1: one returned object -> one workflow variable
+            #
+            # "data": "air_temperature"
+            if isinstance(group_obj, str):
+
+                group_info['behaviour'] = 'one_to_one'
+                group_info['mapping'][group_name] = group_obj
+
+            # case 2: one returned container with internal variables
+            #
+            # "data": {
+            #     "sim": "discharge_sim",
+            #     "obs": "discharge_obs"
+            # }
+            #
+            # or:
+            #
+            # "data": {
+            #     "collections": "soil_moisture"
+            # }
+            elif isinstance(group_obj, dict):
+
+                if not group_obj:
+                    mapping_variables['valid'] = False
+
+                else:
+
+                    group_info['mapping'] = dict(group_obj)
+
+                    # repeated objects representing the same variable
+                    if (
+                            len(group_obj) == 1
+                            and 'collections' in group_obj
+                    ):
+                        group_info['behaviour'] = 'collections'
+
+                    # one returned object containing multiple variables
+                    elif len(group_obj) > 1:
+                        group_info['behaviour'] = 'one_to_multi'
+
+                    # explicit nested single variable
+                    else:
+                        group_info['behaviour'] = 'one_to_one'
+
+            else:
+                mapping_variables['valid'] = False
+                continue
+
+            # store group
+            mapping_variables['out']['groups'][group_name] = group_info
+
+        # ---------------------------------------------------------------------------------
+        # final checks
+
+        if not mapping_variables['in']['groups']:
+            mapping_variables['valid'] = False
+
+        if not mapping_variables['out']['groups']:
+            mapping_variables['valid'] = False
+
+        return mapping_variables
+
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # method to create map of the variables
+    @staticmethod
+    def _mapping_variables_OLD(
             datasets: dict, results: dict,
             root_separator: str = '|', variable_separator: str = ':') -> dict:
 
@@ -780,11 +785,14 @@ class Mapper:
         # organize input groups
         for dataset_key, dataset_name in datasets.items():
 
-            # split group and variable
-            try:
-                group_name, variable_name = dataset_key.split(root_separator, 1)
-            except ValueError:
-                raise ValueError(f'Dataset key "{dataset_key}" must have format "group{root_separator}variable".')
+            # split group and variables
+            if root_separator in dataset_key:
+                try:
+                    group_name, variable_name = dataset_key.split(root_separator, 1)
+                except ValueError:
+                    raise ValueError(f'Dataset key "{dataset_key}" must have format "group{root_separator}variable".')
+            else:
+                group_name, variable_name = dataset_key, dataset_name
 
             # initialize input group
             if group_name not in mapping_variables['in']['groups']:
@@ -824,10 +832,13 @@ class Mapper:
         for result_key, result_name in results.items():
 
             # split group and variables
-            try:
-                group_name, variables_name = result_key.split(root_separator, 1)
-            except ValueError:
-                raise ValueError(f'Result key "{result_key}" must have format "group{root_separator}variable".')
+            if root_separator in result_key:
+                try:
+                    group_name, variables_name = result_key.split(root_separator, 1)
+                except ValueError:
+                    raise ValueError(f'Result key "{result_key}" must have format "group{root_separator}variable".')
+            else:
+                group_name, variables_name = result_key, result_name
 
             # split output variables
             variables_name = [variable_name
@@ -846,17 +857,23 @@ class Mapper:
             # organize output variables
             for variable_name in variables_name:
 
-                dataset_key = root_separator.join([group_name,variable_name])
-
-                # get workflow variable from input mapping
-                workflow_variable = input_lookup.get(dataset_key)
+                # split group and variables
+                if root_separator in result_key:
+                    dataset_key = root_separator.join([group_name,variable_name])
+                    workflow_variable = input_lookup.get(dataset_key)
+                else:
+                    dataset_key = group_name
+                    workflow_variable = group_name
 
                 # create output reference
                 # example: time_series:data_1
-                variable_reference = (f'{result_name}{root_separator}{variable_name}')
+                if root_separator in result_key:
+                    variable_reference = f'{result_name}{root_separator}{variable_name}'
+                else:
+                    variable_reference = result_name
 
                 # store output mapping
-                mapping_variables['out']['groups'][group_name]['mapping'][variable_reference] = workflow_variable
+                mapping_variables['out']['groups'][group_name]['mapping'][workflow_variable] = variable_reference
 
                 # variable is not linked to an input variable
                 if workflow_variable is None:
@@ -1145,14 +1162,21 @@ def build_pairs_and_process(process_list, dataset_namespace,
         workflow_tags.append(step_workflow)
         workflow_collections[step_key_str] = step_workflow
 
+    # pre-check workflows selected in namespaces
+    if len(workflow_found) == 0:
+        logger_stream.warning("No process workflow is selected in namespaces.")
+    elif len(workflow_found) == 1:
+        logger_stream.info(f"Process '{workflow_found[0]}' is selected in namespaces.")
+    else:
+        logger_stream.error(f"Only one process workflow can be selected in namespaces. "
+                            f"Found {len(workflow_found)}: {', '.join(workflow_found)}")
+        raise RuntimeError("Multiple process workflows are selected in namespaces.")
+
     # check workflows available in process_list but not used by namespaces
     workflow_unused = []
     for process_workflow in process_list.keys():
         if process_workflow not in workflow_found:
             workflow_unused.append(process_workflow)
-
-            logger_stream.warning(
-                f"Process '{process_workflow}' is available in process_list but is not available in namespaces.")
 
     # info object
     info = {

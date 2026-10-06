@@ -46,7 +46,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_points_toolkit.lib_proc_join import join_points_to_time_series
 
-from shybox.orchestrator_toolkit.orchestrator_handler_timeseries import OrchestratorTimeSeries as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -199,7 +199,7 @@ def main(view_table: bool = False):
         data_layout='points', data_mandatory=False,
         file_deps=None,
         file_type='points_1d', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE', file_io='input',
+        file_variable='DISCHARGE_POINTS', file_io='input',
         file_args={'delimiter': ','},
         variable_template={
             "dims_data": {"x": "data"},
@@ -216,11 +216,11 @@ def main(view_table: bool = False):
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
         data_layout='time_series',
         file_type='hydrograph_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE', file_io='output',
+        file_variable='DISCHARGE_TS', file_io='output',
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
-            "vars_data": {"discharge": "discharge_"}
+            "vars_data": {"discharge": "discharge_grid"}
         },
         time_signature='end', time_reference=alg_reference_time,
         time_period=1, time_format='%Y%m%d%H%M',
@@ -231,8 +231,9 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
-    orc_process = Orchestrator.time_series_discharge(
-        data_package_in=source_data_discharge, data_package_out=destination_data_discharge,
+    orc_process = Orchestrator.configure(
+        data_package_in={'DISCHARGE_POINTS': source_data_discharge},
+        data_package_out={'DISCHARGE_TS': destination_data_discharge},
         data_ref=registry_sections_hmc, priority=None,
         configuration=alg_cfg_workflow,
         logger=logging_handle

@@ -100,9 +100,15 @@
         "intermediate_output": "Tmp",
         "tmp_dir": "{path_tmp}"
     },
+
     "process_list": {
-        "WATERSHEDS": [
-            {"function": "delineate_watershed", "fill_value": -9999, "no_data_value": -9999}
+        "WATERSHEDS_WORKFLOW": [
+            {
+              "function": "delineate_watershed",
+              "datasets": {"data": "watersheds_data"},
+              "results": {"data": "watersheds_mask"},
+              "fill_value": -9999, "no_data_value": -9999
+            }
         ]
     }
   },

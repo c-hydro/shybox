@@ -3,7 +3,7 @@ Library Features:
 
 Name:          lib_proc_compute_wind
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251118'
+Date:          '20261005'
 Version:       '1.1.0'
 """
 
@@ -14,26 +14,18 @@ import logging
 import numpy as np
 import xarray as xr
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_OLD import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 from shybox.logging_toolkit.lib_logging_utils import with_logger
-
-import matplotlib
-import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to compute Wind Speed from u, v wind components
 @as_process(input_type='xarray', output_type='xarray')
 def compute_data_wind_speed(
-        u: xr.DataArray,
-        v: xr.DataArray,
-        mask_format: str = 'float',
-        mask_no_data: (float, int) = -9999.0,
-        clip: bool = True,
-        return_diag: bool = False,
-        name: (str, None) = 'wind_speed',
-        **kwargs
-    ):
+        u: xr.DataArray, v: xr.DataArray,
+        mask_format: str = 'float', mask_no_data: (float, int) = -9999.0, clip: bool = True,
+        return_diag: bool = False, name: (str, None) = 'wind_speed', **kwargs):
+
     """
     Compute wind speed (m s-1) from u, v wind components, following the same
     structure and masking/dtype logic as `compute_data_rh`.
@@ -67,7 +59,15 @@ def compute_data_wind_speed(
         mathematical convention (0°=east, 90°=north, CCW positive).
     """
 
-    # ---- Input checks mirroring your structure ----
+    # check mandatory argument(s)
+    variables_required = {'u': u, 'v': v,}
+    for var_name, var_data in variables_required.items():
+        if var_data is None:
+            raise ValueError(f'Variable "{var_name}" is defined by NoneType.')
+        if not isinstance(var_data, xr.DataArray):
+            raise TypeError(f'Variable "{var_name}" must be an xarray.DataArray. Got "{type(var_data).__name__}".')
+
+    # checks mirroring your structure
     if mask_format is not None:
         if mask_format == 'integer':
             if mask_no_data == np.nan:
@@ -84,10 +84,9 @@ def compute_data_wind_speed(
     else:
         out_dtype = float
 
-    # ---- Core computation (vectorized with xarray) ----
-    # Wind speed magnitude
+    # core computation (vectorized with xarray) ----
+    # wind speed magnitude
     ws = xr.ufuncs.sqrt(u ** 2 + v ** 2)
-
     if clip:
         ws = ws.clip(min=0.0)
 
@@ -119,6 +118,7 @@ def compute_data_wind_speed(
     ws.attrs.update({'units': 'm s-1', 'long_name': 'Wind speed'})
 
     """ debug plot
+    import matplotlib.pyplot as plt
     plt.figure()
     plt.imshow(ws.values, cmap='viridis')
     plt.colorbar(label='Wind speed [m s-1]')

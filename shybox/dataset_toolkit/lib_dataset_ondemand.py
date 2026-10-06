@@ -60,10 +60,8 @@ def create_object(
             grid_check=True, grid_format='data_array', grid_name=obj_variable)
 
     else:
-
         logger_stream.error(f'Object type not supported: {obj_type}')
         raise ValueError(f'Object type not supported: {obj_type}')
-
 
     return data
 # ----------------------------------------------------------------------------------------------------------------------

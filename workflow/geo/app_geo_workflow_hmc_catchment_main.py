@@ -37,7 +37,7 @@ from shybox.config_toolkit.config_handler import ConfigManager
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_geo_toolkit.lib_proc_compute_catchment import delineate_watershed
 
-from shybox.orchestrator_toolkit.orchestrator_handler_geo import OrchestratorGeo as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -145,7 +145,7 @@ def main(view_table: bool = False):
         file_args={
             'lut_map': alg_cfg_application['geo_data_src']['registry_sections']['lut_map'],
             'lut_type': alg_cfg_application['geo_data_src']['registry_sections']['lut_type'],
-            'sep':',', 'col_datafrom': 'SEC_TAG'},
+            'sep':',', 'col_reference': 'SEC_TAG'},
         file_variable='sections', file_io='input',
         variable_template={
             "dims_point": {"x": "fields", "y": "sections"},
@@ -159,7 +159,7 @@ def main(view_table: bool = False):
     geo_grid = DataLocal(
         path=alg_cfg_application['geo_data_src']['flow_directions']['path'],
         file_name=alg_cfg_application['geo_data_src']['flow_directions']['file_name'],
-        file_type='grid_obj', file_format='ascii', file_mode='local', file_variable='fdir', file_io='input',
+        file_type='grid_obj', file_format='ascii', file_mode='local', file_variable='fdir_grid', file_io='input',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -202,15 +202,16 @@ def main(view_table: bool = False):
         path=None,
         file_name=None,
         file_type=None, file_format='tmp', file_mode='local',
-        file_variable='WATERSHEDS' , file_io='derived',
-        file_deps=[geo_data_fdir, geo_data_cnet, geo_data_sections],
+        file_variable='WATERSHEDS_SRC' , file_io='derived', file_workflow='WATERSHEDS_WORKFLOW',
+        file_deps={'fdir' : geo_data_fdir,
+                   'cnet' : geo_data_cnet,
+                   'sections' : geo_data_sections
+                   },
         variable_template={
             "dims_data": {"x": "longitude", "y": "latitude"},
             "coord_data": {"x": "longitude", "y": "latitude"},
             "vars_data": {
-                "fdir": "flow_directions",
-                "cnet": "channels_network",
-                "sections": "sections",
+                "data": "watersheds_data"
             }
         },
         logger=logging_handle
@@ -224,8 +225,8 @@ def main(view_table: bool = False):
         path=alg_cfg_application['geo_data_dst']['path'],
         file_name=alg_cfg_application['geo_data_dst']['file_name'],
         data_layout='geo', file_args={},
-        file_type='geo_watershed', file_format='tiff', file_mode='local',
-        file_variable='WATERSHEDS', file_io='output',
+        file_type='geo_watershed', file_format='tiff', file_mode='local', file_workflow='WATERSHEDS_WORKFLOW',
+        file_variable='WATERSHEDS_DST', file_io='output',
         variable_template={
             "dims_data": {"x": "longitude", "y": "latitude"},
             "coord_data": {"x": "longitude", "y": "latitude"},
@@ -241,11 +242,10 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
-    ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
-    orc_process = Orchestrator.watersheds(
-        data_package_in=geo_data_src,
-        data_package_out=geo_data_dst,
+    orc_process = Orchestrator.configure(
+        data_package_in={'WATERSHEDS_SRC': geo_data_src},
+        data_package_out={'WATERSHEDS_DST': geo_data_dst},
         data_ref={'grid': geo_grid},
         priority=None,
         configuration=alg_cfg_workflow,

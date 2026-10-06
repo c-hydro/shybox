@@ -27,8 +27,13 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# adapter to convert object to dictionary
-def obj_to_dict(obj_data, obj_keys=None, logger_stream=None, **kwargs):
+# adapter to convert fx output to dictionary
+def fx_to_dict(
+        obj_data,
+        obj_keys=None,
+        obj_separator='|',
+        logger_stream=None,
+        **kwargs):
 
     # normalize input object to list of values
     if isinstance(obj_data, dict):
@@ -40,25 +45,43 @@ def obj_to_dict(obj_data, obj_keys=None, logger_stream=None, **kwargs):
 
     # check mapping (if exists)
     if obj_keys is None:
+
         if 'mapping' in kwargs:
             mapping = kwargs['mapping']
-            # get mapping keys
+
+            # get mapping values
             obj_keys = []
             for map_key, map_value in mapping.items():
-                # use sub-dictionary keys
+
+                # use sub-dictionary values
                 if isinstance(map_value, dict):
-                    obj_keys.extend(map_value.keys())
-                # use root key
+                    obj_keys.extend(map_value.values())
+
+                # use root value
                 else:
-                    obj_keys.append(map_key)
+                    obj_keys.append(map_value)
+
         else:
-            obj_keys = [str(idx + 1) for idx in range(len(obj_values))]
+            # create default keys
+            obj_keys = [
+                str(idx + 1)
+                for idx in range(len(obj_values))
+            ]
+
+    # normalize key defined by string
     elif isinstance(obj_keys, str):
         obj_keys = [obj_keys]
+
+    # normalize key defined by list or tuple
     elif isinstance(obj_keys, (list, tuple)):
         obj_keys = list(obj_keys)
+
+    # unsupported key format
     else:
-        raise TypeError(f"`obj_keys` must be None, str, list or tuple. Got {type(obj_keys)}")
+        raise TypeError(
+            f"`obj_keys` must be None, str, list or tuple. "
+            f"Got {type(obj_keys)}"
+        )
 
     # check if number of values is greater than number of keys
     if len(obj_values) > len(obj_keys):
@@ -73,21 +96,51 @@ def obj_to_dict(obj_data, obj_keys=None, logger_stream=None, **kwargs):
             logger_stream.warning(msg)
 
     # create output dictionary
-    obj_dict = {
-        key: value
-        for key, value in zip(obj_keys, obj_values)
-    }
+    if len(obj_values) == 1 and obj_keys:
+
+        # get root keys
+        root_keys = {
+            key.split(obj_separator, 1)[0]
+            for key in obj_keys
+        }
+
+        # use root only if all keys share the same root
+        if len(root_keys) == 1:
+            obj_dict = {
+                next(iter(root_keys)): obj_values[0]
+            }
+
+        # use complete keys
+        else:
+            obj_dict = {
+                key: value
+                for key, value in zip(obj_keys, obj_values)
+            }
+
+    else:
+
+        # map values to keys
+        obj_dict = {
+            key: value
+            for key, value in zip(obj_keys, obj_values)
+        }
 
     return obj_dict
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# adapter to convert dict to list
-def dict_to_list(obj_data, flat_list_one_element=True, **kwargs):
+# adapter to convert dict to fx input
+def dict_to_fx(obj_data, flat_list_one_element=True, **kwargs):
+
+    # if not dictinary (for example key:value run in the previous method)
+    if not isinstance(obj_data, dict):
+        return obj_data
 
     # check if dictionary contains nested dictionaries
-    has_subdict = any(isinstance(root_value, dict)for root_value in obj_data.values())
+    has_subdict = False
+    if isinstance(obj_data, dict):
+        has_subdict = any(isinstance(root_value, dict)for root_value in obj_data.values())
 
     # case of flat dictionary
     if not has_subdict:
@@ -118,6 +171,23 @@ def dict_to_list(obj_data, flat_list_one_element=True, **kwargs):
                 obj[root_key] = root_value
 
     return obj
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to normalize xarray object to dictionary
+@with_logger(var_name='logger_stream')
+def xarray_to_dict(obj: Union[None, xr.DataArray, xr.Dataset]) -> Union[None, dict]:
+    # check obj format
+    if obj is None:
+        return None
+    elif isinstance(obj, xr.DataArray):
+        name = obj.name or 'var'
+        return {name: obj}
+    elif isinstance(obj, xr.Dataset):
+        return {var_name: obj[var_name] for var_name in obj.data_vars}
+    else:
+        logger_stream.error(f"Unsupported element in data: {type(obj)}")
+        raise TypeError(f"Unsupported element in data: {type(obj)}")
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

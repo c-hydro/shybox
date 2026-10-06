@@ -31,11 +31,15 @@ from shybox.time_toolkit.lib_utils_time import convert_time_format, normalize_to
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
 
-from shybox.dataset_toolkit.dataset_handler_mem import DataMem
+from shybox.dataset_toolkit.dataset_handler_memory import DataMemory
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_collections import DataCollection
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
+
+# package utils
 from shybox.logging_toolkit.lib_logging_utils import with_logger
+from shybox.generic_toolkit.lib_utils_code import deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -47,7 +51,10 @@ class OrchestratorBase:
         "intermediate_output": "Mem",  # "Mem" or "Tmp"
         "break_on_missing_tiles": False,  # legacy naming; grid uses it, TS may ignore
         "tmp_dir": None,
+        "dump_mode": "one_var_to_one_file"
     }
+    # set recognized dump modes
+    dump_modes = ('one_data_to_one_file', 'many_data_to_one_file',)
 
     def __init__(
         self,
@@ -77,9 +84,12 @@ class OrchestratorBase:
 
         self.options = deepcopy(self.default_options)
         if options is not None:
+            options = {key: value for key, value in options.items() if not (key.startswith('_') and key.endswith('_'))}
             self.options.update(options)
 
-        self.tmp_dir = None
+        # get dump mode
+        self.dump_mode = self.options.get("dump_mode", 'one_data_to_one_file')
+        # get tmp dir
         if self.options["intermediate_output"] == "Tmp":
             tmp_root = self.options.get("tmp_dir", tempfile.gettempdir())
             self.tmp_dir = ensure_folder_tmp(tmp_root)
@@ -89,17 +99,21 @@ class OrchestratorBase:
 
         self.process_current = None
         self.process_previous = None
-        self.process_history, self.process_id, self.process_tag = [], [], []
+        self.process_history, self.process_id, self.process_tag = {}, [], []
+        self.result_history = {}
 
     # Hooks (override in subclasses)
+    @deprecated(since='2026-10-02')
     def grouping_tag(self) -> str:
         """Attribute used by group_process(). Default matches your current behavior."""
         return "reference"
 
+    @deprecated(since='2026-10-02')
     def reference_key_from_map(self, process_map: Dict[str, Any]) -> str:
         """Default reference is tag:workflow (your current convention)."""
         return ":".join([process_map["tag"], process_map["workflow"]])
 
+    @deprecated(since='2026-10-02')
     def get_input_by_reference(self, reference_key: str) -> Any:
         """Resolve initial input object for a variable group."""
         if isinstance(self.data_in, dict):
@@ -110,12 +124,22 @@ class OrchestratorBase:
             return self.data_in
         raise RuntimeError("Input data must be DataLocal or dict[str, Any].")
 
+    @deprecated(since='2026-10-02')
     def get_deps_by_reference(self, reference_key: str) -> Any:
         if self.deps_in is None:
             return None
         if not isinstance(self.deps_in, dict):
             raise RuntimeError("Input deps must be a dict or None.")
         return self.deps_in.get(reference_key, None)
+
+    @property
+    def dump_mode(self):
+        return self._dump_mode
+    @dump_mode.setter
+    def dump_mode(self, value):
+        if value not in self.dump_modes:
+            raise ValueError(f'Dump mode "{value}" is not supported. Available modes: {", ".join(self.dump_modes)}')
+        self._dump_mode = value
 
     # properties
     @property
@@ -125,6 +149,7 @@ class OrchestratorBase:
         else:
             return False
 
+    # clean tmp directory where process ends
     def clean_up(self):
         if hasattr(self, 'tmp_dir') and os.path.exists(self.tmp_dir):
             try:
@@ -138,7 +163,10 @@ class OrchestratorBase:
                     function = None, message: bool = True, **kwargs) -> dict:
 
         # create out key (if needed)
-        out_key = create_key(workflow=workflow, variable=variable, separator=':')
+        if workflow not in variable:
+            out_key = create_key(workflow=workflow, variable=variable, separator=':')
+        else:
+            out_key = variable
 
         # if output obj is dict or DataLocal return
         out_collections = {}
@@ -207,6 +235,7 @@ class OrchestratorBase:
                 # clean variable name
                 variable_part = re.sub(r'_+','_',re.sub(r'[:|,.]', '_', str(variable)))
                 name_parts.append(variable_part)
+
             # add random id
             name_parts.append(random_out)
             # add time placeholder
@@ -215,15 +244,12 @@ class OrchestratorBase:
 
             # create output filename
             file_name_out = f'{"_".join(name_parts)}.{ext_out}'
-
             # create complete output path
             path_name_out = os.path.join(folder_name_tmp, file_name_out)
-
             # create file history
             file_history = "_".join(name_parts)
 
         else:
-
             # ensure temporary output path
             path_name_out = ensure_folder_tmp()
 
@@ -238,8 +264,9 @@ class OrchestratorBase:
 
         # manage and intermediate output in geotiff format
         output_type = self.options['intermediate_output']
-        if output_type == 'Mem':
-            out_obj = DataMem(loc_pattern=path_name_out)
+        if output_type == 'Memory':
+            # NOTE. Update class definition ...
+            out_obj = DataMemory(loc_pattern=path_name_out)
         elif output_type == 'Tmp':
 
             # prepare file name (temporary)
@@ -369,7 +396,9 @@ class OrchestratorBase:
 
             # define process settings for the method 1
             this_input, this_type = {}, {}
-            in_keys = list(self.data_in.keys())
+
+            # get input keys for the selected workflow
+            in_keys = [key for key in self.data_in.keys() if key.split('|')[0] == workflow_name]
             for step_key in in_keys:
                 in_flag = False
                 for process_key, process_mapper in process_mapping_in.items():
@@ -439,13 +468,19 @@ class OrchestratorBase:
             self.logger.info('Active static mode')
             time = pd.Timestamp.now()
 
+        proc_options = self.options
+
         # manage process execution and process output
         if len(self.processes) == 0:
             # exit no processes declared
             self.logger.error('No processes have been added to the workflow. Exit')
             raise ValueError('Check the messages to found the issue in adding processes.')
 
+        # get global process obj and id
+        process_last, id_last = self.processes[-1], len(self.processes) - 1
+
         # iterate over process(es)
+        data_out_collections = None
         for proc_id, proc_obj in enumerate(self.processes):
 
             # get mode
@@ -477,8 +512,25 @@ class OrchestratorBase:
                     if (data_out is None) or (workflow_out is None):
                         raise RuntimeError(f'Data_out and workflow_out is/are defined by NoneType.')
 
-                    self.processes[proc_id].out_obj[workflow_default] = data_out
-                    self.processes[proc_id].dump_state = True
+                    # set output options
+                    if self.dump_mode == 'many_data_to_one_file':
+
+                        if data_out_collections is None:
+                            data_out_collections = DataCollection(logger=self.logger)
+
+                        # add current DataLocal to collection
+                        data_key = f"{data_out.file_workflow}|{data_out.file_variable}"
+                        data_out_collections.add(data_key, data_out)
+
+                        if proc_id == id_last:
+                            workflow_collections = '|'.join(data_out_collections.file_workflow)
+                            self.processes[proc_id].out_obj[workflow_default] = data_out_collections
+                            self.processes[proc_id].dump_state = True
+                    elif self.dump_mode == 'one_data_to_one_file':
+                        self.processes[proc_id].out_obj[workflow_default] = data_out
+                        self.processes[proc_id].dump_state = True
+                    else:
+                        pass
 
             elif proc_mode == 'start':
                 pass
@@ -492,16 +544,6 @@ class OrchestratorBase:
         # check time steps
         if len(time_steps) == 0:
             return None
-
-        ### LASCIATO  DA CONTROLLARE OCN CASO SPECIFICO
-        # check group tag in kwargs (by_time disables memory) --> da controllare con merge time
-        if 'group' in kwargs:
-            group_type = kwargs['group']
-            if group_type == 'by_time':
-                # if group by time the algorithm will pass a list of time steps to each process (memory disabled)
-                # merger by time requires all time steps at once
-                time_steps = _merge_by_time(time_steps)
-                self.memory_active = False
 
         # iterate over time steps
         for ts in time_steps:
@@ -587,32 +629,82 @@ class OrchestratorBase:
 
                 # get process fx and tag
                 proc_fx, proc_tag = proc_obj.fx_name, proc_obj.tag
+                # get process workflow name and id
+                proc_wflow_name, proc_wflow_id = proc_obj.workflow_name, proc_obj.workflow_id
                 # get process mode and dump
                 proc_mode, proc_dump = proc_obj.mode, proc_obj.dump_state
+                # get process datasets and results
+                proc_datasets, proc_results = proc_obj.datasets, proc_obj.results
 
                 # start process block
                 self.logger.info_up(f'Process "{proc_fx}" ...')
+
+                # get collections of tags and objects
+                proc_tag_collections = self.process_tag
+                proc_history_obj_collections = self.process_history
+
+                # define process ids
+                proc_id_current = proc_id
+                proc_id_previous = proc_id - 1 if proc_id > 0 else None
+                # define process tags
+                proc_tag_current = proc_tag
+                proc_tag_previous = proc_tag_collections[proc_id - 1] if proc_id > 0 else None
+                # define process history tags
+                proc_history_id_current = f'process_{proc_id_current}'
+                proc_history_id_previous = (f'process_{proc_id_previous}' if proc_id_previous is not None else None)
 
                 # define proc args
                 proc_args = {}
                 # execute process
                 try:
-                    # set collections args (stored object for data iterations)
-                    if proc_id > 0 and proc_history[proc_id - 1] is None:
-                        self.logger.warning(f'Process "{proc_fx}" ... SKIPPED. Previous process was NoneType')
-                        proc_history.append(None)
-                        continue
-                    elif proc_id > 0 and proc_history[proc_id - 1] is not None:
-                        proc_args['collections_history'].update(self.process_history)
+                    # initialize process collections
+                    proc_args['collections_history'], proc_args['collections_tags'] = {}, []
+                    proc_args['results_history'] = {}
+
+                    # manage previous process
+                    proc_history_obj_previous = {}
+                    if proc_id_previous is not None:
+
+                        # get previous process objects matching the workflow
+                        proc_history_obj_tmp = {
+                            key: value
+                            for key, value in proc_history_obj_collections.items()
+                            if key.startswith(f"{proc_wflow_name}")
+                        }
+
+                        # check previous process objects
+                        if not proc_history_obj_tmp or all(value is None for value in proc_history_obj_tmp.values()):
+
+                            self.logger.warning(
+                                f'Process "{proc_fx}" ... SKIPPED. '
+                                f'Previous process for workflow "{proc_wflow_name}" was NoneType'
+                            )
+                            proc_history_obj_previous = {}
+                            continue
+
+                        else:
+                            # create previous process history
+                            proc_history_obj_previous = copy(proc_history_obj_tmp)
+
+                        # get keys history and previous process(es)
+                        key_previous = list(proc_history_obj_previous.keys())
+                        key_history = list(self.process_history.keys())
+                        # check validity of previous process
+                        if len(key_previous) != 1 or key_previous[0] not in key_history:
+                            raise RuntimeError(f'Previous process for workflow "{proc_wflow_name}" was NoneType or not available')
+
+                        proc_args['collections_history'] = self.process_history
                         proc_args['collections_tags'] = self.process_tag
-                    else:
-                        proc_args['collections_history'] = {}
-                        proc_args['collections_tags'] = []
 
                     # define process args
                     proc_args['memory_active'] = self.memory_active
-                    proc_args['process_id'] = proc_id
+                    proc_args['process_id'] = proc_id_current
+                    proc_args['process_tag'] = proc_tag_current
+                    proc_args['workflow_name'] = proc_wflow_name
+                    proc_args['workflow_id'] = proc_wflow_id
                     proc_args['group_id'] = group_id
+                    # collect results from other workflow(s) if available
+                    proc_args['results_history'] = self.result_history
 
                     # run process (return obj or dict just to test for iterations ... )
                     proc_result, proc_memory = proc_obj.run(time, **proc_args)
@@ -620,25 +712,70 @@ class OrchestratorBase:
                     # manage history process
                     if not proc_dump:
 
-                        # DETAIL: if skipped / empty
+                        # check expected process results
+                        available_variables = list(proc_result.keys())
+                        for variable_result in proc_results.values():
+                            tag_result = f'{proc_workflow}|{variable_result}'
+                            if tag_result not in available_variables:
+                                error_message = (
+                                    f'Variable "{tag_result}" not found in process results. '
+                                    f'Available variables: {", ".join(available_variables)}'
+                                )
+                                self.logger.error(error_message)
+                                raise RuntimeError(error_message)
+
+                        # alert if result obj is defined by NoneType
                         if proc_result is None:
                             self.logger.warning(f'Process "{proc_fx}" ... SKIPPED. Data not available')
 
+                        # check result format
+                        if not isinstance(proc_result, dict):
+                            self.logger.error(f'Process "{proc_fx}" ... FAILED')
+                            raise RuntimeError(f'Object result must be defined by Dict. Found type: {type(proc_result).__name__}')
+
                         # store process result
                         self.process_id = proc_id
-                        self.process_history.append(proc_result)
                         self.process_tag.append(proc_tag)
                         # set proc previous
                         self.process_previous = copy(proc_obj)
+
+                        # get workflow from new result
+                        proc_workflows = {key.split("|", 1)[0] for key in proc_result.keys()}
+
+                        # remove previous entries belonging to the same workflow
+                        self.process_history = {
+                            key: value
+                            for key, value in self.process_history.items()
+                            if key.split("|", 1)[0] not in proc_workflows
+                        }
+
+                        # update with new result
+                        self.process_history.update(proc_result)
 
                     else:
                         # dump state active the data in memory is cleared (empty dict)
                         self.process_current, self.process_previous = None, None
                         self.process_history, self.process_id, self.process_tag = {}, [], []
+                        self.result_history = {}
+
+                except Exception as exc:
+
+                    # capture expections
+                    self.logger.exception(f'Process "{proc_fx}" ... FAILED: {exc}')
+
+                    # create obj proc_history
+                    proc_history_obj_current = {proc_history_id_current: None}
+
+                    # optional: keep history aligned with process ids
+                    self.process_history[proc_wflow_name].update(proc_history_obj_current)
+                    self.process_tag.append(proc_tag)
+
+                    # propagate exception
+                    raise
 
                 finally:
                     # end process block
-                    self.logger.info_up(f'Process "{proc_fx}" ... DONE')
+                    self.logger.info_down(f'Process "{proc_fx}" ... DONE')
 
             # end workflow end
             self.logger.info_down(f'Workflow "{proc_workflow}" ... DONE')

@@ -18,15 +18,12 @@ import xarray as xr
 # ----------------------------------------------------------------------------------------------------------------------
 # decoretor to adapt object (call an adapter to make it)
 def adapt_obj(adapter):
-
     def decorator(func):
-
         @wraps(func)
         def wrapper(obj, *args, **kwargs):
             adapted = adapter(obj, **kwargs)
             return func(*args, **adapted)
         return wrapper
-
     return decorator
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -36,7 +33,6 @@ def iterate_obj(func):
 
     @wraps(func)
     def wrapper(data, *args, **kwargs):
-
         # dictionary
         if isinstance(data, dict):
             results = {}
@@ -46,7 +42,6 @@ def iterate_obj(func):
 
         # list
         elif isinstance(data, list):
-
             results = []
             for variable_idx, variable_data in enumerate(data):
                 results.append(func(variable_data, *args, variable_name=str(variable_idx), **kwargs))
@@ -54,7 +49,6 @@ def iterate_obj(func):
 
         # tuple
         elif isinstance(data, tuple):
-
             results = []
             for variable_idx, variable_data in enumerate(data):
                 results.append(func(variable_data, *args, variable_name=str(variable_idx), **kwargs))
