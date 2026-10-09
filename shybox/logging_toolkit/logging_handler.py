@@ -331,9 +331,7 @@ class LoggingManager:
         self.use_arrows = use_arrows
         self.arrow_dynamic = arrow_dynamic
         self.arrow_tag = arrow_tag
-        self.arrow_base_len = (
-            arrow_base_len if arrow_base_len is not None else self._global_arrow_base_len
-        )
+        self.arrow_base_len = (arrow_base_len if arrow_base_len is not None else self._global_arrow_base_len)
 
         self._printer = LoggingPrinter() if use_arrows else None
         if self._printer:
@@ -688,6 +686,21 @@ class LoggingManager:
         self.store_set(store_key, new, tag=t)
         self.set_prefix_len(new, tag=t, update_last=True)
 
+    # line info status
+    def info_status(self, msg: Optional[str] = None,
+                    items: Optional[Dict[str, object]] = None, prefix: str = ":::",) -> None:
+        # print direct message
+        if msg:
+            self.logger.info(f"{prefix} {msg}")
+        # print status items
+        if items:
+            width = max(len(str(key)) for key in items)
+            for key, value in items.items():
+                # convert boolean status
+                if isinstance(value, bool):
+                    value = "ACTIVE" if value else "INACTIVE"
+                self.logger.info(f"{prefix} {str(key).upper():<{width}} : {value}")
+
     # line info header
     def info_header(self, msg: str, *, blank_before: bool = False,
                     blank_after: bool = False, underline: bool = False):
@@ -774,7 +787,7 @@ class LoggingManager:
     def log_path(self) -> Optional[str]:
         return self._log_path
 
-    # ---------- ArrowPrinter replacement utilities ----------
+    # ArrowPrinter replacement utilities
     @staticmethod
     def rule_line(char: str = "=", width: int = 78) -> str:
         """Return a repeated char line, e.g., main break line."""

@@ -3,8 +3,8 @@ Class Features
 
 Name:          mapper_handler
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '202600903'
-Version:       '1.1.0'
+Date:          '20261007'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -15,13 +15,16 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 from collections.abc import Mapping as AbcMapping
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+
+# common method from package root
+from shybox import deprecated, with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # class Mapper
 class Mapper:
 
+    # ------------------------------------------------------------------------------------------------------------------
     # initialize class
     def __init__(
         self,
@@ -38,27 +41,42 @@ class Mapper:
         self._mapping: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None
         self._data_count: int = data_count
 
+    # ------------------------------------------------------------------------------------------------------------------
+
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # method to normalize variables (flat dictionary)
     @staticmethod
     def _normalize_variables(mapping: dict) -> dict:
+
+        # check mapping format
+        if not isinstance(mapping, dict):
+            raise TypeError(f'Mapping must be defined by dictionary. Found "{type(mapping).__name__}".')
+
+        # flat mapping object
         mapping_flat = {}
         for root_name, mapping_obj in mapping.items():
+
             # simple variable
-            if isinstance(mapping_obj, str):
+            if isinstance(mapping_obj, (int, float, str)):
                 mapping_flat[root_name] = mapping_obj
+
             # structured variable/container
             elif isinstance(mapping_obj, dict):
                 for sub_name, variable_name in mapping_obj.items():
-                    variable_key = f'{root_name}|{sub_name}'
+                    variable_key = f"{root_name}|{sub_name}"
+                    if variable_key in mapping_flat:
+                        raise ValueError(f'Duplicated mapping key "{variable_key}".')
                     mapping_flat[variable_key] = variable_name
 
             else:
                 raise TypeError(
-                    f'Mapping "{root_name}" must be defined by '
-                    f'string or dictionary. '
+                    f'Mapping "{root_name}" must be defined by string, integer, float or dictionary. '
                     f'Found "{type(mapping_obj).__name__}".'
                 )
 
         return mapping_flat
+    # ----------------------------------------------------------------------------------------------------------------------
 
     # ----------------------------------------------------------------------------------------------------------------------
     # method to validate workflow
@@ -66,14 +84,11 @@ class Mapper:
             self,
             sep_root: str = '|', sep_sub: str = ':', ) -> Dict[str, List[Dict[str, Any]]]:
 
-        # -------------------------------------------------------------------------
         # get data from commons
         workflow_fx = self._workflow
         data_collections_in = self._data_in
         data_collections_out = self._data_out
-        # -------------------------------------------------------------------------
 
-        # -------------------------------------------------------------------------
         # method to search a workflow variable in data collections
         def find_in_collection(
                 workflow_name: str, variable_name: str, data_collections: Dict[str, Any],
@@ -194,12 +209,29 @@ class Mapper:
             # iterate over methods in declared order
             for step_id, step_obj in enumerate(workflow_structure):
 
-                # get function
-                fx_name = step_obj.get("function")
+                # check function declarations
+                if "function" not in step_obj:
+                    raise KeyError(f'Function "{fx_name}" does not define "function".')
+                if "datasets" not in step_obj:
+                    raise KeyError(f'Function "{fx_name}" does not define "datasets".')
+                if "results" not in step_obj:
+                    raise KeyError(f'Function "{fx_name}" does not define "results".')
+
+                # get function name
+                fx_name = step_obj.get("function", None)
+                # get function args
+                fx_args = {key: value for key, value in step_obj.items() if
+                           key not in {"function", "datasets", "results"}}
 
                 # get datasets and results
                 datasets_raw = step_obj.get("datasets", {}) or {}
                 results_raw = step_obj.get("results", {}) or {}
+
+                # check function datasets and results
+                if not datasets_raw:
+                    raise ValueError(f'Datasets are not defined for function "{fx_name}".')
+                if not results_raw:
+                    raise ValueError(f'Results are not defined for function "{fx_name}".')
 
                 # normalize datasets and results
                 datasets = self._normalize_variables(datasets_raw)
@@ -228,7 +260,7 @@ class Mapper:
                     "mode": mode,
                     "workflow_id": workflow_id, "workflow_name": workflow_key,
                     "tag": step_tag, "step": step_id + 1,
-                    "function": fx_name,
+                    "function": fx_name, "args": fx_args,
                     "datasets": datasets, "results": results,
                     "mapping_in": {}, "mapping_out": {},
                     "variables_in_structure": {}, "variables_out_structure": {},
@@ -241,8 +273,7 @@ class Mapper:
                 if is_first:
 
                     # iterate over datasets
-                    for var_id, (key_var_fx, key_var_workflow) in enumerate(
-                            datasets.items(), start=1):
+                    for var_id, (key_var_fx, key_var_workflow) in enumerate(datasets.items(), start=1):
 
                         # define mapping key
                         mapping_key = f"var{var_id}"
@@ -577,9 +608,9 @@ class Mapper:
 
         return variable_workflow
 
-    # ----------------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
 
-    # ----------------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------------
     # method to collect workflow by priority
     def order_workflows_by_priority(
             self,
@@ -624,31 +655,21 @@ class Mapper:
         return workflows_sorted
     # ------------------------------------------------------------------------------------------------------------------
 
+    # ------------------------------------------------------------------------------------------------------------------
     # method to create map of the variables
     @staticmethod
-    def _mapping_variables(
-            datasets: dict,
-            results: dict) -> dict:
+    def _mapping_variables(datasets: dict, results: dict) -> dict:
 
         # initialize mapping object
-        mapping_variables = {
-            'in': {'groups': {}},
-            'out': {'groups': {}},
-            'valid': True,
-        }
+        mapping_variables = {'in': {'groups': {}},'out': {'groups': {}},'valid': True,}
 
-        # ---------------------------------------------------------------------------------
         # organize INPUT variables
         for group_name, group_obj in datasets.items():
 
             # initialize group
-            group_info = {
-                'behaviour': None,
-                'mapping': {},
-            }
+            group_info = {'behaviour': None, 'mapping': {},}
 
             # case 1: one variable
-            #
             # "data": "air_temperature"
             if isinstance(group_obj, str):
 
@@ -671,16 +692,11 @@ class Mapper:
 
                 if not group_obj:
                     mapping_variables['valid'] = False
-
                 else:
-
                     group_info['mapping'] = dict(group_obj)
 
                     # collection of the same logical variable
-                    if (
-                            len(group_obj) == 1
-                            and 'collections' in group_obj
-                    ):
+                    if len(group_obj) == 1 and 'collections' in group_obj:
                         group_info['behaviour'] = 'collections'
 
                     # multiple variables packed into one fx argument
@@ -698,15 +714,11 @@ class Mapper:
             # store group
             mapping_variables['in']['groups'][group_name] = group_info
 
-        # ---------------------------------------------------------------------------------
         # organize OUTPUT variables
         for group_name, group_obj in results.items():
 
             # initialize group
-            group_info = {
-                'behaviour': None,
-                'mapping': {},
-            }
+            group_info = {'behaviour': None,'mapping': {},}
 
             # case 1: one returned object -> one workflow variable
             #
@@ -732,16 +744,12 @@ class Mapper:
 
                 if not group_obj:
                     mapping_variables['valid'] = False
-
                 else:
 
                     group_info['mapping'] = dict(group_obj)
 
                     # repeated objects representing the same variable
-                    if (
-                            len(group_obj) == 1
-                            and 'collections' in group_obj
-                    ):
+                    if len(group_obj) == 1 and 'collections' in group_obj:
                         group_info['behaviour'] = 'collections'
 
                     # one returned object containing multiple variables
@@ -759,9 +767,7 @@ class Mapper:
             # store group
             mapping_variables['out']['groups'][group_name] = group_info
 
-        # ---------------------------------------------------------------------------------
         # final checks
-
         if not mapping_variables['in']['groups']:
             mapping_variables['valid'] = False
 
@@ -775,6 +781,7 @@ class Mapper:
     # ------------------------------------------------------------------------------------------------------------------
     # method to create map of the variables
     @staticmethod
+    @deprecated(since='2026-10-07')
     def _mapping_variables_OLD(
             datasets: dict, results: dict,
             root_separator: str = '|', variable_separator: str = ':') -> dict:
@@ -942,6 +949,7 @@ class Mapper:
 
     # ------------------------------------------------------------------------------------------------------------------
     # method to get pairs based on reference fields
+    @deprecated(since='2026-10-07')
     def get_pairs_OLD(
             self,
             field_value,
@@ -988,6 +996,7 @@ class Mapper:
     # helpers
     # method to return list
     @staticmethod
+    @deprecated(since='2026-10-07')
     def _as_list_OLD(obj: Union[Any, List[Any]]) -> List[Any]:
         if obj is None:
             return []
@@ -997,12 +1006,14 @@ class Mapper:
 
     # method to get attributes or key
     @staticmethod
+    @deprecated(since='2026-10-07')
     def _getattr_or_key_OLD(partial: Any, key: str, default=None):
         if isinstance(partial, (dict, AbcMapping)):
             return partial.get(key, default)
         return getattr(partial, key, default)
 
     # method to get partial mapping
+    @deprecated(since='2026-10-07')
     def _get_partial_mapping_OLD(self, partial: Any, tag: str, side: str, index_in_tag: int):
 
         # check side
@@ -1088,7 +1099,6 @@ def extract_tag_value(data, tag):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to build check variables and processes pairs
-
 # check namespace fields
 @with_logger(var_name='logger_stream')
 def _ns_has_fields(ns):
@@ -1106,9 +1116,10 @@ def _ns_has_fields(ns):
         return None
     return ns
 
+# method to pair workflows and processes
 @with_logger(var_name='logger_stream')
-def build_pairs_and_process(process_list, dataset_namespace,
-                            key_separator='|', key_order='workflow_and_variable'):
+def build_pairs_and_process(process_list, dataset_namespace, process_id,
+                            key_separator='|', key_order='workflow_and_variable',):
 
     # check file variable as a list
     if not isinstance(dataset_namespace, list):
@@ -1118,6 +1129,7 @@ def build_pairs_and_process(process_list, dataset_namespace,
     process_selection, process_collections = [], {}
     pairs_list_str, pairs_list_tuple = [], []
     workflow_found, workflow_missed, workflow_collections, workflow_tags = [], [], {}, []
+    key_found, key_missed = [], []
     for i, step_namespace in enumerate(dataset_namespace):
 
         # check namespace fields
@@ -1129,15 +1141,6 @@ def build_pairs_and_process(process_list, dataset_namespace,
         # get variable and workflow
         step_var, step_workflow = step_namespace.variable, step_namespace.workflow
 
-        # warn if step workflow is not defined in process list
-        if step_workflow not in process_list:
-            workflow_missed.append(step_workflow)
-            logger_stream.warning(
-                f"Namespace workflow '{step_workflow}' for variable '{step_var}' not in process_list {process_list} ")
-            continue
-        else:
-            workflow_found.append(step_workflow)
-
         # get key(s) by a default order
         if key_order == 'workflow_and_variable':
             step_key_str = f"{step_workflow}{key_separator}{step_var}"
@@ -1148,6 +1151,17 @@ def build_pairs_and_process(process_list, dataset_namespace,
         else:
             logger_stream.error('key order in define pairs must be "workflow_and_variable" or "variable_and_workflow"')
             raise NotImplementedError('Case not implemented yet')
+
+        # warn if step workflow is not defined in process list
+        if step_workflow not in process_list:
+            workflow_missed.append(step_workflow)
+            key_missed.append(step_key_str)
+            logger_stream.warning(
+                f"Namespace workflow '{step_workflow}' for variable '{step_var}' not in process_list {process_list} ")
+            continue
+        else:
+            workflow_found.append(step_workflow)
+            key_found.append(step_key_str)
 
         # get process(s)
         step_process = process_list[step_workflow]
@@ -1164,13 +1178,12 @@ def build_pairs_and_process(process_list, dataset_namespace,
 
     # pre-check workflows selected in namespaces
     if len(workflow_found) == 0:
-        logger_stream.warning("No process workflow is selected in namespaces.")
+        logger_stream.warning(f'No workflow selected. Missed: {" | ".join(workflow_missed)}')
     elif len(workflow_found) == 1:
-        logger_stream.info(f"Process '{workflow_found[0]}' is selected in namespaces.")
+        logger_stream.info(f'Workflow: {workflow_found[0]} | 'f'Key: {key_found[0]} | 'f'Process ID: {process_id}')
     else:
-        logger_stream.error(f"Only one process workflow can be selected in namespaces. "
-                            f"Found {len(workflow_found)}: {', '.join(workflow_found)}")
-        raise RuntimeError("Multiple process workflows are selected in namespaces.")
+        logger_stream.error(f'Multiple workflows selected: {" | ".join(workflow_found)}')
+        raise RuntimeError(f'Only one workflow can be selected. Found: {len(workflow_found)}')
 
     # check workflows available in process_list but not used by namespaces
     workflow_unused = []

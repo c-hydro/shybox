@@ -126,14 +126,16 @@
         "tmp_dir": "{path_tmp}"
     },
     "process_list": {
-        "AIR_T": [
+        "AIR_T_WORKFLOW": [
             {"function": "exec_average_over_mask",
               "datasets": {"data": "air_temperature"},
+              "results": {"data": "air_temperature"},
               "fill_value": -9999, "no_data_value": -9999}
         ],
-        "RELATIVE_HUMIDITY": [
+        "RELATIVE_HUMIDITY_WORKFLOW": [
             {"function": "exec_average_over_mask",
               "datasets": {"data": "relative_humidity"},
+              "results": {"data": "relative_humidity"},
               "fill_value": -9999, "no_data_value": -9999}
         ]
     }

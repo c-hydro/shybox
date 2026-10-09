@@ -3,16 +3,16 @@ Class Features
 
 Name:          lib_orchestrator_utils_workflow
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260123'
-Version:       '1.0.0'
+Date:          '20261008'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from __future__ import annotations
-from collections import defaultdict
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+# common decorators
+from shybox import with_logger, deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -27,6 +27,7 @@ def normalize_deps(deps):
         return {i + 1: v for i, v in enumerate(deps)}
     else:
         logger_stream.error(f"Unsupported deps type: {type(deps)}")
+        raise RuntimeError('Object deps must be defined by dict (or list with keys defined by ints)')
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -82,6 +83,7 @@ def as_list(maybe_seq):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to remove none values from a list
+@deprecated(since='2026-10-08')
 @with_logger(var_name='logger_stream')
 def remove_none(obj: (list, dict) = None) -> (list, dict):
 
@@ -192,6 +194,7 @@ def _make_report_line(k, s):
     )
 
 # method to ensure workflows
+@deprecated(since='2026-10-08')
 @with_logger(var_name='logger_stream')
 def ensure_workflows(
     data_package_in: list,

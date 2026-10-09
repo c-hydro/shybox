@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO TIME-SERIES - HMC
 
-__date__ = '20260630'
-__version__ = '1.1.0'
+__date__ = '20261007'
+__version__ = '1.2.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -27,6 +27,7 @@ PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/converter_hmc/tmp/;
 PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/converter_hmc/log/;
 
 Version(s):
+20260630 (1.2.0) --> Update and refactor codes related to the new orchestrator methods
 20260630 (1.1.0) --> Update and fixed release for shybox package
 20260302 (1.0.0) --> Beta release for shybox package
 """
@@ -45,6 +46,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_points_toolkit.lib_proc_join import join_points_to_time_series
+from shybox.processing_points_toolkit.points_adapter import exec_join_points_to_time_series
 
 from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -55,8 +57,8 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 project_name = 'shybox'
 alg_name = 'Workflow for converting data points to time-series configuration'
 alg_type = 'Package'
-alg_version = '1.1.0'
-alg_release = '2026-06-30'
+alg_version = '1.2.0'
+alg_release = '2026-10-07'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -178,7 +180,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_hmc']['path'],
         file_name=alg_cfg_application['static_data']['registry_hmc']['file_name'],
         data_layout='points',
-        file_type='points_section_hmc', file_format='ascii', file_mode='local',
+        file_type='points_section_hmc', file_format='ascii', file_mode='local', file_workflow='GEO',
         file_args={'delimiter':','},
         file_variable='registry_hmc', file_io='input',
         variable_template={
@@ -199,7 +201,7 @@ def main(view_table: bool = False):
         data_layout='points', data_mandatory=False,
         file_deps=None,
         file_type='points_1d', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE_POINTS', file_io='input',
+        file_variable='DISCHARGE_POINTS', file_io='input', file_workflow='DISCHARGE_WORKFLOW',
         file_args={'delimiter': ','},
         variable_template={
             "dims_data": {"x": "data"},
@@ -215,12 +217,12 @@ def main(view_table: bool = False):
         path=alg_cfg_application['dynamic_data_dst']['path'],
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
         data_layout='time_series',
-        file_type='hydrograph_hmc', file_format='ascii', file_mode='local',
+        file_type='hydrograph_hmc', file_format='ascii', file_mode='local', file_workflow='DISCHARGE_WORKFLOW',
         file_variable='DISCHARGE_TS', file_io='output',
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
-            "vars_data": {"discharge": "discharge_grid"}
+            "vars_data": {"discharge": "discharge_ts"}
         },
         time_signature='end', time_reference=alg_reference_time,
         time_period=1, time_format='%Y%m%d%H%M',
@@ -234,13 +236,15 @@ def main(view_table: bool = False):
     orc_process = Orchestrator.configure(
         data_package_in={'DISCHARGE_POINTS': source_data_discharge},
         data_package_out={'DISCHARGE_TS': destination_data_discharge},
-        data_ref=registry_sections_hmc, priority=None,
+        data_ref={'ref': registry_sections_hmc},
+        priority=None,
         configuration=alg_cfg_workflow,
+        tag_orchestrator='points_to_time_series', tag_logger='OrchestratorPoints',
         logger=logging_handle
     )
     # orchestrator exec
     orc_process.run(time=pd.date_range(start=alg_cfg_time.time_start, end=alg_cfg_time.time_end, freq='h'),
-                    group='by_time')
+                    group='by:period')
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

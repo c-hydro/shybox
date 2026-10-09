@@ -14,30 +14,17 @@ import xarray as xr
 
 from typing import Union
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 from shybox.io_toolkit.lib_io_utils import create_darray
-from shybox.logging_toolkit.lib_logging_utils import with_logger
-
+from shybox.processing_points_toolkit.lib_proc_join import join_points_to_time_series
 from shybox.processing_points_toolkit.lib_proc_interpolate import interpolate_point2grid_base
+
+# common decorators
+from shybox import with_logger, deprecated, as_process
 # ----------------------------------------------------------------------------------------------------------------------
 
-@as_process(input_type='tiff',
-            input_adapter=None, args_adapter=None, output_adapter=None,
-            output_type='tiff')
-def exec_mask_grid(data_raw, ref=None, **kwargs):
-
-    data_in = data_raw
-
-    return data_in
-
-@as_process(input_type='tiff',
-            input_adapter=None, args_adapter=None, output_adapter=None,
-            output_type='tiff')
-def exec_set_null(data_raw, ref=None, **kwargs):
-    return data_raw
 
 # ----------------------------------------------------------------------------------------------------------------------
-# helper to execute average over mask
+# helper to interpolate data
 @as_process(input_type='pandas',
             input_adapter=None,
             args_adapter=None,
@@ -46,7 +33,89 @@ def exec_set_null(data_raw, ref=None, **kwargs):
             },
             output_type='xarray')
 @with_logger(var_name='logger_stream')
-def exec_interpolate_points(
+def exec_interpolate_points_hs(
+        points_hs: pd.DataFrame,
+        viirs_sca: xr.DataArray, viirs_cp: xr.DataArray, s3m_hs: xr.DataArray,
+        dem: xr.DataArray, m_bianco: xr.DataArray, m_paradiso: xr.DataArray,
+        inv_combin: xr.DataArray = None, forest: xr.DataArray = None,
+        fill_value: float = -9999.0, no_data_value: float = -9999.0,
+        min_n_updating: int = 20, min_r2: float = 0.7,
+        **kwargs):
+
+    pnt_value_avg = points_hs['HSavg'].values
+    pnt_elev = points_hs['elev'].values
+    pnt_lons = points_hs['lon'].values
+    pnt_lats = points_hs['lat'].values
+
+    if viirs_sca is not None:
+        print()
+    else:
+        print()
+
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to execute join points to time-series
+@as_process(input_type='dict',
+            input_adapter={
+                'data': [
+                    {'method': 'adapter_variables_to_group', 'kwargs': {}},
+                    {'method': 'dict_to_fx', 'kwargs': {}},
+                ]
+            },
+            args_adapter=None,
+            output_adapter=None,
+            output_type='pandas')
+@with_logger(var_name='logger_stream')
+def exec_join_points_to_time_series(data, ref, **kwargs):
+
+    # info method start
+    logger_stream.info_up('Join points to time series ... ')
+
+    # call method
+    time_series = join_points_to_time_series(data=data, ref=ref, **kwargs)
+
+    # info method end
+    logger_stream.info_down('Join points to time series ... DONE')
+
+    return time_series
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to mask grid outside the reference
+@as_process(input_type='tiff',
+            input_adapter=None, args_adapter=None, output_adapter=None,
+            output_type='tiff')
+def exec_mask_grid(data_raw, ref=None, **kwargs):
+    data_in = data_raw
+    return data_in
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to set null value over grid
+@as_process(input_type='tiff',
+            input_adapter=None, args_adapter=None, output_adapter=None,
+            output_type='tiff')
+def exec_set_null(data_raw, ref=None, **kwargs):
+    return data_raw
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to interpolate points to grid
+@as_process(input_type='pandas',
+            input_adapter=None,
+            args_adapter=None,
+            output_adapter={
+                'data': {"method": "fx_to_dict", "kwargs": {}},
+            },
+            output_type='xarray')
+@with_logger(var_name='logger_stream')
+def exec_interpolate_points_air_temperature(
         data: Union[pd.DataFrame, None] = None,
         code: Union[pd.DataFrame, None] = None,
         time: pd.Timestamp = None,

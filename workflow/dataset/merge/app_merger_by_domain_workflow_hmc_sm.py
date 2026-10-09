@@ -256,6 +256,7 @@ def main(view_table: bool = False):
             },
             time_signature='current',
             time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
+            logger=logging_handle
         )
         # ------------------------------------------------------------------------------------------------------------------
 

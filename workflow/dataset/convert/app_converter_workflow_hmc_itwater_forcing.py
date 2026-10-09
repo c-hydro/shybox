@@ -2,8 +2,8 @@
 """
 SHYBOX PACKAGE - APP PROCESSING DATASET MAIN - CONVERTER
 
-__date__ = '20251126'
-__version__ = '1.2.0'
+__date__ = '20261009'
+__version__ = '1.3.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
@@ -17,12 +17,14 @@ DOMAIN_NAME='marche';
 TIME_START='2024-01-04';
 TIME_END='2024-01-06';
 
-PATH_SRC_BY_S3M='/home/fabio/Desktop/shybox/dset/case_study_itwater/case_study_merger_hmc/data_dynamic/src/s3m/';
-PATH_SRC_BY_BIAS_CORRECTION='/home/fabio/Desktop/shybox/dset/case_study_itwater/case_study_merger_hmc/data_dynamic/src/cmcc';
-PATH_DST='/home/fabio/Desktop/shybox/dset/case_study_itwater/case_study_merger_hmc/data_dynamic/src'
-PATH_LOG=/home/fabio/Desktop/shybox/dset/case_study_itwater/case_study_merger_hmc/log/;
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_itwater/converter_hmc/geo';
+PATH_SRC_BY_S3M='/home/fabio/Desktop/shybox/dset/case_study_itwater/converter_hmc/data/';
+PATH_SRC_BY_BIAS_CORRECTION='/home/fabio/Desktop/shybox/dset/case_study_itwater/converter_s3m/data/';
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_itwater/converter_s3m/forcing'
+PATH_LOG=/home/fabio/Desktop/shybox/exec/case_study_itwater/converter_s3m/log/;
 
 Version(s):
+20261009 (1.3.0) --> Update codes to the new orchestrator structure and methods
 20251126 (1.2.0) --> Release for shybox package (hmc datasets converter base configuration)
 20250716 (1.0.0) --> Beta release for shybox package (hmc datasets converter base configuration)
 """
@@ -39,12 +41,12 @@ import pandas as pd
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_grid_toolkit.lib_proc_interpolate import interpolate_data
+from shybox.processing_grid_toolkit.grids_adapter import exec_interpolate_data_generic
 from shybox.processing_grid_toolkit.lib_proc_mask import mask_data_by_ref
 
 from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_format)
@@ -55,8 +57,8 @@ from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_f
 project_name = 'shybox'
 alg_name = 'Application for processing datasets - Converter'
 alg_type = 'Package'
-alg_version = '1.Q.0'
-alg_release = '2025-11-18'
+alg_version = '1.3.0'
+alg_release = '2026-10-09'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -136,33 +138,69 @@ def main():
         "WORKFLOW": {
             "options": {
                 "intermediate_output": "Tmp",
-                "tmp_dir": alg_cfg_application['tmp']['path']
+                "tmp_dir": alg_cfg_application['tmp']['path'],
+                "dump_mode": "many_data_tiles_to_one_file"
             },
             "process_list": {
-                "rain": [
-                    {"function": "interpolate_data", "method": 'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                "RAIN_WORKFLOW": [
+                    {"function": "exec_interpolate_data_generic",
+                     "datasets": {"data": "rain"},
+                     "results": {"data": "rain"},
+                     "method": 'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan
+                     },
+                    {"function": "mask_data_by_ref",
+                     "datasets": {"data": "rain"},
+                     "results": {"data": "Rain"},
+                     "ref_value": -9999, "mask_no_data": np.nan
+                     }
                 ],
-                "air_t": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 25000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                "AIR_T_WORKFLOW": [
+                    {"function": "exec_interpolate_data_generic",
+                     "datasets": {"data": "air_temperature"},
+                     "results": {"data": "air_temperature"},
+                     "method":'nn', "max_distance": 25000, "neighbours": 7, "fill_value": np.nan
+                     },
+                    {"function": "mask_data_by_ref",
+                     "datasets": {"data": "air_temperature"},
+                     "results": {"data": "AirTemperature"},
+                     "ref_value": -9999, "mask_no_data": np.nan
+                     }
                 ],
-                "rh": [
-                    {"function": "interpolate_data", "method":'nn', "max_distance": 22000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                "RH_WORKFLOW": [
+                    {"function": "exec_interpolate_data_generic",
+                     "datasets": {"data": "relative_humidity"},
+                     "results": {"data": "relative_humidity"},
+                     "method":'nn', "max_distance": 22000, "neighbours": 7,"fill_value": np.nan
+                     },
+                    {"function": "mask_data_by_ref",
+                     "datasets": {"data": "relative_humidity"},
+                     "results": {"data": "RelHumidity"},
+                     "ref_value": -9999, "mask_no_data": np.nan
+                     }
                 ],
-                "inc_rad": [
-                    {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                "INC_RAD_WORKFLOW": [
+                    {"function": "exec_interpolate_data_generic",
+                     "datasets": {"data": "incoming_radiation"},
+                     "results": {"data": "incoming_radiation"},
+                     "method": 'nn', "max_distance": 22000, "neighbours": 7, "fill_value": np.nan
+                     },
+                    {"function": "mask_data_by_ref",
+                     "datasets": {"data": "incoming_radiation"},
+                     "results": {"data": "IncRadiation"},
+                     "ref_value": -9999, "mask_no_data": np.nan
+                     }
                 ],
-                "wind": [
-                    {"function": "interpolate_data", "method": 'nn', "max_distance": 22000, "neighbours": 7,
-                     "fill_value": np.nan},
-                    {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": np.nan}
+                "WIND_SPEED_WORKFLOW": [
+                    {"function": "exec_interpolate_data_generic",
+                     "datasets": {"data": "wind"},
+                     "results": {"data": "wind"},
+                     "method": 'nn', "max_distance": 22000, "neighbours": 7, "fill_value": np.nan
+                     },
+                    {"function": "mask_data_by_ref",
+                     "datasets": {"data": "wind"},
+                     "results": {"data": "Wind"},
+                     "ref_value": -9999, "mask_no_data": np.nan
+                     }
                 ]
             }
         }
@@ -186,7 +224,8 @@ def main():
     geo_data = DataLocal(
         path=alg_cfg_application['geo']['terrain']['path'],
         file_name=alg_cfg_application['geo']['terrain']['file_name'],
-        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_io='input',
+        file_type='grid_2d', file_format='ascii', file_mode='local',
+        file_variable='terrain', file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -229,12 +268,12 @@ def main():
 
         # ------------------------------------------------------------------------------------------------------------------
         ## DATASETS MANAGEMENT
-        # Rain handler
-        rain_handler = DataLocal(
+        # Rain src handler
+        rain_handler_src = DataLocal(
             path=step_cfg_application['data_source']['rain']['path'],
             file_name=step_cfg_application['data_source']['rain']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='rain', file_io='input',
+            file_type='grid_itwater', file_format='netcdf', file_mode='local',
+            file_variable='RAIN', file_io='input', file_workflow='RAIN_WORKFLOW',
             variable_template={
                 "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
                 "vars_data": {"RAIN_EFF": "rain"}
@@ -244,12 +283,12 @@ def main():
             time_freq='h', time_direction='forward',
         )
 
-        # Air Temperature handler
-        airt_handler = DataLocal(
+        # Air Temperature src handler
+        airt_handler_src = DataLocal(
             path=step_cfg_application['data_source']['air_t']['path'],
             file_name=step_cfg_application['data_source']['air_t']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='air_t', file_io='input',
+            file_type='grid_itwater', file_format='netcdf', file_mode='local',
+            file_variable='AIR_T', file_io='input', file_workflow='AIR_T_WORKFLOW',
             variable_template={
                 "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
                 "vars_data": {"Tair": "air_temperature"}
@@ -258,12 +297,12 @@ def main():
             time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
         )
 
-        # Relative Humidity handler
-        rh_handler = DataLocal(
+        # Relative Humidity src handler
+        rh_handler_src = DataLocal(
             path=step_cfg_application['data_source']['rh']['path'],
             file_name=step_cfg_application['data_source']['rh']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='rh', file_io='input',
+            file_type='grid_itwater', file_format='netcdf', file_mode='local',
+            file_variable='RH', file_io='input', file_workflow='RH_WORKFLOW',
             variable_template={
                 "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
                 "vars_data": {"RH": "relative_humidity"}
@@ -272,12 +311,12 @@ def main():
             time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
         )
 
-        # Relative Humidity handler
-        inc_rad_handler = DataLocal(
+        # Relative Humidity src handler
+        inc_rad_handler_src = DataLocal(
             path=step_cfg_application['data_source']['inc_rad']['path'],
             file_name=step_cfg_application['data_source']['inc_rad']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='inc_rad', file_io='input',
+            file_type='grid_itwater', file_format='netcdf', file_mode='local',
+            file_variable='INC_RAD', file_io='input', file_workflow='INC_RAD_WORKFLOW',
             variable_template={
                 "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
                 "vars_data": {"Rad": "incoming_radiation"}
@@ -285,12 +324,12 @@ def main():
             time_signature='period',
             time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
         )
-        # Wind Speed handler
-        wind_speed_handler = DataLocal(
+        # Wind Speed src handler
+        wind_speed_handler_src = DataLocal(
             path=step_cfg_application['data_source']['wind']['path'],
             file_name=step_cfg_application['data_source']['wind']['file_name'],
-            file_type='grid_3d', file_format='netcdf', file_mode='local',
-            file_variable='wind', file_io='input',
+            file_type='grid_itwater', file_format='netcdf', file_mode='local',
+            file_variable='WIND_SPEED', file_io='input', file_workflow='WIND_SPEED_WORKFLOW',
             variable_template={
                 "dims_geo": {"lon": "longitude", "lat": "latitude", "nt": "time"},
                 "vars_data": {"Wind": "wind"}
@@ -299,33 +338,101 @@ def main():
             time_reference=time_data_reference, time_period=time_data_length, time_freq='h', time_direction='forward',
         )
 
-        # destination data
-        output_handler = DataLocal(
+        # Rain dst handler
+        rain_handler_dst = DataLocal(
             path=alg_cfg_application['data_destination']['path'],
             file_name=alg_cfg_application['data_destination']['file_name'],
             file_format='netcdf', file_type='grid_hmc', file_mode='local',
-            file_variable=['rain', 'air_t', 'rh', 'inc_rad', 'wind'], file_io='output',
+            file_variable='RAIN', file_io='output', file_workflow='RAIN_WORKFLOW',
             variable_template={
                 "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
                 "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
-                "vars_data": {
-                    "rain": "Rain",
-                    "air_temperature": "AirTemperature",
-                    "relative_humidity": "RelHumidity",
-                    "incoming_radiation": "IncRadiation",
-                    "wind": "Wind"}
+                "vars_data": {"rain": "Rain",}
+            },
+            time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
+            logger=logging_handle, message=False
+        )
+
+        # Air Temperature dst handler
+        airt_handler_dst = DataLocal(
+            path=alg_cfg_application['data_destination']['path'],
+            file_name=alg_cfg_application['data_destination']['file_name'],
+            file_format='netcdf', file_type='grid_hmc', file_mode='local',
+            file_variable='AIR_T', file_io='output', file_workflow='AIR_T_WORKFLOW',
+            variable_template={
+                "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
+                "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+                "vars_data": {"air_temperature": "AirTemperature"}
+            },
+            time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
+            logger=logging_handle, message=False
+        )
+
+        # Relative Humidity dst handler
+        rh_handler_dst = DataLocal(
+            path=alg_cfg_application['data_destination']['path'],
+            file_name=alg_cfg_application['data_destination']['file_name'],
+            file_format='netcdf', file_type='grid_hmc', file_mode='local',
+            file_variable='RH', file_io='output', file_workflow='RH_WORKFLOW',
+            variable_template={
+                "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
+                "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+                "vars_data": {"relative_humidity": "RelHumidity",}
+            },
+            time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
+            logger=logging_handle, message=False
+        )
+
+        # Incoming Radiation dst handler
+        inc_rad_handler_dst = DataLocal(
+            path=alg_cfg_application['data_destination']['path'],
+            file_name=alg_cfg_application['data_destination']['file_name'],
+            file_format='netcdf', file_type='grid_hmc', file_mode='local',
+            file_variable='INC_RAD', file_io='output', file_workflow='INC_RAD_WORKFLOW',
+            variable_template={
+                "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
+                "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+                "vars_data": {"incoming_radiation": "IncRadiation",}
+            },
+            time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
+            logger=logging_handle, message=False
+        )
+
+        # Wind Speed dst handler
+        wind_speed_handler_dst = DataLocal(
+            path=alg_cfg_application['data_destination']['path'],
+            file_name=alg_cfg_application['data_destination']['file_name'],
+            file_format='netcdf', file_type='grid_hmc', file_mode='local',
+            file_variable='WIND_SPEED', file_io='output', file_workflow='WIND_SPEED_WORKFLOW',
+            variable_template={
+                "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
+                "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+                "vars_data": {"wind": "Wind"}
             },
             time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
             logger=logging_handle, message=False
         )
 
         # orchestrator settings
-        orc_process = Orchestrator.multi_variable(
-            data_package_in=[rain_handler, airt_handler, rh_handler, inc_rad_handler, wind_speed_handler],
-            data_package_out=output_handler,
+        orc_process = Orchestrator.configure(
+            data_package_in={
+                'RAIN_DATA_SRC': rain_handler_src,
+                'AIR_T_DATA_SRC': airt_handler_src,
+                'RH_DATA_SRC': rh_handler_src,
+                'INC_RAD_SRC': inc_rad_handler_src,
+                'WIND_SPEED_DATA_SRC': wind_speed_handler_src
+            },
+            data_package_out={
+                'RAIN_DATA_DST': rain_handler_dst,
+                'AIR_T_DATA_DST': airt_handler_dst,
+                'RH_DATA_DST': rh_handler_dst,
+                'INC_RAD_DST': inc_rad_handler_dst,
+                'WIND_SPEED_DATA_DST': wind_speed_handler_dst}
+            ,
             data_ref=geo_data,
             priority=['air_temperature'],
             configuration=configuration['WORKFLOW'],
+            tag_orchestrator='multi_data_to_hmc_forcing', tag_logger='OrchestratorGrid',
             logger=logging_handle
         )
         # orchestrator exec

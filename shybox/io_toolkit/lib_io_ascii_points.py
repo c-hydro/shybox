@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_io_ascii_points
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260902'
-Version:       '1.1.0'
+Date:          '20261009'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -19,7 +19,10 @@ import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Union, Iterable, Hashable
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+from shybox.generic_toolkit.lib_utils_file import get_time_from_filename
+
+# common decorators
+from shybox import with_logger, deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -191,8 +194,6 @@ def read_points_registry(
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 # method to read points 2d
 @with_logger(var_name='logger_stream')
@@ -223,17 +224,32 @@ def read_points_2d(
     # get time column
     time_key = time_name.strip().lower()
     if time_key not in column_map:
-        logger_stream.error(f"Time column '{time_name}' not found. Available columns: {list(df.columns)}")
-        raise ValueError(f"Check the source data {file_path}")
 
-    # get actual time column name
-    time_column = column_map[time_key]
-    # parse time
-    time_raw = df[time_column].copy()
-    if time_format is not None:
+        # try to get time from file_path
+        time_raw = get_time_from_filename(file_path)
+        time_column = None
+        # check time raw get from file
+        if time_raw is None:
+            logger_stream.error(f"Time column '{time_name}' not found. Available columns: {list(df.columns)}")
+            raise ValueError(f"Check the source data {file_path}")
+        else:
+            logger_stream.warning(
+                f"Time column '{time_name}' not found. "
+                f"Available columns: {list(df.columns)}. Time {time_raw} is get from {file_path}")
+    else:
+        # get actual time column name
+        time_column = column_map[time_key]
+        # parse time
+        time_raw = df[time_column].copy()
+
+    # convert time column
+    if time_column is None and isinstance(time_raw, pd.Timestamp):
+        time_column = time_key
+        df[time_column] = time_raw
+    elif time_format is not None:
         df[time_column] = pd.to_datetime(time_raw, format=time_format, errors='coerce')
     else:
-        df[time_column] = pd.to_datetime(time_raw,errors='coerce')
+        df[time_column] = pd.to_datetime( time_raw, errors='coerce')
 
     # check invalid time values
     time_invalid = df[time_column].isna()

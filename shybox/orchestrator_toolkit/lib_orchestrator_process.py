@@ -29,12 +29,12 @@ from shybox.dataset_toolkit.dataset_handler_memory import DataMemory
 from shybox.dataset_toolkit.dataset_handler_on_demand import DataOnDemand
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
-
 from shybox.orchestrator_toolkit.lib_orchestrator_data import ProcessorData
 from shybox.orchestrator_toolkit.lib_orchestrator_data import ProcessorCollection
-# ----------------------------------------------------------------------------------------------------------------------
 
+# common decorators
+from shybox import with_logger, deprecated
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # class to handle the process
@@ -51,7 +51,7 @@ class ProcessorContainer:
         # set attributes needed by the environment
         self.ref = None
         self.workflow_name, self.workflow_id = None, None
-        self.tag, self.mode, self.step = None, None, None
+        self.args, self.tag, self.mode, self.step = None, None, None, None
         self.valid = None
         self.mapping_in, self.mapping_out = None, None
         self.variables_in_structure, self.variables_out_structure = None, None
@@ -97,9 +97,9 @@ class ProcessorContainer:
                             value.logger = self.logger.compare(value.logger)
                             # get static data
                             if isinstance(value, DataLocal):
-                                args_static[arg_name][key] = value.get_data(mapping=variable_template, name=f"{arg_name}_{key}")
+                                args_static[arg_name][key] = value.get_data(mapping=variable_template, name=f"{arg_name}:{key}")
                             elif isinstance(value, DataOnDemand):
-                                args_static[arg_name][key] = value.create_data(mapping=variable_template, name=f"{arg_name}_{key}")
+                                args_static[arg_name][key] = value.create_data(mapping=variable_template, name=f"{arg_name}:{key}")
                             else:
                                 self.logger.error('Argument data object is not DataLocal or DataOnDemand instance')
                                 raise TypeError('Argument data object is not DataLocal or DataOnDemand instance')
@@ -235,16 +235,13 @@ class ProcessorContainer:
             if len(time) == 1: time = time[0]
 
         # get information from process
-        fx_id, fx_name, fx_tag, fx_mode = self.step, self.fx_name, self.tag, self.mode
+        fx_id, fx_name, fx_args, fx_tag, fx_mode = self.step, self.fx_name, self.args, self.tag, self.mode
         fx_workflow_name, fx_workflow_id = self.workflow_name, self.workflow_id
         fx_mapping_in, fx_mapping_out = self.mapping_in, self.mapping_out
         fx_variables_in_structure = self.variables_in_structure
         fx_variables_out_structure = self.variables_out_structure
         fx_variables_in_right, fx_variables_in_left = self.variables_in_right, self.variables_in_left
         fx_variables_out_right, fx_variables_out_left = self.variables_out_right, self.variables_out_left
-
-        # get output dump mode
-        fx_dump_mode = self.out_opts.get('dump_mode', 'one_var_to_one_file')
 
         # memory is active only for start process
         if fx_id > 1:
@@ -382,10 +379,22 @@ class ProcessorContainer:
                             self.logger.info(f"Check object for variable '{dset_var}' ... SKIP")
 
                     # iterate over dataset times
-                    for time_step in group_time:
+                    for time_id, time_step in enumerate(group_time):
 
                         # info start
                         self.logger.info(f"Check object '{time_step}' and variable '{dset_var}' ... ")
+
+                        # compose key
+                        if collection_flag:
+                            if dset_role == "data":
+                                dset_key = f"{dset_tag}::data|{data_id}@time|{time_id}"
+                            elif dset_role == "deps":
+                                dset_key = f"{dset_tag}::data|{deps_id}@time|{time_id}"
+                            else:
+                                self.logger.error('dset_role must be defined as "data" or "deps"')
+                                raise RuntimeError(f"Unknown dset_role '{dset_role}'")
+                        else:
+                            dset_key = f"{dset_tag}@time|{time_id}"
 
                         # read data (check if data is readable or not)
                         if is_available:
@@ -398,37 +407,32 @@ class ProcessorContainer:
                             # get data
                             fx_tmp = dset_obj.get_data(time=time_step, name=dset_tag, as_is=as_is ,**kwargs)
 
-                            if dset_role == 'data':
-                                if collection_flag:
-                                    fx_data[f'{dset_tag}::{data_id}'] = fx_tmp
-                                else:
-                                    fx_data[f'{dset_tag}'] = fx_tmp
-                            elif dset_role == 'deps':
-                                if collection_flag:
-                                    fx_deps[f'{dset_tag}::{deps_id}'] = fx_tmp
-                                else:
-                                    fx_deps[f'{dset_tag}'] = fx_tmp
+                            # store data (readable)
+                            if dset_role == "data":
+                                fx_data[dset_key] = fx_tmp
+                            elif dset_role == "deps":
+                                fx_deps[dset_key] = fx_tmp
                             else:
                                 raise RuntimeError(f"Unknown dset_type '{dset_role}'")
 
                             # debug data in
                             if self.debug_state_in: plot_data(fx_tmp)
+
+                            # info end (done)
+                            self.logger.info(f"Check object '{time_step}' and variable '{dset_var}' ... DONE")
+
                         else:
 
-                            self.logger.info(f"Object '{time_step}' is not readable ... SKIP")
-
-                            if dset_role == 'data':
-                                if collection_flag:
-                                    fx_data[f'{dset_tag}::{data_id}'] = None
-                                else:
-                                    fx_data[f'{dset_tag}'] = None
-                            elif dset_role == 'deps':
-                                if collection_flag:
-                                    fx_deps[f'{dset_tag}::{deps_id}'] = None
-                                else:
-                                    fx_deps[f'{dset_tag}'] = None
+                            # store data (not readable)
+                            if dset_role == "data":
+                                fx_data[dset_key] = None
+                            elif dset_role == "deps":
+                                fx_deps[dset_key] = None
                             else:
                                 raise RuntimeError(f"Unknown dset_type '{dset_role}'")
+
+                            # info end (not readable)
+                            self.logger.info(f"Check object '{time_step}' and variable '{dset_var}' ... NOT READABLE")
 
                         # save roles
                         fx_roles.append(dset_role)
@@ -449,7 +453,7 @@ class ProcessorContainer:
             self.logger.info_down(f"Run :: {fx_tag} - {message} ... SKIPPED. DATA NOT AVAILABLE")
             return None, None
 
-        # manage memory data
+        # manage memory data [DELETE ?]
         fx_memory = None
         if fx_id == 0:
             if isinstance(data_raw, list):
@@ -469,6 +473,9 @@ class ProcessorContainer:
             'variable_out': fx_variables_out_structure.get('groups', None),
         }
 
+        # info organize refs start
+        self.logger.info(f"Organize reference object(s) ... ")
+
         # manage reference argument and add it to fx_args
         ref_obj = getattr(self, 'ref', None)
         # check reference object
@@ -479,7 +486,9 @@ class ProcessorContainer:
             for key, value in ref_obj.items():
                 if key not in fx_deps_args:
                     if isinstance(value, DataLocal):
-                        value = value.get_data()
+                        has_placeholder, _ = self._get_placeholders(value.loc_pattern)
+                        if not has_placeholder:
+                            value = value.get_data()
                     fx_deps_args[key] = value
                 else:
                     self.logger.warning(
@@ -491,30 +500,59 @@ class ProcessorContainer:
         else:
             # add single reference object (also None if not defined)
             if isinstance(ref_obj, DataLocal):
-                ref_obj = ref_obj.get_data()
+
+                has_placeholder, _ = self._get_placeholders(ref_obj.loc_pattern)
+                if not has_placeholder:
+                    ref_obj = ref_obj.get_data()
+
             fx_deps_args['ref'] = ref_obj
 
+        # info organize refs end
+        self.logger.info(f"Organize reference object(s) ... DONE")
+
+        # info organize deps start
+        self.logger.info(f"Organize deps object(s) ... ")
         # add deps
         for deps_key, deps_data in fx_deps.items():
 
             # split dependency key
-            deps_role, deps_workflow, deps_variable = deps_key.split('|')
+            deps_base, deps_time = deps_key.split('@')
+            deps_role, deps_workflow, deps_variable = deps_base.split('|')
+
             # check multiple variable suffix, e.g. variable::1
             if '::' in deps_variable:
 
+                # split base and indexes
+                deps_base, deps_other = deps_variable.rsplit("::", 1)
+                # split data and time indexes
+                deps_data_idx, deps_time_idx = deps_other.split("--", 1)
+
+                # get numeric indexes
+                deps_data_idx = deps_data_idx.rsplit("|", 1)[-1]
+                deps_time_idx = deps_time_idx.rsplit("|", 1)[-1]
+
                 # get variable name and counter (if exists)
                 deps_variable_base, deps_counter = deps_variable.rsplit('::', 1)
-                if deps_counter.isdigit():
+                #if deps_data_idx.isdigit():
+
+                if deps_data_idx.isdigit() and deps_time_idx.isdigit():
+                    deps_variable_nested = f"collections::data|{deps_data_idx}--time|{deps_time_idx}"
                     # get variable nested
-                    deps_variable_nested = f'collections::{deps_counter}'
+                    #deps_variable_nested = f'collections::{deps_data_idx}'
                     # initialize root container
-                    fx_deps_args.setdefault(deps_variable_base, {})
+                    fx_deps_args.setdefault(deps_base, {})
                     # store dependency using split keys
-                    fx_deps_args[deps_variable_base][deps_variable_nested] = deps_data
+                    fx_deps_args[deps_base][deps_variable_nested] = deps_data
                 else:
                     fx_deps_args[deps_variable] = deps_data
             else:
                 fx_deps_args[deps_variable] = deps_data
+
+        # info organize deps end
+        self.logger.info(f"Organize deps object(s) ... DONE")
+
+        # info organize data start
+        self.logger.info(f"Organize data object(s) ... ")
 
         # remap fx data keys using mapping information
         fx_variable_workflow, fx_data_remapped = {}, {}
@@ -533,16 +571,34 @@ class ProcessorContainer:
                     mapping_collection = fx_data_key
 
                 if mapping_collection in fx_data_key:
-                    # check for indexed key, e.g. "...::1", "...::2", ...
+
                     if '::' in fx_data_key:
 
-                        fx_data_base, fx_data_idx = fx_data_key.rsplit('::', 1)
+                        # split base and indexes
+                        fx_data_base, fx_data_other = fx_data_key.rsplit("::", 1)
+                        # split data and time indexes
+                        fx_data_idx, fx_time_idx = fx_data_other.split("--", 1)
+
+                        # get numeric indexes
+                        fx_data_idx = fx_data_idx.rsplit("|", 1)[-1]
+                        fx_time_idx = fx_time_idx.rsplit("|", 1)[-1]
+
+                        if fx_data_idx.isdigit() and fx_time_idx.isdigit():
+                            mapping_var_fx_idx = f"{mapping_var_fx}::data|{fx_data_idx}--time|{fx_time_idx}"
+
+                            fx_data_remapped[mapping_var_fx_idx] = fx_data_obj
+                            fx_variable_workflow[mapping_var_fx_idx] = mapping_var_workflow
+                            # do not break: other ::N entries may exist
+                            continue
+
+                        """
                         if fx_data_idx.isdigit():
                             mapping_var_fx_idx = f'{mapping_var_fx}::{fx_data_idx}'
                             fx_data_remapped[mapping_var_fx_idx] = fx_data_obj
                             fx_variable_workflow[mapping_var_fx_idx] = mapping_var_workflow
                             # do not break: other ::N entries may exist
                             continue
+                        """
 
                     # standard case without ::N
                     fx_data_remapped[mapping_var_fx] = fx_data_obj
@@ -569,7 +625,14 @@ class ProcessorContainer:
                         # remove from data and keep dependency in fx_deps_args
                         fx_data.pop(fx_key)
 
-        # run function to process data
+        # info organize data end
+        self.logger.info(f"Organize data object(s) ... DONE")
+
+        # info process data start
+        self.logger.info(f"Process data ...")
+        # add fx args
+        fx_deps_args.update(fx_args)
+        # execute fx
         fx_result = self.fx_obj(data=fx_data, **fx_deps_args)
 
         # manage output object
@@ -642,6 +705,9 @@ class ProcessorContainer:
             'variable_names': variable_collections_result,
             'workflow': fx_variable_in, "variable_out": fx_variable_out,
         }
+
+        # info process data end
+        self.logger.info(f"Process data ... DONE")
 
         # check output object
         if not isinstance(self.out_obj, dict):
@@ -852,6 +918,8 @@ class ProcessorContainer:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
+# method to get data from memory (USE OR NOT?)
+@deprecated(since='2026-10-08')
 def _get_memory_data(obj):
     if hasattr(obj, "memory_data"):
         return obj.memory_data

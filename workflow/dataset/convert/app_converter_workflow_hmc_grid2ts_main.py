@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER GRID TO TIME-SERIES - HMC
 
-__date__ = '20260825'
-__version__ = '1.0.0'
+__date__ = '20261008'
+__version__ = '1.1.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -27,6 +27,7 @@ PROJ_DATA=/home/fabio/Documents/Work_Area/Code_Development/Workspace/shybox/cond
 PROJ_LIB=
 
 Version(s):
+20261008 (1.0.0) --> Update codes to new orchestrator methods
 20260825 (1.0.0) --> Beta release for shybox package
 """
 
@@ -46,7 +47,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 from shybox.processing_ts_toolkit.lib_proc_compute import compute_average_over_mask
 from shybox.processing_ts_toolkit.ts_adapter import exec_average_over_mask
 
-from shybox.orchestrator_toolkit.orchestrator_handler_timeseries import OrchestratorTimeSeries as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -56,7 +57,7 @@ project_name = 'shybox'
 alg_name = 'Workflow for converting data grid to time-series configuration'
 alg_type = 'Package'
 alg_version = '1.1.0'
-alg_release = '2026-06-30'
+alg_release = '2026-10-08'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -178,11 +179,11 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_sections']['path'],
         file_name=alg_cfg_application['static_data']['registry_sections']['file_name'],
         data_layout='points',
-        file_type='points_section_db', file_format='ascii', file_mode='local',
+        file_type='points_section_db', file_format='ascii', file_mode='local', file_workflow='GEO',
         file_args={
             'lut_map': alg_cfg_application['static_data']['registry_sections']['lut_map'],
             'lut_type': alg_cfg_application['static_data']['registry_sections']['lut_type'],
-            'sep':',', 'col_datafrom': 'SEC_TAG'},
+            'sep':',', 'col_reference': 'SEC_TAG'},
         file_variable='registry_db', file_io='input',
         variable_template={
             "dims_point": {"x": "fields", "y": "sections"},
@@ -196,7 +197,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_hmc']['path'],
         file_name=alg_cfg_application['static_data']['registry_hmc']['file_name'],
         data_layout='points',
-        file_type='points_section_hmc', file_format='ascii', file_mode='local',
+        file_type='points_section_hmc', file_format='ascii', file_mode='local', file_workflow='GEO',
         file_args={'delimiter':','},
         file_variable='registry_hmc', file_io='input',
         variable_template={
@@ -211,7 +212,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['mask']['path'],
         file_name=alg_cfg_application['static_data']['mask']['file_name'],
         data_layout='grid',
-        file_type='grid', file_format='tiff', file_mode='local',
+        file_type='grid', file_format='tiff', file_mode='local', file_workflow='GEO',
         file_args={'sections': registry_sections_hmc},
         file_variable='MASK', file_io='input',
         variable_template={
@@ -225,19 +226,33 @@ def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## DYNAMIC DATASETS MANAGEMENT
-    # source grid data handler
-    source_data = DataLocal(
+    # source air temperature grid data handler
+    source_data_air_t = DataLocal(
         path=alg_cfg_application['dynamic_data']['source']['path'],
         file_name=alg_cfg_application['dynamic_data']['source']['file_name'],
         file_type='forcing_hmc', file_format='netcdf', file_mode='local',
-        file_variable=['AIR_T', 'RELATIVE_HUMIDITY'], file_io='input',
-        file_deps=None, file_args={},
+        file_variable='AIR_T_GRID', file_io='input',
+        file_deps=None, file_args={}, file_workflow='AIR_T_WORKFLOW',
         variable_template={
             "dims_geo": {"west_east": "longitude", "south_north": "latitude", "time": "time"},
-            "vars_data": {
-                "AirTemperature": "air_temperature",
-                "RelHumidity": "relative_humidity",
-            }
+            "vars_data": {"AirTemperature": "air_temperature"}
+        },
+        time_signature='current',
+        time_reference=alg_reference_time,
+        time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
+        logger=logging_handle
+    )
+
+    # source relative humidity grid data handler
+    source_data_rh = DataLocal(
+        path=alg_cfg_application['dynamic_data']['source']['path'],
+        file_name=alg_cfg_application['dynamic_data']['source']['file_name'],
+        file_type='forcing_hmc', file_format='netcdf', file_mode='local',
+        file_variable='RELATIVE_HUMIDITY_GRID', file_io='input',
+        file_deps=None, file_args={}, file_workflow='RELATIVE_HUMIDITY_WORKFLOW',
+        variable_template={
+            "dims_geo": {"west_east": "longitude", "south_north": "latitude", "time": "time"},
+            "vars_data": {"RelHumidity": "relative_humidity",}
         },
         time_signature='current',
         time_reference=alg_reference_time,
@@ -246,20 +261,37 @@ def main(view_table: bool = False):
     )
 
     # destination time-series data handler
-    destination_data = DataLocal(
+    destination_data_air_t = DataLocal(
         path=alg_cfg_application['dynamic_data']['destination']['path'],
         file_name=alg_cfg_application['dynamic_data']['destination']['file_name'],
         data_layout='time_series',
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable=['AIR_T', 'RELATIVE_HUMIDITY'], file_io='output',
-        file_deps=None, file_args={}, file_placeholder={'var_name': ['default', 'default']},
+        file_variable='AIR_T_TS', file_io='output', file_workflow='AIR_T_WORKFLOW',
+        file_deps=None, file_args={},
+        file_placeholder={'var_name': 'default'},
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
-            "vars_data": {
-                "air_temperature": "air_t",
-                "relative_humidity": "rel_hum"
-            }
+            "vars_data": {"air_temperature": "air_t"}
+        },
+        time_signature='end', time_reference=alg_reference_time,
+        time_period=1, time_format='%Y%m%d%H%M',
+        logger=logging_handle, message=False
+    )
+
+    # destination time-series data handler
+    destination_data_rh = DataLocal(
+        path=alg_cfg_application['dynamic_data']['destination']['path'],
+        file_name=alg_cfg_application['dynamic_data']['destination']['file_name'],
+        data_layout='time_series',
+        file_type='time_series_hmc', file_format='ascii', file_mode='local',
+        file_variable='RELATIVE_HUMIDITY_TS', file_io='output', file_workflow='RELATIVE_HUMIDITY_WORKFLOW',
+        file_deps=None, file_args={},
+        file_placeholder={'var_name': 'default'},
+        variable_template={
+            "dims_data": {"time": "time", "sections": "n"},
+            "coord_data": {"time": "time", "sections": "n"},
+            "vars_data": {"relative_humidity": "rel_hum"}
         },
         time_signature='end', time_reference=alg_reference_time,
         time_period=1, time_format='%Y%m%d%H%M',
@@ -270,19 +302,26 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## ORCHESTRATOR MANAGEMENT
     # orchestrator settings
-    orc_process = Orchestrator.time_series(
-        data_package_in=source_data, data_package_out=destination_data,
+    orc_process = Orchestrator.configure(
+        data_package_in={
+            'AIR_T_GRID': source_data_air_t,
+            'RELATIVE_HUMIDITY_GRID': source_data_rh,
+        },
+        data_package_out={
+            'AIR_T_TS': destination_data_air_t,
+            'RELATIVE_HUMIDITY_TS': destination_data_rh,
+        },
         data_ref={
             'sections_hmc': registry_sections_hmc,
             'sections_db': registry_sections_data,
             'mask': mask_sections_hmc},
-        priority=None,
-        configuration=alg_cfg_workflow,
+        priority=None, configuration=alg_cfg_workflow,
+        tag_orchestrator='grid_to_time_series', tag_logger='OrchestratorGrid',
         logger=logging_handle
     )
     # orchestrator exec
     orc_process.run(time=pd.date_range(start=alg_cfg_time.time_start, end=alg_cfg_time.time_end, freq='h'),
-                    group='by_time')
+                    group='by:period')
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

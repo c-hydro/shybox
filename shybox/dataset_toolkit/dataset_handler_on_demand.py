@@ -72,7 +72,8 @@ class DataOnDemand(Dataset):
 
     def __init__(self,
                  info: dict = None,
-                 logger: Optional[LoggingManager] = None, file_io: str = None,
+                 file_io: str = None, file_variable: str = None, file_workflow: str = None,
+                 logger: Optional[LoggingManager] = None,
                  message: bool = True,
                  **kwargs):
 
@@ -86,19 +87,45 @@ class DataOnDemand(Dataset):
         if 'file_deps' in kwargs:
             self.file_deps = kwargs.pop('file_deps')
         else:
-            self.file_deps = []
+            self.file_deps = {}
+
         # check data layout
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
         else:
             self.data_layout = 'geo'
 
-        self._file_io = None  # internal storage
+        # check data mandatory
+        if 'data_mandatory' in kwargs:
+            self.data_mandatory = kwargs.pop('data_mandatory')
+        else:
+            self.data_mandatory = True
+
+        # check data_id (to link data to ancillary info if needed)
+        if 'data_id' in kwargs:
+            self.data_id = kwargs.pop('data_id')
+        else:
+            self.data_id = -1
+        # check data_role (to define if Data is data, deps, auxiliary ... )
+        if 'data_role' in kwargs:
+            self.data_role = kwargs.pop('data_role')
+        else:
+            self.data_role = 'data'
+
+        # define file io
+        self._file_io = 'undefined'  # internal storage
         if file_io is not None:
             self.file_io = file_io  # triggers the setter
 
-        # handle file_template normalization
-        file_variable = kwargs.get('file_variable', 'variable')
+        # check file variable not NoneType obj
+        if file_variable is None:
+            self.logger.error("The file_variable is defined by NoneType.")
+            raise RuntimeError("The file_variable must be defined by string.")
+        # check file variable type
+        if not isinstance(file_variable, str):
+            self.logger.error(f"The file_variable must be a string. Found type: {type(file_variable).__name__}.")
+            raise RuntimeError("The file_variable must be defined by string.")
+
         n_vars = kwargs.pop('n_vars', 1) or 1
 
         # variable template normalization
@@ -108,6 +135,13 @@ class DataOnDemand(Dataset):
         elif not isinstance(variable_template, dict):
             self.logger.error("Variable template must be a dict if provided.")
             raise ValueError("Variable template must be a dict if provided.")
+
+        # variable role normalization
+        if isinstance(self.data_role, str):
+            variable_role = {file_variable: self.data_role}
+        else:
+            self.logger.error("Attribute data_role must be a str")
+            raise RuntimeError("Check your settings in the DataObject definition")
 
         # define dims and vars - layout handling (backward compatible)
         layout_raw = getattr(self, "data_layout", "geo") or "geo"
@@ -119,6 +153,11 @@ class DataOnDemand(Dataset):
         layout_cfg = self._layout_templates[layout_norm]
         dims_key_default = layout_cfg["dims_key"]
         coords_key_default = layout_cfg["coords_key"]
+
+        # handle as_is flag (if True, data are returned as read without any processing)
+        self.data_as_is = True
+        if 'data_as_is' in kwargs:
+            self.data_as_is = kwargs.pop('data_as_is')
 
         dims_user = (
                 variable_template.get(dims_key_default)
@@ -144,15 +183,13 @@ class DataOnDemand(Dataset):
             else:
                 vars_data = {f"var_{i}": f"var{i}" for i in range(1, int(n_vars) + 1)}
 
-        # select file_workflow based on file_io (defined in calling code)
-        if self.file_io == 'input':
-            file_workflow = list(vars_data.values())
-        elif self.file_io == 'output':
-            file_workflow = list(vars_data.keys())
-        elif self.file_io == 'derived':
-            file_workflow = list(vars_data.values())
-        else:
-            file_workflow = variable_template.get("vars_wf") or self._default_vars_wf
+        # select file_workflow based on args or file_io (defined in calling code)
+        if file_workflow is None:
+            if layout_norm == 'geo':
+                file_workflow = 'GEO'
+            else:
+                self.logger.error("Attribute file_workflow must be defined by string.")
+                raise ValueError("Attribute file_workflow must be defined by string.")
 
         # ensure valid structure
         if not all(isinstance(x, dict) for x in (dims_geo, coords_geo, vars_data)):
@@ -172,8 +209,13 @@ class DataOnDemand(Dataset):
             'logger': self.logger,
             'message': message,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
+            'variable_role': variable_role,
+            "data_id": self.data_id,
             "data_layout": layout_norm,
+            "data_role": self.data_role,
+            "data_as_is": self.data_as_is,
             'file_variable': file_variable,
+            'file_io': self.file_io,
             'file_workflow': file_workflow
         })
 
@@ -234,8 +276,9 @@ class DataOnDemand(Dataset):
     @file_io.setter
     def file_io(self, value):
         """Set the file_io value, ensuring it is valid."""
-        if value not in {'input', 'output', 'derived','tmp'}:
-            raise ValueError(f"Invalid file_io '{value}'. Must be one of {'input', 'output', 'derived', 'tmp'}.")
+        if value not in {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}:
+            raise ValueError(f"Invalid file_io '{value}'. "
+                             f"Must be one of {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}.")
         self._file_io = value
 
     def path(self, time: Optional[pd.Timestamp] = None, **kwargs):

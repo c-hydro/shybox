@@ -70,7 +70,7 @@
     },
     "static_data": {
       "registry_hmc": {
-        "path": "{path_geo}/",
+        "path": "{path_geo}/sections/",
         "file_name": "{domain_name}.info_section.txt"
       }
     },
@@ -92,11 +92,20 @@
   "workflow": {
     "options": {
         "intermediate_output": "Tmp",
-        "tmp_dir": "{path_tmp}"
+        "tmp_dir": "{path_tmp}",
+        "dump_mode": "many_data_to_one_file"
     },
     "process_list": {
-        "DISCHARGE": [
-            {"function": "join_points_to_time_series", "fill_value": -9999, "no_data_value": -9999}
+        "DISCHARGE_WORKFLOW": [
+            {"function": "exec_join_points_to_time_series",
+              "datasets": {
+                "data": {"collections": "discharge"}
+              },
+              "results": {
+                "data": {"collections": "discharge"}
+              },
+              "fill_value": -9999.0, "no_data_value": -9999.0
+            }
         ]
     }
   },

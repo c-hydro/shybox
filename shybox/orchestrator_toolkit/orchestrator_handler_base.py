@@ -51,10 +51,22 @@ class OrchestratorBase:
         "intermediate_output": "Mem",  # "Mem" or "Tmp"
         "break_on_missing_tiles": False,  # legacy naming; grid uses it, TS may ignore
         "tmp_dir": None,
-        "dump_mode": "one_var_to_one_file"
+        "dump_mode": "one_data_to_one_file"
     }
+
     # set recognized dump modes
-    dump_modes = ('one_data_to_one_file', 'many_data_to_one_file',)
+    DUMP_REGISTRY = {
+        "one_data_to_one_file": "Dump each data object to a separate file (example: mask grid usign a reference)",
+        "many_data_to_one_file": "Dump multiple data objects to a single file [old declaration]",
+        "many_data_tiles_to_one_file": "Dump multiple data tiles objects to a single file (example: merge data)",
+        "many_data_times_to_one_file": "Dump multiple data times objects to a single file (example: create time-series)",
+        "many_data_tiles_to_many_files": "Dump multiple data tiles objects to multiple files (example: multiple tiff)",
+    }
+    # set recognized group modes
+    GROUP_REGISTRY = {
+        "by:step": "Group data by single time step",
+        "by:period": "Group data by time period",
+    }
 
     def __init__(
         self,
@@ -65,8 +77,7 @@ class OrchestratorBase:
         args_in: dict = None, args_out: dict = None,
         options: Union[dict, None] = None,
         mapper: Any = None,
-        logger: LoggingManager = None,
-    ) -> None:
+        logger: LoggingManager = None,) -> None:
 
         self.logger = logger or LoggingManager(name=self.__class__.__name__)
 
@@ -102,6 +113,9 @@ class OrchestratorBase:
         self.process_history, self.process_id, self.process_tag = {}, [], []
         self.result_history = {}
 
+        self.group = 'by:step'
+        self.time = None
+
     # Hooks (override in subclasses)
     @deprecated(since='2026-10-02')
     def grouping_tag(self) -> str:
@@ -132,14 +146,46 @@ class OrchestratorBase:
             raise RuntimeError("Input deps must be a dict or None.")
         return self.deps_in.get(reference_key, None)
 
+    ## ORCHESTRATOR PROPERTIES
+    # dump property
     @property
     def dump_mode(self):
         return self._dump_mode
     @dump_mode.setter
     def dump_mode(self, value):
-        if value not in self.dump_modes:
-            raise ValueError(f'Dump mode "{value}" is not supported. Available modes: {", ".join(self.dump_modes)}')
+        if value not in self.DUMP_REGISTRY:
+            raise ValueError(f'Dump mode "{value}" is not supported. '
+                             f'Available modes: {", ".join(self.DUMP_REGISTRY)}')
         self._dump_mode = value
+
+    # group property
+    @property
+    def group(self):
+        return self._group
+    @group.setter
+    def group(self, value):
+        if value not in self.GROUP_REGISTRY:
+            raise ValueError(f'Group mode "{value}" is not supported. '
+                             f'Available modes: {", ".join(self.GROUP_REGISTRY)}')
+        self._group = value
+
+    # time property
+    @property
+    def time(self):
+        return self._time
+    @time.setter
+    def time(self, value):
+        if value is None:
+            self._time = None
+        elif isinstance(value, pd.Timestamp):
+            self._time = value
+        elif isinstance(value, str):
+            self._time = pd.Timestamp(value)
+        elif isinstance(value, pd.DatetimeIndex):
+            self._time = value
+        else:
+            raise TypeError(f'Time type "{type(value).__name__}" is not supported. '
+                            f'Expected pd.Timestamp, str, pd.DatetimeIndex or None.')
 
     # properties
     @property
@@ -357,6 +403,15 @@ class OrchestratorBase:
             self.logger.error('Process variable "function" must be provided in the process arguments.')
             raise RuntimeError('Process variable "function" must be provided in the process arguments.')
 
+        # get process fx
+        if 'args' in kwargs:
+            process_args = kwargs['args']
+        else:
+            process_args = {}
+
+        # define process options
+        option_process = {**process_args, **self.options}
+
         # check data in/out format
         if not isinstance(self.data_in, dict):
             self.logger.error('Datasets input must be a Dataset.')
@@ -442,9 +497,9 @@ class OrchestratorBase:
         # create the process container
         this_process = ProcessorContainer(
             function = function_obj,
-            in_obj = this_input, in_opts=self.options,
+            in_obj = this_input, in_opts=option_process,
             in_deps=deps_input, out_deps=deps_output,
-            out_obj = this_output, out_opts=self.options,
+            out_obj = this_output, out_opts=option_process,
             args = kwargs,
             logger=self.logger)
 
@@ -456,19 +511,23 @@ class OrchestratorBase:
         self.processes.append(this_process)
 
     # method to wrap the run of the orchestrator
-    def run(self, time: Union[pd.Timestamp, str, pd.DatetimeIndex, None] = None, **kwargs) -> None:
+    def run(self,
+            time: Union[pd.Timestamp, str, pd.DatetimeIndex, None] = None,
+            group: str = 'by:step', **kwargs) -> None:
 
         # info orchestrator start
         self.logger.info_up('Run orchestrator ...')
 
         # check time availability
-        if time is not None:
-            self.logger.info('Active dynamic mode')
-        else:
-            self.logger.info('Active static mode')
+        if time is None:
+            self.logger.info_status("RunExecution -- MODE static")
             time = pd.Timestamp.now()
+        else:
+            self.logger.info_status("RunExecution -- MODE dynamic")
 
-        proc_options = self.options
+        # update orchestrator properties
+        self.time = time
+        self.group = group
 
         # manage process execution and process output
         if len(self.processes) == 0:
@@ -485,6 +544,9 @@ class OrchestratorBase:
 
             # get mode
             proc_mode, proc_tag = proc_obj.mode, proc_obj.tag
+
+            # info status process
+            self.logger.info_status(f"RunExecution -- PROCESS ID {proc_id} MODE {proc_mode} TAG {proc_tag}")
 
             # set by the mode
             if proc_mode == 'end' or proc_mode == 'unique':
@@ -513,7 +575,9 @@ class OrchestratorBase:
                         raise RuntimeError(f'Data_out and workflow_out is/are defined by NoneType.')
 
                     # set output options
-                    if self.dump_mode == 'many_data_to_one_file':
+                    if self.dump_mode in (
+                            'many_data_to_one_file',
+                            'many_data_tile_to_one_file', 'many_data_times_to_one_file',):
 
                         if data_out_collections is None:
                             data_out_collections = DataCollection(logger=self.logger)
@@ -544,6 +608,14 @@ class OrchestratorBase:
         # check time steps
         if len(time_steps) == 0:
             return None
+
+        # defined group time or objects
+        if self.group == 'by:step':
+            # info status group
+            self.logger.info_status(f"RunExecution -- GROUP {self.group}")
+        elif self.group == 'by:period':
+            self.logger.info_status(f"RunExecution -- GROUP {self.group}")
+            time_steps = _merge_by_period(time_steps)
 
         # iterate over time steps
         for ts in time_steps:
@@ -606,7 +678,7 @@ class OrchestratorBase:
         self.clean_up()
 
     # method to iterate over process(es)
-    def _run_processes(self, processes, time: dt.datetime, **kwargs) -> None:
+    def _run_processes(self, processes, time: Union[dt.datetime, list[dt.datetime]], **kwargs) -> None:
 
         # return if no processes
         if not processes: return None
@@ -783,7 +855,7 @@ class OrchestratorBase:
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# helpers
+# HELPERS
 # helper to create a data key
 def create_key(workflow: Union[str, None] = None, variable: Union[str, None] = None, separator: str = ":",) -> str:
     # check workflow and variable
@@ -793,21 +865,19 @@ def create_key(workflow: Union[str, None] = None, variable: Union[str, None] = N
     return separator.join([str(workflow), str(variable),])
 
 # helper to merge by times
-def _merge_by_time(times):
+def _merge_by_period(times):
     return [times]
 
 # helper to merge by process
+@deprecated(since='2026-10-07')
 def _merge_by_process(containers):
     merged = {}
-
     for pc in containers:
-
         process, key, variable, sources = pc.args  # adapt if attribute name differs
         base_key = (process, variable)
 
         # split existing sources
         src_list = sources.split(',')
-
         if base_key not in merged:
             merged[base_key] = set(src_list)
         else:

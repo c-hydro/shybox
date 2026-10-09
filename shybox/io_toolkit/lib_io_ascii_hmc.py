@@ -413,11 +413,13 @@ def read_sections_registry(
         cols = LUT_DOMAIN_DEFAULT[:]
     else:
         logger_stream.error("Sections hmc columns names must be list, dict, or None")
+        raise RuntimeError(f"Sections hmc columns names must be list, dict, or None")
 
     # check file availability
     path = Path(filepath)
     if not path.exists():
         logger_stream.error(f"File sections hmc not found: {path}")
+        raise FileNotFoundError(f"File is mandatory. Check your source: {path}")
 
     # open file and parse lines
     records: List[dict] = []
@@ -433,7 +435,7 @@ def read_sections_registry(
             parts = line.split(maxsplit=4)
             if len(parts) < 4:
                 if strict:
-                    logger_stream.error(f"Malformed line {lineno}: expected >=4 fields -> {raw!r}")
+                    logger_stream.warning(f"Malformed line {lineno}: expected >=4 fields -> {raw!r}")
                 continue
 
             try:
@@ -441,20 +443,14 @@ def read_sections_registry(
                 id2 = int(parts[1])
             except ValueError as e:
                 if strict:
-                    logger_stream.error(f"Line {lineno}: IDs must be integers -> {raw!r}")
+                    logger_stream.warning(f"Line {lineno}: IDs must be integers -> {raw!r}")
                 continue
 
             name1 = parts[2]
             name2 = parts[3]
             extra = parts[4] if len(parts) >= 5 else None
 
-            records.append({
-                cols[0]: id1,
-                cols[1]: id2,
-                cols[2]: name1,
-                cols[3]: name2,
-                cols[4]: extra,
-            })
+            records.append({cols[0]: id1, cols[1]: id2, cols[2]: name1, cols[3]: name2, cols[4]: extra,})
 
     # create dataframe from records (list of dicts)
     df = pd.DataFrame.from_records(records, columns=cols)

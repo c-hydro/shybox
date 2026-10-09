@@ -273,8 +273,7 @@
   },
   "workflow": {
     "options": {
-        "intermediate_output": "Tmp",
-        "tmp_dir": "{path_tmp}"
+        "intermediate_output": "Tmp", "tmp_dir": "{path_tmp}"
     },
     "process_list": {
         "SOIL_MOISTURE_WORKFLOW": [

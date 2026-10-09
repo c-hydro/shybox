@@ -36,7 +36,9 @@ from shybox.dataset_toolkit.lib_dataset_generic import (
     straighten_data, straighten_time, straighten_dims, select_by_time, select_da_by_mapping,
     set_type, check_data_format, select_variable)
 from shybox.generic_toolkit.lib_utils_debug import plot_data
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+
+# common decorators
+from shybox import with_logger, deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -88,6 +90,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.file_variable = self._defaults['variable']
         if 'file_variable' in kwargs:
             self.file_variable = kwargs.pop('file_variable')
+        # define data id
+        self.data_id = self._defaults['data_id']
+        if 'data_id' in kwargs:
+            self.data_id = kwargs.pop('data_id')
 
         # define variable list for info
         variable_list = (
@@ -99,7 +105,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # info dataset initialization start
         if self.message:
             self.logger.info(f'Configure dataset for variables [{variable_list}] from {self.loc_pattern} ... ')
-            self.logger.info_up(f'Initialize dataset object ... ')
+            if not np.isfinite(self.data_id):
+                self.logger.info_up(f'Initialize dataset object ... ')
+            else:
+                self.logger.info_up(f'Initialize dataset object [ID: {self.data_id}] ... ')
 
         # substitute "now" with the current time
         if self.loc_pattern is not None:
@@ -126,8 +135,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.file_io = self._defaults['io']
         if 'file_io' in kwargs:
             self.file_io = kwargs.pop('file_io')
-        else:
-            print()
 
         self.units = self._defaults['units']
         if 'units' in kwargs:
@@ -140,10 +147,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.nan_value = None
         if 'nan_value' in kwargs:
             self.nan_value = kwargs.pop('nan_value')
-
-        self.data_id = self._defaults['data_id']
-        if 'data_id' in kwargs:
-            self.data_id = kwargs.pop('data_id')
 
         self.data_role = self._defaults['data_role']
         if 'data_role' in kwargs:
@@ -222,7 +225,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # info dataset initialization end
         if self.message:
-            self.logger.info_down(f'Initialize dataset object {self.__str__()} ... DONE')
+            if not np.isfinite(self.data_id):
+                self.logger.info_down(f'Initialize dataset object {self.__str__()} ... DONE')
+            else:
+                self.logger.info_down(f'Initialize dataset object [ID: {self.data_id}] ... DONE')
             self.logger.info(f'Configure dataset for variables [{variable_list}] from {self.loc_pattern} ... DONE')
 
     # method to return information as a string representation
@@ -499,6 +505,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self._variable = value
 
     @property
+    def data_id(self):
+        return self._data_id
+    @data_id.setter
+    def data_id(self, value):
+        if value is None or value < 0 or not np.isfinite(value):
+            value = np.nan
+        self._data_id = value
+
+    @property
     def has_version(self):
         return '{file_version}' in self.loc_pattern
 
@@ -654,6 +669,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         return all_tags
 
+    # method to get placeholders from string
+    def get_placeholders(self, value):
+        # check value type
+        if not isinstance(value, str): return False, []
+        # get placeholders
+        placeholders = re.findall(r"\{([^{}]+)\}", value)
+        # print placeholders
+        if placeholders:
+            self.logger.info(f"Placeholders found: {placeholders}")
+            return True, placeholders
+        return False, []
+
     # method to get attribute
     def get_attribute(self, attribute: str, default: Union[str, None] = None) \
             -> Union[str, int, float, dict, list, pd.Timestamp, None]:
@@ -774,6 +801,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         return time
 
+    @deprecated(since='2026-10-09')
     def namespace(self, variable, workflow):
         # If both are lists, build a list of SimpleNamespace objects
         if isinstance(variable, list) and isinstance(workflow, list):
@@ -884,6 +912,14 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # info log start (source case)
         log_data('start', name=name, time=time, from_memory=False)
+
+        # check full location of file
+        flag_placeholders, list_placeholders = self.get_placeholders(full_location)
+        if flag_placeholders:
+            self.logger.warning(
+                f'File location "{full_location}" contains unresolved placeholders: '
+                f'{", ".join(map(str, list_placeholders))}'
+            )
 
         # file format specific reading
         if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
@@ -1051,6 +1087,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return data
 
     @staticmethod
+    @deprecated(since='2026-10-09')
     def select_dataarray_by_mapping(ds, mapping_str):
         """
         Select a DataArray from an xarray.Dataset using a 'name:var' mapping string.

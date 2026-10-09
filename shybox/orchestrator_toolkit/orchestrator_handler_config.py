@@ -11,17 +11,15 @@ Version:       '1.0.0'
 # libraries
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Union
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes_OLD import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES as PROCESSES_UPD
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBase
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
-    as_list, remove_none, ensure_variables, normalize_deps, count_variables)
+    as_list, ensure_variables, normalize_deps, count_variables)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -86,7 +84,7 @@ class OrchestratorConfig(OrchestratorBase):
 
                 # build pairs tag and process
                 pairs_tag_str, pairs_tag_tuple, pairs_process, pairs_info = build_pairs_and_process(
-                    workflow_fx, file_namespace)
+                    workflow_fx, file_namespace, data_id)
 
                 # iterate over variable tags and processes
                 for var_id, (var_tag, var_process) in enumerate(zip(pairs_tag_str, pairs_process)):
@@ -142,7 +140,7 @@ class OrchestratorConfig(OrchestratorBase):
 
                 # build pairs tag and process
                 pairs_tag_str, pairs_tag_tuple, pairs_process, pairs_info = build_pairs_and_process(
-                    workflow_fx, file_namespace)
+                    workflow_fx, file_namespace, data_id)
 
                 # iterate over variable tags and processes
                 for var_id, (var_tag, var_process) in enumerate(zip(pairs_tag_str, pairs_process)):
@@ -253,7 +251,7 @@ class OrchestratorConfig(OrchestratorBase):
             for process_id, process_obj in enumerate(workflow_obj):
 
                 # get process and workflows information
-                process_fx_name =  process_obj["function"]
+                process_fx_name, process_fx_args =  process_obj["function"], process_obj["args"]
                 workflow_name, workflow_id = process_obj["workflow_name"], process_obj["workflow_id"]
 
                 # info workflow and process start
@@ -280,7 +278,13 @@ class OrchestratorConfig(OrchestratorBase):
                 else:
 
                     # info function end (failed)
-                    logger.error(f'Process "{process_fx_name}" not found in {PROCESSES_UPD}"')
+                    if not PROCESSES_UPD:
+                        logger.error('No processes are registered. '
+                                     'Process functions must be defined using the @as_process decorator.')
+                    else:
+                        logger.error(f'Process "{process_fx_name}" not found in registered processes: '
+                                     f'{list(PROCESSES_UPD)}')
+
                     logger.info_down(
                         f'Configure workflow "{workflow_name}" process "{process_fx_name}" ... FAILED', tag="ow")
                     raise RuntimeError('All process(es) must be correctly configured. Exit')

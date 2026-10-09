@@ -10,7 +10,6 @@
     "variables": {
       "lut": {
         "user": {
-          "path_geo": "/home/fabio/Desktop/shybox/dset/itwater/static/",
           "path_source_time": null, "path_destination_time" : null,
           "time_source": null, "time_destination": null,
           "time_rounding": "D", "time_frequency": "D", "time_direction": "forward",
@@ -20,6 +19,7 @@
         "environment": {
           "domain_name": "DOMAIN_NAME",
           "time_start": "TIME_START", "time_end": "TIME_END",
+          "path_geo": "PATH_GEO",
           "path_source_by_s3m": "PATH_SRC_BY_S3M", "path_source_by_bc": "PATH_SRC_BY_BIAS_CORRECTION",
           "path_destination": "PATH_DST",
           "path_app": "PATH_APP", "path_log": "PATH_LOG", "path_tmp": "PATH_TMP"
@@ -64,13 +64,13 @@
       },
       "geo": {
         "terrain": {
-          "path": "{path_geo}",
+          "path": "{path_geo}/gridded/",
           "file_name": "{domain_name}.dem.txt"
         }
       },
       "data_source": {
         "rain": {
-          "path": "{path_source_by_s3m}/REff/{path_source_time}",
+          "path": "{path_source_by_s3m}/s3m/REff/{path_source_time}",
           "file_name": "REFF_{time_source}.nc"
         },
         "air_t": {

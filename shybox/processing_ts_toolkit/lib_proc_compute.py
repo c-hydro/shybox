@@ -13,11 +13,12 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+from shybox import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Method to compute average values over a spatial mask
+# method to compute average values over a spatial mask
+@with_logger(var_name='logger_stream')
 def compute_average_over_mask(
         data: xr.DataArray, mask: xr.DataArray, mask_value: int = 1,
         time_dim: str ="time", y_dim: str ="latitude", x_dim: str ="longitude",

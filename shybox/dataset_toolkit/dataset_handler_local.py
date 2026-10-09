@@ -97,6 +97,7 @@ class DataLocal(Dataset):
             self.file_deps = kwargs.pop('file_deps')
         else:
             self.file_deps = {}
+
         # check data layout
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
@@ -297,9 +298,26 @@ class DataLocal(Dataset):
     def file_io(self, value):
         """Set the file_io value, ensuring it is valid."""
         if value not in {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}:
-            raise ValueError(f"Invalid file_io '{value}'. "
+            self.logger.error("attribute 'file_io' has not the expected value.")
+            raise ValueError(f"attribute 'file_io' value is '{value}'. "
                              f"Must be one of {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}.")
         self._file_io = value
+
+    # FILE DEPS MANAGEMENT
+    @property
+    def file_deps(self):
+        """Get file dependencies."""
+        return self._file_deps
+    @file_deps.setter
+    def file_deps(self, value):
+        """Set file dependencies."""
+        if value is None or isinstance(value, list):
+            self.logger.warning(f"file_deps must be a dict, got {type(value).__name__}. Using an empty dictionary.",)
+            value = {}
+        elif not isinstance(value, dict):
+            self.logger.error("attribute 'file_deps' is not in expected format.")
+            raise TypeError(f"attribute 'file_deps' must be a dict, got {type(value).__name__}.")
+        self._file_deps = value
 
     ## DATA MANAGEMENT
     @property
@@ -310,8 +328,9 @@ class DataLocal(Dataset):
     @data_role.setter
     def data_role(self, value):
         if value not in ['data', 'deps', 'ancillary', 'auxiliary']:
-            self.logger.error(f'Invalid data role: {value}')
-            raise ValueError(f"Invalid data_role: {value}")
+            self.logger.error(f"attribute 'data role' has defined by not expected value")
+            raise ValueError(f"attribute 'data_role' value is '{value}'. "
+                             f"Must be one of {'data', 'deps', 'ancillary', 'auxiliary'}.")
         self._data_role = value
 
     # method to apply time to path

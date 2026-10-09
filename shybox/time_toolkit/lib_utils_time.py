@@ -3,13 +3,12 @@ Library Features:
 
 Name:          lib_utils_time
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20251203'
-Version:       '1.1.0'
+Date:          '20261007'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-import logging
 import re
 import numpy as np
 import pandas as pd
@@ -25,22 +24,20 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # convert time format (from string to timestamp and vice versa)
 @with_logger(var_name="logger_stream")
 def convert_time_format(
-        time_in: Union[str, pd.Timestamp, None],
-        time_conversion: str = 'str_to_stamp') -> Optional[Union[pd.Timestamp, str]]:
+        time_obj: Union[str, pd.Timestamp, None],
+        time_conversion: str = "str_to_stamp",
+        time_format: str = "%Y-%m-%d %H:%M",
+        logger_stream=None,) -> Optional[Union[pd.Timestamp, str]]:
 
-    if time_in is None:
+    if time_obj is None:
         return None
+    if time_conversion == "str_to_stamp":
+        return pd.Timestamp(time_obj)
+    if time_conversion in {"stamp_to_str", "str_to_str"}:
+        return pd.Timestamp(time_obj).strftime(time_format)
 
-    if time_conversion == 'str_to_stamp':
-        return pd.Timestamp(time_in) if isinstance(time_in, str) else time_in
-
-    elif time_conversion in ('stamp_to_str', 'str_to_str'):
-        ts = pd.Timestamp(time_in)
-        return ts.strftime(format_dset)
-
-    else:
-        logger_stream.error(f'Incorrect time conversion: {time_conversion}')
-        raise ValueError(f"Unrecognized time_conversion: {time_conversion}")
+    logger_stream.error(f'Incorrect time conversion "{time_conversion}"')
+    raise ValueError(f'Unrecognized time_conversion: "{time_conversion}"')
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

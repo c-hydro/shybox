@@ -14,6 +14,9 @@ import sys
 import re
 import shutil
 import errno, os
+import pandas as pd
+
+from pathlib import Path
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
@@ -21,6 +24,31 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 ERROR_INVALID_NAME = 123
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to get time from filename
+def get_time_from_filename(file_path: str | Path) -> pd.Timestamp | None:
+
+    # get filename without extension
+    file_name = Path(file_path).stem
+
+    # search timestamp
+    time_match = re.search(r"(?<!\d)(\d{14}|\d{12}|\d{10}|\d{8})(?!\d)", file_name)
+    if not time_match:
+        return None
+
+    # get timestamp string
+    time_string = time_match.group(1)
+
+    # supported formats
+    time_formats = { 8: "%Y%m%d",10: "%Y%m%d%H", 12: "%Y%m%d%H%M", 14: "%Y%m%d%H%M%S",}
+
+    # convert timestamp
+    try:
+        return pd.to_datetime(time_string,format=time_formats[len(time_string)])
+    except ValueError:
+        return None
+
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # check if file has a compression extension

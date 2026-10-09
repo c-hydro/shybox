@@ -141,12 +141,16 @@ def as_process(
             # ----------------------------------------------------------------------------------------------------------
 
             # ----------------------------------------------------------------------------------------------------------
-            # check data format
+            # check data format (in)
             if not isinstance(data, dict):
                 data = __try_to_adjust_data(data, in_map)
 
             # check input (if expected or not)
             input_check = check_data_type(obj_data=data, string_data=input_type)
+            # warn input
+            if not input_check:
+                logger_stream.warning(f'Decorator "as_process": data type mismatch. '
+                                      f'Expected "{input_type}", got "{type(data).__name__}".')
             # ----------------------------------------------------------------------------------------------------------
 
             # ----------------------------------------------------------------------------------------------------------
@@ -265,12 +269,17 @@ def as_process(
             # ----------------------------------------------------------------------------------------------------------
 
             # ----------------------------------------------------------------------------------------------------------
-            # check output (if expected or not)
-            output_check = check_data_type(obj_data=result, string_data=output_type)
-
             # check output format
             if not isinstance(result, dict):
                 result = __try_to_adjust_result(result, out_map)
+
+            # check output (if expected or not)
+            output_check = check_data_type(obj_data=result, string_data=output_type)
+
+            # warn output
+            if not output_check:
+                logger_stream.warning(f'Decorator "as_process": result type mismatch. '
+                                      f'Expected "{output_type}", got "{type(result).__name__}".')
 
             # return result
             return result

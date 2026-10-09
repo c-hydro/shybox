@@ -42,5 +42,13 @@ dependencies = [
 Repository = "https://github.com/c-hydro/shybox"
 
 [project.optional-dependencies]
+rfarm = ["rfarm @ git+https://github.com/c-hydro/rfarm.git"]
+prism = ["prism @ git+https://github.com/c-hydro/prism.git@dev"]
 thumbnails = []
 remote-data = []
+
+external_toolkits = [
+    "rfarm @ git+https://github.com/c-hydro/rfarm.git",
+    "prism @ git+https://github.com/c-hydro/prism.git@dev"
+]
+

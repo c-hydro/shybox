@@ -1,30 +1,38 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO GRID - HMC
+SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO GRID - SNOW HEIGHT - HMC
 
-__date__ = '20260901'
+__date__ = '20261008'
 __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
-     Andrea Libertino (andrea.libertino@cimafoundation.org)'
+     Andrea Libertino (andrea.libertino@cimafoundation.org),
+     Lucia Ferrarin (lucia.ferrarin@cimafoundation.org)
+     Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
 __library__ = 'shybox'
 
 General command line:
 python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Examples of environment variables declarations:
-TIME_RUN="2026-07-14 01:34";
-TIME_PERIOD=10;
-
-TIME_START='2026-07-13 22:00';
-TIME_END='2026-07-14 01:00';
-
+# time info
+TIME_RUN="2026-01-01 11:34";
+TIME_PERIOD=1;
+TIME_FREQUENCY='D'
+TIME_START='2026-01-01 10:00';
+TIME_END='2026-01-01 10:00';
+# domain info
 DOMAIN_NAME='vda';
-PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_vda/converter_hmc/geo/';
-PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_vda/converter_hmc/data/weather_stations';
-PATH_DST='/home/fabio/Desktop/shybox/dset/case_study_vda/converter_hmc/data/maps/';
-PATH_TMP=$HOME/Desktop/shybox/exec/case_study_vda/converter_hmc/tmp/;
-PATH_LOG=$HOME/Desktop/shybox/exec/case_study_vda/converter_hmc/log/;
+
+# path(s) data
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_vda/converter_s3m/geo/';
+PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_vda/converter_s3m/data/';
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_vda/converter_s3m/data/';
+PATH_TMP=$HOME/Desktop/shybox/exec/case_study_vda/converter_s3m/tmp/;
+PATH_LOG=$HOME/Desktop/shybox/exec/case_study_vda/converter_s3m/log/;
+# path(s) libraries
+PROJ_DATA=/home/fabio/Documents/Work_Area/Code_Development/Workspace/shybox/conda/envs/shybox_geo_libraries/share/proj;
+PROJ_LIB=
 
 # Set env variables to use proj 8.0.0 or proj 6.0.0
 PROJ_DATA=/home/fabio/Documents/Work_Area/Code_Development/Workspace/shybox/conda/envs/shybox_geo_libraries/share/proj;
@@ -47,7 +55,7 @@ from shybox.config_toolkit.config_handler import ConfigManager
 from shybox.time_toolkit.time_handler import TimeManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_points_toolkit.points_adapter import exec_interpolate_points, exec_mask_grid, exec_set_null
+from shybox.processing_points_toolkit.points_adapter import exec_interpolate_points_hs
 
 from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -59,7 +67,7 @@ project_name = 'shybox'
 alg_name = 'Workflow for converting data points to grid configuration'
 alg_type = 'Package'
 alg_version = '1.0.0'
-alg_release = '2026-09-01'
+alg_release = '2026-10-08'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -87,7 +95,7 @@ def main(view_table: bool = False):
     alg_cfg_application = alg_cfg_obj.fill_obj_from_lut(
         section=alg_cfg_application,
         resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
-        template_keys=('path_time_source', 'file_time_source',
+        template_keys=('path_time_source', 'file_time_source_ground', 'file_time_source_s3m',
                        'path_time_destination', 'file_time_destination', )
     )
     # view application section
@@ -176,12 +184,13 @@ def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## STATIC DATASETS MANAGEMENT
-    # geographical grid
-    geo_grid = DataLocal(
-        path=alg_cfg_application['static_data']['terrain']['path'],
+    # geographical raster terrain
+    geo_raster_terrain = DataLocal(
+        path=alg_cfg_application['static_data']['raster_terrain']['path'],
+        file_name=alg_cfg_application['static_data']['raster_terrain']['file_name'],
         data_role='auxiliary',
-        file_name=alg_cfg_application['static_data']['terrain']['file_name'],
-        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_io='input',
+        file_type='grid_2d', file_format='ascii', file_mode='local',
+        file_variable='terrain', file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -190,21 +199,57 @@ def main(view_table: bool = False):
         logger=logging_handle, message=False
     )
 
-    # weather stations registry
-    registry_ws = DataLocal(
-        path=alg_cfg_application['static_data']['registry_weather_stations']['path'],
-        file_name=alg_cfg_application['static_data']['registry_weather_stations']['file_name'],
-        data_layout='points', data_role='auxiliary',
-        file_type='points_registry', file_format='ascii', file_mode='local',
-        file_args={
-            'sep':',', 'col_reference': 'tag',
-            'lut_map': alg_cfg_application['static_data']['registry_weather_stations']['lut_map'],
-            'lut_type': alg_cfg_application['static_data']['registry_weather_stations']['lut_type']
-        },
-        file_variable='registry_ws', file_io='input',
+    geo_raster_mbianco = DataLocal(
+        path=alg_cfg_application['static_data']['raster_monte_bianco']['path'],
+        file_name=alg_cfg_application['static_data']['raster_monte_bianco']['file_name'],
+        data_role='auxiliary',
+        file_type='grid', file_format='tiff', file_mode='local',
+        file_variable='monte_bianco', file_io='input', file_workflow='GEO',
         variable_template={
-            "dims_point": {"x": "fields", "y": "sections"},
-            "vars_point": {"registry_ws": "registry_ws"}
+            "dims_geo": {"x": "longitude", "y": "latitude"},
+            "vars_geo": {"x": "longitude", "y": "latitude"}
+        },
+        time_signature=None, time_direction=None,
+        logger=logging_handle, message=False
+    )
+
+    geo_raster_mparadiso = DataLocal(
+        path=alg_cfg_application['static_data']['raster_monte_paradiso']['path'],
+        file_name=alg_cfg_application['static_data']['raster_monte_paradiso']['file_name'],
+        data_role='auxiliary',
+        file_type='grid', file_format='tiff', file_mode='local',
+        file_variable='monte_paradiso', file_io='input', file_workflow='GEO',
+        variable_template={
+            "dims_geo": {"x": "longitude", "y": "latitude"},
+            "vars_geo": {"x": "longitude", "y": "latitude"}
+        },
+        time_signature=None, time_direction=None,
+        logger=logging_handle, message=False
+    )
+
+    geo_raster_inverse_c = DataLocal(
+        path=alg_cfg_application['static_data']['raster_inverse_combin']['path'],
+        file_name=alg_cfg_application['static_data']['raster_inverse_combin']['file_name'],
+        data_role='auxiliary',
+        file_type='grid', file_format='tiff', file_mode='local',
+        file_variable='inverse_combin', file_io='input', file_workflow='GEO',
+        variable_template={
+            "dims_geo": {"x": "longitude", "y": "latitude"},
+            "vars_geo": {"x": "longitude", "y": "latitude"}
+        },
+        time_signature=None, time_direction=None,
+        logger=logging_handle, message=False
+    )
+
+    geo_raster_forest = DataLocal(
+        path=alg_cfg_application['static_data']['raster_forest']['path'],
+        file_name=alg_cfg_application['static_data']['raster_forest']['file_name'],
+        data_role='auxiliary',
+        file_type='grid', file_format='tiff', file_mode='local',
+        file_variable='forest', file_io='input', file_workflow='GEO',
+        variable_template={
+            "dims_geo": {"x": "longitude", "y": "latitude"},
+            "vars_geo": {"x": "longitude", "y": "latitude"}
         },
         time_signature=None, time_direction=None,
         logger=logging_handle, message=False
@@ -213,36 +258,71 @@ def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## DYNAMIC DATASETS MANAGEMENT
-    # source point codes handler
-    source_point_code = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['code']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['code']['file_name'],
+    # source data hs handler
+    source_data_hs = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['ground']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['ground']['file_name'],
         data_layout='points', data_mandatory=False, data_role='data',
-        file_deps={'registry': registry_ws},
+        file_deps=None,
         file_type='points_2d', file_format='ascii', file_mode='local',
-        file_variable='AIR_T_DATA_C', file_workflow='AIR_T_WORKFLOW', file_io='input',
+        file_variable='SNOW_HEIGHT', file_workflow='SNOW_HEIGHT_WORKFLOW', file_io='input',
         file_args={'delimiter': ',', 'time_format': '%Y-%m-%d %H:%M'},
         variable_template={
-            "dims_data": {"x": "data", "y": "weather_stations"},
-            "vars_data": {"AIR_T_CODE": "air_temperature_code"}
+            "dims_data": {"x": "data", "y": "points"},
+            "vars_data": {"HS": "ground_snow_height"}
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
         logger=logging_handle, message=False
     )
 
-    # source point data handler
-    source_point_data = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['data']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['data']['file_name'],
-        data_layout='points', data_mandatory=False, data_role='data',
-        file_deps={'registry': registry_ws},
-        file_type='points_2d', file_format='ascii', file_mode='local',
-        file_variable='AIR_T_DATA_V', file_workflow='AIR_T_WORKFLOW', file_io='input',
+    # source data sca handler
+    source_data_sca = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['viirs_snow_cover_area']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['viirs_snow_cover_area']['file_name'],
+        data_layout='grid', data_mandatory=False, data_role='data',
+        file_deps=None,
+        file_type='grid_2d', file_format='tif', file_mode='local',
+        file_variable='SNOW_COVER_AREA', file_workflow='SNOW_HEIGHT_WORKFLOW', file_io='input',
+        file_args=None,
+        variable_template={
+            "dims_data": {"longitude": "longitude", "latitude": "latitude"},
+            "vars_data": {"SCA": "snow_cover_area"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    source_data_cp = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['viirs_cloud_persistence']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['viirs_cloud_persistence']['file_name'],
+        data_layout='grid', data_mandatory=False, data_role='data',
+        file_deps=None,
+        file_type='grid_2d', file_format='tif', file_mode='local',
+        file_variable='CLOUD_PERSISTENCE', file_workflow='SNOW_HEIGHT_WORKFLOW', file_io='input',
+        file_args=None,
+        variable_template={
+            "dims_data": {"longitude": "longitude", "latitude": "latitude"},
+            "vars_data": {"CP": "cloud_persistence"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # source data sca handler
+    source_data_s3m = DataLocal(
+        path=alg_cfg_application['dynamic_data_src']['s3m']['path'],
+        file_name=alg_cfg_application['dynamic_data_src']['s3m']['file_name'],
+        data_layout='grid', data_mandatory=False, data_role='data',
+        file_deps=None,
+        file_type='grid_2d', file_format='tif', file_mode='local',
+        file_variable='S3M_HS', file_workflow='SNOW_HEIGHT_WORKFLOW', file_io='input',
         file_args={'delimiter': ',', 'time_format': '%Y-%m-%d %H:%M'},
         variable_template={
-            "dims_data": {"x": "data", "y": "weather_stations"},
-            "vars_data": {"AIR_T_VALUE": "air_temperature_value"}
+            "dims_data": {"longitude": "longitude", "latitude": "latitude"},
+            "vars_data": {"SnowHeight": "s3m_snow_height"}
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
@@ -255,13 +335,11 @@ def main(view_table: bool = False):
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
         data_layout='grid', data_role='data',
         file_type='grid_2d', file_format='tiff', file_mode='local',
-        file_variable='AIR_T_GRID', file_workflow='AIR_T_WORKFLOW', file_io='output',
+        file_variable='SNOW_HEIGHT', file_workflow='SNOW_HEIGHT_WORKFLOW', file_io='output',
         variable_template={
             "dims_data": {"longitude": "longitude", "latitude": "longitude", "time": "time"},
             "coord_data": {"longitude": "longitude", "latitude": "latitude"},
-            "vars_data": {
-                "air_temperature": "air_t"
-            }
+            "vars_data": {"snow_height": "hs"}
         },
         time_signature='end', time_reference=alg_reference_time,
         time_period=1, time_format='%Y%m%d%H%M',
@@ -274,13 +352,22 @@ def main(view_table: bool = False):
     # orchestrator settings
     orc_process = Orchestrator.configure(
         data_package_in={
-            'AIR_T_DATA_V': source_point_data,
-            'AIR_T_DATA_C': source_point_code
+            'ground_hs': source_data_hs,
+            'sca': source_data_sca,
+            'cp': source_data_cp,
+            's3m_hs': source_data_s3m,
         },
-        data_package_out={'AIR_T_GRID': destination_grid_obj},
-        data_ref={'terrain': geo_grid},
-        priority=['AIR_T_WORKFLOW'],
+        data_package_out={'grid_hs': destination_grid_obj},
+        data_ref={
+            'dem': geo_raster_terrain,
+            'm_bianco': geo_raster_mbianco,
+            'm_paradiso': geo_raster_mparadiso,
+            'inv_combin': geo_raster_inverse_c,
+            'forest': geo_raster_forest,
+        },
+        priority=None,
         configuration=alg_cfg_workflow,
+        tag_orchestrator='points_to_grid', tag_logger='OrchestratorPoints',
         logger=logging_handle
     )
     # orchestrator exec
