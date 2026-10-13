@@ -141,7 +141,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['geo_data_src']['registry_sections']['path'],
         file_name=alg_cfg_application['geo_data_src']['registry_sections']['file_name'],
         data_layout='points',
-        file_type='points_section_db', file_format='ascii', file_mode='local',
+        file_type='points_section_db', file_format='ascii', file_mode='local', file_workflow='GEO',
         file_args={
             'lut_map': alg_cfg_application['geo_data_src']['registry_sections']['lut_map'],
             'lut_type': alg_cfg_application['geo_data_src']['registry_sections']['lut_type'],
@@ -159,7 +159,8 @@ def main(view_table: bool = False):
     geo_grid = DataLocal(
         path=alg_cfg_application['geo_data_src']['flow_directions']['path'],
         file_name=alg_cfg_application['geo_data_src']['flow_directions']['file_name'],
-        file_type='grid_obj', file_format='ascii', file_mode='local', file_variable='fdir_grid', file_io='input',
+        file_type='grid_obj', file_format='ascii', file_mode='local',
+        file_variable='fdir_grid', file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -172,7 +173,8 @@ def main(view_table: bool = False):
     geo_data_fdir = DataLocal(
         path=alg_cfg_application['geo_data_src']['flow_directions']['path'],
         file_name=alg_cfg_application['geo_data_src']['flow_directions']['file_name'],
-        file_type='grid_geo', file_format='ascii', file_mode='local', file_variable='fdir', file_io='input',
+        file_type='grid_geo', file_format='ascii', file_mode='local',
+        file_variable='fdir', file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -185,7 +187,8 @@ def main(view_table: bool = False):
     geo_data_cnet = DataLocal(
         path=alg_cfg_application['geo_data_src']['channels_network']['path'],
         file_name=alg_cfg_application['geo_data_src']['channels_network']['file_name'],
-        file_type='grid_geo', file_format='ascii', file_mode='local', file_variable='cnet', file_io='input',
+        file_type='grid_geo', file_format='ascii', file_mode='local',
+        file_variable='cnet', file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -249,6 +252,7 @@ def main(view_table: bool = False):
         data_ref={'grid': geo_grid},
         priority=None,
         configuration=alg_cfg_workflow,
+        tag_orchestrator='watersheds', tag_logger='OrchestratorGeo',
         logger=logging_handle
     )
     # orchestrator exec

@@ -48,7 +48,7 @@ from shybox.config_toolkit.config_handler import ConfigManager
 from shybox.time_toolkit.time_handler import TimeManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_points_toolkit.points_adapter import exec_interpolate_points, exec_mask_grid, exec_set_null
+from shybox.processing_points_toolkit.points_adapter import exec_interpolate_points_air_temperature, exec_mask_grid, exec_set_null
 
 from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal

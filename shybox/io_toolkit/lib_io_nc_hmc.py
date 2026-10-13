@@ -658,7 +658,7 @@ def write_ts_hmc(
 # ----------------------------------------------------------------------------------------------------------------------
 
 from typing import Union
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_fx_single import xarray_to_dict
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_types import xarray_to_dict
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (netcdf library for hmc dataset)

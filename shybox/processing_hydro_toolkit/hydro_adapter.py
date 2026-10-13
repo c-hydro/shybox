@@ -15,7 +15,7 @@ import xarray as xr
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_fx_single import xarray_to_dataarray
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_types import xarray_to_dataarray
 from shybox.processing_hydro_toolkit.lib_proc_compute_sm import merge_soil_moisture
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -24,9 +24,9 @@ from shybox.processing_hydro_toolkit.lib_proc_compute_sm import merge_soil_moist
 @as_process(input_type='xarray', output_type='xarray',
             input_adapter={
                 'data': [
-                    {'method': 'mapping_keys_by_separator', 'kwargs': {'key_separator':'|', 'other_separator':'::'}},
-                    {'method': 'adapter_variables_to_group', 'kwargs': {}},
-                    {'method': 'dict_to_fx', 'kwargs': {}},
+                    {'method': 'dict_to_fx',
+                     'kwargs': {'flat_list_one_element': False}
+                     },
                 ]
             },
             args_adapter={

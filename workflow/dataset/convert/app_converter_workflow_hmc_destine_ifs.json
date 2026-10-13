@@ -152,7 +152,7 @@
   "workflow": {
     "options": {
       "__comment__": "dump_mode -- default: one_data_to_one_file, other: many_data_to_one_file",
-      "dump_mode": "many_data_to_one_file",
+      "io_config": {"mode": "many_data_files_to_one_file"},
       "intermediate_output": "Tmp",
       "tmp_dir": "{path_tmp}"
     },

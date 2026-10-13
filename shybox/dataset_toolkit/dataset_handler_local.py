@@ -216,7 +216,8 @@ class DataLocal(Dataset):
             if file_variable:
                 vars_data = {file_variable: file_variable}
             else:
-                vars_data = {f"var_{i}": f"var{i}" for i in range(1, int(n_vars) + 1)}
+                self.logger.error("Attribute vars_data must be defined by dictionary.")
+                raise ValueError("Attribute vars_data must be defined by dictionary.")
 
         # units nad ensure units are defined for all variables
         units = variable_template.get("units", {})
@@ -224,23 +225,18 @@ class DataLocal(Dataset):
 
         # select file_workflow based on args or file_io (defined in calling code)
         if file_workflow is None:
-            if layout_norm == 'geo':
-                file_workflow = 'GEO'
-            else:
                 self.logger.error("Attribute file_workflow must be defined by string.")
                 raise ValueError("Attribute file_workflow must be defined by string.")
 
+
         # add placeholder for file (for example if output file needs some extra definitions to fill the string)
         file_placeholder = kwargs.pop('file_placeholder', {})
-        if file_placeholder is not None:
-            # get default variable names preserving vars_data order
-            vars_values = iter(vars_data.values())
-            # replace "default" values
-            for placeholder, values in file_placeholder.items():
-                file_placeholder[placeholder] = [
-                    next(vars_values) if value == "default" else value
-                    for value in values
-                ]
+        # check placeholder format
+        if not isinstance(file_placeholder, dict):
+            logger_stream.error('File placeholder must be a dictionary. Exit.')
+            raise TypeError(f'File placeholder must be a dictionary. Got {type(file_placeholder).__name__}.')
+        # replace undefined values with "NA"
+        file_placeholder = {key: "NA" if value is None else value for key, value in file_placeholder.items()}
 
         # ensure valid structure
         if not all(isinstance(x, dict) for x in (dims_geo, coords_geo, vars_data)):

@@ -1071,7 +1071,9 @@ def straighten_data(
         da = da.rename({"y": dim_y})
 
     return da
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 @deprecated(since="2026-09-30")
 @withxrds
 def reset_nan(data: xr.DataArray, nan_value = None) -> xr.DataArray:
@@ -1093,7 +1095,9 @@ def reset_nan(data: xr.DataArray, nan_value = None) -> xr.DataArray:
         data.attrs['_FillValue'] = new_fill_value
 
     return data
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # method to select variable
 @withxrds
 def select_variable(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (str, None):
@@ -1109,7 +1113,9 @@ def select_variable(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (st
         var_select = data.name
 
     return var_select
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # method to select time
 @withxrds
 def select_by_time(
@@ -1178,7 +1184,9 @@ def select_by_time(
             return da.isel(time=idx)
 
     return None
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # method to select da by mapping (mapping_str = variable:workflow)
 @with_logger(var_name="logger_stream")
 @withxrds
@@ -1252,7 +1260,9 @@ def select_da_by_mapping(data: xr.DataArray,
     else:
         logger_stream.error(f'Invalid mapping_use: {mapping_use!r}')
         raise ValueError(f"Invalid mapping_use: {mapping_use!r}")
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # method to rename da variables use variable template
 @deprecated(since="2026-09-30")
 @with_logger(var_name="logger_stream")
@@ -1319,9 +1329,37 @@ def rename_da_by_template_OLD(
         "case_sensitive": case_sensitive}
 
     return da_new, info
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to set data type
+@withxrds
+def set_type(data: xr.DataArray, nan_value=None) -> xr.DataArray:
+    """Optimize data type while preserving name, coordinates and attributes."""
+
+    if not isinstance(data, xr.DataArray):
+        raise TypeError("Input data must be an xr.DataArray.")
+
+    # convert only if necessary
+    if data.dtype == np.float64:
+        data = data.astype(np.float32, copy=False, keep_attrs=True)
+
+    # replace missing values only if requested
+    if nan_value is not None:
+        data_name = data.name
+        data_attrs = data.attrs.copy()
+
+        data = reset_nan(data, nan_value)
+
+        # restore metadata
+        data.name = data_name
+        data.attrs = data_attrs
+
+    return data
 
 @withxrds
-def set_type(data: xr.DataArray, nan_value = None) -> xr.DataArray:
+@deprecated(use='set_type', since="2026-10-12")
+def set_type_OLD(data: xr.DataArray, nan_value = None) -> xr.DataArray:
     """
     Make sure that the data is the smallest possible.
     """

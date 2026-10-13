@@ -117,7 +117,8 @@
   "workflow": {
     "options": {
         "intermediate_output": "Tmp",
-        "tmp_dir": "{path_tmp}"
+        "tmp_dir": "{path_tmp}",
+        "io_config": {"mode": "many_data_files_to_one_file"}
     },
     "process_list": {
         "AIR_T_WORKFLOW": [

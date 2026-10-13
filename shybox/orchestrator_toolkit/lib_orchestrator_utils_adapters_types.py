@@ -2,7 +2,7 @@
 """
 Library Features:
 
-Name:          lib_orchestrator_utils_fx_single
+Name:          lib_orchestrator_utils_adapters_types
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20260123'
 Version:       '1.1.0'

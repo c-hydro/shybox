@@ -79,7 +79,9 @@ class ProcessorContainer:
                         loc_pattern = value.loc_pattern
                         has_placeholder, _ = self._get_placeholders(loc_pattern)
                         if has_placeholder:
-                            args_dynamic[arg_name] = value
+                            if arg_name not in list(args_dynamic.keys()):
+                                args_dynamic[arg_name] = {}
+                            args_dynamic[arg_name][key] = value
                             continue
 
                         if not value.is_static:
@@ -126,6 +128,22 @@ class ProcessorContainer:
 
         # set original arguments as attributes
         args_common = {**args_static, **args_dynamic}
+
+        # merge static and dynamic references
+        ref_static, ref_dynamic = args_static.get("ref"), args_dynamic.get("ref")
+        if isinstance(ref_static, dict) and isinstance(ref_dynamic, dict):
+
+            # check overlapping reference keys
+            ref_duplicates = set(ref_static) & set(ref_dynamic)
+
+            if ref_duplicates:
+                self.logger.warning(
+                    f'Dynamic "ref" overwrites static subkey(s): '
+                    f'{", ".join(sorted(map(str, ref_duplicates)))}'
+                )
+            # merge references, dynamic values take priority
+            args_common["ref"] = {**ref_static, **ref_dynamic}
+
         # collect updated attributes
         updated_args = []
         for arg_name, arg_value in args_common.items():
@@ -319,11 +337,8 @@ class ProcessorContainer:
             data_name = data_names[data_id]
             # group datasets
             group_objects = ProcessorCollection.extract_group(group=data_collections)
-
-            # define data flag(s)
-            collection_flag = False
-            if 'collections' in data_name:
-                collection_flag = True
+            # group multiple tiles
+            group_multiple_data = isinstance(data_collections, list) and len(data_collections) > 1
 
             # iterate over groups
             data_id, deps_id = 0, 0
@@ -384,8 +399,11 @@ class ProcessorContainer:
                         # info start
                         self.logger.info(f"Check object '{time_step}' and variable '{dset_var}' ... ")
 
+                        # group multiple times
+                        group_multiple_time = len(group_time) > 1
+
                         # compose key
-                        if collection_flag:
+                        if group_multiple_data:
                             if dset_role == "data":
                                 dset_key = f"{dset_tag}::data|{data_id}@time|{time_id}"
                             elif dset_role == "deps":
@@ -512,39 +530,29 @@ class ProcessorContainer:
 
         # info organize deps start
         self.logger.info(f"Organize deps object(s) ... ")
-        # add deps
+        # iterate over deps
         for deps_key, deps_data in fx_deps.items():
 
-            # split dependency key
-            deps_base, deps_time = deps_key.split('@')
-            deps_role, deps_workflow, deps_variable = deps_base.split('|')
+            # parse dependency tag
+            deps_tag = _parse_tag(deps_key)
 
-            # check multiple variable suffix, e.g. variable::1
-            if '::' in deps_variable:
+            # get variable information
+            deps_variable = deps_tag["variable"]
+            deps_data_idx = deps_tag["data_idx"] or deps_tag["variable_idx"]
+            deps_time_idx = deps_tag["time_idx"]
 
-                # split base and indexes
-                deps_base, deps_other = deps_variable.rsplit("::", 1)
-                # split data and time indexes
-                deps_data_idx, deps_time_idx = deps_other.split("--", 1)
+            # build nested key when both indexes are available
+            if deps_data_idx is not None and deps_time_idx is not None:
 
-                # get numeric indexes
-                deps_data_idx = deps_data_idx.rsplit("|", 1)[-1]
-                deps_time_idx = deps_time_idx.rsplit("|", 1)[-1]
+                # build tag
+                deps_nested = _build_tag(variable="data", data_idx=deps_data_idx, time_idx=deps_time_idx)
 
-                # get variable name and counter (if exists)
-                deps_variable_base, deps_counter = deps_variable.rsplit('::', 1)
-                #if deps_data_idx.isdigit():
+                # remove initial variable name from nested key
+                deps_nested = deps_nested.split("::", 1)[-1]
 
-                if deps_data_idx.isdigit() and deps_time_idx.isdigit():
-                    deps_variable_nested = f"collections::data|{deps_data_idx}--time|{deps_time_idx}"
-                    # get variable nested
-                    #deps_variable_nested = f'collections::{deps_data_idx}'
-                    # initialize root container
-                    fx_deps_args.setdefault(deps_base, {})
-                    # store dependency using split keys
-                    fx_deps_args[deps_base][deps_variable_nested] = deps_data
-                else:
-                    fx_deps_args[deps_variable] = deps_data
+                fx_deps_args.setdefault(deps_variable, {})
+                fx_deps_args[deps_variable][deps_nested] = deps_data
+
             else:
                 fx_deps_args[deps_variable] = deps_data
 
@@ -555,58 +563,39 @@ class ProcessorContainer:
         self.logger.info(f"Organize data object(s) ... ")
 
         # remap fx data keys using mapping information
+        self.logger.info("Organize data object(s) ... ")
         fx_variable_workflow, fx_data_remapped = {}, {}
         for mapping_key, mapping_obj in fx_mapping_in.items():
 
-            # get collection and target fx variable
-            mapping_collection = mapping_obj.get('collection')
-            mapping_var_fx = mapping_obj.get('var_fx')
-            mapping_var_workflow = mapping_obj.get('var_workflow')
+            mapping_collection = mapping_obj.get("collection")
+            mapping_var_fx = mapping_obj.get("var_fx")
+            mapping_var_workflow = mapping_obj.get("var_workflow")
 
-            # search collection in fx_data keys
             for fx_data_key, fx_data_obj in fx_data.items():
 
-                # iterate over processes (fill collection previously ... )
-                if mapping_collection is None:
-                    mapping_collection = fx_data_key
+                if mapping_collection is not None and mapping_collection not in fx_data_key:
+                    continue
 
-                if mapping_collection in fx_data_key:
+                # parse input tag
+                fx_data_tag = _parse_tag(fx_data_key)
 
-                    if '::' in fx_data_key:
+                # get indexes
+                fx_data_idx = fx_data_tag["data_idx"] or fx_data_tag["variable_idx"]
+                fx_time_idx = fx_data_tag["time_idx"]
 
-                        # split base and indexes
-                        fx_data_base, fx_data_other = fx_data_key.rsplit("::", 1)
-                        # split data and time indexes
-                        fx_data_idx, fx_time_idx = fx_data_other.split("--", 1)
+                # build output tag
+                mapping_var_fx_idx = _build_tag(variable=mapping_var_fx, data_idx=fx_data_idx, time_idx=fx_time_idx)
 
-                        # get numeric indexes
-                        fx_data_idx = fx_data_idx.rsplit("|", 1)[-1]
-                        fx_time_idx = fx_time_idx.rsplit("|", 1)[-1]
+                # store mapped object
+                fx_data_remapped[mapping_var_fx_idx] = fx_data_obj
+                fx_variable_workflow[mapping_var_fx_idx] = mapping_var_workflow
 
-                        if fx_data_idx.isdigit() and fx_time_idx.isdigit():
-                            mapping_var_fx_idx = f"{mapping_var_fx}::data|{fx_data_idx}--time|{fx_time_idx}"
+                # continue for multiple variables
+                if fx_data_idx is not None:
+                    continue
 
-                            fx_data_remapped[mapping_var_fx_idx] = fx_data_obj
-                            fx_variable_workflow[mapping_var_fx_idx] = mapping_var_workflow
-                            # do not break: other ::N entries may exist
-                            continue
-
-                        """
-                        if fx_data_idx.isdigit():
-                            mapping_var_fx_idx = f'{mapping_var_fx}::{fx_data_idx}'
-                            fx_data_remapped[mapping_var_fx_idx] = fx_data_obj
-                            fx_variable_workflow[mapping_var_fx_idx] = mapping_var_workflow
-                            # do not break: other ::N entries may exist
-                            continue
-                        """
-
-                    # standard case without ::N
-                    fx_data_remapped[mapping_var_fx] = fx_data_obj
-                    fx_variable_workflow[mapping_var_fx] = mapping_var_workflow
-                    break
-
-        # return remap variables to the fx_data
-        fx_data = fx_data_remapped
+        # return remap and group variables to the fx_data
+        fx_data = _group_tag(fx_data_remapped)
 
         # get variables args and workflow
         fx_variable_in = fx_deps_args['variable_in']
@@ -822,9 +811,13 @@ class ProcessorContainer:
                 fx_collections_tags.append(fx_tag)
 
                 # get args from out kwargs
-                out_kwargs = {}
-                if fx_tag in self.out_obj:
+                if fx_tag not in self.out_obj:
+                    self.logger.warning(f'Output tag "{fx_tag}" is not defined in out_obj.')
+                    out_kwargs = {}
+                else:
                     out_kwargs = self.out_obj[fx_tag]
+
+                # set kwargs
                 kwargs['time_format'] = getattr(out_kwargs, 'time_format', '%Y-%m-%d %H:%M:%S')
                 kwargs['units'] = getattr(out_kwargs, 'units', {})
                 variable_template = getattr(out_kwargs, 'variable_template', {}) or {}
@@ -918,6 +911,247 @@ class ProcessorContainer:
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helpers
+# helper to parse the data tag
+def _parse_tag(tag: str) -> dict:
+    """
+    Parse a workflow tag into its components.
+
+    Examples:
+        data|WORKFLOW|VARIABLE
+        data|WORKFLOW|VARIABLE|1
+        data|WORKFLOW|VARIABLE::data|1@time|0
+    """
+
+    # initialize
+    tag_base, tag_other, tag_time = tag, None, None
+
+    # split time information
+    if '@' in tag_base:
+        tag_base, tag_time = tag_base.split('@', 1)
+
+    # split multiple variable information
+    if '::' in tag_base:
+        tag_base, tag_other = tag_base.split('::', 1)
+
+    # split base components
+    tag_parts = tag_base.split('|')
+
+    if len(tag_parts) not in (3, 4):
+        raise ValueError(f'Invalid tag "{tag}". Expected 3 or 4 base elements.')
+
+    tag_role, tag_workflow, tag_variable = tag_parts[:3]
+    tag_variable_idx = tag_parts[3] if len(tag_parts) == 4 else None
+
+    # split multiple variable index
+    tag_data_idx = None
+    if tag_other is not None:
+        other_parts = tag_other.split('|')
+        tag_data_idx = other_parts[-1] if len(other_parts) > 1 else other_parts[0]
+
+    # split time index
+    tag_time_name, tag_time_idx = None, None
+    if tag_time is not None:
+        tag_time_name, tag_time_idx = tag_time.split('|', 1)
+
+    return {
+        "role": tag_role, "workflow": tag_workflow, "variable": tag_variable,
+        "variable_idx": tag_variable_idx, "data_idx": tag_data_idx,
+        "time_name": tag_time_name, "time_idx": tag_time_idx,}
+
+# helper to build tag
+def _build_tag(variable: str, data_idx=None, time_idx=None, data_name: str = "data", time_name: str = "time") -> str:
+    """Build a normalized variable tag."""
+    tag = variable
+    if data_idx is not None:
+        tag += f"::data|{data_idx}"
+    if time_idx is not None:
+        tag += f"@{time_name}|{time_idx}"
+    return tag
+
+# helper to group tag
+def _group_tag(data: dict, separator: str = "::", flatten_single: bool = False) -> dict:
+    """Group variables by data index, time index, or unique name."""
+
+    # behaviour
+    # data@time|0 -- unique --> data: value
+    # data@time|0, data@time|1 ... -- multiple --> data: {time|0: value0, time|1: value1 ...}
+    # data|{id}::data|i@time|t --> data: {data|i@time|t: value}
+    # data|{t}@time|t1, data|{t}@time|t2 --> data: {time|t1: value, time|t2: value ...}
+    # data|q_sim_open_loop@time|0 --> data!q_sim_open_loop: value
+    # code@time|0 --> code: value ; data@time|0 --> data: value
+
+    data_grouped = {}
+    repeated_groups = set()
+    for data_key, data_obj in data.items():
+
+        # split variable name and suffix
+        data_variable, sep, data_suffix = data_key.partition(separator)
+
+        # split time information
+        data_base, time_sep, time_suffix = data_variable.partition("@")
+
+        # check repeated data and time placeholders
+        is_repeated_data = bool(re.search(r"[|:]\{(?:n|id)\}", data_base))
+        is_repeated_time = bool(re.search(r"[|:]\{t\}", data_base))
+
+        # remove placeholders
+        data_base = re.sub(r"[|:]\{(?:n|id|t)\}", "", data_base)
+
+        # case 1: repeated data variables
+        if is_repeated_data:
+
+            # example: data|{id}::data|1@time|0
+            # output: data -> {"data|1@time|0": value}
+            if not sep or not data_suffix:
+                raise ValueError(
+                    f'Repeated data tag "{data_key}" requires separator "{separator}" '
+                    'and a non-empty suffix.'
+                )
+
+            group_key = data_base
+            item_key = data_suffix
+            repeated_groups.add(group_key)
+
+        # case 2: repeated time variables
+        elif is_repeated_time:
+
+            # example: data|{t}@time|0
+            # output: data -> {"time|0": value}
+            if not time_sep or not time_suffix:
+                raise ValueError(f'Missing time index in tag "{data_key}".')
+
+            group_key = data_base
+            item_key = time_suffix
+            repeated_groups.add(group_key)
+
+        # case 3: named variables
+        elif "|" in data_base:
+
+            # example: data|q_sim_open_loop@time|0
+            # output: data!q_sim_open_loop -> value
+            data_group, data_name = data_base.split("|", 1)
+
+            group_key = f"{data_group}!{data_name}"
+            item_key = time_suffix if time_sep else None
+
+        # case 4: unique or multiple time variables
+        else:
+
+            # example: data@time|0 -> data: value
+            # example: data@time|0, data@time|1 -> data: {time|0: ..., time|1: ...}
+            group_key = data_base
+            item_key = time_suffix if time_sep else None
+
+        # initialize group
+        data_grouped.setdefault(group_key, {})
+
+        # check duplicate keys
+        if item_key in data_grouped[group_key]:
+            raise KeyError(f'Duplicate tag "{item_key}" in variable "{group_key}".')
+        # store data
+        data_grouped[group_key][item_key] = data_obj
+
+    # finalize grouped variables
+    for group_key, group_values in list(data_grouped.items()):
+
+        # repeated placeholders remain dictionaries unless flattening is requested
+        if group_key in repeated_groups:
+
+            if flatten_single and len(group_values) == 1:
+                data_grouped[group_key] = next(iter(group_values.values()))
+            continue
+
+        # unique variables become direct objects
+        if len(group_values) == 1:
+            data_grouped[group_key] = next(iter(group_values.values()))
+
+        # multiple time steps remain dictionaries
+        elif None in group_values:
+            raise ValueError(f'Variable "{group_key}" mixes indexed and non-indexed values.')
+
+    return data_grouped
+
+# helper to test tag grouping
+def _test_tag():
+
+    test_cases = [
+        # unique variable
+        (
+            {"data@time|0": 10},
+            {"data": 10}
+        ),
+
+        # multiple time steps
+        (
+            {"data@time|0": 10, "data@time|1": 20},
+            {"data": {"time|0": 10, "time|1": 20}}
+        ),
+
+        # repeated data indexes
+        (
+            {
+                "data|{id}::data|1@time|0": 10,
+                "data|{id}::data|2@time|0": 20
+            },
+            {
+                "data": {
+                    "data|1@time|0": 10,
+                    "data|2@time|0": 20
+                }
+            }
+        ),
+
+        # repeated time indexes
+        (
+            {
+                "data|{t}@time|0": 10,
+                "data|{t}@time|1": 20
+            },
+            {
+                "data": {
+                    "time|0": 10,
+                    "time|1": 20
+                }
+            }
+        ),
+
+        # named variable
+        (
+            {"data|q_sim_open_loop@time|0": 10},
+            {"data!q_sim_open_loop": 10}
+        ),
+
+        # multiple unique variables
+        (
+            {"code@time|0": 10, "data@time|0": 20},
+            {"code": 10, "data": 20}
+        )
+    ]
+
+    # execute tests
+    for test_id, (data_in, data_expected) in enumerate(test_cases, start=1):
+
+        data_out = _group_tag(data_in)
+
+        assert data_out == data_expected, (
+            f"Test {test_id} failed.\n"
+            f"Expected: {data_expected}\n"
+            f"Result: {data_out}"
+        )
+
+        print(f"Test {test_id} ... OK")
+
+    # test flatten_single
+    data_out = _group_tag(
+        {"data|{id}::data|1@time|0": 10},
+        flatten_single=True
+    )
+
+    assert data_out == {"data": 10}
+
+    print("Test flatten_single ... OK")
+    print("All tag grouping tests passed.")
+
 # method to get data from memory (USE OR NOT?)
 @deprecated(since='2026-10-08')
 def _get_memory_data(obj):

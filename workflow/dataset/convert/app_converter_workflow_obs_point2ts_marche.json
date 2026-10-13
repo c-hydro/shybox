@@ -93,17 +93,13 @@
     "options": {
         "intermediate_output": "Tmp",
         "tmp_dir": "{path_tmp}",
-        "dump_mode": "many_data_to_one_file"
+        "io_config": {"mode": "many_data_files_to_one_file"}
     },
     "process_list": {
         "DISCHARGE_WORKFLOW": [
             {"function": "exec_join_points_to_time_series",
-              "datasets": {
-                "data": {"collections": "discharge"}
-              },
-              "results": {
-                "data": {"collections": "discharge"}
-              },
+              "datasets": {"data|{t}": "discharge"},
+              "results": {"data": "discharge"},
               "fill_value": -9999.0, "no_data_value": -9999.0
             }
         ]

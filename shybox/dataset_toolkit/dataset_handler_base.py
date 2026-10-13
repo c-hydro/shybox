@@ -1138,8 +1138,22 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if isinstance(time, list) and len(time) == 1:
             time = time[0]
 
-        # define the output file
+        # get the out file
         out_file = self.get_key(time, **kwargs)
+        # get the out placeholders
+        out_placeholder = self.file_placeholder
+
+        # check and replace out placeholders
+        if out_placeholder:
+            if not isinstance(out_placeholder, dict):
+                raise TypeError('File placeholders must be defined by a dictionary.')
+            for placeholder, value in out_placeholder.items():
+                # define placeholder tag
+                placeholder_tag = "{" + placeholder + "}"
+                # replace only if the placeholder exists in the filename
+                if placeholder_tag in out_file:
+                    out_file = out_file.replace(placeholder_tag, "NA" if value is None else str(value))
+        # define out path and name
         out_path, out_name = os.path.dirname(out_file), os.path.basename(out_file)
 
         # update variable from metadata (if available)
@@ -1258,7 +1272,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
     # method to create data
     def create_data(self, mapping, name: str='variable'):
-
 
         # get information from classes
         obj_info = self.info

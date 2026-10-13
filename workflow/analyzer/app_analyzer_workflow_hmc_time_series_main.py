@@ -178,7 +178,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_sections']['path'],
         file_name=alg_cfg_application['static_data']['registry_sections']['file_name'],
         data_layout='points',
-        file_type='points_section_db', file_format='ascii', file_mode='local',
+        file_type='points_section_db', file_format='ascii', file_mode='local', file_workflow='GEO',
         file_args={
             'lut_map': alg_cfg_application['static_data']['registry_sections']['lut_map'],
             'lut_type': alg_cfg_application['static_data']['registry_sections']['lut_type'],
@@ -196,7 +196,7 @@ def main(view_table: bool = False):
         path=alg_cfg_application['static_data']['registry_hmc']['path'],
         file_name=alg_cfg_application['static_data']['registry_hmc']['file_name'],
         data_layout='points',
-        file_type='points_section_hmc', file_format='ascii', file_mode='local',
+        file_type='points_section_hmc', file_format='ascii', file_mode='local', file_workflow='GEO',
         file_args={'delimiter':','},
         file_variable='registry_hmc', file_io='input',
         variable_template={
@@ -319,6 +319,7 @@ def main(view_table: bool = False):
         data_ref={'sections_hmc': registry_sections_hmc, 'sections_db': registry_sections_data},
         priority=None,
         configuration=alg_cfg_workflow,
+        tag_orchestrator='multi_time_series', tag_logger='OrchestratorTimeSeries',
         logger=logging_handle
     )
     # orchestrator exec

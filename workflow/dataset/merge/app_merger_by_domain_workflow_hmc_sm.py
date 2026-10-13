@@ -175,7 +175,8 @@ def main(view_table: bool = False):
     ref_data = DataOnDemand(
         info=alg_cfg_application['geo']['grid'],
         data_role='auxiliary', data_id=-1,
-        file_type='grid_2d', file_format=None, file_mode='local', file_variable='GRID', file_io='input',
+        file_type='grid_2d', file_format=None, file_mode='local',
+        file_variable='GRID', file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"},
@@ -213,7 +214,7 @@ def main(view_table: bool = False):
                 file_name=alg_data_src_settings['file_watermark']['file_name'],
                 data_role='auxiliary', data_id=alg_data_id,
                 file_type='grid_2d', file_format='ascii', file_mode='local',
-                file_variable='WATERMARK', file_io='input',
+                file_variable='WATERMARK', file_io='input', file_workflow="SOIL_MOISTURE_WORKFLOW",
                 variable_template={
                     "dims_geo": {"x": "longitude", "y": "latitude"},
                     "vars_geo": {"x": "longitude", "y": "latitude"},

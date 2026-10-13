@@ -27,7 +27,7 @@ from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_proc
     },
     args_adapter=None,
     output_adapter={
-        'data': {"method": "obj_to_dict", "kwargs": {}},
+        'data': {"method": "fx_to_dict", "kwargs": {}},
     },
     output_type='pandas',
     lazy_undefined_args=True, lazy_undefined_value=None)

@@ -9,9 +9,9 @@ Version:       '1.0.0'
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_fx_list import (
-    adapter_list_to_xarray, adapter_variables_to_group,)
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_fx_single import dict_to_fx, fx_to_dict
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_fx import (
+    adapter_obj_to_xarray, adapter_variables_to_group,)
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_types import dict_to_fx, fx_to_dict
 
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_vars import mapping_keys_by_separator
 # ----------------------------------------------------------------------------------------------------------------------
@@ -19,7 +19,7 @@ from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_vars import map
 # ----------------------------------------------------------------------------------------------------------------------
 # collect adapters type
 ADAPTERS_TYPE = {
-    'list_to_darray': adapter_list_to_xarray,
+    'adapter_obj_to_xarray': adapter_obj_to_xarray,
     'dict_to_fx': dict_to_fx,
     'fx_to_dict': fx_to_dict,
     'mapping_keys_by_separator': mapping_keys_by_separator,

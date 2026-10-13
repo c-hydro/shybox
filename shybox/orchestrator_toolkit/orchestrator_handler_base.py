@@ -47,21 +47,42 @@ from shybox.generic_toolkit.lib_utils_code import deprecated
 class OrchestratorBase:
 
     # default class options
-    default_options = {
+    DEFAULT_OPTION_REGISTRY = {
         "intermediate_output": "Mem",  # "Mem" or "Tmp"
         "break_on_missing_tiles": False,  # legacy naming; grid uses it, TS may ignore
         "tmp_dir": None,
-        "dump_mode": "one_data_to_one_file"
+        "dump_mode": None
     }
 
-    # set recognized dump modes
-    DUMP_REGISTRY = {
-        "one_data_to_one_file": "Dump each data object to a separate file (example: mask grid usign a reference)",
-        "many_data_to_one_file": "Dump multiple data objects to a single file [old declaration]",
-        "many_data_tiles_to_one_file": "Dump multiple data tiles objects to a single file (example: merge data)",
-        "many_data_times_to_one_file": "Dump multiple data times objects to a single file (example: create time-series)",
-        "many_data_tiles_to_many_files": "Dump multiple data tiles objects to multiple files (example: multiple tiff)",
+    # io configuration registry
+    IO_REGISTRY = {
+        "one_data_to_one_file": {
+            "type_in": "single",
+            "type_out": "single",
+            "description": "Dump each data object to a separate file",
+        },
+        "many_data_ts_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple time-series into one file",
+        },
+        "many_data_tiles_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple tiles into one file",
+        },
+        "many_data_times_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple time steps into one file",
+        },
+        "many_data_files_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple files into one file",
+        },
     }
+
     # set recognized group modes
     GROUP_REGISTRY = {
         "by:step": "Group data by single time step",
@@ -93,13 +114,18 @@ class OrchestratorBase:
         self.processes: List[ProcessorContainer] = []
         self.break_points: List[int] = []
 
-        self.options = deepcopy(self.default_options)
+        self.options = deepcopy(self.DEFAULT_OPTION_REGISTRY)
         if options is not None:
             options = {key: value for key, value in options.items() if not (key.startswith('_') and key.endswith('_'))}
             self.options.update(options)
 
-        # get dump mode
-        self.dump_mode = self.options.get("dump_mode", 'one_data_to_one_file')
+        # get io configuration
+        self.io_config = self.options.get("io_config", None)
+        # set io attributes
+        self.io_mode = self.io_config["mode"]
+        self.type_in = self.io_config["type_in"]
+        self.type_out = self.io_config["type_out"]
+
         # get tmp dir
         if self.options["intermediate_output"] == "Tmp":
             tmp_root = self.options.get("tmp_dir", tempfile.gettempdir())
@@ -147,16 +173,70 @@ class OrchestratorBase:
         return self.deps_in.get(reference_key, None)
 
     ## ORCHESTRATOR PROPERTIES
-    # dump property
+    # io configuration
     @property
-    def dump_mode(self):
-        return self._dump_mode
-    @dump_mode.setter
-    def dump_mode(self, value):
-        if value not in self.DUMP_REGISTRY:
-            raise ValueError(f'Dump mode "{value}" is not supported. '
-                             f'Available modes: {", ".join(self.DUMP_REGISTRY)}')
-        self._dump_mode = value
+    def io_config(self):
+        return self._io_config
+    @io_config.setter
+    def io_config(self, value):
+
+        # Validate configuration
+        if not isinstance(value, dict):
+            raise TypeError('IO configuration must be a dictionary.')
+
+        # Get IO mode
+        mode = value.get("mode")
+
+        # Format available modes
+        available_modes = "\n".join(
+            f'  - {name}: {cfg["description"]} '
+            f'[{cfg["type_in"]} -> {cfg["type_out"]}]'
+            for name, cfg in self.IO_REGISTRY.items()
+        )
+
+        # Validate mode
+        if mode not in self.IO_REGISTRY:
+            raise ValueError(
+                f'Unsupported IO mode "{mode}".\n'
+                f'Check "workflow.options.io_config.mode".\n'
+                f'Available modes:\n{available_modes}'
+            )
+
+        # Get IO settings from registry
+        io_settings = self.IO_REGISTRY[mode]
+
+        # Set IO configuration
+        self._io_config = {"mode": mode,"type_in": io_settings["type_in"],"type_out": io_settings["type_out"],}
+
+    # IO mode property
+    @property
+    def io_mode(self):
+        return self._io_mode
+    @io_mode.setter
+    def io_mode(self, value):
+        if value not in self.IO_REGISTRY:
+            raise ValueError(f'Unsupported IO mode "{value}".')
+        self._io_mode = value
+
+    # Input data type property
+    @property
+    def type_in(self):
+        return self._type_in
+    @type_in.setter
+    def type_in(self, value):
+        if value not in ("single", "collections"):
+            raise ValueError(f'Unsupported input data type "{value}".')
+        self._type_in = value
+
+    # Output data type property
+    @property
+    def type_out(self):
+        return self._type_out
+    @type_out.setter
+    def type_out(self, value):
+        if value not in ("single", "collections"):
+            raise ValueError(f'Unsupported output data type "{value}".')
+        self._type_out = value
 
     # group property
     @property
@@ -520,14 +600,13 @@ class OrchestratorBase:
 
         # check time availability
         if time is None:
-            self.logger.info_status("RunExecution -- MODE static")
+            self.logger.info_status("RunExecution -- TYPE static")
             time = pd.Timestamp.now()
         else:
-            self.logger.info_status("RunExecution -- MODE dynamic")
+            self.logger.info_status("RunExecution -- TYPE dynamic")
 
         # update orchestrator properties
-        self.time = time
-        self.group = group
+        self.time, self.group = time, group
 
         # manage process execution and process output
         if len(self.processes) == 0:
@@ -546,62 +625,83 @@ class OrchestratorBase:
             proc_mode, proc_tag = proc_obj.mode, proc_obj.tag
 
             # info status process
-            self.logger.info_status(f"RunExecution -- PROCESS ID {proc_id} MODE {proc_mode} TAG {proc_tag}")
+            self.logger.info_status(f"RunExecution -- PROCESS | STEP | ID: {proc_id} | MODE: {proc_mode} | TAG: {proc_tag}")
 
-            # set by the mode
-            if proc_mode == 'end' or proc_mode == 'unique':
+            # Set by process mode
+            if proc_mode in ('end', 'unique'):
 
-                # get data from self or process(es)
+                # Get data from self or process(es)
                 out_collections = self.data_out
                 default_obj = proc_obj.out_obj
                 tmp_obj = copy(proc_obj)
 
-                # iterate over default obj (usually a dict with one key)
+                # Iterate over default objects
                 for workflow_default, data_default in default_obj.items():
 
-                    # define data and workflow out
+                    # Define data and workflow out
                     data_out, workflow_out = None, None
-                    if isinstance(out_collections, dict):
-                        for key_tmp, data_tmp in out_collections.items():
-                            workflow_tmp = key_tmp.split('|')[0]
-                            if workflow_tmp in workflow_default:
-                                data_out = data_tmp[0]
-                                workflow_out = workflow_tmp
-                                continue
-                    else:
+                    if not isinstance(out_collections, dict):
                         raise TypeError('out_collections must be a dictionary.')
-                    # check data and workflow out
-                    if (data_out is None) or (workflow_out is None):
-                        raise RuntimeError(f'Data_out and workflow_out is/are defined by NoneType.')
 
-                    # set output options
-                    if self.dump_mode in (
-                            'many_data_to_one_file',
-                            'many_data_tile_to_one_file', 'many_data_times_to_one_file',):
+                    for key_tmp, data_tmp in out_collections.items():
+                        workflow_tmp = key_tmp.split('|', 1)[0]
+                        if workflow_tmp in workflow_default:
+                            data_out = data_tmp[0]
+                            workflow_out = workflow_tmp
+                            break
+
+                    # Check data and workflow out
+                    if data_out is None or workflow_out is None:
+                        raise RuntimeError(f'Output data not found for workflow "{workflow_default}".')
+
+                    # status process output
+                    self.logger.info_status(
+                        f"RunExecution -- PROCESS | OUTPUT | DUMP: {self.io_mode} | "
+                        f"TYPE_IN: {self.type_in} | TYPE_OUT: {self.type_out}"
+                    )
+
+                    # manage io type
+                    if (self.type_in == 'collections' and self.type_out == 'single') and self.group == 'by:step':
 
                         if data_out_collections is None:
                             data_out_collections = DataCollection(logger=self.logger)
 
-                        # add current DataLocal to collection
+                        # Add current DataLocal to collection
                         data_key = f"{data_out.file_workflow}|{data_out.file_variable}"
                         data_out_collections.add(data_key, data_out)
 
+                        # Assign collection only at the last process
                         if proc_id == id_last:
-                            workflow_collections = '|'.join(data_out_collections.file_workflow)
                             self.processes[proc_id].out_obj[workflow_default] = data_out_collections
                             self.processes[proc_id].dump_state = True
-                    elif self.dump_mode == 'one_data_to_one_file':
+
+                    elif (self.type_in == 'collections' and self.type_out == 'single') and self.group == 'by:period':
+
+                        # assign DataLocal at the end of time period
                         self.processes[proc_id].out_obj[workflow_default] = data_out
                         self.processes[proc_id].dump_state = True
-                    else:
-                        pass
 
-            elif proc_mode == 'start':
-                pass
-            elif proc_mode == 'intermediate':
+                    elif self.type_in == 'single' and self.type_out == 'single':
+
+                        # assign individual DataLocal
+                        self.processes[proc_id].out_obj[workflow_default] = data_out
+                        self.processes[proc_id].dump_state = True
+
+                    elif self.type_in == 'single' and self.type_out == 'collections':
+                        raise NotImplementedError(
+                            f'Not implemented IO "{self.type_in} :: {self.type_out}" for IO mode "{self.io_mode}". ')
+
+                    elif self.type_in == 'collections' and self.type_out == 'collections':
+                        raise NotImplementedError(
+                            f'Not implemented IO "{self.type_in} :: {self.type_out}" for IO mode "{self.io_mode}". ')
+
+                    else:
+                        raise ValueError(f'Unsupported IO input type "{self.type_in}" for IO mode "{self.io_mode}".')
+
+            elif proc_mode in ('start', 'intermediate'):
                 pass
             else:
-                self.logger.error('Variable "mode" can be defined by "end", "start", "unique" or "intermediate" tag')
+                raise ValueError(f'Unsupported process mode "{proc_mode}". Expected: start, intermediate, end, unique.')
 
         # normalize time steps
         time_steps = normalize_to_datetime_index(time)

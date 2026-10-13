@@ -98,7 +98,8 @@
   "workflow": {
     "options": {
         "intermediate_output": "Tmp",
-        "tmp_dir": "{path_tmp}"
+        "tmp_dir": "{path_tmp}",
+        "io_config": {"mode": "one_data_to_one_file"}
     },
 
     "process_list": {

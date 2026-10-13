@@ -1,7 +1,7 @@
 """
 Library Features:
 
-Name:          lib_orchestrator_utils_fx_list
+Name:          lib_orchestrator_utils_adapters_fx
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20260309'
 Version:       '1.1.0'
@@ -32,8 +32,8 @@ def adapter_variables_to_group(data: dict, separator: str = '|', **kwargs) -> di
         try:
             group_name, variable_name = data_key.split(separator, 1)
         except ValueError:
-            raise ValueError(
-                f'Key "{data_key}" must have format group{separator}variable".')
+            logger_stream.warning(f'Key "{data_key}" must have format group{separator}variable".')
+            return data
 
         # initialize group
         if group_name not in data_organized:
@@ -48,17 +48,34 @@ def adapter_variables_to_group(data: dict, separator: str = '|', **kwargs) -> di
 # ----------------------------------------------------------------------------------------------------------------------
 # adapter to convert list of xarray objects to xarray object
 @with_logger(var_name='logger_stream')
-def adapter_list_to_xarray(
-        data: Union[list, None] = None,
+def adapter_obj_to_xarray(
+        data: Union[dict, list, tuple, xr.DataArray, xr.Dataset, None] = None,
         time: Union[list, pd.DatetimeIndex, pd.Timestamp, str, None] = None,
         dim: str = "time",
-        dim_values: Union[int, None] = None,
-        no_data: float = -9999.0):
+        dim_values=None,
+        no_data: float = -9999.0,
+        **kwargs):
+    """Concatenate xarray objects along a new dimension, supporting dict inputs."""
 
     # check input
     if data is None:
         logger_stream.warning('Object data is defined by None. Return None')
         return None
+
+    # manage dictionary inputs
+    if isinstance(data, dict):
+
+        data_out = {}
+        for data_key, data_value in data.items():
+
+            # recursively concatenate each dictionary value
+            data_out[data_key] = adapter_obj_to_xarray(
+                data=data_value,
+                time=time,dim=dim,
+                dim_values=dim_values, no_data=no_data,
+                **kwargs)
+
+        return data_out
 
     # normalize input to list
     if not isinstance(data, (list, tuple)):
@@ -77,22 +94,19 @@ def adapter_list_to_xarray(
         raise TypeError(f"Expected xr.DataArray or xr.Dataset. Found: {type(obj_ref).__name__}")
 
     # initialize undefined objects using reference
-    data = [obj_ref.full_like(no_data) if obj is None else obj for obj in data]
+    data = [xr.full_like(obj_ref, no_data) if obj is None else obj for obj in data]
 
     # check homogeneous xarray type
     obj_type = type(obj_ref)
-    if not all(isinstance(obj, obj_type) for obj in data):
+    if not all(type(obj) is obj_type for obj in data):
         raise TypeError("All objects must have the same xarray type: all xr.DataArray or all xr.Dataset.")
 
-    # define time coordinates
+    # define dimension coordinates
     if time is not None:
-
         if isinstance(time, pd.DatetimeIndex):
-            dim_values = tim
-
+            dim_values = time
         elif isinstance(time, (pd.Timestamp, str)):
             dim_values = pd.DatetimeIndex([pd.Timestamp(time)])
-
         elif isinstance(time, (list, tuple)):
             dim_values = pd.DatetimeIndex([pd.Timestamp(time_step) for time_step in time])
         else:
@@ -101,14 +115,14 @@ def adapter_list_to_xarray(
 
     # use explicitly defined dimension values
     elif dim_values is not None:
-
         if isinstance(dim_values, pd.DatetimeIndex):
             pass
         elif isinstance(dim_values, pd.Timestamp):
             dim_values = pd.DatetimeIndex([dim_values])
+        elif isinstance(dim_values, (int, float)):
+            dim_values = [dim_values]
         else:
             dim_values = list(dim_values)
-
     # fallback to sequential index
     else:
         dim_values = list(range(len(data)))

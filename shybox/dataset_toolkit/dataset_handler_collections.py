@@ -40,8 +40,20 @@ class DataCollection(Dataset):
 
         # set data collections logger
         self.logger = logger or LoggingManager(name="DataCollections")
-        # update collections data
+
+        # initialize collection
         self.data = {}
+
+        # initialize dataset runtime attributes
+        self._structure_template = {}
+        self.nan_value = None
+        self.memory_active = False
+        self.memory_data = None
+        self.tags = {}
+        self.options = kwargs
+        self.message = kwargs.get("message", True)
+
+        # initialize collection data
         if data is not None:
             self.update(data)
 

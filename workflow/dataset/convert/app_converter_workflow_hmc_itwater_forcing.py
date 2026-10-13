@@ -139,7 +139,7 @@ def main():
             "options": {
                 "intermediate_output": "Tmp",
                 "tmp_dir": alg_cfg_application['tmp']['path'],
-                "dump_mode": "many_data_tiles_to_one_file"
+                "io_config": {"mode": "many_data_files_to_one_file"}
             },
             "process_list": {
                 "RAIN_WORKFLOW": [

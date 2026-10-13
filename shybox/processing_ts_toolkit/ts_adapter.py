@@ -25,12 +25,17 @@ from shybox.io_toolkit.lib_io_tiff import read_tiff_base
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to execute average over mask
 @as_process(input_type='pandas',
-            input_adapter={'data': 'list_to_darray'}, args_adapter=None, output_adapter=None,
+            input_adapter={'data' : [
+                {'method': 'dict_to_fx', 'kwargs': {}},
+                {'method': 'adapter_obj_to_xarray'}]
+            },
+            args_adapter=None,
+            output_adapter=None,
             output_type='pandas')
 @with_logger(var_name='logger_stream')
 def exec_average_over_mask(
-        data: xr.DataArray, sections_db: Union[pd.DataFrame, None],
-        mask: Union[DataLocal, xr.DataArray, None],
+        data: xr.DataArray, sections_db: Union[pd.DataFrame, None] = None,
+        mask: Union[DataLocal, xr.DataArray, None] = None,
         default_name: str = "data", ref_column: str = 'tag', ref_delimiter: Union[str, None] = '.',
         time_dim: str = "time",
         **kwargs):
@@ -38,17 +43,32 @@ def exec_average_over_mask(
     # info method start
     logger_stream.info_up('Execute average over mask ... ')
 
+    # convert Dataset with one variable to DataArray
+    if isinstance(data, xr.Dataset):
+
+        # check number of variables
+        if len(data.data_vars) == 1:
+            var_name = next(iter(data.data_vars))
+            data = data[var_name]
+        else:
+            logger_stream.error('Object data is defined by Dataset but variable are more then 1. Exit')
+            raise RuntimeError('Object data must be defined by DataArray or Dataset (var_dim = 1)')
+
     # check data format
     if not isinstance(data, xr.DataArray):
-        logger_stream.error('Object data is defined by xr.DataArray. Return None')
+        logger_stream.error('Object data is not defined by xr.DataArray. Exit')
         raise TypeError('Object data is not DataArray. Got {}'.format(type(data)))
     # get data variable name
     data_name = data.name or default_name
 
     # if mask is defined by NoneType, nothing to do
     if mask is None:
-        logger_stream.warning('Object mask is defined by NoneType. Return None')
-        return None
+        logger_stream.error('Object mask is defined by NoneType. Exit')
+        raise RuntimeError('Object mask is undefined. Mask data algorithm is not allowed.')
+    # if sections_db is defined by NoneType, nothing to do
+    if sections_db is None:
+        logger_stream.error('Object sections_db is defined by NoneType. Exit')
+        raise RuntimeError('Object sections_db is undefined. Maskin data is not available.')
 
     # single DataArray mask
     if isinstance(mask, xr.DataArray):

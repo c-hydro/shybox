@@ -268,7 +268,7 @@ def main(view_table: bool = False):
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
         file_variable='AIR_T_TS', file_io='output', file_workflow='AIR_T_WORKFLOW',
         file_deps=None, file_args={},
-        file_placeholder={'var_name': 'default'},
+        file_placeholder={'var_name': 'air_temperature'},
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
@@ -287,7 +287,7 @@ def main(view_table: bool = False):
         file_type='time_series_hmc', file_format='ascii', file_mode='local',
         file_variable='RELATIVE_HUMIDITY_TS', file_io='output', file_workflow='RELATIVE_HUMIDITY_WORKFLOW',
         file_deps=None, file_args={},
-        file_placeholder={'var_name': 'default'},
+        file_placeholder={'var_name': 'relative_humidity'},
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},

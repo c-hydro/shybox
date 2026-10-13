@@ -147,18 +147,19 @@
   "workflow": {
     "options": {
         "intermediate_output": "Tmp",
-        "tmp_dir": "{path_tmp}"
+        "tmp_dir": "{path_tmp}",
+        "io_config": {"mode": "many_data_ts_to_one_file"}
     },
     "process_list": {
         "TIME_SERIES_WORKFLOW": [
             {"function": "join_time_series_by_registry",
               "datasets": {
-                "data|data_1": "discharge_sim_openloop",
-                "data|data_2": "discharge_sim_analysis",
-                "data|data_3": "discharge_obs",
-                "data|data_4": "air_temperature_obs"
+                "data|q_sim_open_loop": "discharge_sim_openloop",
+                "data|q_sim_analysis": "discharge_sim_analysis",
+                "data|q_obs": "discharge_obs",
+                "data|air_t_obs": "air_temperature_obs"
               },
-              "results": {"data|data_1:data_2:data_3:data_4": "time_series"},
+              "results": {"data": "time_series"},
               "fill_value": -9999, "no_data_value": -9999}
         ]
     }
