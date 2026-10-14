@@ -1,16 +1,17 @@
 """
 Class Features
 
-Name:          orchestrator_handler_points
+Name:          orchestrator_handler_config
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260114'
-Version:       '1.0.0'
+Date:          '20261014'
+Version:       '1.5.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Union
 
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES as PROCESSES_UPD
@@ -298,6 +299,7 @@ class OrchestratorConfig(OrchestratorBase):
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
+## HELPERS
 # method to normalize data package to dictionary (if not)
 def _normalize_data_package(data_package_in, default_key='var'):
 
@@ -315,4 +317,60 @@ def _normalize_data_package(data_package_in, default_key='var'):
         data_package_out[package_key] = package
 
     return data_package_out
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+## UTILS
+# Utils to select workflow and common options to generate a single workflow
+def select_workflow_by_name(workflow_config: dict, workflow_name: str) -> dict:
+    """Select a workflow, merging options and normalizing the process list."""
+
+    # validate workflow configuration
+    if not isinstance(workflow_config, dict):
+        raise TypeError("Workflow configuration must be a dictionary.")
+
+    # internal function to merge options recursively
+    def _merge_options(common: dict, sub_options: dict) -> dict:
+        merged = deepcopy(common)
+        for key, value in sub_options.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = _merge_options(merged[key], value)
+            else:
+                merged[key] = deepcopy(value)
+        return merged
+
+    # extract workflow root if present
+    config = workflow_config.get("workflow", workflow_config)
+    # get common options
+    options = deepcopy(config.get("options", {}))
+
+    # check workflow-specific configuration
+    if workflow_name in config:
+
+        # get selected workflow
+        selected = config[workflow_name]
+        # merge common and workflow-specific options
+        options = _merge_options(options, selected.get("options", {}))
+        # get workflow-specific processes
+        processes = selected.get("process_list", {})
+        # collect process steps preserving all nested dictionaries
+        process_steps = deepcopy(processes)
+
+    else:
+
+        # get common process list
+        processes = config.get("process_list", {})
+
+        # validate selected workflow
+        if workflow_name not in processes:
+            raise KeyError(
+                f"Workflow '{workflow_name}' not found. "
+                f"Available workflows: {list(processes.keys())}"
+            )
+
+        # get selected process steps
+        process_steps = deepcopy(processes[workflow_name])
+
+    # return normalized configuration
+    return {"options": options, "process_list": {workflow_name: process_steps}}
 # ----------------------------------------------------------------------------------------------------------------------

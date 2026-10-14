@@ -241,7 +241,7 @@ def main(view_table: bool = False):
                 logger=logging_handle
             )
 
-            # append to src list
+            # append to src dictionary
             dset_src_handler_common[f'SOIL_MOISTURE_PARTIAL|{alg_data_id}'] = dset_src_handler_data
 
         ## DESTINATION DATA MANAGEMENT

@@ -133,6 +133,18 @@ def delineate_watershed(
         # create binary catchment mask
         catchment_mask = create_catchment_mask(obj_catchment=obj_catchment)
 
+        # recover geographical metadata
+        catchment_transform, catchment_crs = catchment_mask.affine, catchment_mask.crs
+
+        # validate geographical metadata
+        if catchment_transform is None:
+            raise ValueError(f"Affine transform is not defined for section '{section_tag}'.")
+        if catchment_crs is None:
+            logger_stream.warning(
+                f"CRS is not defined for section '{section_tag}'. "
+                "GeoTIFF output may not be correctly georeferenced."
+            )
+
         # compute catchment area
         catchment_area, catchment_cells = compute_catchment_area(
             grid_values=np.asarray(catchment_mask).copy(),
@@ -141,6 +153,13 @@ def delineate_watershed(
             transform_is_metric=False, latitude=lat_2d,
             decimal_round=2
         )
+
+        # warn if catchment area or number of cells is less than 1
+        if catchment_area < 1 or catchment_cells < 1:
+            logger_stream.warning(
+                f"Watershed '{section_tag}' has an invalid or very small catchment: "
+                f"area={catchment_area:.2f} km², cells={catchment_cells}."
+            )
 
         # info catchment
         logger_stream.info(f" ::: area: {catchment_area} - cells: {catchment_cells}")
@@ -156,6 +175,8 @@ def delineate_watershed(
             "x": point_x, "y": point_y,
             "longitude": point_lon, "latitude": point_lat,
             "catchment": obj_catchment, "mask": catchment_mask,
+            "transform": catchment_transform, "crs": catchment_crs,
+            "area_km2": catchment_area, "area_n_cells": catchment_cells,
             "section": section.to_dict()
         }
 

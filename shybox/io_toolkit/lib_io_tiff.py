@@ -116,9 +116,13 @@ def write_tiff_base(
     if crs is None: crs = attrs.get("crs", None)
 
     # check transform
-    if transform is None: raise ValueError('Raster transform is not defined.')
+    if transform is None:
+        logger_stream.error('Geographical info "transform" is defined by NoneType')
+        raise ValueError('Raster transform is not defined.')
     # check crs
-    if crs is None:raise ValueError('Raster CRS is not defined.')
+    if crs is None:
+        logger_stream.error('Geographical info "crs" is defined by NoneType')
+        raise ValueError('Raster CRS is not defined.')
 
     # write GeoTIFF
     with rasterio.open(

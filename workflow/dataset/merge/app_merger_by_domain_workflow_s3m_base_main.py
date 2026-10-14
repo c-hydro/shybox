@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BY DOMAIN BASE
+SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BY DOMAIN BASE - S3M
 
-__date__ = '20260122'
-__version__ = '1.1.0'
+__date__ = '20261014'
+__version__ = '1.2.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
@@ -23,6 +23,7 @@ PATH_LOG=$HOME/Desktop/shybox/exec/case_study_itwater/merger_s3m_by_domain/log/;
 PATH_TMP=$HOME/Desktop/shybox/exec/case_study_itwater/merger_s3m_by_domain/tmp/
 
 Version(s):
+20261014 (1.2.0) --> Update codes using the new orchestrator structure and methods
 20260122 (1.1.0) --> Refactor using class methods in shybox package
 20250403 (1.0.0) --> Beta release for shybox package
 """
@@ -36,24 +37,26 @@ import time
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import select_workflow_by_name
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
-# fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_grid_toolkit.lib_proc_mask import mask_data_by_ref
-from shybox.processing_grid_toolkit.lib_proc_merge import merge_data_by_ref
-
+# utils
 from shybox.time_toolkit.lib_utils_time import select_time_range
+
+# fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
+from shybox.processing_grid_toolkit.lib_proc_merge import merge_data_by_ref
+from shybox.processing_grid_toolkit.lib_proc_mask import mask_data_by_ref
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Workflow for datasets merger by domain base configuration'
+alg_name = 'Workflow for datasets merger by domain base configuration - s3m'
 alg_type = 'Package'
-alg_version = '1.1.0'
-alg_release = '2026-01-22'
+alg_version = '1.2.0'
+alg_release = '2026-10-14'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -168,7 +171,8 @@ def main(view_table: bool = False):
     geo_data = DataLocal(
         path=alg_cfg_application['geo']['terrain']['path'],
         file_name=alg_cfg_application['geo']['terrain']['file_name'],
-        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_io='input',
+        file_type='grid_2d', file_format='ascii', file_mode='local',
+        file_variable='terrain', file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -183,12 +187,6 @@ def main(view_table: bool = False):
     for time_step in alg_time_generic:
 
         # ------------------------------------------------------------------------------------------------------------------
-        ## ANCILLARY DATA MANAGEMENT
-        # get workflow variable list
-        alg_data_vars = get_workflow_variable(alg_cfg_workflow)
-        # ------------------------------------------------------------------------------------------------------------------
-
-        # ------------------------------------------------------------------------------------------------------------------
         ## SOURCE DATA MANAGEMENT
         alg_cfg_step = alg_cfg_obj.fill_obj_from_lut(
             resolve_time_placeholders=True, when=time_step,
@@ -201,62 +199,69 @@ def main(view_table: bool = False):
         # view application section
         alg_cfg_obj.view(section=alg_cfg_step, table_name='application [cfg step]', table_print=view_table)
 
-        # iterate over src datasets
-        dset_src_handler_list = []
-        for alg_data_src_key, alg_data_src_settings in alg_cfg_step['data_source'].items():
+        # iterate over tiles
+        dset_src_handler_snow_mask, dset_src_handler_rain_eff, dset_src_handler_snow_albedo = {}, {}, {}
+        for dset_id, (dset_key, dset_info) in enumerate(alg_cfg_step['data_source'].items()):
 
-            # dataset handler
-            dset_src_handler_obj = DataLocal(
-                path=alg_data_src_settings['path'],
-                file_name=alg_data_src_settings['file_name'],
+            # dataset handler src snow mask
+            dset_tmp_handler_snow_mask = DataLocal(
+                path=dset_info['path'],
+                file_name=dset_info['file_name'],
                 file_type='grid_s3m', file_format='netcdf', file_mode='local',
-                file_variable=alg_data_vars, file_io='input',
+                file_variable="SNOW_MASK_PARTIAL", file_io='input', file_workflow='WORKFLOW_SNOW_MASK',
                 variable_template={
                     "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
-                    "vars_data": {"SnowMask": "snow_mask", "REff": "rain_eff", "AlbedoS": "snow_albedo"}
+                    "vars_data": {"SnowMask": "snow_mask"}
                 },
                 time_signature='current',
                 time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
                 logger=logging_handle
             )
 
-            dset_src_handler_list.append(dset_src_handler_obj)
+            # append to src dictionary
+            dset_src_handler_snow_mask[f'SNOW_MASK_PARTIAL|{dset_id}'] = dset_tmp_handler_snow_mask
 
+        """
+        "vars_data": {"SnowMask": "snow_mask",
+                      "REff": "rain_eff", "AlbedoS": "snow_albedo"}
+                      
+        """
         ## DESTINATION DATA MANAGEMENT
-        # iterate over dst datasets
-        dset_dst_handler_list = []
-        for alg_data_dst_key, alg_data_dst_settings in alg_cfg_step['data_destination'].items():
-
-            # dataset handler 'grid_2d' or 'grid' for geotiff
-            dset_dst_handler_obj = DataLocal(
-                path=alg_data_dst_settings['path'],
-                file_name=alg_data_dst_settings['file_name'],
-                file_type='grid_2d', file_format='geotiff', file_mode='local',
-                file_variable=[alg_data_dst_settings['variable']], file_io='output',
-                variable_template={
-                    "dims_geo": alg_data_dst_settings['dims_geo'],
-                    "vars_data": alg_data_dst_settings['vars_data']
-                },
-                time_signature='current',
-                time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
-            )
-
-            dset_dst_handler_list.append(dset_dst_handler_obj)
+        # dataset handler dst snow mask
+        dset_dst_handler_snow_mask = DataLocal(
+            path=alg_cfg_step['data_destination']['snow_mask']['path'],
+            file_name=alg_cfg_step['data_destination']['snow_mask']['file_name'],
+            file_type='grid_2d', file_format='geotiff', file_mode='local',
+            file_variable='SNOW_MASK_GRID', file_io='output', file_workflow='WORKFLOW_SNOW_MASK',
+            variable_template={
+                "dims_geo": alg_cfg_step['data_destination']['snow_mask']['dims_geo'],
+                "vars_data": alg_cfg_step['data_destination']['snow_mask']['vars_data']
+            },
+            time_signature='current',
+            time_reference=time_step, time_period=1, time_freq='h', time_direction='forward',
+            logger=logging_handle
+        )
         # ------------------------------------------------------------------------------------------------------------------
 
         # ------------------------------------------------------------------------------------------------------------------
         ## ORCHESTRATOR MANAGEMENT
+
+        # select snow mask workflow
+        orc_workflow_snow_mask = select_workflow_by_name(
+            workflow_config=alg_cfg_workflow, workflow_name='WORKFLOW_SNOW_MASK')
+
         # orchestrator settings
-        orc_process = Orchestrator.multi_tile(
-            data_package_in=dset_src_handler_list,
-            data_package_out=dset_dst_handler_list,
+        orc_process_snow_mask = Orchestrator.configure(
+            data_package_in={**dset_src_handler_snow_mask},
+            data_package_out={'SNOW_MASK_DST': dset_dst_handler_snow_mask},
             data_ref=geo_data,
-            priority=['snow_mask'],
-            configuration=alg_cfg_workflow,
+            priority=['WORKFLOW_SNOW_MASK'],
+            configuration=orc_workflow_snow_mask,
+            tag_orchestrator='multi_variable', tag_logger='OrchestratorGrid',
             logger=logging_handle
         )
-        # orchestrator exec
-        orc_process.run(time=time_step)
+        # orchestrator execution
+        orc_process_snow_mask.run(time=time_step)
         # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

@@ -482,7 +482,6 @@ class ProcessorData:
         return data_collection
 
     @classmethod
-    @classmethod
     def manage_time(
             cls,
             data_collection: Dict[str, Dict[str, "ProcessorData"]],

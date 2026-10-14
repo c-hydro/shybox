@@ -47,6 +47,7 @@ class DataCollection(Dataset):
         # initialize dataset runtime attributes
         self._structure_template = {}
         self.nan_value = None
+        self.file_placeholder = {}
         self.memory_active = False
         self.memory_data = None
         self.tags = {}

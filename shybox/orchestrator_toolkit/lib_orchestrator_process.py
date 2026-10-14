@@ -805,7 +805,10 @@ class ProcessorContainer:
                         fx_collections_history[fx_name_step] = {}
 
                     # store object by variable name
-                    fx_collections_history[fx_name_step] = fx_collections_step
+                    if use_key:
+                        fx_collections_history[fx_name_step].update(fx_collections_step)
+                    else:
+                        fx_collections_history[fx_name_step] = fx_collections_step
 
                 # add results directly to collections
                 fx_collections_tags.append(fx_tag)

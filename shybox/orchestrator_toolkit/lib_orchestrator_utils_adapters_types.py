@@ -4,8 +4,8 @@ Library Features:
 
 Name:          lib_orchestrator_utils_adapters_types
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260123'
-Version:       '1.1.0'
+Date:          '20261014'
+Version:       '1.2.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -29,11 +29,8 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 # adapter to convert fx output to dictionary
 def fx_to_dict(
-        obj_data,
-        obj_keys=None,
-        obj_separator='|',
-        logger_stream=None,
-        **kwargs):
+        obj_data, obj_keys=None, obj_separator='|',
+        logger_stream=None, **kwargs):
 
     # normalize input object to list of values
     if isinstance(obj_data, dict):
@@ -56,32 +53,24 @@ def fx_to_dict(
                 # use sub-dictionary values
                 if isinstance(map_value, dict):
                     obj_keys.extend(map_value.values())
-
                 # use root value
                 else:
                     obj_keys.append(map_value)
 
         else:
             # create default keys
-            obj_keys = [
-                str(idx + 1)
-                for idx in range(len(obj_values))
-            ]
+            obj_keys = [str(idx + 1) for idx in range(len(obj_values))]
 
     # normalize key defined by string
     elif isinstance(obj_keys, str):
         obj_keys = [obj_keys]
-
     # normalize key defined by list or tuple
     elif isinstance(obj_keys, (list, tuple)):
         obj_keys = list(obj_keys)
 
     # unsupported key format
     else:
-        raise TypeError(
-            f"`obj_keys` must be None, str, list or tuple. "
-            f"Got {type(obj_keys)}"
-        )
+        raise TypeError(f"`obj_keys` must be None, str, list or tuple. Got {type(obj_keys)}")
 
     # check if number of values is greater than number of keys
     if len(obj_values) > len(obj_keys):
@@ -99,31 +88,20 @@ def fx_to_dict(
     if len(obj_values) == 1 and obj_keys:
 
         # get root keys
-        root_keys = {
-            key.split(obj_separator, 1)[0]
-            for key in obj_keys
-        }
+        root_keys = {key.split(obj_separator, 1)[0] for key in obj_keys}
 
         # use root only if all keys share the same root
         if len(root_keys) == 1:
-            obj_dict = {
-                next(iter(root_keys)): obj_values[0]
-            }
+            obj_dict = {next(iter(root_keys)): obj_values[0]}
 
         # use complete keys
         else:
-            obj_dict = {
-                key: value
-                for key, value in zip(obj_keys, obj_values)
-            }
+            obj_dict = {key: value for key, value in zip(obj_keys, obj_values)}
 
     else:
 
         # map values to keys
-        obj_dict = {
-            key: value
-            for key, value in zip(obj_keys, obj_values)
-        }
+        obj_dict = {key: value for key, value in zip(obj_keys, obj_values)}
 
     return obj_dict
 # ----------------------------------------------------------------------------------------------------------------------

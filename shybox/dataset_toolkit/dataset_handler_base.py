@@ -212,6 +212,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         self.memory_active = True
         self.memory_data = None
+        self.memory_time = []
 
         # readability fields
         self.readable: bool = False
@@ -842,73 +843,80 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # check if data is already in memory
             if self.memory_data is not None:
 
-                # info log start (memory case)
-                log_data('start', name=name, time=time, from_memory=True)
+                # check if time is store in memorized steps
+                if time in self.memory_time:
 
-                # get data from memory
-                data = deepcopy(self.memory_data)
+                    # info log start (memory case)
+                    log_data('start', name=name, time=time, from_memory=True)
 
-                # get variables
-                variable = select_variable(data, **self.variable_template)
+                    # get data from memory
+                    data = deepcopy(self.memory_data)
 
-                # if there is no structure_template for the dataset, create it from the data
-                structure_template = self.get_structure_template(make_it=False, **kwargs)
-                if structure_template is None:
-                    self.set_structure_template(data, template_key=variable, **kwargs)
+                    # get variables
+                    variable = select_variable(data, **self.variable_template)
+
+                    # if there is no structure_template for the dataset, create it from the data
+                    structure_template = self.get_structure_template(make_it=False, **kwargs)
+                    if structure_template is None:
+                        self.set_structure_template(data, template_key=variable, **kwargs)
+                    else:
+                        # otherwise, update the data in the template
+                        # (this will make sure there is no errors in the coordinates due to minor rounding)
+                        attrs = data.attrs
+                        data = self.set_data_to_structure_template(data, structure_template)
+                        data.attrs.update(attrs)
+
+                    data.attrs.update({'source_location': full_location})
+
+                    # check data type
+                    if isinstance(data, xr.DataArray):
+                        data.name = self.memory_data.name
+                    elif isinstance(data, xr.Dataset):
+                        pass
+                    else:
+                        self.logger.error('Invalid data type in memory.')
+                        raise ValueError(f"Invalid data type: {type(data)}")
+
+                    # select by time
+                    data = select_by_time(data, when=time, tolerance='1H')
+
+                    # check data after selecting by time
+                    if data is None:
+                        self.logger.warning(f'Data is defined by NoneType after selecting by time {time}.')
+                        # info get data end
+                        self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
+                        return None
+
+                    # select data using a 'variable:workflow' mapping string (from reference or variable)
+                    reference, variable = kwargs.pop('reference', None), kwargs.pop('variable', None)
+                    if reference is not None or variable is not None:
+                        for key in (reference, variable):
+                            tmp = select_da_by_mapping(data, mapping_str=key)
+                            if tmp is not None:
+                                data = tmp
+                                break
+
+                    # check data after selecting by variables
+                    if data is None:
+                        self.logger.warning(f'Data is defined by NoneType after selecting by variables {reference}.')
+                        # info get data end
+                        self.logger.info_down(f'Get data for time {time} ... SKIPPED. Variables are not available')
+                        return None
+
+                    # info log start (memory case)
+                    log_data('end', name=name, time=time, from_memory=True)
+
+                    return data
+
                 else:
-                    # otherwise, update the data in the template
-                    # (this will make sure there is no errors in the coordinates due to minor rounding)
-                    attrs = data.attrs
-                    data = self.set_data_to_structure_template(data, structure_template)
-                    data.attrs.update(attrs)
-
-                data.attrs.update({'source_location': full_location})
-
-                # check data type
-                if isinstance(data, xr.DataArray):
-                    data.name = self.memory_data.name
-                elif isinstance(data, xr.Dataset):
+                    self.logger.info(
+                        f"Data are stored, but time {time} is not found in the available "
+                        f"memory time range [{self.memory_time[0]} -> {self.memory_time[-1]}]."
+                    )
                     pass
-                else:
-                    self.logger.error('Invalid data type in memory.')
-                    raise ValueError(f"Invalid data type: {type(data)}")
-
-                # select by time
-                data = select_by_time(data, when=time, tolerance='1H')
-
-                # check data after selecting by time
-                if data is None:
-                    self.logger.warning(f'Data is defined by NoneType after selecting by time {time}.')
-                    # info get data end
-                    self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
-                    return None
-
-                # select data using a 'variable:workflow' mapping string (from reference or variable)
-                reference, variable = kwargs.pop('reference', None), kwargs.pop('variable', None)
-                if reference is not None or variable is not None:
-                    for key in (reference, variable):
-                        tmp = select_da_by_mapping(data, mapping_str=key)
-                        if tmp is not None:
-                            data = tmp
-                            break
-
-                # select by variables
-                #data = select_by_vars(data, vars=self.variable_template)
-
-                # check data after selecting by variables
-                if data is None:
-                    self.logger.warning(f'Data is defined by NoneType after selecting by variables {reference}.')
-                    # info get data end
-                    self.logger.info_down(f'Get data for time {time} ... SKIPPED. Variables are not available')
-                    return None
-
-                # info log start (memory case)
-                log_data('end', name=name, time=time, from_memory=True)
-
-                return data
-
             else:
-                 pass
+                self.logger.info(f'Memory is active but data are not stored')
+                pass
 
         # info log start (source case)
         log_data('start', name=name, time=time, from_memory=False)
@@ -1016,6 +1024,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # store in memory (if active)
             if self.memory_active:
                 self.memory_data = deepcopy(data)
+                if time is not None:
+                    self.memory_time.append(time)
+                else:
+                    self.logger.warning(f'Memory data is stored for {full_location} '
+                                        f'but time is set to NoneType.')
 
         else:
             # check data mandatory or not

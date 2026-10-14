@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW MERGER BY TIME BASE
 
-__date__ = '20260126'
-__version__ = '1.1.0'
+__date__ = '20261014'
+__version__ = '1.2.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
@@ -23,6 +23,7 @@ PATH_LOG=$HOME/Desktop/shybox/exec/case_study_itwater/merger_s3m_by_time/log/;
 PATH_TMP=$HOME/Desktop/shybox/exec/case_study_itwater/merger_s3m_by_time/tmp/
 
 Version(s):
+20261014 (1.2.0) --> Update codes using the new orchestrator structure and methods
 20260126 (1.1.0) --> Refactor using class methods in shybox package
 20250403 (1.0.0) --> Beta release for shybox package
 """
@@ -38,7 +39,8 @@ import pandas as pd
 from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 
-from shybox.orchestrator_toolkit.orchestrator_handler_grid import OrchestratorGrid as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import select_workflow_by_name
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
@@ -53,8 +55,8 @@ from shybox.time_toolkit.lib_utils_time import select_time_range, select_time_fo
 project_name = 'shybox'
 alg_name = 'Workflow for datasets merger by time base configuration'
 alg_type = 'Package'
-alg_version = '1.1.0'
-alg_release = '2026-01-26'
+alg_version = '1.2.0'
+alg_release = '2026-10-14'
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -170,7 +172,8 @@ def main(view_table: bool = False):
     geo_data = DataLocal(
         path=alg_cfg_application['geo']['terrain']['path'],
         file_name=alg_cfg_application['geo']['terrain']['file_name'],
-        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_io='input',
+        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain',
+        file_io='input', file_workflow='GEO',
         variable_template={
             "dims_geo": {"x": "longitude", "y": "latitude"},
             "vars_geo": {"x": "longitude", "y": "latitude"}
@@ -213,58 +216,13 @@ def main(view_table: bool = False):
         # ------------------------------------------------------------------------------------------------------------------
 
         # ------------------------------------------------------------------------------------------------------------------
-        ## ORGANIZE AND RUN DATASET 1 (RAIN_EFF)
-        # organize source handler rain eff - workflow dset 1
-        src_handler_dset_01 = DataLocal(
-            path=alg_cfg_step['data_source']['dset_01']['path'],
-            file_name=alg_cfg_step['data_source']['dset_01']['file_name'],
+        ## ORGANIZE AND RUN - DATASET SNOW_MASK
+        # organize source handler
+        src_handler_snow_mask = DataLocal(
+            path=alg_cfg_step['data_source']['SNOW_MASK']['path'],
+            file_name=alg_cfg_step['data_source']['SNOW_MASK']['file_name'],
             file_type='grid_2d', file_format='geotiff', file_mode='local', file_io='input',
-            file_variable=['rain_eff'],
-            variable_template={
-                "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
-                'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
-                "vars_data": {"rain_eff": "rain_eff"}
-            },
-            time_signature='period',
-            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
-            logger=logging_handle)
-
-        # organize destination handler rain eff - workflow dset 1
-        dst_handler_dset_01 = DataLocal(
-            path=alg_cfg_step['data_destination']['dset_01']['path'],
-            file_name=alg_cfg_step['data_destination']['dset_01']['file_name'],
-            time_signature='start',
-            file_format='netcdf', file_type='grid_3d_itwater', file_mode='local', file_io='output',
-            file_variable=alg_cfg_step['data_destination']['dset_01']['variable'],
-            variable_template={
-                "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
-                "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-                "vars_data": alg_cfg_step['data_destination']['dset_01']['vars_data']
-            },
-            time_period=24, time_format='%Y%m%d%H%M',
-            logger=logging_handle)
-
-        # orchestrator multi time(s) settings - workflow dset 1
-        orc_process_01 = Orchestrator.multi_time(
-            data_package_in=[src_handler_dset_01], data_package_out=[dst_handler_dset_01],
-            data_ref=geo_data,
-            configuration=alg_cfg_workflow['WORKFLOW_DSET_01'],
-            logger = logging_handle
-        )
-
-        # orchestrator multi time(s) execution - workflow dset 1
-        orc_process_01.run(
-            time=pd.date_range(start_data_time, end_data_time, freq='h'), group='by_time')
-        # ------------------------------------------------------------------------------------------------------------------
-
-        # ------------------------------------------------------------------------------------------------------------------
-        ## ORGANIZE AND RUN DATASET 2 (SNOW_MASK)
-        # organize source handler snow mask - workflow dset 2
-        src_handler_dset_02 = DataLocal(
-            path=alg_cfg_step['data_source']['dset_02']['path'],
-            file_name=alg_cfg_step['data_source']['dset_02']['file_name'],
-            file_type='grid_2d', file_format='geotiff', file_mode='local', file_io='input',
-            file_variable=['snow_mask'],
+            file_variable='SNOW_MASK_2D', file_workflow='WORKFLOW_SNOW_MASK',
             variable_template={
                 "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
                 'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
@@ -274,32 +232,94 @@ def main(view_table: bool = False):
             time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
             logger=logging_handle)
 
-        # organize destination handler snow mask - workflow dset 2
-        dst_handler_dset_02 = DataLocal(
-            path=alg_cfg_step['data_destination']['dset_02']['path'],
-            file_name=alg_cfg_step['data_destination']['dset_02']['file_name'],
+        # organize destination handler
+        dst_handler_snow_mask = DataLocal(
+            path=alg_cfg_step['data_destination']['SNOW_MASK']['path'],
+            file_name=alg_cfg_step['data_destination']['SNOW_MASK']['file_name'],
             time_signature='start',
-            file_format='netcdf', file_type='grid_3d_itwater', file_mode='local', file_io='output',
-            file_variable=alg_cfg_step['data_destination']['dset_02']['variable'],
+            file_format='netcdf', file_type='grid_3d_itwater', file_mode='local',
+            file_io='output', file_workflow='WORKFLOW_SNOW_MASK',
+            file_variable=alg_cfg_step['data_destination']['SNOW_MASK']['variable'],
             variable_template={
                 "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
                 "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
-                "vars_data": alg_cfg_step['data_destination']['dset_02']['vars_data']
+                "vars_data": alg_cfg_step['data_destination']['SNOW_MASK']['vars_data']
             },
             time_period=24, time_format='%Y%m%d%H%M',
             logger=logging_handle)
 
-        # orchestrator multi time(s) settings - workflow dset 2
-        orc_process_02 = Orchestrator.multi_time(
-            data_package_in=[src_handler_dset_02], data_package_out=[dst_handler_dset_02],
+        # workflow settings
+        orc_workflow_options_snow_mask = select_workflow_by_name(
+            workflow_config=alg_cfg_workflow, workflow_name='WORKFLOW_SNOW_MASK')
+
+        # orchestrator configure
+        orc_process_snow_mask = Orchestrator.configure(
+            data_package_in={'SNOW_MASK_SRC': src_handler_snow_mask},
+            data_package_out={'SNOW_MASK_DST': dst_handler_snow_mask},
             data_ref=geo_data,
-            configuration=alg_cfg_workflow['WORKFLOW_DSET_02'],
+            priority=None,
+            configuration=orc_workflow_options_snow_mask,
+            tag_orchestrator='multi_time_snow_mask', tag_logger='OrchestratorGrid',
+            logger=logging_handle
+        )
+
+        # orchestrator times
+        orc_process_times = pd.date_range(start=start_data_time, end=end_data_time, freq="h")
+        # orchestrator execution
+        orc_process_snow_mask.run(time=orc_process_times, group='by:period')
+        # ------------------------------------------------------------------------------------------------------------------
+
+        # ------------------------------------------------------------------------------------------------------------------
+        ## ORGANIZE AND RUN - DATASET RAIN_EFF)
+        # organize source handler
+        src_handler_rain_eff = DataLocal(
+            path=alg_cfg_step['data_source']['RAIN_EFF']['path'],
+            file_name=alg_cfg_step['data_source']['RAIN_EFF']['file_name'],
+            file_type='grid_2d', file_format='geotiff', file_mode='local', file_io='input',
+            file_variable='RAIN_EFF_2D', file_workflow='WORKFLOW_RAIN_EFF',
+            variable_template={
+                "dims_geo": {"X": "longitude", "Y": "latitude", "time": "time"},
+                'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
+                "vars_data": {"rain_eff": "rain_eff"}
+            },
+            time_signature='period',
+            time_reference=start_data_time, time_period=period_data_time, time_freq='h', time_direction='forward',
+            logger=logging_handle)
+
+        # organize destination handler
+        dst_handler_rain_eff = DataLocal(
+            path=alg_cfg_step['data_destination']['RAIN_EFF']['path'],
+            file_name=alg_cfg_step['data_destination']['RAIN_EFF']['file_name'],
+            time_signature='start',
+            file_format='netcdf', file_type='grid_3d_itwater', file_mode='local',
+            file_io='output', file_workflow='WORKFLOW_RAIN_EFF',
+            file_variable=alg_cfg_step['data_destination']['RAIN_EFF']['variable'],
+            variable_template={
+                "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
+                "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
+                "vars_data": alg_cfg_step['data_destination']['RAIN_EFF']['vars_data']
+            },
+            time_period=24, time_format='%Y%m%d%H%M',
+            logger=logging_handle)
+
+        # workflow settings
+        orc_workflow_options_rain_eff = select_workflow_by_name(
+            workflow_config=alg_cfg_workflow, workflow_name='WORKFLOW_RAIN_EFF')
+
+        # orchestrator configure
+        orc_process_rain_eff = Orchestrator.configure(
+            data_package_in={'RAIN_EFF_SRC': src_handler_rain_eff,},
+            data_package_out={'RAIN_EFF_DST': dst_handler_rain_eff,},
+            data_ref=geo_data,
+            configuration=orc_workflow_options_rain_eff,
+            tag_orchestrator='multi_time_rain_eff', tag_logger='OrchestratorGrid',
             logger = logging_handle
         )
 
-        # orchestrator multi time(s) execution - workflow dset 2
-        orc_process_02.run(
-            time=pd.date_range(start_data_time, end_data_time, freq='h'), group='by_time')
+        # orchestrator times
+        orc_process_times = pd.date_range(start=start_data_time, end=end_data_time, freq="h")
+        # orchestrator execution
+        orc_process_rain_eff.run(time=orc_process_times, group='by:time')
         # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

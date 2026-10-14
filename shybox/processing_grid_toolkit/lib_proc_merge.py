@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_proc_merge
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260123'
-Version:       '1.2.0'
+Date:          '20261014'
+Version:       '1.3.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -19,15 +19,26 @@ from pyresample.geometry import GridDefinition
 from pyresample.kd_tree import resample_nearest, resample_gauss, resample_custom#
 
 from shybox.io_toolkit.lib_io_utils import create_darray
-from shybox.orchestrator_toolkit.old.lib_orchestrator_utils_processes_OLD import as_process
-from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.generic_toolkit.lib_utils_debug import plot_data, dump_data2nc
+
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_types import xarray_to_dataset
+
+# common decoretor
+from shybox import with_logger, deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to merge data by time
-@as_process(input_type='xarray', output_type='xarray')
+@as_process(input_adapter={
+                'data': {"method": "dict_to_fx", "kwargs": {}},
+            },
+            args_adapter=None,
+            output_adapter={
+                'data': {"method": "fx_to_dict", "kwargs": {}},
+            },
+)
 @with_logger(var_name='logger_stream')
 def merge_data_by_time(
         data: (xr.DataArray, list), ref: xr.DataArray,
@@ -64,20 +75,6 @@ def merge_data_by_time(
         if var_name is None: var_name = step_obj.name
         var_obj[step_id, :, :] = var_data
 
-    # create Dataset object
-    #dset_obj = xr.Dataset(coords={coord_name_time: ([dim_name_time], time)})
-    #dset_obj.coords[coord_name_time] = dset_obj.coords[coord_name_time].astype('datetime64[ns]')
-
-    # add reference dataarray
-    #if ref_add_data:
-    #    geo_data[np.isnan(geo_data)] = ref_no_data
-    #    var_da_terrain = xr.DataArray(geo_data,  name=ref_name,
-    #                                  dims=[dim_name_y, dim_name_x],
-    #                                  coords={coord_name_x: ([dim_name_x], geo_x),
-    #                                          coord_name_y: ([dim_name_y], geo_y)})
-    #    dset_obj[ref_name] = var_da_terrain
-
-
     # create DataArray (2D or 3D)
     if var_obj.ndim == 2:
         da_obj = xr.DataArray(var_obj, name=var_name,
@@ -91,10 +88,8 @@ def merge_data_by_time(
                                            coord_name_x: ([dim_name_x], geo_x),
                                            coord_name_y: ([dim_name_y], geo_y)})
     else:
-        logger_stream.error('Data obj dimensions not supported.')
-        raise NotImplemented
-
-    #dset_obj[var_name] = da_obj
+        logger_stream.error(f"Data must be 2D or 3D. Got {var_obj.ndim} dimensions.")
+        raise NotImplementedError(f"Data with {var_obj.ndim} dimensions are not supported.")
 
     # debug (dump to netcdf)
     if debug:
@@ -382,7 +377,15 @@ def merge_data_by_watermark(
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to merge data
-@as_process(input_type='xarray', output_type='xarray')
+@as_process(input_type='dict',
+            input_adapter={
+                'data': {"method": "dict_to_fx", "kwargs": {}},
+            },
+            args_adapter=None,
+            output_adapter={
+                'data': {"method": "fx_to_dict", "kwargs": {}},
+            },
+            output_type='xarray')
 @with_logger(var_name='logger_stream')
 def merge_data_by_ref(
         data,                                     # xr.DataArray | xr.Dataset | list/tuple of them
@@ -404,14 +407,14 @@ def merge_data_by_ref(
 
     # check data type and normalize to list of Datasets
     if isinstance(data, (xr.DataArray, xr.Dataset)):
-        ds_list = [_to_dataset(data)]
+        ds_list = [xarray_to_dataset(data)]
     elif isinstance(data, (list, tuple)):
-        ds_list = [_to_dataset(it) for it in data]
+        ds_list = [xarray_to_dataset(it) for it in data]
     else:
         logger_stream.error("`data` must be a DataArray, Dataset, or list/tuple of them.")
         raise TypeError(f"`data` must be a DataArray, Dataset, or list/tuple of them. Got {type(data)}")
 
-    # gather union of variable names across datasets
+    # gather sorted unique variable names across datasets
     var_list = sorted({vn for ds in ds_list for vn in ds.data_vars})
 
     # reference grid & mask
@@ -444,7 +447,7 @@ def merge_data_by_ref(
         for ds in ds_list:
             if var_name not in ds.data_vars:
                 continue
-            # get dataarray
+            # get data array
             da_in = ds[var_name]
             if var_attrs is None:
                 var_attrs = dict(da_in.attrs)
@@ -515,7 +518,7 @@ def merge_data_by_ref(
             coord_name_x=coord_name_x, coord_name_y=coord_name_y,
             dim_name_x=dim_name_x, dim_name_y=dim_name_y
         )
-        # add attrinutes if defined
+        # add attributes if defined
         if var_attrs:
             var_da.attrs = var_attrs
         # store variable DataArray
