@@ -868,16 +868,46 @@ class ProcessorContainer:
                     # parse time by signature
                     time = _parser_time_signature(time, time_signature=time_signature)
 
-                    # write collections
-                    out_handler.write_data(
-                        fx_collections_output, time,
-                        metadata=fx_collections_metadata, **kwargs)
+                    # get output variable mapping
+                    vars_data = out_handler.variable_template.get("vars_data", {})
 
-                    # info dump end
-                    self.logger.info_down(f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... DONE")
+                    # filter and rename output variables
+                    if vars_data:
+                        fx_output_filtered = {}
+                        for var_key, var_name in vars_data.items():
 
-                    # end of processes
-                    return True, False
+                            # check if variable already uses the output name
+                            if var_name in fx_collections_output:
+                                fx_output_filtered[var_name] = fx_collections_output[var_name]
+                            # otherwise, check the original variable key
+                            elif var_key in fx_collections_output:
+                                fx_output_filtered[var_name] = fx_collections_output[var_key]
+                            else:
+                                self.logger.warning(
+                                    f'Output variable "{var_key}" or "{var_name}" not found in collections. Skipping.')
+                    else:
+                        # if not vars data available
+                        fx_output_filtered = copy(fx_collections_output)
+
+                    # write filtered collections
+                    if fx_output_filtered:
+                        out_handler.write_data(
+                            fx_output_filtered, time, metadata=fx_collections_metadata, **kwargs
+                        )
+                        # info dump end
+                        self.logger.info_down(
+                            f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... DONE")
+
+                        # end of processes
+                        return True, False
+                    else:
+                        self.logger.warning("No matching output variables found in collections. Writing skipped.")
+                        # info dump end
+                        self.logger.info_down(
+                            f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... SKIPPED")
+
+                        # end of processes
+                        return None, False
 
                 else:
 

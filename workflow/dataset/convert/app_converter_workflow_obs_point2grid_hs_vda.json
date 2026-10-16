@@ -118,20 +118,15 @@
     },
     "dynamic_data_dst": {
       "path": "{path_dynamic_destination}/{path_time_destination}/",
-      "file_name": "snow_height_{file_time_destination}.tiff",
-      "format": "tif",
-      "type": null,
-      "mode": "grid",
-      "variable": ["snow_height"],
-      "dims_data": {"longitude": "longitude", "latitude": "longitude", "time": "time"},
-      "coord_data": {"longitude": "longitude", "latitude": "latitude"},
-      "vars_data": {"snow_height": "hs"}
+      "file_name": "snow_data_{file_time_destination}.nc",
+      "format": "netcdf", "type": "default"
     }
   },
   "workflow": {
     "options": {
         "intermediate_output": "Tmp",
-        "tmp_dir": "{path_tmp}"
+        "tmp_dir": "{path_tmp}",
+        "io_config": {"mode": "many_data_variables_to_one_file"}
     },
     "process_list": {
         "SNOW_HEIGHT_WORKFLOW": [
@@ -139,13 +134,21 @@
             "function": "exec_interpolate_points_hs",
             "datasets": {
               "points_hs": "ground_snow_height",
-              "viirs_sca": "snow_cover_area",
-              "viirs_cp": "cloud_persistence",
+              "satellite_sca": "snow_cover_area",
+              "satellite_cp": "cloud_persistence",
               "s3m_hs": "s3m_snow_height"
             },
-            "results": {"data": "snow_height"},
+            "results": {
+              "result_sca": "snow_cover_area",
+              "result_sqa": "snow_quality_area",
+              "result_kernel": "kernel",
+              "result_snow_height": "snow_height"
+            },
             "fill_value": -9999, "no_data_value": -9999,
-            "min_n_updating": 25, "min_r2": 0.7
+            "S3M_iFlagSCA_regrid": 1, "S3M_threshold_cloud_per": 3,
+            "S3M_Rregression": 300, "S3M_minimum_dN_for_Updating": 20,
+            "S3M_R2_min": 0.2, "S3M_R2_high_elev": 0.6, "S3M_Thresh_high_elev": 2500,
+            "S3M_Updating_coeff_corr_Combin": 1, "S3M_Corr_z_Updating": [2000, 4500]
           }
         ]
     }

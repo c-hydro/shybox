@@ -550,6 +550,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             else:
                 self.logger.error("Invalid time_reference: length greater than 1.")
                 raise ValueError("time_reference must be a single timestamp or a length-1 DatetimeIndex.")
+
         elif isinstance(time_reference, str):
             try:
                 time_reference = pd.to_datetime(time_reference)
@@ -557,33 +558,40 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.logger.error(f"Invalid time_reference string: {e}")
                 raise ValueError(f"Invalid time_reference string: {e}")
 
-        # Early exits for missing params
-        if time_reference is None or time_direction is None:
-            return None
-        if time_direction != "single" and time_period is None:
+        # Early exit for missing reference
+        if time_reference is None:
             return None
 
-        # Validate time_period when used
-        if time_direction != "single":
-            if not isinstance(time_period, int) or time_period <= 0:
-                self.logger.error("Invalid time_period: must be a positive integer.")
-                raise ValueError("time_period must be a positive integer.")
-
-        # Compute times
-        if time_direction == "backward":
-            time_obj = pd.date_range(
-                end=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize
-            )
-        elif time_direction == "forward":
-            time_obj = pd.date_range(
-                start=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize
-            )
-        elif time_direction == "single":
+        # Validate time_direction
+        if time_direction not in {"forward", "backward", "single", "current"}:
+            self.logger.error(f"Invalid time_direction: {time_direction}")
+            raise ValueError("time_direction must be 'forward', 'backward', 'single', or 'current'.")
+        # Handle single time immediately
+        if time_direction in {"single", "current"}:
             ts = time_reference.normalize() if time_normalize else time_reference
-            time_obj = pd.DatetimeIndex([ts])
-        else:
-            self.logger.error("Invalid time_direction: must be 'forward', 'backward', or 'single'.")
-            raise ValueError("Invalid time_direction. Use 'forward', 'backward', or 'single'.")
+            return pd.DatetimeIndex([ts])
+
+        # Early exit for missing period
+        if time_period is None:
+            return None
+
+        # Validate time_period
+        if not isinstance(time_period, int) or time_period < 0:
+            self.logger.error("Invalid time_period: must be a non-negative integer.")
+            raise ValueError("time_period must be a non-negative integer.")
+
+        # Handle zero period as single time
+        if time_period == 0:
+            self.logger.warning(
+                f"Time period is 0 but time_direction is '{time_direction}'. Using 'current' time configuration.")
+            ts = time_reference.normalize() if time_normalize else time_reference
+            return pd.DatetimeIndex([ts])
+
+        # Compute expected times
+        if time_direction == "backward":
+            time_obj = pd.date_range(end=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize)
+        else:  # forward
+            time_obj = pd.date_range(start=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize)
 
         return time_obj
 
@@ -1433,50 +1441,58 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # iterate over all keys
         for step_key in template_key:
 
+            # get template object
             if isinstance(template_array, xr.Dataset):
-                self._structure_template[step_key] = {'crs': crs_wkt,
-                                        '_FillValue' : template_array[step_key].attrs.get('_FillValue'),
-                                        'dims_names' : template_array[step_key].dims,
-                                        'spatial_dims' : (template_array[step_key].longitude.name, template_array[step_key].latitude.name),
-                                        'dims_starts': {},
-                                        'dims_ends': {},
-                                        'dims_lengths': {}}
+                template_obj = template_array[step_key]
             elif isinstance(template_array, xr.DataArray):
-                self._structure_template[step_key] = {
-                    'crs': crs_wkt,
-                    '_FillValue': template_array.attrs.get('_FillValue'),
-                    'dims_names': template_array.dims,
-                    'spatial_dims': (template_array.longitude.name,
-                                     template_array.latitude.name),
-                    'dims_starts': {},
-                    'dims_ends': {},
-                    'dims_lengths': {}
-                }
+                template_obj = template_array
             else:
                 self.logger.error('Invalid template array type.')
                 raise ValueError('Invalid template array type.')
 
-        # ensure structure template for dataset case
-        if isinstance(template_array, xr.Dataset):
-            # copy the template structure for
-            for step_key in template_key:
+            # get dimensions
+            dims_names = template_obj.dims
+
+            # get spatial dimensions (expected y, x)
+            if len(dims_names) < 2:
+                raise ValueError(f'Variable "{step_key}" must have at least two spatial dimensions {dims_names}.')
+
+            spatial_dims = dims_names[-2:]
+
+            # warn if spatial dimensions are not recognized
+            if spatial_dims[0] not in {'latitude', 'lat', 'y'} or spatial_dims[1] not in {'longitude', 'lon', 'x'}:
+                self.logger.warning(
+                    f'Unexpected spatial dimensions {spatial_dims} for variable "{step_key}". '
+                    'Expected (latitude, longitude), (lat, lon), or (y, x).'
+                )
+
+            # define template structure
+            self._structure_template[step_key] = {
+                'crs': crs_wkt,
+                '_FillValue': template_obj.attrs.get('_FillValue'),
+                'dims_names': dims_names,
+                'spatial_dims': spatial_dims,
+                'dims_starts': {}, 'dims_ends': {}, 'dims_lengths': {}
+            }
+
+            # add dataset variables
+            if isinstance(template_array, xr.Dataset):
                 self._structure_template[step_key]['variables'] = list(template_array.data_vars)
 
-        # ensure dimensions info for all keys
-        for step_key in template_key:
-            for dim in template_array.dims:
+            # get dimensions information
+            for dim in dims_names:
 
-                if isinstance(template_array, xr.DataArray):
-                    this_dim_values = template_array[dim].data
-                elif isinstance(template_array, xr.Dataset):
-                    this_dim_values = template_array[step_key][dim].data
+                # check dimension coordinate availability
+                if dim in template_obj.coords:
+                    this_dim_values = template_obj[dim].data
                 else:
-                    self.logger.error('Invalid template array type.')
-                    raise ValueError('Invalid template array type.')
+                    # use positional indexes when dimension coordinates are missing
+                    this_dim_values = range(template_obj.sizes[dim])
 
-                start = this_dim_values[0]
-                end = this_dim_values[-1]
-                length = len(this_dim_values)
+                # get dimension information
+                start, end, length = this_dim_values[0], this_dim_values[-1], len(this_dim_values)
+
+                # store dimension information
                 self._structure_template[step_key]['dims_starts'][dim] = self._safe_dim(start)
                 self._structure_template[step_key]['dims_ends'][dim] = self._safe_dim(end)
                 self._structure_template[step_key]['dims_lengths'][dim] = length
@@ -1538,6 +1554,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         
         return data
 
+    # method to set time metadata
     def set_metadata(self, data: (xr.DataArray, xr.Dataset),
                      time: Union[pd.Timestamp, dt.datetime] = None,
                      time_format: str = '%Y-%m-%d', **kwargs) -> xr.DataArray:

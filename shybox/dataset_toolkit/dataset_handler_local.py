@@ -79,11 +79,14 @@ class DataLocal(Dataset):
                  file_name: Optional[str] = None, file_io: str = None,
                  file_variable: str = None, file_workflow : str = None,
                  logger: Optional[LoggingManager] = None,
-                 message: bool = True,
+                 message: bool = True, tag: str = type,
                  **kwargs):
 
         # set data local logger
         self.logger = logger or LoggingManager(name="DataLocal")
+
+        # info logger start
+        self.logger.info_up(f"Initialize object {tag} ... ")
 
         # store path
         self.path = path
@@ -194,15 +197,19 @@ class DataLocal(Dataset):
         if 'data_as_is' in kwargs:
             self.data_as_is = kwargs.pop('data_as_is')
 
+        # define dimension(s)
         dims_user = (
                 variable_template.get(dims_key_default)
                 or variable_template.get("dims_geo")
+                or variable_template.get("dims_data")
                 or variable_template.get("dims_point")
                 or variable_template.get("dims_time")
         )
+        # define coord(s)
         coords_user = (
                 variable_template.get(coords_key_default)
                 or variable_template.get("coords_geo")
+                or variable_template.get("coords_data")
                 or variable_template.get("coords_point")
                 or variable_template.get("coords_time")
         )
@@ -271,6 +278,9 @@ class DataLocal(Dataset):
         # initialize parent class
         super().__init__(**kwargs)
 
+        # info logger end
+        self.logger.info_down(f"Initialize object {tag} ... DONE")
+
     # LOC PATTERS MANAGEMENT
     @property
     def loc_pattern(self):
@@ -336,16 +346,21 @@ class DataLocal(Dataset):
     ## INPUT/OUTPUT METHODS
     # method to read data
     def _read_data(self, path: str,
-                   vars_data: dict = None, vars_geo: dict = None, dims_geo: dict = None,
-                   **kwargs) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+                   vars_data: dict | None = None, vars_geo: dict | None = None, dims_geo: dict | None = None,
+                   **kwargs) -> xr.DataArray | xr.Dataset | pd.DataFrame:
 
         # message info start
         self.logger.info_up(f"Read data from {path} ... ")
 
-        # set variable if defined
-        variable = None
-        if 'variable' in kwargs:
-            variable = kwargs['variable']
+        # set variable from kwargs or vars_data
+        variable = kwargs.get('variable', None)
+        # if variable field is not provided get from class the variable name
+        if variable is None:
+            if vars_data is None:
+                vars_data = self.variable_template.get('vars_data', {})
+            if isinstance(vars_data, dict) and vars_data:
+                values = list(vars_data.values())
+                variable = values[0] if len(values) == 1 else values
 
         # method to read data from file
         data = read_from_file(

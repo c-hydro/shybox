@@ -59,7 +59,7 @@ def read_grid(file_name: str, file_epsg: str = 'EPSG:4326', file_dtype: str = 'f
         is_ascii_grid = False
 
     dset = rio.open(file_name)
-    bounds, res, transform = dset.bounds, dset.res, dset.transform
+    bounds, res, transform, profile = dset.bounds, dset.res, dset.transform, dset.profile.copy()
     data = dset.read()
 
     if dset.crs is None:
@@ -174,6 +174,7 @@ def read_grid(file_name: str, file_epsg: str = 'EPSG:4326', file_dtype: str = 'f
     assert max_lat_round == center_top_round
 
     data_attrs = {'transform': transform_out, 'crs': file_crs, 'epsg': file_epsg,
+                  'profile': profile,
                   'bbox': [bbox_left, bbox_bottom, bbox_right, bbox_top],
                   'bb_left': bbox_left, 'bb_right': bbox_right,
                   'bb_top': bbox_top, 'bb_bottom': bbox_bottom,

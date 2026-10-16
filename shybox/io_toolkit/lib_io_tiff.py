@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_io_tiff
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260824'
-Version:       '1.0.0'
+Date:          '20261015'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -16,9 +16,64 @@ import numpy as np
 import xarray as xr
 import rasterio
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
-from shybox.generic_toolkit.lib_utils_code import deprecated
 from shybox.io_toolkit.lib_io_utils import make_file_path
+
+# common decorators
+from shybox import with_logger, deprecated
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read file (internal for back compatibility
+@deprecated(use='read_tiff_base', future_removal=True)
+def _read_file_internal(path, file_variable=None):
+
+    # open raster file
+    with rasterio.open(path) as src:
+
+        # read first band with mask
+        tmp = src.read(1, masked=True)
+
+        # get raster metadata
+        transform = src.transform
+        crs = src.crs
+
+        # check raster orientation
+        if transform.b != 0 or transform.d != 0:
+            raise NotImplementedError("Rotated or sheared raster grids are not supported.")
+
+        # compute pixel-center coordinates
+        x = transform.c + (np.arange(src.width) + 0.5) * transform.a
+        y = transform.f + (np.arange(src.height) + 0.5) * transform.e
+
+        # convert masked values to NaN
+        data_values = np.asarray(tmp.filled(np.nan), dtype=float)
+
+        # ensure coordinates are ascending
+        if x.size > 1 and x[1] < x[0]:
+            x = x[::-1]
+            data_values = data_values[:, ::-1]
+        if y.size > 1 and y[1] < y[0]:
+            y = y[::-1]
+            data_values = data_values[::-1, :]
+
+        # define variable name
+        if isinstance(file_variable, list):
+            file_variable = file_variable[0] if file_variable else None
+
+        if file_variable is None:
+            file_variable = "DATA"
+
+        # create DataArray
+        data = xr.DataArray(
+            data_values,
+            dims=("latitude", "longitude"),
+            coords={"latitude": y, "longitude": x}, name=file_variable)
+
+        # store geographical metadata
+        data.attrs.update({"crs": crs.to_string() if crs is not None else None, "transform": tuple(transform)})
+
+    return data
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -50,6 +105,7 @@ def read_tiff_base(
         # get metadata
         transform = src.transform
         crs = src.crs
+        profile = src.profile.copy()
         src_nodata = src.nodata
 
         # cast dtype if requested
@@ -85,6 +141,7 @@ def read_tiff_base(
         da.attrs["transform"] = transform
         da.attrs["crs"] = crs
         da.attrs["nodata"] = nodata_value
+        da.attrs["profile"] = profile
 
     return da
 # ----------------------------------------------------------------------------------------------------------------------

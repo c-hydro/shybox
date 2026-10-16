@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_utils_code
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260930'
-Version:       '1.1.0'
+Date:          '20261015'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -19,22 +19,22 @@ def deprecated(
         *,
         use: str | None = None,
         since: str | None = None,
-        use_new: bool = False):
+        use_new: bool = False,
+        future_removal: bool = False):
 
     """
-    Deprecation decorator with optional redirection to a new implementation.
+    Deprecation decorator with optional redirection and future removal warning.
 
     Parameters
     ----------
     use : str | None
-        Name of the new function/method to use instead.
-
+        Name of the replacement function/method.
     since : str | None
-        Version/date information for the warning.
-
+        Version/date when the method was deprecated.
     use_new : bool
-        If True, call the new implementation instead of executing the old code.
-        If False, execute the old implementation and only emit a warning.
+        If True, execute the replacement instead of the old method.
+    future_removal : bool
+        If True, warn that the method will be removed in a future release.
     """
 
     def decorator(old_func):
@@ -43,14 +43,17 @@ def deprecated(
         msg = f'{old_func.__qualname__} is deprecated'
         if since:
             msg += f' (since {since})'
+        if future_removal:
+            msg += ' and will be removed in a future release'
         if use:
-            msg += f'; use {use} instead'
+            msg += f'; please use {use} instead'
 
         @wraps(old_func)
         def wrapper(*args, **kwargs):
 
             # emit warning
             warnings.warn(msg,category=DeprecationWarning,stacklevel=2)
+
             # optionally redirect to new implementation
             if use_new:
 
@@ -64,12 +67,13 @@ def deprecated(
 
                 # otherwise try function in same module
                 new_func = old_func.__globals__.get(use)
+
                 if new_func is None:
                     raise RuntimeError(f'{old_func.__qualname__}: replacement "{use}" was not found')
 
                 return new_func(*args, **kwargs)
 
-            # default: execute old implementation
+            # execute old implementation
             return old_func(*args, **kwargs)
 
         return wrapper

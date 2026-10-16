@@ -51,7 +51,7 @@ class OrchestratorBase:
         "intermediate_output": "Mem",  # "Mem" or "Tmp"
         "break_on_missing_tiles": False,  # legacy naming; grid uses it, TS may ignore
         "tmp_dir": None,
-        "dump_mode": None
+        "io_config": {'type_in': None, 'type_out': None, 'description': 'NA'}
     }
 
     # io configuration registry
@@ -66,10 +66,15 @@ class OrchestratorBase:
             "type_out": "single",
             "description": "Merge multiple time-series into one file",
         },
+        "many_data_variables_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple variables into one file",
+        },
         "many_data_tiles_to_one_file": {
             "type_in": "collections",
             "type_out": "single",
-            "description": "Merge multiple tiles into one file",
+            "description": "Merge multiple tiles into one file"
         },
         "many_data_times_to_one_file": {
             "type_in": "collections",
@@ -646,6 +651,11 @@ class OrchestratorBase:
                     for key_tmp, data_tmp in out_collections.items():
                         workflow_tmp = key_tmp.split('|', 1)[0]
                         if workflow_tmp in workflow_default:
+
+                            # validate output list
+                            if not isinstance(data_tmp, list) or len(data_tmp) != 1:
+                                raise ValueError(f'Output "{key_tmp}" must contain exactly one object.')
+
                             data_out = data_tmp[0]
                             workflow_out = workflow_tmp
                             break
@@ -663,12 +673,26 @@ class OrchestratorBase:
                     # manage io type
                     if (self.type_in == 'collections' and self.type_out == 'single') and self.group == 'by:step':
 
+                        # initialize data collection object
                         if data_out_collections is None:
                             data_out_collections = DataCollection(logger=self.logger)
 
-                        # Add current DataLocal to collection
-                        data_key = f"{data_out.file_workflow}|{data_out.file_variable}"
-                        data_out_collections.add(data_key, data_out)
+                        # add output object
+                        for out_key, out_config in out_collections.items():
+
+                            # filter by workflow
+                            if out_key.split('|', 1)[0] != workflow_out:
+                                continue
+
+                            # check that exactly one object is available
+                            if not isinstance(out_config, list) or len(out_config) != 1:
+                                raise ValueError(
+                                    f'Output "{out_key}" must contain exactly one object. '
+                                    f'Found: {len(out_config) if isinstance(out_config, list) else type(out_config).__name__}'
+                                )
+
+                            # add current DataLocal to collection
+                            data_out_collections.add(out_key, out_config[0])
 
                         # Assign collection only at the last process
                         if proc_id == id_last:

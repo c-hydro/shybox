@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO GRID - AIRT - HMC
+SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO GRID - AIR TEMPERATURE
 
 __date__ = '20261008
 __version__ = '1.1.0'
@@ -132,7 +132,7 @@ def main(view_table: bool = False):
 
     # define logging instance
     logging_handle = LoggingManager(
-        name="shybox_algorithm_converter_hmc_points2grid",
+        name="shybox_algorithm_converter_hmc_points2grid_air_temperature",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------
@@ -283,6 +283,7 @@ def main(view_table: bool = False):
         data_ref={'terrain': geo_grid},
         priority=['AIR_T_WORKFLOW'],
         configuration=alg_cfg_workflow,
+        tag_orchestrator='points_to_grid_air_temperature', tag_logger='OrchestratorPoints',
         logger=logging_handle
     )
     # orchestrator exec

@@ -32,7 +32,7 @@ def get_time_from_filename(file_path: str | Path) -> pd.Timestamp | None:
     file_name = Path(file_path).stem
 
     # search timestamp
-    time_match = re.search(r"(?<!\d)(\d{14}|\d{12}|\d{10}|\d{8})(?!\d)", file_name)
+    time_match = re.search(r"(?<!\d)(\d{8}_\d{6}|\d{8}_\d{4}|\d{14}|\d{12}|\d{10}|\d{8})(?!\d)", file_name)
     if not time_match:
         return None
 
@@ -40,7 +40,9 @@ def get_time_from_filename(file_path: str | Path) -> pd.Timestamp | None:
     time_string = time_match.group(1)
 
     # supported formats
-    time_formats = { 8: "%Y%m%d",10: "%Y%m%d%H", 12: "%Y%m%d%H%M", 14: "%Y%m%d%H%M%S",}
+    time_formats = {
+        8: "%Y%m%d",10: "%Y%m%d%H", 12: "%Y%m%d%H%M",
+        14: "%Y%m%d%H%M%S",13: "%Y%m%d_%H%M", 15: "%Y%m%d_%H%M%S",}
 
     # convert timestamp
     try:

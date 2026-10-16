@@ -1,13 +1,13 @@
 #!/usr/bin/python3
 """
-SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO GRID - SNOW HEIGHT - HMC
+SHYBOX - Snow HYdro toolBOX - WORKFLOW CONVERTER POINT TO GRID - SNOW HEIGHT
 
 __date__ = '20261008'
 __version__ = '1.0.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org),
-     Lucia Ferrarin (lucia.ferrarin@cimafoundation.org)
+     Lucia Ferrarin (lucia.ferrarin@cimafoundation.org),
      Francesco Avanzi (francesco.avanzi@cimafoundation.org)'
 __library__ = 'shybox'
 
@@ -139,7 +139,7 @@ def main(view_table: bool = False):
 
     # define logging instance
     logging_handle = LoggingManager(
-        name="shybox_algorithm_converter_hmc_points2grid",
+        name="shybox_algorithm_converter_hmc_points2grid_hs",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------
@@ -196,7 +196,7 @@ def main(view_table: bool = False):
             "vars_geo": {"x": "longitude", "y": "latitude"}
         },
         time_signature=None, time_direction=None,
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='geo grid terrain'
     )
 
     geo_raster_mbianco = DataLocal(
@@ -210,7 +210,7 @@ def main(view_table: bool = False):
             "vars_geo": {"x": "longitude", "y": "latitude"}
         },
         time_signature=None, time_direction=None,
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='geo grid m_bianco'
     )
 
     geo_raster_mparadiso = DataLocal(
@@ -224,7 +224,7 @@ def main(view_table: bool = False):
             "vars_geo": {"x": "longitude", "y": "latitude"}
         },
         time_signature=None, time_direction=None,
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='geo grid m_paradiso'
     )
 
     geo_raster_inverse_c = DataLocal(
@@ -238,7 +238,7 @@ def main(view_table: bool = False):
             "vars_geo": {"x": "longitude", "y": "latitude"}
         },
         time_signature=None, time_direction=None,
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='geo grid inverse combin'
     )
 
     geo_raster_forest = DataLocal(
@@ -252,7 +252,7 @@ def main(view_table: bool = False):
             "vars_geo": {"x": "longitude", "y": "latitude"}
         },
         time_signature=None, time_direction=None,
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='geo grid forest'
     )
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -272,8 +272,9 @@ def main(view_table: bool = False):
             "vars_data": {"HS": "ground_snow_height"}
         },
         time_signature='period',
-        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period,
+        time_freq='h', time_direction='current',
+        logger=logging_handle, message=False, tag='source points snow height'
     )
 
     # source data sca handler
@@ -290,8 +291,9 @@ def main(view_table: bool = False):
             "vars_data": {"SCA": "snow_cover_area"}
         },
         time_signature='period',
-        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period,
+        time_freq='h', time_direction='current',
+        logger=logging_handle, message=False, tag='source grid snow cover area'
     )
 
     source_data_cp = DataLocal(
@@ -307,8 +309,9 @@ def main(view_table: bool = False):
             "vars_data": {"CP": "cloud_persistence"}
         },
         time_signature='period',
-        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period,
+        time_freq='h', time_direction='current',
+        logger=logging_handle, message=False, tag='source grid cloud persistence'
     )
 
     # source data sca handler
@@ -325,25 +328,43 @@ def main(view_table: bool = False):
             "vars_data": {"SnowHeight": "s3m_snow_height"}
         },
         time_signature='period',
-        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period,
+        time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False, tag='source grid snow height'
     )
 
     # destination grid data handler
-    destination_grid_obj = DataLocal(
+    destination_grid_sca = DataLocal(
         path=alg_cfg_application['dynamic_data_dst']['path'],
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
         data_layout='grid', data_role='data',
-        file_type='grid_2d', file_format='tiff', file_mode='local',
+        file_type='default', file_format='netcdf', file_mode='local',
+        file_variable='SNOW_COVER_AREA', file_workflow='SNOW_HEIGHT_WORKFLOW', file_io='output',
+        variable_template={
+            "dims_data": {"longitude": "longitude", "latitude": "longitude", "time": "time"},
+            "coord_data": {"longitude": "longitude", "latitude": "latitude"},
+            "vars_data": {"sca": "SNOW_COVER_AREA"}
+        },
+        time_signature='end', time_reference=alg_reference_time,
+        time_period=1, time_format='%Y%m%d%H%M', time_direction='current',
+        logger=logging_handle, message=False, tag='destination snow cover area'
+    )
+
+    # destination grid data handler
+    destination_grid_snow_height = DataLocal(
+        path=alg_cfg_application['dynamic_data_dst']['path'],
+        file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
+        data_layout='grid', data_role='data',
+        file_type='default', file_format='netcdf', file_mode='local',
         file_variable='SNOW_HEIGHT', file_workflow='SNOW_HEIGHT_WORKFLOW', file_io='output',
         variable_template={
             "dims_data": {"longitude": "longitude", "latitude": "longitude", "time": "time"},
             "coord_data": {"longitude": "longitude", "latitude": "latitude"},
-            "vars_data": {"snow_height": "hs"}
+            "vars_data": {"snow_height": "SNOW_HEIGHT"}
         },
         time_signature='end', time_reference=alg_reference_time,
-        time_period=1, time_format='%Y%m%d%H%M',
-        logger=logging_handle, message=False
+        time_period=1, time_format='%Y%m%d%H%M', time_direction='current',
+        logger=logging_handle, message=False, tag='destination snow height'
     )
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -357,7 +378,9 @@ def main(view_table: bool = False):
             'cp': source_data_cp,
             's3m_hs': source_data_s3m,
         },
-        data_package_out={'grid_hs': destination_grid_obj},
+        data_package_out={
+            'grid_snow_cover_area': destination_grid_sca,
+            'grid_snow_height': destination_grid_snow_height},
         data_ref={
             'dem': geo_raster_terrain,
             'm_bianco': geo_raster_mbianco,
@@ -367,7 +390,7 @@ def main(view_table: bool = False):
         },
         priority=None,
         configuration=alg_cfg_workflow,
-        tag_orchestrator='points_to_grid', tag_logger='OrchestratorPoints',
+        tag_orchestrator='points_to_grid_hs', tag_logger='OrchestratorPoints',
         logger=logging_handle
     )
     # orchestrator exec

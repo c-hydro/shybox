@@ -1,7 +1,7 @@
 """
 Library Features:
 
-Name:          lib_proc_interpolate
+Name:          lib_proc_interpolate_generic
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20260928'
 Version:       '1.1.0'
@@ -21,7 +21,7 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
 @with_logger(var_name='logger_stream')
-def interpolate_point2grid_base(
+def interpolate_points2grid_base(
         point_values: np.ndarray, point_lons: np.ndarray, point_lats: np.ndarray,
         grid_lons: np.ndarray, grid_lats: np.ndarray,
         method: str = "idw",

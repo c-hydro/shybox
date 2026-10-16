@@ -23,7 +23,7 @@ from shybox.default.lib_default_info import file_conventions, file_title, file_i
 from shybox.default.lib_default_time import time_units as time_default_units, time_calendar as time_default_calendar
 from shybox.default.lib_default_geo import crs_obj as crs_default
 from shybox.io_toolkit.lib_io_gzip import define_compress_filename, compress_and_remove
-from shybox.io_toolkit.lib_io_nc_generic import get_dims_by_object, da_to_dset, to_nc_dtype
+from shybox.io_toolkit.lib_io_nc_generic import get_dims_by_object, to_nc_dtype
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 

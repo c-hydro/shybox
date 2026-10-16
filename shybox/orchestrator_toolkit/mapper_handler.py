@@ -219,9 +219,21 @@ class Mapper:
 
                 # get function name
                 fx_name = step_obj.get("function", None)
-                # get function args
-                fx_args = {key: value for key, value in step_obj.items() if
-                           key not in {"function", "datasets", "results"}}
+
+                # get function args (different declarations)
+                if 'args' in step_obj:
+                    # if args available get it (new mode)
+                    fx_args = step_obj['args']
+                else:
+                    # if not args get all keys that are not in excluded_keys (old mode)
+                    excluded_keys = {'function', 'datasets', 'results'}
+                    fx_args = {key: value for key, value in step_obj.items() if key not in excluded_keys}
+
+                    # warn about deprecated arguments declaration
+                    self.logger.warning(
+                        f'Function "{step_obj.get("function", "NA")}" uses a legacy arguments declaration. '
+                        f'Please move function arguments into the "args" dictionary.'
+                    )
 
                 # get datasets and results
                 datasets_raw = step_obj.get("datasets", {}) or {}

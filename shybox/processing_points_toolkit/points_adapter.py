@@ -3,8 +3,8 @@ Library Features:
 
 Name:          points_adapter
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260902'
-Version:       '1.0.0'
+Date:          '20261016'
+Version:       '1.3.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -16,48 +16,151 @@ from typing import Union
 
 from shybox.io_toolkit.lib_io_utils import create_darray
 from shybox.processing_points_toolkit.lib_proc_join import join_points_to_time_series
-from shybox.processing_points_toolkit.lib_proc_interpolate import interpolate_point2grid_base
+from shybox.processing_points_toolkit.lib_proc_interpolate_generic import interpolate_points2grid_base
+from shybox.processing_points_toolkit.lib_proc_interpolate_hs import interp_hsnow
+from shybox.processing_points_toolkit.lib_proc_interpolate_rain import interpolate_griso
+
+from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 # common decorators
 from shybox import with_logger, deprecated, as_process
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to interpolate data
+@as_process(input_type='pandas', input_adapter=None,
+            args_adapter=None, output_adapter=None, output_type='xarray')
+@with_logger(var_name='logger_stream')
+def exec_interpolate_points_rain(
+        data: pd.DataFrame, grid: xr.DataArray,
+        debug_data: bool = False, debug_results: bool = False,
+        **kwargs):
+
+    # info method start
+    logger_stream.info_up('Interpolate rain points to grid ... ')
+
+    # check observed points
+    if data is None:
+        logger_stream.error("Observed points are not defined. Interpolation cannot proceed.")
+        raise ValueError("Observed points are None. Check your workflow configuration.")
+    if not isinstance(data, pd.DataFrame):
+        logger_stream.error("Observed points format is not expected. Interpolation cannot proceed.")
+        raise TypeError(f"Observed points must be a pandas DataFrame. Got {type(points_hs).__name__}.")
+    # check if points are empty
+    if data.empty:
+        logger_stream.warning("Observed points DataFrame is empty. Interpolation skipped.")
+        logger_stream.info_down('Interpolate hs points to grid ... SKIPPED')
+        return None
+
+    # info input points
+    logger_stream.info_status(f'Points | N: {len(data)} | Columns: {list(data.columns)}')
+    logger_stream.info_status(f'BBox | [{data["lon"].min():.4f}, {data["lat"].min():.4f}, '
+                              f'{data["lon"].max():.4f}, {data["lat"].max():.4f}]')
+    logger_stream.info_status(f'Values | [{data["value"].min():.4f}, {data["value"].max():.4f}]')
+
+    # call method to interpolate points
+    grid = interpolate_griso(data, grid, **kwargs)
+
+    # get grid values
+    grid_values = grid.values
+    # get grid coordinates
+    grid_lon, grid_lat = grid["lon"].values, grid["lat"].values
+
+    # analyze grid values
+    valid_mask = np.isfinite(grid_values)
+    n_total = grid_values.size
+    n_valid = np.count_nonzero(valid_mask)
+    n_invalid = n_total - n_valid
+    coverage = (n_valid / n_total * 100) if n_total else 0.0
+
+    # compute grid statistics
+    if n_valid > 0:
+        value_min, value_max = np.nanmin(grid_values), np.nanmax(grid_values)
+        value_mean, value_std = np.nanmean(grid_values), np.nanstd(grid_values)
+    else:
+        value_min = value_max = value_mean = value_std = np.nan
+
+    # info output grid
+    logger_stream.info_status(f'Grid | Shape: {grid.shape}')
+    logger_stream.info_status(f'BBox: [{np.nanmin(grid_lon):.4f}, {np.nanmin(grid_lat):.4f}, '
+                              f'{np.nanmax(grid_lon):.4f}, {np.nanmax(grid_lat):.4f}]')
+    logger_stream.info_status(
+        f'Values | Min: {value_min:.4f} | Max: {value_max:.4f} | Mean: {value_mean:.4f} | Std: {value_std:.4f}')
+    logger_stream.info_status(f'Quality | Valid: {n_valid}/{n_total} ({coverage:.2f}%) | NaN/Inf: {n_invalid}')
+
+    # warn if grid contains no valid data
+    if n_valid == 0:
+        logger_stream.warning('Grid contains no valid values.')
+    elif n_invalid > 0:
+        logger_stream.warning(f'Grid contains {n_invalid} invalid cells ({100 - coverage:.2f}%).')
+
+    # check grid result(s)
+    if debug_results:
+        plot_data(grid, title='interpolated grid --> rainfall')
+
+    # info method start
+    logger_stream.info_down('Interpolate rain points to grid ... DONE')
+
+    return grid
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to interpolate data
 @as_process(input_type='pandas',
             input_adapter=None,
             args_adapter=None,
-            output_adapter={
-                'data': {"method": "fx_to_dict", "kwargs": {}},
-            },
+            output_adapter=None,
             output_type='xarray')
 @with_logger(var_name='logger_stream')
 def exec_interpolate_points_hs(
         points_hs: pd.DataFrame,
-        viirs_sca: xr.DataArray, viirs_cp: xr.DataArray, s3m_hs: xr.DataArray,
+        satellite_sca: xr.DataArray, satellite_cp: xr.DataArray,
+        s3m_hs: xr.DataArray,
         dem: xr.DataArray, m_bianco: xr.DataArray, m_paradiso: xr.DataArray,
         inv_combin: xr.DataArray = None, forest: xr.DataArray = None,
-        fill_value: float = -9999.0, no_data_value: float = -9999.0,
-        min_n_updating: int = 20, min_r2: float = 0.7,
+        debug_data: bool = False, debug_results: bool = False,
         **kwargs):
 
-    pnt_value_avg = points_hs['HSavg'].values
-    pnt_elev = points_hs['elev'].values
-    pnt_lons = points_hs['lon'].values
-    pnt_lats = points_hs['lat'].values
+    # info method start
+    logger_stream.info_up('Interpolate hs points to grid ... ')
 
-    if viirs_sca is not None:
-        print()
-    else:
-        print()
+    # check observed points
+    if points_hs is None:
+        logger_stream.error("Observed points are not defined. Interpolation cannot proceed.")
+        raise ValueError("Observed points are None. Check your workflow configuration.")
+    if not isinstance(points_hs, pd.DataFrame):
+        logger_stream.error("Observed points format is not expected. Interpolation cannot proceed.")
+        raise TypeError(f"Observed points must be a pandas DataFrame. Got {type(points_hs).__name__}.")
+    # check if points are empty
+    if points_hs.empty:
+        logger_stream.warning("Observed points DataFrame is empty. Interpolation skipped.")
+        logger_stream.info_down('Interpolate hs points to grid ... SKIPPED')
+        return None
 
+    # add options to kwargs
+    kwargs['logger_stream'] = logger_stream
 
+    # method to interpolate points data
+    grid_sca, grid_sqa, grid_kernel, grid_snow_height = interp_hsnow(
+        HS_df=points_hs,
+        SCA_da=satellite_sca, CLOUD_da=satellite_cp,
+        DEM_da=dem, Bianco_da=m_bianco, Paradiso_da=m_paradiso,
+        Combin_da=inv_combin, foreste_da=forest,
+        **kwargs)
+
+    # check grid result(s)
+    if debug_results:
+        plot_data(grid_sca, title='interpolate points hs --> grid sca')
+        plot_data(grid_sqa, title='interpolate points hs --> grid sqa')
+        plot_data(grid_kernel, title='interpolate points hs --> grid kernel')
+        plot_data(grid_snow_height, title='interpolate points hs --> grid snow height')
+
+    # info method start
+    logger_stream.info_down('Interpolate hs points to grid ... DONE')
+
+    return grid_sca, grid_sqa, grid_kernel, grid_snow_height
 
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to execute join points to time-series
@@ -128,7 +231,7 @@ def exec_interpolate_points_air_temperature(
         **kwargs):
 
     # info method start
-    logger_stream.info_up('Interpolate points to grid ... ')
+    logger_stream.info_up('Interpolate air temperature points to grid ... ')
 
     # get and normalize time
     try:
@@ -227,7 +330,7 @@ def exec_interpolate_points_air_temperature(
     logger_stream.info(f' ::: Points available: {point_values.size}')
 
     # method to interpolate points
-    grid_values = interpolate_point2grid_base(
+    grid_values = interpolate_points2grid_base(
         point_values, point_lons, point_lats,
         grid_lons=grid_lons, grid_lats=grid_lats)
 
@@ -239,7 +342,7 @@ def exec_interpolate_points_air_temperature(
     grid_da.attrs = common_attrs
 
     # info method end
-    logger_stream.info_down('Interpolate points to grid ... DONE')
+    logger_stream.info_down('Interpolate air temperature points to grid ... DONE')
 
     ''' debug grid
     import matplotlib.pylab as plt

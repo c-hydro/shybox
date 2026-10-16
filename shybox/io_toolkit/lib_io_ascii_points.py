@@ -199,7 +199,8 @@ def read_points_registry(
 @with_logger(var_name='logger_stream')
 def read_points_2d(
         file_path: str, header: bool = True, delimiter: str =',',
-        time_name: str ='time', time_format: str = '%Y-%m-%d %H:%M',):
+        time_name: str ='time', time_format: str = '%Y-%m-%d %H:%M',
+        no_data: float = -9999.0, columns: dict = None):
 
     # check file availability
     if not os.path.exists(file_path):
@@ -215,6 +216,18 @@ def read_points_2d(
     if df.empty:
         logger_stream.warning(f"Points 2D file is empty: {file_path}")
         return df
+
+    # rename columns according to the provided mapping
+    if columns is not None:
+        if not isinstance(columns, dict):
+            raise TypeError("Argument 'columns' must be a dictionary.")
+        # map column positions to names
+        columns_map = {
+            df.columns[idx]: name
+            for name, idx in columns.items() if isinstance(idx, int) and 0 <= idx < len(df.columns)
+        }
+        # rename dataframe columns
+        df = df.rename(columns=columns_map)
 
     # normalize column names
     df.columns = [str(col).strip() for col in df.columns]

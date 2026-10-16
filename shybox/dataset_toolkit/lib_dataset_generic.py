@@ -38,7 +38,9 @@ from shybox.generic_toolkit.lib_utils_file import fix_file_path
 from shybox.io_toolkit.lib_io_ascii_grid import read_grid
 from shybox.io_toolkit.lib_io_ascii_points import read_points_1d, read_points_2d, read_points_registry
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
+from shybox.io_toolkit.lib_io_tiff import read_tiff_base, _read_file_internal
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
+from shybox.io_toolkit.lib_io_nc_generic import to_nc_attrs
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
 from shybox.io_toolkit.lib_io_nc_hmc import read_forcing_hmc, read_results_hmc, write_dataset_hmc, write_ts_hmc
 from shybox.io_toolkit.lib_io_nc_other import read_dataset_itwater, write_dataset_itwater
@@ -149,9 +151,9 @@ def get_format_from_path(path: str) -> str:
 # method to read from file
 @with_logger(var_name="logger_stream")
 def read_from_file(
-        path, file_format: Optional[str] = None, file_args: Optional[dict] = {},
-        file_type: Optional[str] = None, file_variable: (str, list) = 'na') \
-        -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+        path: str,
+        file_format: Optional[str] = None, file_args: Optional[dict] = None, file_type: Optional[str] = None,
+        file_variable: str | list[str] | None = "na") -> Union[xr.DataArray, xr.Dataset, pd.DataFrame]:
 
     # add suppress warnings
     rxr_logger = logging.getLogger('rioxarray')
@@ -253,52 +255,27 @@ def read_from_file(
     # read the data from a geotiff (and similar formats)
     elif file_format in ['tiff', 'geotiff', 'tif']:
 
-        if file_variable is not None:
-            if not file_variable:
-                file_variable = 'variable'
+        # define default variable name
+        if file_variable is None:
+            file_variable = 'variable'
 
-        # data = rxr.open_rasterio(path) # if no epsg are provided ... we have to set a geo template
-        with rio.open(path) as src:
+        # read the netcdf file according to the file type
+        if file_type in ['grid', 'grid_2d']:
 
-            # Read band with mask
-            tmp = src.read(1, masked=True)
-            # Extract transform
-            transform = src.transform
+            # check if file_variable is a list
+            if isinstance(file_variable, list):
+                file_variable = file_variable[0] if file_variable else 'variable'
 
-            # Build coordinate arrays correctly
-            # Note: transform * (col, row) gives (x, y)
-            # But you can also compute linearly using transform coefficients:
-            x = transform[2] + np.arange(src.width) * transform[0]
-            y = transform[5] + np.arange(src.height) * transform[4]
+            # validate variable type
+            if not isinstance(file_variable, str):
+                raise TypeError(f"GeoTIFF variable name must be a string. Got {type(file_variable).__name__}.")
 
-            # Flip y if descending (common in rasters)
-            if y[1] < y[0]:
-                y = y[::-1]
-                tmp = tmp[::-1, :]
-
-            # If masked, convert to np.nan (optional)
-            if np.ma.isMaskedArray(tmp):
-                data_values = tmp.filled(np.nan)
-            else:
-                data_values = tmp
-
-            # Create DataArray
-            data = xr.DataArray(
-                data_values,
-                dims=("latitude", "longitude"),
-                coords={"latitude": y, "longitude": x},
-                name=file_variable
-            )
-
-        if 'band' in list(data.dims):
-            if data.band.size == 1:
-                data = data.squeeze('band', drop = True)
-
-        if isinstance(data, xr.DataArray):
-            if file_variable is not None:
-                if isinstance(file_variable, list):
-                    file_variable = file_variable[0]
-                data.name = file_variable
+            # read tiff using base method
+            data = read_tiff_base(file_name=path, var_name=file_variable)
+        else:
+            # read tiff usign an internal method for back compatibility
+            logger_stream.warning(f'File type not defined for tiff reading: {file_type}. Using default reader.')
+            data = _read_file_internal(path)
 
     # read the data from a netcdf (and similar formats)
     elif file_format in ['netcdf', 'nc', 'nc4']:
@@ -475,9 +452,17 @@ def write_to_file(data, path,
     # write the data to a geotiff
     elif file_format == 'geotiff':
 
-        data.rio.to_raster(path, compress = 'LZW')
+        # check file type
+        if file_type == 'default':
+            # dump rastar
+            data.rio.to_raster(path, compress="LZW", dtype="float32")
+        else:
+            logger_stream.error(f'File type not supported for geotiff writing: {file_type}')
+            raise ValueError(f'File type not supported for geotiff writing: {file_type}')
 
     elif file_format == 'tiff' or file_format == 'tif':
+
+        # check file type
         if file_type == 'geo_watershed':
 
             # wrap the tiff base for watershed case
@@ -485,7 +470,7 @@ def write_to_file(data, path,
 
         elif file_type == 'grid_2d':
 
-            # wrap the tiff base for watershed case
+            # wrap the tiff base for grid 2d case
             write_tiff_grid2d(data, file_path=path, **kwargs)
 
         else:
@@ -495,6 +480,7 @@ def write_to_file(data, path,
     # write the data to a netcdf
     elif file_format == 'netcdf':
 
+        # check file type
         if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
 
             # get units and mapping
@@ -520,7 +506,10 @@ def write_to_file(data, path,
         elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
             write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['default']:
-            data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
+            # adjust attributes to avoid not permitted format
+            obj_data = to_nc_attrs(data)
+            # dump to nc file
+            obj_data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
         else:
             logger_stream.error(f'File type not supported for netcdf writing: {file_type}')
             raise ValueError(f'File type not supported for netcdf writing: {file_type}')
@@ -613,37 +602,109 @@ def straighten_dims(data: xr.DataArray, default_name: str='variable') -> xr.Data
         logger_stream.info(f"Check DataArray: {var_name} ... DONE.")
         return data
 
-# flat dims
+# method to flat dims
 @withxrds
 def flat_dims(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = 'latitude'):
 
-    x, y = data[dim_x].values, data[dim_y].values
+    # find available spatial coordinates
+    def find_coord(name, alternatives):
+        if name in data.coords:
+            return name
+        return next((coord for coord in alternatives if coord in data.coords), None)
+
+    # detect longitude and latitude
+    dim_x = find_coord(dim_x, ['longitude', 'lon', 'x', 'Longitude', 'X', 'Lon', 'LON'])
+    dim_y = find_coord(dim_y, ['latitude', 'lat', 'y', 'Latitude', 'Y', 'Latitude', 'LAT'])
+
+    # check coordinates
+    if dim_x is None or dim_y is None:
+        raise ValueError(f"Spatial coordinates not found. Available coordinates: {list(data.coords)}")
+
+    # flatten longitude coordinates
+    x = data[dim_x].values
     if x.ndim == 2:
         x = x[0, :]
-        data = data.drop_vars([dim_x])
-        data[dim_x] = xr.DataArray(x, dims=dim_x)
+        x_dim = data[dim_x].dims[1]
+        data = data.drop_vars(dim_x)
+        data = data.assign_coords({dim_x: (x_dim, x)})
+
+    # flatten latitude coordinates
+    y = data[dim_y].values
     if y.ndim == 2:
         y = y[:, 0]
-        data = data.drop_vars([dim_y])
-        data[dim_y] = xr.DataArray(y, dims=dim_y)
+        y_dim = data[dim_y].dims[0]
+        data = data.drop_vars(dim_y)
+        data = data.assign_coords({dim_y: (y_dim, y)})
 
     return data
 
 # method to map dims
-@deprecated(use="map_dims", since="2026-01-27", use_new=False)
-@withxrds
-def map_dims_OLD(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray:
-    # check if dims mapping is required
-    if dims_geo is not None:
-
-        for dim_in, dim_out in dims_geo.items():
-            if dim_in in list(data.dims):
-                data = data.rename({dim_in: 'var_tmp'})
-                data = data.rename({'var_tmp': dim_out})
-    return data
-
 @withxrds
 def map_dims(data: xr.DataArray,
+             dims_geo: dict | None = None, *,
+             create_dim_coords: bool = True, **kwargs) -> xr.DataArray:
+
+    # if not defined return data
+    if not dims_geo:
+        return data
+
+    # iterate over dimensions and coordinates mapping
+    for dim_in, dim_out in dims_geo.items():
+
+        # skip unchanged names
+        if dim_in == dim_out:
+            continue
+
+        # rename dimensions
+        if dim_in in data.dims:
+
+            # target coordinate already exists and is compatible
+            if dim_out in data.coords and data[dim_out].dims == (dim_in,):
+                data = data.swap_dims({dim_in: dim_out})
+
+            # target name is available
+            elif dim_out not in data.dims and dim_out not in data.coords:
+                data = data.rename({dim_in: dim_out})
+
+            else:
+                logging.warning(
+                    f'Cannot rename dimension "{dim_in}" to "{dim_out}": '
+                    'target name already exists or coordinate is incompatible.'
+                )
+                continue
+
+        # rename coordinates that are not dimensions
+        elif dim_in in data.coords:
+
+            if dim_out not in data.dims and dim_out not in data.coords:
+                data = data.rename({dim_in: dim_out})
+            else:
+                logging.warning(
+                    f'Cannot rename coordinate "{dim_in}" to "{dim_out}": target name already exists.'
+                )
+
+    # ensure each mapped dimension has a coordinate
+    for dim_out in dims_geo.values():
+
+        if dim_out not in data.dims:
+            continue
+
+        # create missing dimension coordinates
+        if dim_out not in data.coords:
+            if not create_dim_coords:
+                continue
+            data = data.assign_coords({dim_out: np.arange(data.sizes[dim_out])})
+
+        # ensure dimension coordinate is indexed
+        if dim_out in data.coords and data[dim_out].dims == (dim_out,):
+            if dim_out not in data.indexes:
+                data = data.set_index({dim_out: dim_out})
+
+    return data
+
+@deprecated(use="map_dims", since="2026-10-16", use_new=False)
+@withxrds
+def map_dims_OLD(data: xr.DataArray,
              dims_geo: dict | None = None, *, create_dim_coords: bool = True, **kwargs) -> xr.DataArray:
 
     if not dims_geo:
@@ -808,16 +869,13 @@ def map_vars(data: xr.DataArray, vars_data: Optional[Dict[str, str]] = None, **k
 
     # forward mapping: var_in -> var_out
     if name in vars_data:
-
         var_out = vars_data[name]
-
         if isinstance(var_out, str):
             data.name = var_out
         elif isinstance(var_out, dict):
             data.name = var_out.get('var_out')
         else:
             raise RuntimeError(f"Unsupported vars_data definition: {var_out}")
-
         return data
 
     # reverse mapping: var_out -> var_in
@@ -840,7 +898,6 @@ def map_vars(data: xr.DataArray, vars_data: Optional[Dict[str, str]] = None, **k
 
     # no mapping found
     return None
-
 
 # method to map vars
 @deprecated(use="map_vars", since="2026-01-27", use_new=True)

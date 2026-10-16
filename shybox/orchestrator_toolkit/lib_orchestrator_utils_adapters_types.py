@@ -11,8 +11,8 @@ Version:       '1.2.0'
 # libraries
 from typing import Union
 import xarray as xr
-
 import rioxarray as rxr
+
 import tempfile
 import os
 
