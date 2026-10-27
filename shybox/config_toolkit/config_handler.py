@@ -223,11 +223,7 @@ class ConfigManager:
     ) -> "ConfigManager":
 
         # Normalize logger: use provided, or current, or create default
-        log = LoggingManager.get_logger(
-            logger=logger,
-            name="ConfigManager",
-            set_as_current=False,
-        )
+        log = LoggingManager.get_logger(logger=logger, name="ConfigManager", set_as_current=False,)
 
         # info start
         log.info_up("Configuration ... ", tag="config")
@@ -266,6 +262,7 @@ class ConfigManager:
         else:
             settings_section = data
 
+        # initialize class
         obj = cls(
             settings_section,
             auto_merge_lut=auto_merge_lut,

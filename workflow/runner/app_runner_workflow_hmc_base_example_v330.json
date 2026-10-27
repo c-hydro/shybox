@@ -50,7 +50,7 @@
     },
     "file": {
       "template": "hmc.template.info.v3.3.0.txt",
-      "project": "{path_app}/{file_namelist}"
+      "location": "{path_app}/{file_namelist}"
     },
     "fields": {
       "by_value": {
