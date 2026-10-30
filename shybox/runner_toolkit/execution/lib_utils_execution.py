@@ -20,8 +20,11 @@ from shybox.generic_toolkit.lib_utils_debug import (
 # -------------------------------------------------------------------------
 # small logging helpers (safe if LoggingManager not active)
 # -------------------------------------------------------------------------
-def _log_info(msg: str, tag: str | None = None, up: bool = False, down: bool = False):
-    log = get_log()
+def _log_info(msg: str, tag: str | None = None, up: bool = False, down: bool = False, log=None):
+
+    if log is None:
+        log = get_log()
+
     if up and hasattr(log, "info_up"):
         log.info_up(msg, tag=tag)
     elif down and hasattr(log, "info_down"):
@@ -32,9 +35,11 @@ def _log_info(msg: str, tag: str | None = None, up: bool = False, down: bool = F
         else:
             log.info(msg)
 
+def _log_warning(msg: str, tag: str | None = None, log=None):
 
-def _log_warning(msg: str, tag: str | None = None):
-    log = get_log()
+    if log is None:
+        log = get_log()
+
     if hasattr(log, "warning"):
         if tag:
             log.warning(f"[{tag}] {msg}")
@@ -44,8 +49,11 @@ def _log_warning(msg: str, tag: str | None = None):
         print(f"WARNING: {msg}")
 
 
-def _log_error(msg: str, tag: str | None = None):
-    log = get_log()
+def _log_error(msg: str, tag: str | None = None, log=None):
+
+    if log is None:
+        log = get_log()
+
     if hasattr(log, "error"):
         if tag:
             log.error(f"[{tag}] {msg}")
@@ -75,34 +83,34 @@ def split_join_path(path: str) -> Tuple[str, str, str]:
 # -------------------------------------------------------------------------
 # EXECUTABLE / LIBRARY CHECKS
 # -------------------------------------------------------------------------
-def check_executable(path: str):
+def check_executable(path: str, log=None):
     if not os.path.exists(path):
-        _log_error(f'Executable "{path}" not found', tag="exec_utils")
+        _log_error(f'Executable "{path}" not found', tag="exec_utils",log=log)
         raise RuntimeError(f'Executable "{path}" not found')
 
     if not os.path.isfile(path):
-        _log_error(f'"{path}" is not a regular file', tag="exec_utils")
+        _log_error(f'"{path}" is not a regular file', tag="exec_utils",log=log)
         raise RuntimeError(f'"{path}" must be a regular file')
 
     if not os.access(path, os.X_OK):
-        _log_error(f'"{path}" is not executable', tag="exec_utils")
+        _log_error(f'"{path}" is not executable', tag="exec_utils",log=log)
         raise RuntimeError(f'"{path}" is not executable')
 
-    _log_info(f'Executable "{path}" ... OK', tag="exec_utils")
+    _log_info(f'Executable "{path}" ... OK', tag="exec_utils", log=log)
 
 
-def check_library_path(path: str):
+def check_library_path(path: str, log=None):
     if not os.path.exists(path):
-        _log_error(f'Library dependency "{path}" not found', tag="exec_utils")
+        _log_error(f'Library dependency "{path}" not found', tag="exec_utils", log=log)
         raise RuntimeError(f'Library "{path}" not found')
 
-    _log_info(f'Library "{path}" ... OK', tag="exec_utils")
+    _log_info(f'Library "{path}" ... OK', tag="exec_utils", log=log)
 
 
 # -------------------------------------------------------------------------
 # LD_LIBRARY_PATH
 # -------------------------------------------------------------------------
-def prepare_ld_library_path(env: dict, deps: List[str]) -> dict:
+def prepare_ld_library_path(env: dict, deps: List[str], log=None) -> dict:
     dirs = [d for d in deps if os.path.isdir(d)]
     if not dirs:
         return env
@@ -115,14 +123,14 @@ def prepare_ld_library_path(env: dict, deps: List[str]) -> dict:
             parts.append(d)
 
     env["LD_LIBRARY_PATH"] = ":".join(parts)
-    _log_info(f'Set LD_LIBRARY_PATH="{env["LD_LIBRARY_PATH"]}"', tag="exec_utils")
+    _log_info(f'Set LD_LIBRARY_PATH="{env["LD_LIBRARY_PATH"]}"', tag="exec_utils", log=log)
     return env
 
 
 # -------------------------------------------------------------------------
 # COMMAND BUILDING
 # -------------------------------------------------------------------------
-def build_command(exec_app: str, exec_args: Any) -> List[str]:
+def build_command(exec_app: str, exec_args: Any, log=None) -> List[str]:
     import shlex
 
     cmd = [exec_app]
@@ -131,7 +139,7 @@ def build_command(exec_app: str, exec_args: Any) -> List[str]:
     elif isinstance(exec_args, list):
         cmd.extend([str(a) for a in exec_args])
 
-    _log_info(f'Command = "{" ".join(cmd)}"', tag="exec_utils")
+    _log_info(f'Command = "{" ".join(cmd)}"', tag="exec_utils", log=log)
     return cmd
 
 
@@ -144,7 +152,7 @@ VALID_STDERR_FLAGS = [
     "IEEE_UNDERFLOW_FLAG",
 ]
 
-def clean_stderr(stderr: str | None) -> str | None:
+def clean_stderr(stderr: str | None, log=None) -> str | None:
     if stderr is None:
         return None
 
@@ -152,7 +160,7 @@ def clean_stderr(stderr: str | None) -> str | None:
         if flag in stderr:
             _log_warning(
                 f'StdErr contains acceptable flag "{flag}" → ignored',
-                tag="exec_utils",
+                tag="exec_utils", log=log
             )
             return None
 
@@ -170,7 +178,7 @@ def to_text_or_none(b: bytes | None) -> str | None:
 # -------------------------------------------------------------------------
 def build_execution_collections(
     execution_obj: Dict[str, Any],
-    settings_obj: Dict[str, Any] | None = None,
+    settings_obj: Dict[str, Any] | None = None, log=None,
 ) -> Dict[str, Any]:
     """
     Build paths for:
@@ -221,9 +229,9 @@ def build_execution_collections(
         if isinstance(v, str):
             collections[k] = normalize_path(v)
 
-    _log_info("Execution paths:", tag="exec_utils")
+    _log_info("Execution paths:", tag="exec_utils", log=log)
     for k, v in collections.items():
-        _log_info(f"  - {k}: {v}", tag="exec_utils")
+        _log_info(f"  - {k}: {v}", tag="exec_utils", log=log)
 
     return collections
 
@@ -232,7 +240,7 @@ def build_execution_collections(
 # Prepare executable from library (copy & check)
 # -------------------------------------------------------------------------
 def prepare_executable_from_library(
-    file_exec: str, file_library: str, execution_update: bool = True
+    file_exec: str, file_library: str, execution_update: bool = True, execution_logger=None
 ) -> None:
     """
     - Optionally delete existing exec when execution_update is True
@@ -240,7 +248,7 @@ def prepare_executable_from_library(
     - Copy from library if needed
     - Check executable is valid
     """
-    _log_info("Prepare executable", tag="exec_prepare", up=True)
+    _log_info("Prepare executable", tag="exec_prepare", up=True, log=execution_logger)
 
     folder_exec, _, _ = split_join_path(file_exec)
     if execution_update and os.path.exists(file_exec):
@@ -252,14 +260,14 @@ def prepare_executable_from_library(
         if not os.path.exists(file_library):
             _log_error(
                 f'Library executable "{file_library}" not found',
-                tag="exec_prepare",
+                tag="exec_prepare", log=execution_logger
             )
             raise RuntimeError("Library file missing for executable creation")
         copy_file(file_library, file_exec)
 
-    check_executable(file_exec)
+    check_executable(file_exec, log=execution_logger)
 
-    _log_info("Executable ready", tag="exec_prepare", down=True)
+    _log_info("Executable ready", tag="exec_prepare", down=True, log=execution_logger)
 
 
 # -------------------------------------------------------------------------

@@ -37,7 +37,8 @@ import os
 import time
 
 from copy import copy
-from shybox.runner_toolkit.orchestration.lib_utils_orchestration_hmc import configure_hmc_member, execute_hmc_member
+from shybox.runner_toolkit.orchestration.lib_utils_orchestration_hmc import (
+    configure_hmc_member, execute_hmc_member, configure_hmc_logger, debug_hmc_logger)
 from shybox.runner_toolkit.orchestration import OrchestrationManager
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
@@ -130,7 +131,7 @@ def main(view_table=False, dry_run=True):
     )
 
     # define logging instance
-    logging_handle = LoggingManager(
+    logging_handle_main = LoggingManager(
         name="shybox_algorithm_runner_probabilistic_hmc",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
@@ -139,9 +140,9 @@ def main(view_table=False, dry_run=True):
     # ------------------------------------------------------------------------------------------------------------------
     ## INFO START
     # info algorithm (start)
-    logging_handle.info_header(LoggingManager.rule_line("=", 78))
-    logging_handle.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
-    logging_handle.info_header('START ... ', blank_after=True)
+    logging_handle_main.info_header(LoggingManager.rule_line("=", 78))
+    logging_handle_main.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
+    logging_handle_main.info_header('START ... ', blank_after=True)
 
     # time algorithm
     start_time = time.monotonic()
@@ -169,14 +170,23 @@ def main(view_table=False, dry_run=True):
         # get time tags
         time_tags = alg_cfg_time.as_dict()
 
+        # info hmc member start
+        logging_handle_main.info(f"HMC orchestration member: {member_tags['ensemble_member']} ... ")
+
+        # method to configure member log(s)
+        member_log = configure_hmc_logger(copy(alg_cfg_obj), member_tags, time_tags, view_table=view_table)
+
         # method to configure application (per worker)
-        member_config = configure_hmc_member(
-            copy(alg_cfg_obj), copy(alg_cfg_orchestration), member_tags, time_tags,
+        member_cfg = configure_hmc_member(
+            copy(alg_cfg_obj), member_log, member_tags, time_tags,
             view_table=view_table)
 
         # method to execute application (per worker)
-        member_exec = execute_hmc_member(member_tags, member_config,
+        member_exec = execute_hmc_member(member_tags, member_cfg,
                                          time_tags=time_tags, dry_run=dry_run, view_table=view_table)
+
+        # info hmc member end
+        logging_handle_main.info(f"HMC orchestration member: {member_tags['ensemble_member']} ... DONE")
 
         return member_exec
 
@@ -184,7 +194,7 @@ def main(view_table=False, dry_run=True):
     orchestrator_manager = OrchestrationManager(
         orchestration_obj=alg_cfg_orchestration,
         execution_callback=callback,
-        logger_stream=logging_handle)
+        logger_stream=logging_handle_main)
 
     # method to run orchestrator
     orchestrator_results = orchestrator_manager.run(config={})
@@ -192,7 +202,7 @@ def main(view_table=False, dry_run=True):
     orchestrator_summary = orchestrator_manager.summary()
 
     # info hmc summary status
-    logging_handle.info_status('HMC orchestration summary: %s', orchestrator_summary)
+    logging_handle_main.info_status('HMC orchestration summary: %s', orchestrator_summary)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -200,12 +210,12 @@ def main(view_table=False, dry_run=True):
     # info algorithm (end)
     alg_time_elapsed = round(time.monotonic()  - start_time, 1)
 
-    logging_handle.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')',
+    logging_handle_main.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')',
                                blank_before=True)
-    logging_handle.info_header('TIME ELAPSED: ' + str(alg_time_elapsed) + ' seconds')
-    logging_handle.info_header('... END')
-    logging_handle.info_header('Bye, Bye')
-    logging_handle.info_header(LoggingManager.rule_line("=", 78))
+    logging_handle_main.info_header('TIME ELAPSED: ' + str(alg_time_elapsed) + ' seconds')
+    logging_handle_main.info_header('... END')
+    logging_handle_main.info_header('Bye, Bye')
+    logging_handle_main.info_header(LoggingManager.rule_line("=", 78))
 
     return orchestrator_results, orchestrator_summary
     # ------------------------------------------------------------------------------------------------------------------

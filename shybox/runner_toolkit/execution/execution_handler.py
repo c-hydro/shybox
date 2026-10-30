@@ -72,9 +72,7 @@ class ExecutionManager:
     ) -> None:
 
         # Set up logger for this ConfigManager instance
-        self.log = LoggingManager.get_logger(
-            logger=logger, name="ExecutionManager", set_as_current=False,
-        )
+        self.log = LoggingManager.get_logger(logger=logger, name="ExecutionManager", set_as_current=False,)
 
         self.execution_obj = execution_obj
         self.time_obj = time_obj
@@ -118,10 +116,12 @@ class ExecutionManager:
         """
         Copy executable from library (if needed) and ensure it's valid.
         """
+
         prepare_executable_from_library(
             file_exec=self.file_exec,
             file_library=self.file_library,
             execution_update=self.execution_update,
+            execution_logger=self.log
         )
 
     # ------------------------------------------------------------------
@@ -141,7 +141,10 @@ class ExecutionManager:
         self,
         log_tag: str,
     ) -> Tuple[Optional[str], Optional[str], int]:
-        log = get_log()
+
+        #log = get_log()
+        log = self.log
+
         if hasattr(log, "info_up"):
             log.info_up("Run (buffered mode)", tag=log_tag)
         else:
@@ -172,7 +175,8 @@ class ExecutionManager:
     # ------------------------------------------------------------------
 
     def _run_stream(self, log_tag: str) -> Tuple[Optional[str], Optional[str], int]:
-        log = get_log()
+        # log = get_log()
+        log = self.log
         (log.info_up if hasattr(log, "info_up") else log.info)("Run (streaming mode)", tag=log_tag)
 
         # Ensure unbuffered/line-buffered behavior where possible
@@ -239,7 +243,8 @@ class ExecutionManager:
             If True, perform configuration checks and command build,
             but DO NOT actually execute the external program.
         """
-        log = get_log()
+
+        log = self.log
         log_tag = self.exec_name
 
         span = getattr(log, "span", None)
@@ -260,7 +265,8 @@ class ExecutionManager:
         - If dry_run=True, returns a report without executing the program.
         """
 
-        log = get_log()
+        #log = get_log()
+        log = self.log
 
         # start a fresh checks dict
         self._checks = {
@@ -297,7 +303,7 @@ class ExecutionManager:
         deps_ok = True
         for d in self.deps:
             try:
-                check_library_path(d)
+                check_library_path(d, log=self.log)
             except Exception as e:
                 msg = f"Dependency invalid: {d} → {e}"
                 log.warning(msg)
