@@ -3,16 +3,68 @@ Class Features
 
 Name:          lib_orchestrator_utils_workflow
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20261008'
-Version:       '1.1.0'
+Date:          '20261102'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from __future__ import annotations
+import pandas as pd
 
 # common decorators
 from shybox import with_logger, deprecated
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to format time for logging
+@with_logger(var_name='logger_stream')
+def pretty_time(ts, logger_stream=None):
+
+    # Handle DatetimeIndex
+    if isinstance(ts, pd.DatetimeIndex):
+
+        # Check empty index
+        if len(ts) == 0:
+            logger_stream.warning('DatetimeIndex is empty. No time steps available.')
+            return "NO TIME STEPS AVAILABLE"
+
+        # Check missing timestamps
+        if ts.hasnans:
+            logger_stream.warning('DatetimeIndex contains NaT values.')
+            ts = ts.dropna()
+            if len(ts) == 0:
+                logger_stream.warning('DatetimeIndex contains no valid timestamps.')
+                return "NO TIME STEPS AVAILABLE"
+
+        # Check time ordering
+        if not ts.is_monotonic_increasing:
+            logger_stream.warning('DatetimeIndex is not sorted in ascending order.')
+        # Check duplicated timestamps
+        if ts.has_duplicates:
+            logger_stream.warning('DatetimeIndex contains duplicated timestamps.')
+
+        # Format single timestamp
+        if len(ts) == 1:
+            return ts[0].strftime("%Y-%m-%d %H:%M")
+        else:
+            start = ts[0].strftime("%Y-%m-%d %H:%M")
+            end = ts[-1].strftime("%Y-%m-%d %H:%M")
+            return f"{start} :: {end} ({len(ts)} steps)"
+
+    # Handle single timestamp
+    elif isinstance(ts, pd.Timestamp):
+
+        if pd.isna(ts):
+            logger_stream.warning('Timestamp is NaT.')
+            return "INVALID TIME STAMPS"
+
+        return ts.strftime("%Y-%m-%d %H:%M")
+
+    # Handle unsupported types
+    else:
+        logger_stream.warning(f'Unsupported time type "{type(ts).__name__}". Using string representation.')
+        return str(ts)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

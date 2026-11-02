@@ -16,12 +16,14 @@ from typing import Union, Optional
 
 from datetime import date, datetime
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+# common decorators
+from shybox import with_logger, deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # convert time format (from string to timestamp and vice versa)
+@deprecated(since='2026-11-01')
 @with_logger(var_name="logger_stream")
 def convert_time_format(
         time_obj: Union[str, pd.Timestamp, None],

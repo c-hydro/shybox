@@ -838,8 +838,22 @@ class Dataset(ABC, metaclass=DatasetMeta):
         else:
             self.logger.warning("Variable template does not contain 'coords_geo' definition.", UserWarning)
 
-        # get full location of file (based on time)
-        full_location = self.get_key(time, **kwargs)
+        # select time reference
+        if time is None:
+            time_reference = pd.Timestamp(self.time_reference)
+            time_data = None
+        elif isinstance(time, pd.DatetimeIndex):
+            time_reference = pd.Timestamp(self.time_reference)
+            time_data = time
+        elif isinstance(time, pd.Timestamp):
+            time_reference = time
+            time_data = time
+        else:
+            self.logger.error(f'Check your time reference: {time}')
+            raise ValueError(f"Invalid time reference: {time}")
+
+        # get full location of file (based on time reference)
+        full_location = self.get_key(time_reference, **kwargs)
 
         # check memory active (if defined true or false)
         if 'memory_active' in kwargs:
@@ -852,10 +866,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
             if self.memory_data is not None:
 
                 # check if time is store in memorized steps
-                if time in self.memory_time:
+                if time_reference in self.memory_time:
 
                     # info log start (memory case)
-                    log_data('start', name=name, time=time, from_memory=True)
+                    log_data('start', name=name, time=time_reference, from_memory=True)
 
                     # get data from memory
                     data = deepcopy(self.memory_data)
@@ -886,13 +900,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
                         raise ValueError(f"Invalid data type: {type(data)}")
 
                     # select by time
-                    data = select_by_time(data, when=time, tolerance='1H')
+                    data = select_by_time(data, when=time_data, tolerance='1H')
 
                     # check data after selecting by time
                     if data is None:
-                        self.logger.warning(f'Data is defined by NoneType after selecting by time {time}.')
+                        self.logger.warning(f'Data is defined by NoneType after selecting by time {time_data}.')
                         # info get data end
-                        self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
+                        self.logger.info_down(f'Get data for time {time_reference} ... SKIPPED. Time is not available')
                         return None
 
                     # select data using a 'variable:workflow' mapping string (from reference or variable)
@@ -912,13 +926,13 @@ class Dataset(ABC, metaclass=DatasetMeta):
                         return None
 
                     # info log start (memory case)
-                    log_data('end', name=name, time=time, from_memory=True)
+                    log_data('end', name=name, time=time_reference, from_memory=True)
 
                     return data
 
                 else:
                     self.logger.info(
-                        f"Data are stored, but time {time} is not found in the available "
+                        f"Data are stored, but time {time_reference} is not found in the available "
                         f"memory time range [{self.memory_time[0]} -> {self.memory_time[-1]}]."
                     )
                     pass
@@ -927,7 +941,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 pass
 
         # info log start (source case)
-        log_data('start', name=name, time=time, from_memory=False)
+        log_data('start', name=name, time=time_reference, from_memory=False)
 
         # check full location of file
         flag_placeholders, list_placeholders = self.get_placeholders(full_location)
@@ -946,7 +960,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
                 # return data as is (if specified)
                 if as_is:
-                    log_data('end', name=name, time=time, from_memory=False)
+                    log_data('end', name=name, time=time_reference, from_memory=False)
                     return data
 
                 # check if data is xarray DataArray
@@ -960,7 +974,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     data = flat_dims(data)
 
                 # info log end (source case)
-                log_data('end', name=name, time=time, from_memory=False)
+                log_data('end', name=name, time=time_reference, from_memory=False)
 
                 return data
 
@@ -972,18 +986,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 else:
                     self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
                     # info get data end (source case)
-                    log_data('end', name=name, time=time, from_memory=False)
+                    log_data('end', name=name, time=time_reference, from_memory=False)
                     return None
 
         # check if data is available
-        if self.check_data(time, **kwargs):
+        if self.check_data(time_reference, **kwargs):
 
             # get data
             data = self._read_data(full_location, **self.variable_template)
 
             # return data as is (if specified)
             if as_is:
-                log_data('end', name=name, time=time, from_memory=False)
+                log_data('end', name=name, time=time_reference, from_memory=False)
                 return data
 
             # ensure that the data dimensions are not empty
@@ -1032,8 +1046,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # store in memory (if active)
             if self.memory_active:
                 self.memory_data = deepcopy(data)
-                if time is not None:
-                    self.memory_time.append(time)
+                if time_reference is not None:
+                    self.memory_time.append(time_reference)
                 else:
                     self.logger.warning(f'Memory data is stored for {full_location} '
                                         f'but time is set to NoneType.')
@@ -1047,7 +1061,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
 
                 # info get data end (source case)
-                log_data('end', name=name, time=time, from_memory=False)
+                log_data('end', name=name, time=time_reference, from_memory=False)
                 return None
 
         # if there is no template for the dataset, create it from the data
@@ -1071,12 +1085,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
         data.attrs.update({'source_location': full_location})
 
         # select by time
-        data = select_by_time(data, when=time, tolerance='1H')
+        data = select_by_time(data, when=time_data, tolerance='1H')
         # check data after selecting by time
         if data is None:
-            self.logger.warning(f'Data is defined by NoneType after selecting by time {time}.')
+            self.logger.warning(f'Data is defined by NoneType after selecting by time {time_data}.')
             # info get data end
-            self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
+            self.logger.info_down(f'Get data for time {time_reference} ... SKIPPED. Time is not available')
             return None
 
         # select data using a 'variable:workflow' mapping string (from reference or variable)
@@ -1097,7 +1111,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             return None
 
         # info get data end (source case)
-        log_data('end', name=name, time=time, from_memory=False)
+        log_data('end', name=name, time=time_reference, from_memory=False)
 
         return data
 
@@ -1383,12 +1397,20 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def _check_data(self, data_key) -> bool:
         raise NotImplementedError
 
-    # methods to manipulate the data
+    # Methods to manipulate the data
     def get_key(self, time: Union[pd.Timestamp, dt.datetime] = None, **kwargs):
-        
+
+        # Get time signature
         time = self.get_time_signature(time)
+        # Get raw key
         raw_key = substitute_string(self.loc_pattern, kwargs)
-        key = time.strftime(raw_key) if time is not None else raw_key
+
+        # Return raw key if time is None or NaT
+        if time is None or pd.isna(time):
+            return raw_key
+        # Format key using time
+        key = time.strftime(raw_key)
+
         return key
 
     # methods to organize the structure template
@@ -1586,21 +1608,26 @@ class Dataset(ABC, metaclass=DatasetMeta):
 # helpers
 # print logging message
 @with_logger(var_name="logger_stream")
+# Helper to print logging messages
+@with_logger(var_name="logger_stream")
 def log_data(stage, name=None, time=None, from_memory=False, reference=None):
 
-    # determine tag
+    # Determine tag
     tag = "memory" if from_memory else "source"
-    # build the base message
+    # Check if time is None or NaT
+    is_static = time is None or (isinstance(time, (pd.Timestamp, dt.datetime)) and pd.isna(time))
+    
+    # Build the base message
     if name is not None:
-        if time is not None:
+        if not is_static:
             base = f'Get data for variable "{name}" at time "{time}"'
         else:
             base = f'Get data for variable "{name}" static'
     else:
-        if time is not None:
+        if not is_static:
             base = f'Get data at time "{time}"'
         else:
-            base = f'Get data static'
+            base = 'Get data static'
 
     # Stage: START
     if stage == "start":

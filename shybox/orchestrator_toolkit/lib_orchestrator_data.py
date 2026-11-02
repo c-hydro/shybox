@@ -19,99 +19,96 @@ import pandas as pd
 class ProcessorCollection(dict):
 
     @staticmethod
-    def extract_group(
-            group: Union[Dict[str, Any], List[Dict[str, Any]]],
-    ) -> List[tuple]:
+    def extract_group(group: Union[Dict[str, Any], List[Dict[str, Any]]], time_mode: str = 'by:step') -> List[tuple]:
 
-        # normalize group to list
+        # Normalize group to list
         group_list = (
-            group
-            if isinstance(group, (list, tuple))
-            else [group]
-        )
-
-        # initialize extracted groups
+            group if isinstance(group, (list, tuple)) else [group])
+        # Initialize extracted groups
         groups_obj = []
 
-        # iterate over single groups
+        # Internal method to normalize time according to mode
+        def normalize_group_time(time_values):
+
+            if time_values is None:
+                return None
+
+            if time_mode == 'by:step':
+
+                # Keep previous behavior: DatetimeIndex of individual timestamps
+                if isinstance(time_values, pd.DatetimeIndex):
+                    return time_values
+                elif isinstance(time_values, pd.Timestamp):
+                    return pd.DatetimeIndex([time_values])
+                else:
+                    return pd.DatetimeIndex(pd.to_datetime(time_values))
+
+            elif time_mode == 'by:period':
+
+                # Keep previous behavior for a single grouped DatetimeIndex
+                if isinstance(time_values, pd.DatetimeIndex):
+                    return time_values
+                elif isinstance(time_values, (list, tuple)):
+                    if len(time_values) == 1 and isinstance(time_values[0], pd.DatetimeIndex):
+                        return time_values[0]
+                    return pd.DatetimeIndex(pd.to_datetime(time_values))
+
+                elif isinstance(time_values, pd.Timestamp):
+                    return pd.DatetimeIndex([time_values])
+                else:
+                    return pd.DatetimeIndex(pd.to_datetime(time_values))
+
+            elif time_mode == 'by:file':
+
+                # Preserve list containing complete DatetimeIndex objects
+                if isinstance(time_values, pd.DatetimeIndex):
+                    return [time_values]
+
+                elif isinstance(time_values, (list, tuple)):
+                    if all(isinstance(ts, pd.DatetimeIndex) for ts in time_values):
+                        return list(time_values)
+                    raise TypeError('by:file requires a list of DatetimeIndex objects')
+
+                else:
+                    raise TypeError('by:file requires a DatetimeIndex or list of DatetimeIndex objects')
+
+            else:
+                raise ValueError(f'Unsupported time grouping mode: {time_mode}')
+
+        # Iterate over single groups
         for group_obj in group_list:
 
-            # get group information
+            # Get group information
             group_time = group_obj.get("time", None)
             group_datasets = group_obj.get("datasets", {}) or {}
             group_attrs = group_obj.get("attrs", {}) or {}
 
-            # normalize group time to DatetimeIndex
-            if group_time is not None:
-                if isinstance(group_time, pd.DatetimeIndex):
-                    pass
-                elif isinstance(group_time, pd.Timestamp):
-                    group_time = pd.DatetimeIndex([group_time])
-                else:
-                    group_time = pd.DatetimeIndex(
-                        pd.to_datetime(group_time)
-                    )
+            # Normalize group time
+            group_time = normalize_group_time(group_time)
 
-            # initialize extracted datasets
+            # Initialize extracted datasets
             datasets_obj = []
-
-            # iterate over datasets
+            # Iterate over datasets
             for obj_key, obj_value in group_datasets.items():
 
-                # split role and variable
+                # Split role and variable
                 try:
                     obj_role, obj_variable = obj_key.split("|", 1)
                 except ValueError:
-                    raise ValueError(
-                        f"Dataset key '{obj_key}' must have format "
-                        f"'role|variable'."
-                    )
+                    raise ValueError(f"Dataset key '{obj_key}' must have format 'role|variable'.")
 
-                # get workflow
-                obj_workflow = getattr(
-                    obj_value,
-                    "file_workflow",
-                    None
-                )
+                # Get workflow
+                obj_workflow = getattr(obj_value, "file_workflow", None)
+                # Get object time
+                obj_time = getattr(obj_value, "time", None)
+                # Normalize object time
+                obj_time = normalize_group_time(obj_time)
 
-                # get object time
-                obj_time = getattr(
-                    obj_value,
-                    "time",
-                    None
-                )
+                # Store dataset information
+                datasets_obj.append((obj_role, obj_key, obj_workflow, obj_variable, obj_value, obj_time,))
 
-                # normalize object time to DatetimeIndex
-                if obj_time is not None:
-                    if isinstance(obj_time, pd.DatetimeIndex):
-                        pass
-                    elif isinstance(obj_time, pd.Timestamp):
-                        obj_time = pd.DatetimeIndex([obj_time])
-                    else:
-                        obj_time = pd.DatetimeIndex(
-                            pd.to_datetime(obj_time)
-                        )
-
-                # store dataset information
-                datasets_obj.append(
-                    (
-                        obj_role,
-                        obj_key,
-                        obj_workflow,
-                        obj_variable,
-                        obj_value,
-                        obj_time,
-                    )
-                )
-
-            # store extracted single group
-            groups_obj.append(
-                (
-                    group_time,
-                    tuple(datasets_obj),
-                    group_attrs,
-                )
-            )
+            # Store extracted single group
+            groups_obj.append((group_time, tuple(datasets_obj), group_attrs,))
 
         return groups_obj
 
@@ -485,50 +482,84 @@ class ProcessorData:
     def manage_time(
             cls,
             data_collection: Dict[str, Dict[str, "ProcessorData"]],
-            time: Union[pd.Timestamp, str, List, pd.DatetimeIndex,],
-            time_format: str = "%Y-%m-%d %H:%M") -> Dict[str, Dict[str, "ProcessorData"]]:
+            time: Union[pd.Timestamp, str, List, pd.DatetimeIndex],
+            time_mode: str = 'by:step', time_format: str = "%Y-%m-%d %H:%M") -> Dict[str, Dict[str, "ProcessorData"]]:
 
-        # normalize time
-        if isinstance(time, pd.DatetimeIndex):
-            time_values = time
-        elif isinstance(time, (list, tuple)):
-            time_values = pd.DatetimeIndex(time)
-        else:
-            time_values = pd.Timestamp(time)
+        # Organize time according to grouping mode
+        if time_mode == 'by:step':
 
-        # get time bounds
-        if isinstance(time_values, pd.DatetimeIndex):
-
-            if len(time_values) == 0:
-                time_start = None
-                time_end = None
+            # Single timestamp or list of timestamps
+            if isinstance(time, (list, tuple)):
+                time_values = [pd.Timestamp(ts) for ts in time]
+            elif isinstance(time, pd.DatetimeIndex):
+                time_values = list(time)
             else:
-                time_start = time_values[0]
-                time_end = time_values[-1]
+                time_values = pd.Timestamp(time)
+
+        elif time_mode == 'by:period':
+
+            # Keep previous period behavior
+            if isinstance(time, pd.DatetimeIndex):
+                time_values = time
+            elif isinstance(time, (list, tuple)) and len(time) == 1 \
+                    and isinstance(time[0], pd.DatetimeIndex):
+                time_values = time[0]
+            else:
+                time_values = pd.DatetimeIndex(time)
+
+        elif time_mode == 'by:file':
+
+            # Preserve list containing DatetimeIndex objects
+            if isinstance(time, pd.DatetimeIndex):
+                time_values = [time]
+            elif isinstance(time, (list, tuple)) and all(
+                    isinstance(ts, pd.DatetimeIndex) for ts in time):
+                time_values = list(time)
+            else:
+                raise TypeError('by:file requires a DatetimeIndex or a list of DatetimeIndex objects')
 
         else:
-            time_start = time_values
-            time_end = time_values
+            raise ValueError(f'Unsupported time grouping mode: {time_mode}')
 
-        # create message
+        # Flatten timestamps only for computing time bounds
+        if isinstance(time_values, pd.Timestamp):
+            time_flat = pd.DatetimeIndex([time_values])
+
+        elif isinstance(time_values, pd.DatetimeIndex):
+            time_flat = time_values
+
+        else:
+            time_flat = pd.DatetimeIndex([
+                ts for item in time_values
+                for ts in (item if isinstance(item, pd.DatetimeIndex) else [item])
+            ])
+
+        # Get time bounds
+        if time_flat.empty:
+            time_start = None
+            time_end = None
+        else:
+            time_start = time_flat.min()
+            time_end = time_flat.max()
+
+        # Create message
         if time_start is None:
             message = "Time is not available"
         elif time_start == time_end:
             message = time_start.strftime(time_format)
         else:
-            message = (
-                f"from {time_start.strftime(time_format)} "
-                f"to {time_end.strftime(time_format)}"
-            )
+            message = (f"from {time_start.strftime(time_format)} to {time_end.strftime(time_format)}")
 
-        # assign time and attributes
+        # Assign time and attributes
         for data_obj in cls._iter_data(data_collection):
-            # set time
+            # Set time preserving grouping structure
             data_obj.time = time_values
-            # set attributes
+
+            # Set attributes
             data_obj.attrs["message"] = message
             data_obj.attrs["time_info"] = {
-                "time_start": time_start, "time_end": time_end, "time_format": time_format,
+                "time_start": time_start, "time_end": time_end,
+                "time_format": time_format, "time_mode": time_mode,
             }
 
         return data_collection

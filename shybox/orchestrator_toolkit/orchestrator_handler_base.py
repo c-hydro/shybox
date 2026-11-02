@@ -30,6 +30,7 @@ from shybox.time_toolkit.lib_utils_time import convert_time_format, normalize_to
 
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import pretty_time
 
 from shybox.dataset_toolkit.dataset_handler_memory import DataMemory
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -60,6 +61,11 @@ class OrchestratorBase:
             "type_in": "single",
             "type_out": "single",
             "description": "Dump each data object to a separate file",
+        },
+        "one_data_to_multiple_files": {
+            "type_in": "single",
+            "type_out": "collections",
+            "description": "Dump data object to multiple files",
         },
         "many_data_ts_to_one_file": {
             "type_in": "collections",
@@ -92,6 +98,7 @@ class OrchestratorBase:
     GROUP_REGISTRY = {
         "by:step": "Group data by single time step",
         "by:period": "Group data by time period",
+        "by:file": "Group data by time file",
     }
 
     def __init__(
@@ -712,8 +719,10 @@ class OrchestratorBase:
                         self.processes[proc_id].dump_state = True
 
                     elif self.type_in == 'single' and self.type_out == 'collections':
-                        raise NotImplementedError(
-                            f'Not implemented IO "{self.type_in} :: {self.type_out}" for IO mode "{self.io_mode}". ')
+
+                        # assign individual DataLocal
+                        self.processes[proc_id].out_obj[workflow_default] = data_out
+                        self.processes[proc_id].dump_state = True
 
                     elif self.type_in == 'collections' and self.type_out == 'collections':
                         raise NotImplementedError(
@@ -729,17 +738,29 @@ class OrchestratorBase:
 
         # normalize time steps
         time_steps = normalize_to_datetime_index(time)
+
         # check time steps
-        if len(time_steps) == 0:
+        if time_steps is None or len(time_steps) == 0:
             return None
+        # validate time steps
+        if not isinstance(time_steps, pd.DatetimeIndex):
+            self.logger.error('Time must be a DatetimeIndex.')
+            raise TypeError('Time must be a DatetimeIndex.')
 
         # defined group time or objects
         if self.group == 'by:step':
             # info status group
             self.logger.info_status(f"RunExecution -- GROUP {self.group}")
+            time_steps = _by_step(time_steps)
         elif self.group == 'by:period':
             self.logger.info_status(f"RunExecution -- GROUP {self.group}")
             time_steps = _merge_by_period(time_steps)
+        elif self.group == 'by:file':
+            self.logger.info_status(f"RunExecution -- GROUP {self.group}")
+            time_steps = _merge_by_file(time_steps)
+        else:
+            self.logger.error(f"Group {self.group} not supported.")
+            raise NotImplementedError('Case not implemented yet.')
 
         # iterate over time steps
         for ts in time_steps:
@@ -761,18 +782,6 @@ class OrchestratorBase:
 
     # method to run single time step
     def run_single_ts(self, time: Union[pd.Timestamp, str, pd.DatetimeIndex], **kwargs) -> None:
-
-        # time formatting
-        if isinstance(time, str):
-            time = convert_time_format(time, 'str_to_stamp')
-        elif isinstance(time, pd.DatetimeIndex):
-            tmp = [convert_time_format(ts, 'str_to_stamp') for ts in time]
-            time = deepcopy(tmp)
-        elif isinstance(time, pd.Timestamp):
-            pass
-        else:
-            self.logger.error('Time must be a string or a DatetimeIndex.')
-            raise ValueError('Time must be a string or a DatetimeIndex.')
 
         # run all processes if no breakpoints
         if len(self.break_points) == 0:
@@ -988,9 +997,15 @@ def create_key(workflow: Union[str, None] = None, variable: Union[str, None] = N
     # create key
     return separator.join([str(workflow), str(variable),])
 
-# helper to merge by times
-def _merge_by_period(times):
-    return [times]
+# method to manage single time step
+def _by_step(times):
+    return times
+# method to manage multiple time steps by file
+def _merge_by_period(times, separator='|'):
+    return [pd.DatetimeIndex(times).rename(f'time{separator}by:period')]
+# method to manage multiple time steps by file
+def _merge_by_file(times, separator='|'):
+    return [pd.DatetimeIndex(times).rename(f'time{separator}by:file')]
 
 # helper to merge by process
 @deprecated(since='2026-10-07')
@@ -1016,9 +1031,33 @@ def _merge_by_process(containers):
     return result
 
 # helper to format time for logging
-def pretty_time(ts):
+@with_logger(var_name='logger_stream')
+def pretty_time_OLD(ts, logger_stream=None):
 
+    # Handle DatetimeIndex
     if isinstance(ts, pd.DatetimeIndex):
+
+        # Check empty index
+        if len(ts) == 0:
+            logger_stream.warning('DatetimeIndex is empty. No time steps available.')
+            return "NO TIME STEPS AVAILABLE"
+
+        # Check missing timestamps
+        if ts.hasnans:
+            logger_stream.warning('DatetimeIndex contains NaT values.')
+            ts = ts.dropna()
+            if len(ts) == 0:
+                logger_stream.warning('DatetimeIndex contains no valid timestamps.')
+                return "NO TIME STEPS AVAILABLE"
+
+        # Check time ordering
+        if not ts.is_monotonic_increasing:
+            logger_stream.warning('DatetimeIndex is not sorted in ascending order.')
+        # Check duplicated timestamps
+        if ts.has_duplicates:
+            logger_stream.warning('DatetimeIndex contains duplicated timestamps.')
+
+        # Format single timestamp
         if len(ts) == 1:
             return ts[0].strftime("%Y-%m-%d %H:%M")
         else:
@@ -1026,9 +1065,17 @@ def pretty_time(ts):
             end = ts[-1].strftime("%Y-%m-%d %H:%M")
             return f"{start} :: {end} ({len(ts)} steps)"
 
+    # Handle single timestamp
     elif isinstance(ts, pd.Timestamp):
+
+        if pd.isna(ts):
+            logger_stream.warning('Timestamp is NaT.')
+            return "INVALID TIME STAMPS"
+
         return ts.strftime("%Y-%m-%d %H:%M")
 
+    # Handle unsupported types
     else:
+        logger_stream.warning(f'Unsupported time type "{type(ts).__name__}". Using string representation.')
         return str(ts)
 # ----------------------------------------------------------------------------------------------------------------------

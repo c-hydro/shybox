@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from shybox.dataset_toolkit.dataset_handler_collections import DataCollection
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -31,6 +30,8 @@ from shybox.logging_toolkit.logging_handler import LoggingManager
 
 from shybox.orchestrator_toolkit.lib_orchestrator_data import ProcessorData
 from shybox.orchestrator_toolkit.lib_orchestrator_data import ProcessorCollection
+
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import pretty_time
 
 # common decorators
 from shybox import with_logger, deprecated
@@ -202,6 +203,7 @@ class ProcessorContainer:
         return dict(groups)
 
     # helper to split tag
+    deprecated(since='2026-11-02')
     def split_tag(self, field_separator="|", variable_separator=":"):
         # split workflow, input and output
         workflow, vars_in, vars_out = self.tag.split(field_separator)
@@ -245,12 +247,31 @@ class ProcessorContainer:
     def run(self, time: Union[dt.datetime, str, pd.Timestamp], **kwargs) \
             -> tuple[Optional[Union[dict, list, None, bool]], Optional[bool]]:
 
-        # parse timestamps
-        time = _parse_time_stamps(time)
+        # method to parse time mode
+        time_mode = _parse_time_mode(time)
+        # method to parse time stamps
+        time_stamps = _parse_time_stamps(time)
 
-        # adjust list if only one timestamp is provided
-        if isinstance(time, list):
-            if len(time) == 1: time = time[0]
+        # Adjust time structure according to grouping mode
+        if time_mode == 'by:step':
+            # Flatten only a single Timestamp
+            time = time_stamps
+            if isinstance(time, list) and len(time) == 1:
+                if isinstance(time[0], pd.Timestamp):
+                    time = time[0]
+        elif time_mode == 'by:period':
+            # Keep previous behavior
+            time = time_stamps
+            if isinstance(time, list) and len(time) == 1:
+                if isinstance(time[0], pd.Timestamp):
+                    time = time[0]
+        elif time_mode == 'by:file':
+            # Preserve list containing DatetimeIndex
+            # Each iteration must return the complete DatetimeIndex
+            time = time_stamps
+        else:
+            self.logger.error(f'Time grouping mode "{time_mode}" not supported.')
+            raise NotImplementedError(f'Time grouping mode "{time_mode}" not implemented.')
 
         # get information from process
         fx_id, fx_name, fx_args, fx_tag, fx_mode = self.step, self.fx_name, self.args, self.tag, self.mode
@@ -309,7 +330,7 @@ class ProcessorContainer:
         # get data variables
         data_variables = ProcessorData.get_variables(data_collection)
         # add time to data
-        data_collection = ProcessorData.manage_time(data_collection=data_collection, time=time)
+        data_collection = ProcessorData.manage_time(data_collection=data_collection, time=time, time_mode=time_mode)
 
         # get attrs message
         message = data_collection.get_attr_by_name(name="message", remove_dups=True,)
@@ -336,7 +357,7 @@ class ProcessorContainer:
             # get fx name
             data_name = data_names[data_id]
             # group datasets
-            group_objects = ProcessorCollection.extract_group(group=data_collections)
+            group_objects = ProcessorCollection.extract_group(group=data_collections, time_mode=time_mode)
             # group multiple tiles
             group_multiple_data = isinstance(data_collections, list) and len(data_collections) > 1
 
@@ -396,11 +417,11 @@ class ProcessorContainer:
                     # iterate over dataset times
                     for time_id, time_step in enumerate(group_time):
 
-                        # info start
-                        self.logger.info(f"Check object '{time_step}' and variable '{dset_var}' ... ")
+                        # parse time info
+                        time_start, time_end, time_count, group_multiple_time = _parse_time_info(time_step)
 
-                        # group multiple times
-                        group_multiple_time = len(group_time) > 1
+                        # info start
+                        self.logger.info(f"Check object '{pretty_time(time_step)}' and variable '{dset_var}' ...")
 
                         # compose key
                         if group_multiple_data:
@@ -437,7 +458,8 @@ class ProcessorContainer:
                             if self.debug_state_in: plot_data(fx_tmp)
 
                             # info end (done)
-                            self.logger.info(f"Check object '{time_step}' and variable '{dset_var}' ... DONE")
+                            self.logger.info(
+                                f"Check object '{pretty_time(time_step)}' and variable '{dset_var}' ... DONE")
 
                         else:
 
@@ -450,7 +472,8 @@ class ProcessorContainer:
                                 raise RuntimeError(f"Unknown dset_type '{dset_role}'")
 
                             # info end (not readable)
-                            self.logger.info(f"Check object '{time_step}' and variable '{dset_var}' ... NOT READABLE")
+                            self.logger.info(
+                                f"Check object '{pretty_time(time_step)}' and variable '{dset_var}' ... NOT READABLE")
 
                         # save roles
                         fx_roles.append(dset_role)
@@ -1122,30 +1145,14 @@ def _test_tag():
 
         # repeated data indexes
         (
-            {
-                "data|{id}::data|1@time|0": 10,
-                "data|{id}::data|2@time|0": 20
-            },
-            {
-                "data": {
-                    "data|1@time|0": 10,
-                    "data|2@time|0": 20
-                }
-            }
+            {"data|{id}::data|1@time|0": 10, "data|{id}::data|2@time|0": 20},
+            {"data": {"data|1@time|0": 10,"data|2@time|0": 20}}
         ),
 
         # repeated time indexes
         (
-            {
-                "data|{t}@time|0": 10,
-                "data|{t}@time|1": 20
-            },
-            {
-                "data": {
-                    "time|0": 10,
-                    "time|1": 20
-                }
-            }
+            {"data|{t}@time|0": 10,"data|{t}@time|1": 20},
+            {"data": {"time|0": 10, "time|1": 20}}
         ),
 
         # named variable
@@ -1237,24 +1244,80 @@ def _is_empty_fx_data(fx_data):
         return True
     return False
 
-# helper to parse time
+# helper to parse time mode
 @with_logger(var_name="logger_stream")
-def _parse_time_stamps(time: Union[pd.Timestamp, list[pd.Timestamp]]) -> list[pd.Timestamp]:
+# Method to get time grouping mode
+def _parse_time_mode(time, separator: str = '|') -> str:
 
+    # Single timestamp
     if isinstance(time, pd.Timestamp):
+        return 'by:step'
+    # DatetimeIndex
+    if isinstance(time, pd.DatetimeIndex):
+        if time.name is None:
+            return 'by:step'
+        parts = time.name.split(separator, 1)
+        if len(parts) == 2 and parts[0] == 'time':
+            return parts[1]
+        raise ValueError(f'Invalid time metadata: {time.name}')
+
+    # List of timestamps or grouped timestamps
+    if isinstance(time, list):
+        if not time:
+            raise ValueError('Time list is empty')
+        modes = {_parse_time_mode(item, separator) for item in time}
+        if len(modes) != 1:
+            raise ValueError(f'Mixed time grouping modes: {modes}')
+        return modes.pop()
+
+    raise TypeError(f'Unsupported time type: {type(time).__name__}')
+
+# Helper to parse time stamps
+@with_logger(var_name="logger_stream")
+def _parse_time_stamps(time: Union[pd.Timestamp, pd.DatetimeIndex, list]) -> list:
+
+    # Single timestamp
+    if isinstance(time, pd.Timestamp):
+        if pd.isna(time):
+            logger_stream.error('Timestamp is NaT')
+            raise ValueError('Timestamp is NaT')
         return [time]
 
+    # DatetimeIndex (preserve as one grouped object)
+    if isinstance(time, pd.DatetimeIndex):
+        if time.empty or time.hasnans:
+            logger_stream.error('DatetimeIndex is empty or contains NaT values')
+            raise ValueError('Invalid DatetimeIndex')
+        return [time]
+
+    # List of timestamps or grouped timestamps
     if isinstance(time, list):
+
         if not time:
             logger_stream.error('Time list is empty')
             raise ValueError('Time list is empty')
-        if not all(isinstance(time_step, pd.Timestamp) for time_step in time):
-            logger_stream.error('One or more time values are not pd.Timestamp')
-            raise ValueError('All time values must be pd.Timestamp')
+
+        for time_step in time:
+
+            if isinstance(time_step, pd.Timestamp):
+                if pd.isna(time_step):
+                    logger_stream.error('Timestamp is NaT')
+                    raise ValueError('Timestamp is NaT')
+                continue
+
+            if isinstance(time_step, pd.DatetimeIndex):
+                if time_step.empty or time_step.hasnans:
+                    logger_stream.error('DatetimeIndex is empty or contains NaT values')
+                    raise ValueError('Invalid DatetimeIndex')
+                continue
+
+            logger_stream.error(f'Time value type "{type(time_step).__name__}" is not supported')
+            raise TypeError('All time values must be pd.Timestamp or pd.DatetimeIndex')
+
         return time
 
     logger_stream.error(f'Time format "{type(time).__name__}" is not supported')
-    raise TypeError('Time must be a pd.Timestamp or a list of pd.Timestamp')
+    raise TypeError('Time must be a pd.Timestamp, pd.DatetimeIndex or a list of them')
 
 # helper to parse time according to signature
 @with_logger(var_name='logger_stream')
@@ -1282,4 +1345,34 @@ def _parser_time_signature(time: list[pd.Timestamp], time_signature: str) \
     # unsupported signature
     logger_stream.error(f'Unknown time signature "{time_signature}" in output object.')
     raise ValueError(f'Unknown time signature "{time_signature}" in output object.')
+
+# helper to parse time info
+def _parse_time_info(time: Union[pd.Timestamp, pd.DatetimeIndex]) -> tuple[pd.Timestamp, pd.Timestamp, int, bool]:
+
+    # Check time type
+    if isinstance(time, pd.Timestamp):
+
+        # Single time step
+        time_start = time
+        time_end = time
+        time_count = 1
+
+    elif isinstance(time, pd.DatetimeIndex):
+
+        # Check empty index
+        if time.empty:
+            raise ValueError("DatetimeIndex is empty")
+
+        # Multiple time steps
+        time_start = time[0]
+        time_end = time[-1]
+        time_count = len(time)
+
+    else:
+        raise TypeError(f"Unsupported time type: {type(time).__name__}")
+
+    # Check multiple time steps
+    group_multiple_time = time_count > 1
+
+    return time_start, time_end, time_count, group_multiple_time
 # ----------------------------------------------------------------------------------------------------------------------

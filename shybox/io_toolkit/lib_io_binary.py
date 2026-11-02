@@ -1,14 +1,13 @@
 """
 Library Features:
 
-Name:          lib_data_io_binary
+Name:          lib_io_binary
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20210408'
-Version:       '1.0.0'
+Date:          '20261102'
+Version:       '1.1.0'
 """
-#######################################################################################
-# Library
-import logging
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
 import os
 import struct
 
@@ -18,18 +17,16 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from tools.processing_tool_datasets_merger.lib_info_args import logger_name
+from shybox import with_logger
 
-# Logging
-log_stream = logging.getLogger(logger_name)
-
-# Debug
+# debugging
 import matplotlib.pylab as plt
-#######################################################################################
+# ----------------------------------------------------------------------------------------------------------------------
 
 
-# --------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 # Method to read 2d variable in binary format (saved as 1d integer array)
+@with_logger(var_name='logger_stream')
 def read_data_binary(file_name, var_geo_x, var_geo_y, var_geo_attrs=None,
                      var_format='i', var_scale_factor=10,
                      var_name=None, var_time=None, var_geo_1d=True, var_time_freq='H', var_time_steps_expected=1,
@@ -99,11 +96,11 @@ def read_data_binary(file_name, var_geo_x, var_geo_y, var_geo_attrs=None,
             var_time_steps_cmp = deepcopy(var_time_steps_expected)
 
         else:
-            log_stream.error(' ===> File ' + file_name + ' format are not expected!')
+            logger_stream.error(' ===> File ' + file_name + ' format are not expected!')
             raise NotImplemented('Case not implemented yet')
 
     else:
-        log_stream.warning(' ===> File ' + file_name + ' not available in loaded datasets!')
+        logger_stream.warning(' ===> File ' + file_name + ' not available in loaded datasets!')
         var_data = None
 
     if var_data is not None:
@@ -118,7 +115,7 @@ def read_data_binary(file_name, var_geo_x, var_geo_y, var_geo_attrs=None,
         elif isinstance(var_time, pd.DatetimeIndex):
             pass
         else:
-            log_stream.error(' ===> Time format is not allowed. Expected Timestamp or Datetimeindex')
+            logger_stream.error(' ===> Time format is not allowed. Expected Timestamp or Datetimeindex')
             raise NotImplemented('Case not implemented yet')
 
         var_da = xr.DataArray(var_data, name=var_name, dims=dims_order,
@@ -129,8 +126,8 @@ def read_data_binary(file_name, var_geo_x, var_geo_y, var_geo_attrs=None,
             var_da.attrs = var_geo_attrs
 
     else:
-        log_stream.warning(' ===> All filenames in the selected period are not available')
+        logger_stream.warning(' ===> All filenames in the selected period are not available')
         var_da = None
 
     return var_da
-# -------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------

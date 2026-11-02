@@ -25,20 +25,19 @@ import numpy as np
 import pandas as pd
 import inspect
 
-import rasterio as rio
-
 try:
     import geopandas as gpd
 except ImportError:
     pass
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 
 from shybox.generic_toolkit.lib_utils_file import fix_file_path
 from shybox.io_toolkit.lib_io_ascii_grid import read_grid
 from shybox.io_toolkit.lib_io_ascii_points import read_points_1d, read_points_2d, read_points_registry
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
 from shybox.io_toolkit.lib_io_tiff import read_tiff_base, _read_file_internal
+from shybox.io_toolkit.lib_io_grib import read_datasets_grib
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
 from shybox.io_toolkit.lib_io_nc_generic import to_nc_attrs
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
@@ -282,7 +281,6 @@ def read_from_file(
 
         # check if the file is compressed
         has_compression = has_compression_extension(path)
-
         # uncompress the file if needed
         if has_compression:
             file = uncompress_and_remove(path)
@@ -301,7 +299,8 @@ def read_from_file(
         elif file_type == 'grid_itwater': # it_water project
             data = read_dataset_itwater(path=file)
         elif file_type in ['grid_hmc']:
-            logger_stream.error(f'File type is not supported for netcdf reading: {file_type}. Check the avaiable readers.')
+            logger_stream.error(f'File type is not supported for netcdf reading: {file_type}. '
+                                f'Check the available readers.')
             raise IOError('Reader is not supported for netcdf reading')
         else:
             logger_stream.warning(f'File type not defined for netcdf reading: {file_type}. Using default reader.')
@@ -319,40 +318,21 @@ def read_from_file(
     # read the data from a grib (and similar formats)
     elif file_format == 'grib':
 
+        # check if the file is compressed
         has_compression = has_compression_extension(path)
-
+        # uncompress the file if needed
         if has_compression:
             file = uncompress_and_remove(path)
         else:
             file = path
 
-        # read the grib file
-        data = xr.open_dataset(file, engine="cfgrib")
-
-        # 1) Preserve the original reference time
-        #    (rename 'time' -> 'time_start' to keep it)
-        if "time" not in data.coords:
-            raise ValueError("Dataset has no 'time' coordinate.")
-        data = data.rename({"time": "time_start"})
-
-        # 2) Sanity check
-        if "step" not in data.coords and "step" not in data.dims:
-            logger_stream.error("Dataset has no 'step' coordinate/dimension from cfgrib.")
-            raise ValueError("Dataset has no 'step' coordinate/dimension from cfgrib.")
-
-        # 3) Compute valid timestamps and assign them back onto the 'step' coordinate
-        #    (this keeps the dimension name 'step' but makes its values datetimes)
-        valid_time = data["time_start"] + data["step"]
-        data = data.assign_coords(step=valid_time)
-        # 4) Sort by the new datetime 'step' (handy if steps weren't monotonic)
-        data = data.sortby("step")
-
-        # 5) Optional: prove it's now a DatetimeIndex
-        assert np.issubdtype(data["step"].dtype, np.datetime64), "step is not datetime64 after conversion"
-
-        # check if there is a single variable in the dataset
-        if len(data.data_vars) == 1:
-            data = data[list(data.data_vars)[0]]
+        # read grib data
+        if file_type == 'grid_3d':
+            data = read_datasets_grib(file)
+        else:
+            logger_stream.error(f'File type is not supported for grib reading: {file_type}. '
+                                f'Check the available readers.')
+            raise IOError('Reader is not supported for netcdf reading')
 
         # remove the uncompressed file if needed
         if has_compression:
@@ -970,8 +950,9 @@ def select_by_vars(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (xr.
     return data
 
 # method to select time
+@deprecated(since="2026-11-02")
 @withxrds
-def select_by_time(
+def select_by_time_OLD(
     da: xr.DataArray,
     when,
     *,
@@ -1034,6 +1015,7 @@ def select_by_time(
             return da.isel(time=idx)
 
     return None
+
 # ensure that time are defined by dates and not by numbers
 @withxrds
 def straighten_time(data: xr.DataArray, time_file: pd.Timestamp = None,
@@ -1176,71 +1158,99 @@ def select_variable(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (st
 # method to select time
 @withxrds
 def select_by_time(
-    da: xr.DataArray,
-    when,
-    *,
-    tolerance: str | pd.Timedelta = "1H",
-    active: bool = False
-):
+        da: xr.DataArray,
+        when: Union[str, pd.Timestamp, pd.DatetimeIndex],
+        *,
+        tolerance: str | pd.Timedelta = "1h", active: bool = False) -> xr.DataArray | None:
     """
-    Select a time from a DataArray with optional tolerance logic.
+    Select one or multiple timestamps from a DataArray.
 
-    Parameters
-    ----------
-    da : xr.DataArray
-        Must have a 'time' coordinate.
-    when : str | pandas.Timestamp | numpy.datetime64
-        Target timestamp.
-    tolerance : str | pandas.Timedelta, default "1H"
-        Max time difference allowed when no exact match is found.
-    active : bool, default False
-        If False: choose the previous time within tolerance (default behaviour).
-        If True: choose the nearest time within tolerance (any side).
+    Supports:
+        - pd.Timestamp: select a single time
+        - pd.DatetimeIndex: select multiple times
 
-    Returns
-    -------
-    xr.DataArray | None
-        The selected data (0D) or None if no valid time found.
+    If active=False, select the previous available time within tolerance.
+    If active=True, select the nearest available time within tolerance.
+
+    Returns None if no valid time selection is found.
     """
-    # if no time selection is required
+
+    # If no time selection is required
     if when is None:
         return da
-    # return the data if are 2d
-    if len(da.dims) == 2 and when is not None:
+    # Return data if it is 2D (no time selection required)
+    if len(da.dims) == 2:
         return da
 
-    # if variable time is not in the data array
+    # Check time coordinate
     if "time" not in da.coords:
         raise ValueError("DataArray must have a 'time' coordinate.")
 
-    ts = pd.to_datetime(when)
-    times = pd.to_datetime(da.time.values)
-    tol = pd.to_timedelta(tolerance.lower())
+    # Normalize requested time
+    multiple_time = isinstance(when, pd.DatetimeIndex)
 
-    # if exact match exists
-    if ts in times:
-        return da.sel(time=ts)
-
-    # find candidate times within tolerance
-    diffs = times - ts
-    diffs_abs = abs(diffs)
-
-    if active:
-        # select nearest time (before or after) within tolerance
-        idx = diffs_abs.argmin()
-        if diffs_abs[idx] <= tol:
-            return da.isel(time=idx)
+    if multiple_time:
+        requested_times = when
     else:
-        # select previous time (before only)
-        mask_prev = diffs <= pd.Timedelta(0)
-        if not mask_prev.any():
-            return None
-        diffs_prev = diffs_abs.where(mask_prev, pd.NaT)
-        idx = diffs_prev.argmin()
-        if pd.notna(diffs_prev[idx]) and diffs_prev[idx] <= tol:
-            return da.isel(time=idx)
+        requested_times = pd.DatetimeIndex([pd.Timestamp(when)])
 
-    return None
+    # Check empty requested times
+    if requested_times.empty:
+        return None
+
+    # Get available times and tolerance
+    times = pd.DatetimeIndex(pd.to_datetime(da.time.values))
+    tol = pd.to_timedelta(tolerance)
+
+    # Check empty available times
+    if times.empty:
+        return None
+
+    # Initialize selected indices
+    selected_indices = []
+    # Iterate over requested timestamps
+    for ts in requested_times:
+
+        # Check exact match
+        if ts in times:
+            idx = times.get_indexer([ts])[0]
+            selected_indices.append(idx)
+            continue
+
+        # Compute time differences
+        diffs = times - ts
+        diffs_abs = abs(diffs)
+
+        if active:
+
+            # Select nearest time (before or after)
+            idx = diffs_abs.argmin()
+            if diffs_abs[idx] <= tol:
+                selected_indices.append(idx)
+
+        else:
+
+            # Select previous time only
+            mask_prev = diffs <= pd.Timedelta(0)
+            if not mask_prev.any():
+                continue
+
+            # Find nearest previous time
+            candidate_indices = np.flatnonzero(mask_prev)
+            idx = candidate_indices[diffs_abs[mask_prev].argmin()]
+
+            if diffs_abs[idx] <= tol:
+                selected_indices.append(idx)
+
+    # No valid time found
+    if not selected_indices:
+        return None
+    # Return multiple time selections
+    if multiple_time:
+        return da.isel(time=selected_indices)
+
+    # Return single time selection
+    return da.isel(time=selected_indices[0])
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
