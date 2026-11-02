@@ -38,7 +38,7 @@ import time
 
 from copy import copy
 from shybox.runner_toolkit.orchestration.lib_utils_orchestration_hmc import (
-    configure_hmc_member, execute_hmc_member, configure_hmc_logger, debug_hmc_logger)
+    configure_hmc_member, execute_hmc_member, configure_hmc_logger)
 from shybox.runner_toolkit.orchestration import OrchestrationManager
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
@@ -54,6 +54,10 @@ alg_name = 'Workflow for runner orchestrator configuration'
 alg_type = 'Package'
 alg_version = '1.0.0'
 alg_release = '2026-10-27'
+
+# set logger(s) name
+main_logger = "shybox_algorithm_runner_probabilistic_hmc"
+member_logger = "shybox_algorithm_runner_hmc_{ensemble_member}"
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -132,8 +136,7 @@ def main(view_table=False, dry_run=True):
 
     # define logging instance
     logging_handle_main = LoggingManager(
-        name="shybox_algorithm_runner_probabilistic_hmc",
-        level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
+        name=main_logger, level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -174,7 +177,8 @@ def main(view_table=False, dry_run=True):
         logging_handle_main.info(f"HMC orchestration member: {member_tags['ensemble_member']} ... ")
 
         # method to configure member log(s)
-        member_log = configure_hmc_logger(copy(alg_cfg_obj), member_tags, time_tags, view_table=view_table)
+        member_log = configure_hmc_logger(
+            copy(alg_cfg_obj), member_tags, member_logger, time_tags, view_table=view_table)
 
         # method to configure application (per worker)
         member_cfg = configure_hmc_member(
@@ -202,7 +206,7 @@ def main(view_table=False, dry_run=True):
     orchestrator_summary = orchestrator_manager.summary()
 
     # info hmc summary status
-    logging_handle_main.info_status('HMC orchestration summary: %s', orchestrator_summary)
+    logging_handle_main.info_status('HMC orchestration summary: ', orchestrator_summary)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

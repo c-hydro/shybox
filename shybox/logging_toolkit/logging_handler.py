@@ -304,7 +304,7 @@ class LoggingManager:
             cls.set_current(lm)
 
         return lm
-    
+
     # method to create an independent logging instance
     @classmethod
     def create_instance(
@@ -322,6 +322,7 @@ class LoggingManager:
             arrow_base_len: int = 3,
             propagate: bool = False,
             set_as_current: bool = False,
+            reset_log_path: bool = False,
             force_reconfigure: bool = False):
 
         # Check logger name
@@ -329,9 +330,7 @@ class LoggingManager:
             raise ValueError("Logger name must be defined")
 
         # Get effective handlers
-        effective_handlers = (
-            handlers if handlers is not None else DEFAULT_LOG_HANDLER
-        )
+        effective_handlers = (handlers if handlers is not None else DEFAULT_LOG_HANDLER)
 
         # Validate handlers
         unsupported = set(effective_handlers) - {"file", "stream"}
@@ -343,10 +342,12 @@ class LoggingManager:
         file_name = logger_file or DEFAULT_LOG_FILE
 
         # Define log path
-        log_path = (
-            os.path.join(folder, file_name)
-            if "file" in effective_handlers else None
-        )
+        log_path = (os.path.join(folder, file_name) if "file" in effective_handlers else None)
+
+        # remove previous log path (to avoid append different simulation)
+        if os.path.exists(log_path):
+            if reset_log_path:
+                os.remove(log_path)
 
         # Define logger format
         fmt = logger_format or DEFAULT_LOG_FORMAT
@@ -360,24 +361,17 @@ class LoggingManager:
 
             if logger.handlers and not force_reconfigure:
                 raise RuntimeError(
-                    f"Logger '{name}' already has handlers. "
-                    "Use force_reconfigure=True to replace them."
-                )
+                    f"Logger '{name}' already has handlers. Use force_reconfigure=True to replace them.")
 
             # Prepare new handlers before replacing existing ones
             new_handlers = []
-
             try:
 
                 # Configure file handler
                 if "file" in effective_handlers:
                     os.makedirs(folder, exist_ok=True)
 
-                    file_handler = logging.FileHandler(
-                        log_path,
-                        mode="a",
-                        encoding="utf-8"
-                    )
+                    file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
                     file_handler.setLevel(level)
                     file_handler.setFormatter(formatter)
 
@@ -427,8 +421,6 @@ class LoggingManager:
             cls.set_current(instance)
 
         return instance
-
-    # ----------------------------------------------------------------------------------------------------------------------
 
     # initializer
     def __init__(
@@ -553,7 +545,6 @@ class LoggingManager:
         if n is not None:
             self.set_prefix_len(n, tag=t)
 
-    # ---------- Persistent visual control ----------
     def last_prefix_len(self, tag: Optional[str] = None) -> int:
         t = self._tagkey(tag)
         with self._state_lock:

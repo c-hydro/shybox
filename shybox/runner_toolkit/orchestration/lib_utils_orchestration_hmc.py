@@ -20,87 +20,64 @@ from shybox.runner_toolkit.namelist.namelist_structure_handler import NamelistSt
 from shybox.runner_toolkit.execution.execution_handler import ExecutionManager, ExecutionAnalyzer
 # ----------------------------------------------------------------------------------------------------------------------
 
-def debug_hmc_logger(label, member_log):
-
-    print(f"\n[{label}]")
-    print(f"Manager ID : {id(member_log)}")
-    print(f"Logger ID  : {id(member_log.logger)}")
-    print(f"Logger name: {member_log.logger.name}")
-    print(f"Log path   : {member_log.log_path}")
-
-    for handler in member_log.logger.handlers:
-        print(
-            f"Handler    : {type(handler).__name__}",
-            f"File       : {getattr(handler, 'baseFilename', None)}"
-        )
-
 # ----------------------------------------------------------------------------------------------------------------------
 # method to create hmc logger
-def configure_hmc_logger(alg_cfg_obj, members_tags, time_tags, view_table=True, level=logging.DEBUG):
+def configure_hmc_logger(alg_cfg_obj,
+                         members_tags: dict, member_logger: str = 'runner_hmc_{ensemble_member}',
+                         time_tags: dict = None, view_table: bool =True, level=logging.DEBUG):
+    # ------------------------------------------------------------------------------------------------------------------
+    # NORMALIZE INSTANCE ARGS
+    if time_tags is None:
+        time_tags = {}
+    # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## LOGGING INSTANCE MANAGEMENT
 
-    # set logger name
-    alg_logger_raw = "shybox_algorithm_runner_hmc_{ensemble_member}"
     # Get placeholders
     placeholders = [
         field_name
-        for _, field_name, _, _ in string.Formatter().parse(alg_logger_raw) if field_name is not None
+        for _, field_name, _, _ in string.Formatter().parse(member_logger) if field_name is not None
     ]
 
     # Check placeholders and format
     if placeholders:
         missing = [key for key in placeholders if key not in members_tags]
         if missing:
-            raise ValueError(f"Missing tags for '{alg_logger_raw}': {missing}")
-        alg_logger_name = alg_logger_raw.format(**members_tags)
+            raise ValueError(f"Missing tags for '{member_logger}': {missing}")
+        alg_logger_name = member_logger.format(**members_tags)
     else:
-        alg_logger_name = alg_logger_raw
+        alg_logger_name = member_logger
 
     # get application logging
     alg_app_log = alg_cfg_obj.get_application("log", root_key=None)
     # fill application logging
     alg_app_log = alg_app_log.resolved(
-        time_values=None,  # no fill_section_with_times
-        when=None,  # no LUT time resolution
-        strict=False,
+        time_values=None, when=None, strict=False,
         time_keys=("time_start", "time_restart", "time_period", "time_tag"),
-        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
-        expand_env=True,  # BUT expand $HOME, $RUN, ...
-        env_extra=None,  # or {"RUN": "base"} etc
-        extra_tags=members_tags,
-        validate_result=False,  # or True + allow_placeholders=True if needed
-        validate_allow_placeholders=True,
-        validate_allow_none=False,
+        resolve_time_placeholders=False,
+        expand_env=True, env_extra=None, extra_tags=members_tags,
+        validate_result=False, validate_allow_placeholders=True,  validate_allow_none=False,
     )
     # view application logging
     alg_cfg_obj.view(section=alg_app_log, table_name='application [cfg application logging]', table_print=view_table)
 
     # Create independent member logger
     logging_handle_member = LoggingManager.create_instance(
-        name=alg_logger_name,
-        logger_folder=alg_app_log["path"],
-        logger_file=alg_app_log["file_name"],
+        name=alg_logger_name, logger_folder=alg_app_log["path"], logger_file=alg_app_log["file_name"],
         logger_format=(
             "%(asctime)s %(name)-15s %(levelname)-8s "
             "%(message)-80s %(filename)-20s:"
             "[%(lineno)-6s - %(funcName)-20s()]"
         ),
-        handlers=alg_app_log.get("handlers", ["file", "stream"]),
-        level=level,
-        use_arrows=True,
-        arrow_dynamic=True,
-        arrow_tag="algorithm",
-        arrow_base_len=3,
-        propagate=False,
-        set_as_current=False,
+        handlers=alg_app_log.get("handlers", ["file", "stream"]), level=level,
+        use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm", arrow_base_len=3,
+        propagate=False, reset_log_path=True, set_as_current=False,
     )
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## LOGGING VALIDATION MANAGEMENT
-
     # check logger name
     if logging_handle_member.logger.name != alg_logger_name:
         raise RuntimeError(
@@ -116,12 +93,8 @@ def configure_hmc_logger(alg_cfg_obj, members_tags, time_tags, view_table=True, 
         )
 
     # log initialization
-    logging_handle_member.info(
-        f"HMC logging initialized for member "
-        f"{members_tags['ensemble_member']}"
-    )
+    logging_handle_member.info(f"HMC logging initialized for member {members_tags['ensemble_member']}")
 
-    # ------------------------------------------------------------------------------------------------------------------
     # return objects
     return logging_handle_member
     # ------------------------------------------------------------------------------------------------------------------

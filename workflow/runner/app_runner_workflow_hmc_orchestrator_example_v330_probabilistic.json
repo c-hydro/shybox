@@ -173,7 +173,7 @@
     "simulation_mode": "probabilistic",
     "execution_strategy": "parallel",
     "members": {
-      "start": 1, "end": 2, "step": 1,
+      "start": 1, "end": 1, "step": 1,
       "format": "{member:03d}"
     },
     "forcing": {

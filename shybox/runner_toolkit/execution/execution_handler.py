@@ -81,25 +81,19 @@ class ExecutionManager:
         self.stream_output = stream_output
         self.timeout = timeout
 
-        # --- metadata from description ---
+        # metadata from description
         desc = execution_obj.get("description", {})
         self.exec_name = desc.get("execution_name", "exec")
         self.exec_mode = desc.get("execution_mode", "default")
 
         # --- derive paths from config + templates ---
         collections = build_execution_collections(
-            execution_obj=self.execution_obj,
-            settings_obj=self.settings_obj,
-        )
+            execution_obj=self.execution_obj, settings_obj=self.settings_obj, log=self.log)
 
         self.file_exec: str = collections["executable"]
         self.file_library: str = collections["library"]
         self.file_info: str = collections["info"]
-        self.deps: List[str] = [
-            normalize_path(v)
-            for k, v in collections.items()
-            if k.startswith("deps_")
-        ]
+        self.deps: List[str] = [normalize_path(v) for k, v in collections.items() if k.startswith("deps_")]
 
         self.exec_args = self.execution_obj["executable"]["arguments"]
 
@@ -315,8 +309,8 @@ class ExecutionManager:
         self._checks["deps_ok"] = deps_ok
 
         try:
-            self.env = prepare_ld_library_path(self.env, self.deps)
-            self.command = build_command(self.file_exec, self.exec_args)
+            self.env = prepare_ld_library_path(self.env, self.deps, log=self.log)
+            self.command = build_command(self.file_exec, self.exec_args, log=self.log)
             self._checks["command_built"] = " ".join(self.command)
         except Exception as e:
             msg = f"Command build error: {e}"
