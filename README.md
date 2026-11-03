@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/environment-Python%203.12-blue)](https://www.python.org/)
 [![Release](https://img.shields.io/github/v/release/c-hydro/shybox)](https://github.com/c-hydro/shybox/releases)
+[![Documentation Status](https://readthedocs.org/projects/shybox/badge/?version=latest)](https://shybox.readthedocs.io/en/latest/)
 
 **SHYBOX** (Snow and HYdrologic toolBOX) is a modular hydrological processing framework designed to run **reproducible workflows** using **versioned environmental datasets**.
 
@@ -108,7 +109,9 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 SHYBOX workflows are driven by **configuration files** and executed via the provided scripts and tools.
 
 Refer to:
-- [SHYBOX documentation](docs/index.rst) for installation, configuration, workflows, and development
+
+- [SHYBOX documentation on Read the Docs](https://shybox.readthedocs.io/en/latest/) for installation, configuration, workflows, and development
+- [Documentation source](docs/index.rst) for the pages maintained in this repository
 - Configuration examples for model-specific setups (S3M, HMC)
 
 The first documentation edition is **0.1.0**, independent of the package version.

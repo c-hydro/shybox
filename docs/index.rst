@@ -1,6 +1,17 @@
 SHYBOX documentation
 ====================
 
+.. container:: shybox-hero
+
+   .. image:: _static/images/CVA-170.jpg
+      :alt: Alpine lake beneath mountain ridges with patches of snow.
+
+   .. container:: shybox-hero-copy
+
+      **Snow and hydrological modeling**
+
+      From environmental datasets to reproducible workflows.
+
 **SHYBOX** (Snow and HYdrologic toolBOX) provides configurable workflows for
 environmental data processing, snow modeling and hydrological modeling.
 It is developed by the CIMA Research Foundation for research and operational

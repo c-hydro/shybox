@@ -2,6 +2,25 @@
 Changelog
 =========
 
+Unreleased [2026-11-03]
+***********************
+DOCUMENTATION:
+    - add documentation edition 0.1.0, covering installation, configuration,
+      workflows, development and publication;
+    - publish the documentation at https://shybox.readthedocs.io/en/latest/;
+    - configure Read the Docs and add a Sphinx documentation CI build;
+    - update the README repository layout and environment setup commands;
+    - add the Read the Docs link and documentation status badge to the README.
+    - bundle documentation images locally and add alpine photographs, model
+      branding, a CIMA sidebar logo and responsive documentation styling.
+
+PACKAGE:
+    - integrate the fproofs processing, orchestration and dataset handling
+      refactor into main, including updated workflow drivers;
+    - reconcile soil-moisture dictionary input handling with the hydro adapter.
+
+----
+
 Version 1.2.2 [2026-08-18]
 **************************
 
