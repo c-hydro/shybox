@@ -1,0 +1,43 @@
+SHYBOX documentation
+====================
+
+**SHYBOX** (Snow and HYdrologic toolBOX) provides configurable workflows for
+environmental data processing, snow modeling and hydrological modeling.
+It is developed by the CIMA Research Foundation for research and operational
+forecasting, including Flood-PROOFS systems.
+
+This is documentation edition **0.1.0**, describing the repository structure
+and development interfaces of SHYBOX |package_version|. Workflow compatibility
+depends on the selected code branch, model version and dataset configuration.
+
+Start with :doc:`installation` to prepare the scientific environment, then
+follow :doc:`quickstart` to configure a workflow for your own datasets.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: User guide
+
+   overview
+   installation
+   quickstart
+   configuration
+   workflows
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Development and releases
+
+   development
+   publishing
+   releases
+   license
+
+Project resources
+-----------------
+
+* `SHYBOX source code <https://github.com/c-hydro/shybox>`_
+* `SHYDATA datasets <https://github.com/c-hydro/shydata>`_
+* `Report a problem <https://github.com/c-hydro/shybox/issues>`_
+
+The documentation build does not import the scientific package, download
+datasets or execute hydrological models.
