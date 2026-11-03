@@ -1,0 +1,6 @@
+_build/
+.venv/
+
+# Include legacy documentation artwork despite the repository-wide old/ rule.
+!_static/images/old/
+!_static/images/old/**

@@ -23,6 +23,10 @@ PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_marche/rfarm/data/icon-2i/'
 PATH_LOG='/home/fabio/Desktop/shybox/exec/case_study_marche/rfarm/log/';
 PATH_TMP='/home/fabio/Desktop/shybox/exec/case_study_marche/rfarm/tmp/';
 
+# Set env variables to use proj 8.0.0 or proj 6.0.0
+PROJ_DATA=/home/fabio/Documents/Work_Area/Code_Development/Workspace/shybox/conda/envs/shybox_geo_libraries/share/proj;
+PROJ_LIB=
+
 Version(s):
 20261102 (1.0.0) --> Release for shybox package (rfarm-nwp base configuration)
 """
@@ -47,6 +51,7 @@ from shybox.processing_grid_toolkit.lib_proc_compute_rain import convert_rain_un
 
 from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_temporary import DataTemporary
 from shybox.logging_toolkit.logging_handler import LoggingManager
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -182,6 +187,17 @@ def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## DATASETS MANAGEMENT
+    # ancillary ensemble storage (one member per file/store)
+    ancillary_data = DataTemporary(
+        folder_name=alg_cfg_application['data_ancillary']['path'],
+        file_name=alg_cfg_application['data_ancillary']['file_name'],
+        writer_type=alg_cfg_application['data_ancillary'].get('writer_type', 'pickle'),
+        prefix=alg_cfg_application['data_ancillary'].get('prefix', 'rfarm_'),
+    )
+    for process in alg_cfg_workflow['process_list']['RFARM_WORKFLOW']:
+        if process['function'] == 'exec_rfarm_nwp':
+            process.setdefault('args', {})['ancillary_data'] = ancillary_data
+
     # source data handler
     source_data = DataLocal(
         path=alg_cfg_application['data_source']['RAIN']['path'],
@@ -202,8 +218,7 @@ def main(view_table: bool = False):
     destination_data = DataLocal(
         path=alg_cfg_application['data_destination']['path'],
         file_name=alg_cfg_application['data_destination']['file_name'],
-        time_signature='step',
-        file_format='netcdf', file_type='grid_hmc', file_mode='local',
+        file_format='netcdf', file_type='grid_rfarm_nwp', file_mode='local',
         file_variable='RAIN', file_io='output', file_workflow='RFARM_WORKFLOW',
         variable_template={
             "dims_geo": {"longitude": "west_east", "latitude": "south_north", "time": "time"},
@@ -211,7 +226,7 @@ def main(view_table: bool = False):
             "vars_data": {"rain": "Rain"},
             "units": {"rain": "mm"},
         },
-        time_period=1, time_format='%Y%m%d%H%M',
+        time_period=time_data_length, time_format='%Y%m%d%H%M', time_signature='start',
         logger=logging_handle, message=False, tag='destination data'
     )
     # ------------------------------------------------------------------------------------------------------------------

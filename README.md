@@ -1,8 +1,9 @@
 # 🌨️ SHYBOX – Snow and Hydrologic Modeling Toolbox
 
 [![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/environment-Python%203.12-blue)](https://www.python.org/)
 [![Release](https://img.shields.io/github/v/release/c-hydro/shybox)](https://github.com/c-hydro/shybox/releases)
+[![Documentation Status](https://readthedocs.org/projects/shybox/badge/?version=latest)](https://shybox.readthedocs.io/en/latest/)
 
 **SHYBOX** (Snow and HYdrologic toolBOX) is a modular hydrological processing framework designed to run **reproducible workflows** using **versioned environmental datasets**.
 
@@ -59,11 +60,14 @@ The main objectives of SHYBOX are to:
 ```text
 shybox/
 ├── shybox/             # Core Python package
-├── bin/                # Compiled model executables
-├── configuration/      # JSON settings for workflows
-├── script/             # Python driver scripts
-├── tools/              # Utility scripts
-├── setup/              # Environment and dependency setup
+├── workflow/           # Workflow drivers and JSON examples
+├── exec/               # Case-study execution directories
+├── apps/               # Additional applications
+├── web/                # Result visualization interface
+├── docker/             # Container definitions
+├── apptainer/          # Apptainer deployment notes
+├── hpc/                # HPC execution material
+├── utils/              # Standalone utilities
 ├── docs/               # Documentation and examples
 ├── tests/              # Tests
 └── README.md
@@ -93,7 +97,9 @@ cd shybox
 Environment setup (Conda recommended):
 
 ```bash
-bash setup/setup_conda_shybox_base.sh
+bash setup_shybox_base.sh
+source ./conda/shybox_base_settings
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 ```
 
 ---
@@ -103,8 +109,15 @@ bash setup/setup_conda_shybox_base.sh
 SHYBOX workflows are driven by **configuration files** and executed via the provided scripts and tools.
 
 Refer to:
-- `docs/` for detailed workflow descriptions
+
+- [SHYBOX documentation on Read the Docs](https://shybox.readthedocs.io/en/latest/) for installation, configuration, workflows, and development
+- [Documentation source](docs/index.rst) for the pages maintained in this repository
 - Configuration examples for model-specific setups (S3M, HMC)
+
+The first documentation edition is **0.1.0**, independent of the package version.
+Build its HTML with Python 3.12 and the dependencies in `docs/requirements.txt`;
+see [documentation development](docs/development.rst) and
+[Read the Docs publishing](docs/publishing.rst).
 
 ---
 

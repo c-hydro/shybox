@@ -11,6 +11,7 @@ dependencies:
   - scipy
   - pandas
   - xarray
+  - zarr
   - dask
   - bottleneck
   - cython
@@ -23,6 +24,7 @@ dependencies:
   - rioxarray
   - cfgrib
   - pyresample
+  - cartopy
 
   # Tools
   - pip

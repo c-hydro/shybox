@@ -52,6 +52,7 @@ from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 # wrappers
 from shybox.io_toolkit.tiff_wrapper import write_tiff_watershed, write_tiff_grid2d
+from shybox.io_toolkit.nc_wrapper import write_nc_rfarm_ensemble
 
 # manage logger
 try:
@@ -490,6 +491,21 @@ def write_to_file(data, path,
             obj_data = to_nc_attrs(data)
             # dump to nc file
             obj_data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
+
+        elif file_type in ['grid_rfarm_nwp', 'grid_rfarm_ef']:
+
+            options = dict(kwargs.pop('out_opts', {}) or {})
+            mapping = kwargs.pop('map', {}) or {}
+
+            units = kwargs.pop('units', {}) or {}
+            variable = next(iter(mapping.values()), 'Rain')
+
+            unit = units.get(variable, next(iter(units.values()), 'mm')) if isinstance(units, dict) else units
+            options.setdefault('var_name', variable)
+            options.setdefault('var_attrs', {'units': unit or 'mm'})
+
+            write_nc_rfarm_ensemble(data, file_path=path, ref=kwargs.pop('ref', None), **options)
+
         else:
             logger_stream.error(f'File type not supported for netcdf writing: {file_type}')
             raise ValueError(f'File type not supported for netcdf writing: {file_type}')
