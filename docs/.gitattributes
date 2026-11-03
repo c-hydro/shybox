@@ -1,0 +1,2 @@
+# Preserve artwork bytes and keep PDF/image data out of text diffs.
+_static/images/** binary

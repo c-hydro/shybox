@@ -6,6 +6,15 @@ distribution. It supports workflows around HMC (Hydrological Modeling Chain)
 and S3M (Distributed Snow Simulation System), alongside dataset conversion,
 interpolation, merging and analysis.
 
+.. figure:: _static/images/Loghi_FP_Continuum_S3M.png
+   :alt: Flood-PROOFS forecasting system, Continuum hydrological model and S3M cryospheric model logos.
+   :width: 720px
+   :align: center
+   :figclass: shybox-models
+
+   Flood-PROOFS, Continuum and S3M: forecasting and modeling tools in the
+   ecosystem supported by SHYBOX workflows.
+
 Repository layout
 -----------------
 
@@ -64,3 +73,10 @@ Obtain datasets separately from `SHYDATA <https://github.com/c-hydro/shydata>`_
 or your operational data sources. Dataset paths, geographic domains, model
 executables and model versions must match the workflow settings. A Python
 environment alone does not provide the compiled HMC/S3M engines or their inputs.
+
+.. figure:: _static/images/CVA-237.jpg
+   :alt: Mountain valley bordered by forested slopes and rocky alpine ridges.
+   :width: 100%
+   :figclass: shybox-landscape
+
+   Mountain terrain and valley landscapes from SHYBOX's existing image collection.

@@ -11,3 +11,12 @@ licenses. Consult the source repository or data distributor for each component.
 
 See the repository's ``AUTHORS`` and package metadata for contributor
 attribution, and ``.zenodo.json`` for citation metadata.
+
+Images and branding
+-------------------
+
+The documentation photographs and branding are bundled in
+``docs/_static/images/``. All documentation image references use these local
+assets, so the documentation builds independently of the web application.
+The CIMA, Flood-PROOFS, Continuum and S3M marks identify their respective
+organizations, systems and models.

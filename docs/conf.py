@@ -22,11 +22,14 @@ nitpicky = True
 html_theme = 'sphinx_rtd_theme'
 html_title = f'{project} documentation {release}'
 html_theme_options = {'navigation_depth': 3, 'collapse_navigation': False}
+html_static_path = ['_static']
+html_css_files = ['shybox.css']
+html_logo = '_static/images/app_logo_fcima.png'
 html_context = {
     'display_github': True,
     'github_user': 'c-hydro',
     'github_repo': 'shybox',
-    'github_version': 'docs/0.1.0',
+    'github_version': 'main',
     'conf_py_path': '/docs/',
 }
 html_show_sourcelink = False
