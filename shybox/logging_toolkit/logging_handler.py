@@ -305,6 +305,123 @@ class LoggingManager:
 
         return lm
 
+    # method to create an independent logging instance
+    @classmethod
+    def create_instance(
+            cls,
+            name: str,
+            logger_folder: Optional[str] = None,
+            logger_file: Optional[str] = None,
+            logger_format: Optional[str] = None,
+            handlers: Optional[list] = None,
+            level: int = logging.INFO,
+            *,
+            use_arrows: bool = True,
+            arrow_dynamic: bool = True,
+            arrow_tag: Optional[str] = None,
+            arrow_base_len: int = 3,
+            propagate: bool = False,
+            set_as_current: bool = False,
+            reset_log_path: bool = False,
+            force_reconfigure: bool = False):
+
+        # Check logger name
+        if not name:
+            raise ValueError("Logger name must be defined")
+
+        # Get effective handlers
+        effective_handlers = (handlers if handlers is not None else DEFAULT_LOG_HANDLER)
+
+        # Validate handlers
+        unsupported = set(effective_handlers) - {"file", "stream"}
+        if unsupported:
+            raise ValueError(f"Unsupported logging handlers: {unsupported}")
+
+        # Get logger folder and file
+        folder = logger_folder or DEFAULT_LOG_FOLDER or os.getcwd()
+        file_name = logger_file or DEFAULT_LOG_FILE
+
+        # Define log path
+        log_path = (os.path.join(folder, file_name) if "file" in effective_handlers else None)
+
+        # remove previous log path (to avoid append different simulation)
+        if os.path.exists(log_path):
+            if reset_log_path:
+                os.remove(log_path)
+
+        # Define logger format
+        fmt = logger_format or DEFAULT_LOG_FORMAT
+        formatter = logging.Formatter(fmt)
+
+        # Get named logger
+        logger = logging.getLogger(name)
+
+        # Configure named logger
+        with cls._root_lock:
+
+            if logger.handlers and not force_reconfigure:
+                raise RuntimeError(
+                    f"Logger '{name}' already has handlers. Use force_reconfigure=True to replace them.")
+
+            # Prepare new handlers before replacing existing ones
+            new_handlers = []
+            try:
+
+                # Configure file handler
+                if "file" in effective_handlers:
+                    os.makedirs(folder, exist_ok=True)
+
+                    file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+                    file_handler.setLevel(level)
+                    file_handler.setFormatter(formatter)
+
+                    new_handlers.append(file_handler)
+
+                # Configure stream handler
+                if "stream" in effective_handlers:
+                    stream_handler = logging.StreamHandler(sys.stdout)
+                    stream_handler.setLevel(level)
+                    stream_handler.setFormatter(formatter)
+
+                    new_handlers.append(stream_handler)
+
+            except Exception:
+                for handler in new_handlers:
+                    handler.close()
+                raise
+
+            # Create LoggingManager without changing current logger
+            instance = cls(
+                name=name,
+                level=level,
+                use_arrows=use_arrows,
+                arrow_dynamic=arrow_dynamic,
+                arrow_tag=arrow_tag,
+                arrow_base_len=arrow_base_len,
+                propagate=propagate,
+                set_as_current=False
+            )
+
+            # Remove old handlers only when explicitly requested
+            if force_reconfigure:
+                for handler in logger.handlers[:]:
+                    logger.removeHandler(handler)
+                    handler.close()
+
+            # Attach independent handlers
+            for handler in new_handlers:
+                logger.addHandler(handler)
+
+            # Bind instance logger and path
+            instance.logger = logger
+            instance._log_path = log_path
+
+        # Register as current only if requested
+        if set_as_current:
+            cls.set_current(instance)
+
+        return instance
+
     # initializer
     def __init__(
             self,
@@ -331,9 +448,7 @@ class LoggingManager:
         self.use_arrows = use_arrows
         self.arrow_dynamic = arrow_dynamic
         self.arrow_tag = arrow_tag
-        self.arrow_base_len = (
-            arrow_base_len if arrow_base_len is not None else self._global_arrow_base_len
-        )
+        self.arrow_base_len = (arrow_base_len if arrow_base_len is not None else self._global_arrow_base_len)
 
         self._printer = LoggingPrinter() if use_arrows else None
         if self._printer:
@@ -430,7 +545,6 @@ class LoggingManager:
         if n is not None:
             self.set_prefix_len(n, tag=t)
 
-    # ---------- Persistent visual control ----------
     def last_prefix_len(self, tag: Optional[str] = None) -> int:
         t = self._tagkey(tag)
         with self._state_lock:
@@ -688,6 +802,21 @@ class LoggingManager:
         self.store_set(store_key, new, tag=t)
         self.set_prefix_len(new, tag=t, update_last=True)
 
+    # line info status
+    def info_status(self, msg: Optional[str] = None,
+                    items: Optional[Dict[str, object]] = None, prefix: str = ":::",) -> None:
+        # print direct message
+        if msg:
+            self.logger.info(f"{prefix} {msg}")
+        # print status items
+        if items:
+            width = max(len(str(key)) for key in items)
+            for key, value in items.items():
+                # convert boolean status
+                if isinstance(value, bool):
+                    value = "ACTIVE" if value else "INACTIVE"
+                self.logger.info(f"{prefix} {str(key).upper():<{width}} : {value}")
+
     # line info header
     def info_header(self, msg: str, *, blank_before: bool = False,
                     blank_after: bool = False, underline: bool = False):
@@ -774,7 +903,7 @@ class LoggingManager:
     def log_path(self) -> Optional[str]:
         return self._log_path
 
-    # ---------- ArrowPrinter replacement utilities ----------
+    # ArrowPrinter replacement utilities
     @staticmethod
     def rule_line(char: str = "=", width: int = 78) -> str:
         """Return a repeated char line, e.g., main break line."""

@@ -12,30 +12,35 @@ Version:       '1.0.0'
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
+import random
 
-from copy import deepcopy
-from collections import defaultdict
+from copy import deepcopy, copy
 from typing import Any, Dict, List, Union
 
 import datetime as dt
 import pandas as pd
 import xarray as xr
 
-from shybox.generic_toolkit.lib_utils_string import get_filename_components
 from shybox.generic_toolkit.lib_utils_tmp import ensure_folder_tmp
+from shybox.io_toolkit.lib_io_utils import search_common_path
 from shybox.time_toolkit.lib_utils_time import convert_time_format, normalize_to_datetime_index
 
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import group_process
 from shybox.orchestrator_toolkit.lib_orchestrator_process import ProcessorContainer
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import pretty_time
 
-from shybox.dataset_toolkit.dataset_handler_mem import DataMem
+from shybox.dataset_toolkit.dataset_handler_memory import DataMemory
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.dataset_toolkit.dataset_handler_collections import DataCollection
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
+
+# package utils
 from shybox.logging_toolkit.lib_logging_utils import with_logger
+from shybox.generic_toolkit.lib_utils_code import deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -43,10 +48,57 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 class OrchestratorBase:
 
     # default class options
-    default_options = {
+    DEFAULT_OPTION_REGISTRY = {
         "intermediate_output": "Mem",  # "Mem" or "Tmp"
         "break_on_missing_tiles": False,  # legacy naming; grid uses it, TS may ignore
         "tmp_dir": None,
+        "io_config": {'type_in': None, 'type_out': None, 'description': 'NA'}
+    }
+
+    # io configuration registry
+    IO_REGISTRY = {
+        "one_data_to_one_file": {
+            "type_in": "single",
+            "type_out": "single",
+            "description": "Dump each data object to a separate file",
+        },
+        "one_data_to_multiple_files": {
+            "type_in": "single",
+            "type_out": "collections",
+            "description": "Dump data object to multiple files",
+        },
+        "many_data_ts_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple time-series into one file",
+        },
+        "many_data_variables_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple variables into one file",
+        },
+        "many_data_tiles_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple tiles into one file"
+        },
+        "many_data_times_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple time steps into one file",
+        },
+        "many_data_files_to_one_file": {
+            "type_in": "collections",
+            "type_out": "single",
+            "description": "Merge multiple files into one file",
+        },
+    }
+
+    # set recognized group modes
+    GROUP_REGISTRY = {
+        "by:step": "Group data by single time step",
+        "by:period": "Group data by time period",
+        "by:file": "Group data by time file",
     }
 
     def __init__(
@@ -55,12 +107,10 @@ class OrchestratorBase:
         data_out: Union[DataLocal, Dict[str, Any], None] = None,
         deps_in: Union[DataLocal, Dict[str, Any], None] = None,
         deps_out: Union[DataLocal, Dict[str, Any], None] = None,
-        args_in: dict = None,
-        args_out: dict = None,
+        args_in: dict = None, args_out: dict = None,
         options: Union[dict, None] = None,
         mapper: Any = None,
-        logger: LoggingManager = None,
-    ) -> None:
+        logger: LoggingManager = None,) -> None:
 
         self.logger = logger or LoggingManager(name=self.__class__.__name__)
 
@@ -76,11 +126,19 @@ class OrchestratorBase:
         self.processes: List[ProcessorContainer] = []
         self.break_points: List[int] = []
 
-        self.options = deepcopy(self.default_options)
+        self.options = deepcopy(self.DEFAULT_OPTION_REGISTRY)
         if options is not None:
+            options = {key: value for key, value in options.items() if not (key.startswith('_') and key.endswith('_'))}
             self.options.update(options)
 
-        self.tmp_dir = None
+        # get io configuration
+        self.io_config = self.options.get("io_config", None)
+        # set io attributes
+        self.io_mode = self.io_config["mode"]
+        self.type_in = self.io_config["type_in"]
+        self.type_out = self.io_config["type_out"]
+
+        # get tmp dir
         if self.options["intermediate_output"] == "Tmp":
             tmp_root = self.options.get("tmp_dir", tempfile.gettempdir())
             self.tmp_dir = ensure_folder_tmp(tmp_root)
@@ -88,15 +146,26 @@ class OrchestratorBase:
         self.memory_active = True
         self.mapper = mapper  # injected by builder (Grid/TS)
 
+        self.process_current = None
+        self.process_previous = None
+        self.process_history, self.process_id, self.process_tag = {}, [], []
+        self.result_history = {}
+
+        self.group = 'by:step'
+        self.time = None
+
     # Hooks (override in subclasses)
+    @deprecated(since='2026-10-02')
     def grouping_tag(self) -> str:
         """Attribute used by group_process(). Default matches your current behavior."""
         return "reference"
 
+    @deprecated(since='2026-10-02')
     def reference_key_from_map(self, process_map: Dict[str, Any]) -> str:
         """Default reference is tag:workflow (your current convention)."""
         return ":".join([process_map["tag"], process_map["workflow"]])
 
+    @deprecated(since='2026-10-02')
     def get_input_by_reference(self, reference_key: str) -> Any:
         """Resolve initial input object for a variable group."""
         if isinstance(self.data_in, dict):
@@ -107,12 +176,108 @@ class OrchestratorBase:
             return self.data_in
         raise RuntimeError("Input data must be DataLocal or dict[str, Any].")
 
+    @deprecated(since='2026-10-02')
     def get_deps_by_reference(self, reference_key: str) -> Any:
         if self.deps_in is None:
             return None
         if not isinstance(self.deps_in, dict):
             raise RuntimeError("Input deps must be a dict or None.")
         return self.deps_in.get(reference_key, None)
+
+    ## ORCHESTRATOR PROPERTIES
+    # io configuration
+    @property
+    def io_config(self):
+        return self._io_config
+    @io_config.setter
+    def io_config(self, value):
+
+        # Validate configuration
+        if not isinstance(value, dict):
+            raise TypeError('IO configuration must be a dictionary.')
+
+        # Get IO mode
+        mode = value.get("mode")
+
+        # Format available modes
+        available_modes = "\n".join(
+            f'  - {name}: {cfg["description"]} '
+            f'[{cfg["type_in"]} -> {cfg["type_out"]}]'
+            for name, cfg in self.IO_REGISTRY.items()
+        )
+
+        # Validate mode
+        if mode not in self.IO_REGISTRY:
+            raise ValueError(
+                f'Unsupported IO mode "{mode}".\n'
+                f'Check "workflow.options.io_config.mode".\n'
+                f'Available modes:\n{available_modes}'
+            )
+
+        # Get IO settings from registry
+        io_settings = self.IO_REGISTRY[mode]
+
+        # Set IO configuration
+        self._io_config = {"mode": mode,"type_in": io_settings["type_in"],"type_out": io_settings["type_out"],}
+
+    # IO mode property
+    @property
+    def io_mode(self):
+        return self._io_mode
+    @io_mode.setter
+    def io_mode(self, value):
+        if value not in self.IO_REGISTRY:
+            raise ValueError(f'Unsupported IO mode "{value}".')
+        self._io_mode = value
+
+    # Input data type property
+    @property
+    def type_in(self):
+        return self._type_in
+    @type_in.setter
+    def type_in(self, value):
+        if value not in ("single", "collections"):
+            raise ValueError(f'Unsupported input data type "{value}".')
+        self._type_in = value
+
+    # Output data type property
+    @property
+    def type_out(self):
+        return self._type_out
+    @type_out.setter
+    def type_out(self, value):
+        if value not in ("single", "collections"):
+            raise ValueError(f'Unsupported output data type "{value}".')
+        self._type_out = value
+
+    # group property
+    @property
+    def group(self):
+        return self._group
+    @group.setter
+    def group(self, value):
+        if value not in self.GROUP_REGISTRY:
+            raise ValueError(f'Group mode "{value}" is not supported. '
+                             f'Available modes: {", ".join(self.GROUP_REGISTRY)}')
+        self._group = value
+
+    # time property
+    @property
+    def time(self):
+        return self._time
+    @time.setter
+    def time(self, value):
+        if value is None:
+            self._time = None
+        elif isinstance(value, pd.Timestamp):
+            self._time = value
+        elif isinstance(value, str):
+            self._time = pd.Timestamp(value)
+        elif isinstance(value, pd.DatetimeIndex):
+            self._time = value
+        else:
+            raise TypeError(f'Time type "{type(value).__name__}" is not supported. '
+                            f'Expected pd.Timestamp, str, pd.DatetimeIndex or None.')
 
     # properties
     @property
@@ -122,6 +287,7 @@ class OrchestratorBase:
         else:
             return False
 
+    # clean tmp directory where process ends
     def clean_up(self):
         if hasattr(self, 'tmp_dir') and os.path.exists(self.tmp_dir):
             try:
@@ -130,94 +296,131 @@ class OrchestratorBase:
                 print(f'Error cleaning up temporary directory: {e}')
 
     # create the output object
-    def make_output(self, in_obj: DataLocal, out_obj: DataLocal = None,
-                    function = None, message: bool = True, **kwargs) -> DataLocal:
+    def make_output(self, in_obj: DataLocal, out_obj: Union[DataLocal, None] = None,
+                    variable: str = None, workflow: str = None, mapping: dict = None,
+                    function = None, message: bool = True, **kwargs) -> dict:
 
+        # create out key (if needed)
+        if workflow not in variable:
+            out_key = create_key(workflow=workflow, variable=variable, separator=':')
+        else:
+            out_key = variable
+
+        # if output obj is dict or DataLocal return
+        out_collections = {}
         if isinstance(out_obj, DataLocal):
-            return out_obj
+            # create output key
+            out_collections[out_key] = out_obj
+            return out_collections
+        elif isinstance(out_obj, dict):
+            # use output dictionary
+            out_collections = out_obj
+            return out_collections
+        elif out_obj is None:
+            # keep empty collection
+            pass
+        else:
+            raise RuntimeError('Output obj must be defined by DataLocal, dict or None')
 
-        path_in = in_obj.loc_pattern
-        file_name_in = in_obj.file_name
+        # get input path and filename
+        if isinstance(in_obj, list):
 
-        has_times, format_times = False, None
-        if hasattr(in_obj ,'has_time'):
-            has_times = in_obj.has_time
-            format_times = "%Y%m%d%H%M%S"
+            # collect available location patterns
+            path_names = [obj.loc_pattern for obj in in_obj if getattr(obj, "loc_pattern", None) is not None]
+            # search a common path root (for intermediate step if needed)
+            path_name_in = search_common_path(path_names=path_names, path_extra='common')
+        else:
+            path_name_in = in_obj.loc_pattern
 
-        # create the name of the output file based on the function name
+        # initialize folder and filename
+        folder_name_tmp, file_name_tmp = None, None
+        # get from obj input
+        if path_name_in:
+            # split folder and filename
+            folder_name_in, file_name_in = os.path.split(path_name_in)
+            # get available components
+            folder_name_tmp = folder_name_in or None
+            file_name_tmp = file_name_in or None
+
+        # ensure temporary folder
+        if folder_name_tmp is None:
+            folder_name_tmp = ensure_folder_tmp()
+
+        # check time placeholder
+        has_times = getattr(in_obj, 'has_time', False)
+        format_times = "%Y%m%d%H%M%S" if has_times else None
+
+        # initialize file history
         file_history = None
+        # create output filename
         if function is not None:
 
-            # get the name of process fx
-            fx_name = f'_{function.__name__}'
-
-            # create the output file name pattern
-            if path_in is not None:
-                ext_in = os.path.splitext(path_in)[1][1:]
+            # get input extension
+            if file_name_tmp is not None:
+                ext_tmp = os.path.splitext(file_name_tmp)[1].lstrip('.')
             else:
-                ext_in = in_obj.file_format
-            ext_out = function.__getattribute__('output_ext') or ext_in
+                ext_tmp = str(in_obj.file_format).lstrip('.')
 
-            path_obj = get_filename_components(path_in)
-            name_base, ext_base = path_obj['base_name'], path_obj['ext_name']
+            # get output extension
+            ext_out = getattr(function, 'output_ext', None) or ext_tmp
+            # generate random id
+            random_out = str(random.randint(100, 999))
 
+            # initialize filename parts
+            name_parts = []
+            # add variable
             if self.has_variables:
+                # clean variable name
+                variable_part = re.sub(r'_+','_',re.sub(r'[:|,.]', '_', str(variable)))
+                name_parts.append(variable_part)
 
-                variable = kwargs['tag']
-                save_base = f'{name_base}_{variable}'
+            # add random id
+            name_parts.append(random_out)
+            # add time placeholder
+            if has_times:
+                name_parts.append(format_times)
 
-                if has_times:
-                    path_out = f'{save_base}_{fx_name}_{format_times}.{ext_out}'
-                    file_history = f'{file_name_in}_{variable}_{fx_name}_{format_times}'
-                else:
-                    path_out = f'{save_base}_{fx_name}.{ext_out}'
-                    file_history = f'{file_name_in}_{variable}_{fx_name}'
-
-            else:
-
-                save_base = f'{name_base}'
-
-                if has_times:
-                    path_out = f'_{save_base}_{fx_name}_{format_times}.{ext_out}'
-                    file_history = f'{file_name_in}_{fx_name}_{format_times}'
-                else:
-                    path_out = f'_{save_base}_{fx_name}.{ext_out}'
-                    file_history = f'{file_name_in}_{fx_name}'
+            # create output filename
+            file_name_out = f'{"_".join(name_parts)}.{ext_out}'
+            # create complete output path
+            path_name_out = os.path.join(folder_name_tmp, file_name_out)
+            # create file history
+            file_history = "_".join(name_parts)
 
         else:
-            # ensure a temporary output path (if no function is provided)
-            path_out = ensure_folder_tmp()
+            # ensure temporary output path
+            path_name_out = ensure_folder_tmp()
 
-        # use the output pattern provided by the user
+        # use the output pattern provided automatic or by the user
         if out_obj is None:
-            path_out = deepcopy(path_out)
+            pass
         elif isinstance(out_obj, dict):
-            path_out = out_obj.get('loc_pattern', path_out)
+            path_name_out = out_obj.get('loc_pattern', path_name_out)
         else:
-            self.logger.error('Output must be a Dataset or a dictionary.')
-            raise ValueError('Output must be a Dataset or a dictionary.')
+            self.logger.error('Output object must be defined by dictionary or NoneType.')
+            raise ValueError('Check your "make_output" method to update or change settings.')
 
         # manage and intermediate output in geotiff format
         output_type = self.options['intermediate_output']
-        if output_type == 'Mem':
-
-            out_obj = DataMem(loc_pattern=path_out)
-
+        if output_type == 'Memory':
+            # NOTE. Update class definition ...
+            out_obj = DataMemory(loc_pattern=path_name_out)
         elif output_type == 'Tmp':
 
             # prepare file name (temporary)
-            file_name_tmp = os.path.basename(path_out)
+            file_name_tmp = os.path.basename(path_name_out)
 
             # ensure variable template and file variable attributes
-            if 'variable_template' not in kwargs:
-                kwargs['variable_template'] = {}
-            kwargs['variable_template']['vars_data'] = {kwargs['workflow']: kwargs['workflow']}
-            if 'file_variable' not in kwargs:
-                kwargs['file_variable'] = kwargs['workflow']
+            kwargs['variable_template'] = {}
+            if mapping is None:
+                kwargs['variable_template']['vars_data'] = {kwargs['workflow_name']: 'tmp'}
+            else:
+                kwargs['variable_template']['vars_data'] = mapping
 
             # create the temporary output object (for making tmp files in a list of processes)
             out_obj = DataLocal(
                 path=self.tmp_dir, file_name=file_name_tmp,
+                file_variable=variable, file_workflow=workflow, data_role='data',
                 message=message, logger=self.logger, **kwargs)
 
         else:
@@ -226,86 +429,171 @@ class OrchestratorBase:
 
         # store output file history
         out_obj.file_history = file_history
+        # organize output collections
+        out_collections[out_key] = out_obj
 
-        return out_obj
+        return out_collections
 
     # method to add a process to the orchestrator
-    def add_process(self, function, process_n: [int, None] = None, process_output: Union[DataLocal, xr.Dataset, dict] = None, **kwargs) -> None:
+    def add_process(self,
+                    function_obj,
+                    process_output: Union[DataLocal, xr.Dataset, dict] = None, **kwargs) -> None:
 
-        # get process var tag
-        if 'workflow' in kwargs:
-            process_wf = kwargs['workflow']
+        # get workflow name
+        if 'workflow_name' in kwargs:
+            workflow_name = kwargs['workflow_name']
         else:
-            self.logger.error('Process variable "workflow" must be provided in the process arguments.')
-            raise RuntimeError('Process variable "workflow" must be provided in the process arguments.')
+            self.logger.error('Process variable "workflow_name" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "workflow_name" must be provided in the process arguments.')
 
-        # get process map
-        process_map = self.mapper.get_pairs(name=process_wf, type='workflow') if self.mapper is not None else {}
-        # get process variable in/out
-        process_var_in, process_var_out = process_map['in'], process_map['out']
-        process_var_tag, process_var_workflow = process_map['tag'], process_map['workflow']
-        process_var_reference = ':'.join([process_var_tag, process_var_workflow])
-        # update kwargs with process map
-        kwargs = {**kwargs, **process_map}
-
-        # ensure the state of the process (initial or not)
-        process_obj = self.processes
-        process_previous = self.processes[-1] if len(process_obj) > 0 else None
-        if (process_previous is not None) and (process_wf not in process_previous.workflow):
-            process_init = True
-        elif len(process_obj) == 0:
-            process_init = True
+        # get process tag
+        if 'tag' in kwargs:
+            process_tag = kwargs['tag']
         else:
-            process_init = False
+            self.logger.error('Process variable "tag" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "tag" must be provided in the process arguments.')
+
+        # get process mode
+        if 'mode' in kwargs:
+            process_mode = kwargs['mode']
+        else:
+            self.logger.error('Process variable "mode" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "mode" must be provided in the process arguments.')
+
+        # get mapping_in process
+        if 'mapping_in' in kwargs:
+            process_mapping_in = kwargs['mapping_in']
+        else:
+            self.logger.error('Process variable "mapping_in" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "mapping_in" must be provided in the process arguments.')
+
+        # get mapping_out process
+        if 'mapping_out' in kwargs:
+            process_mapping_out = kwargs['mapping_out']
+        else:
+            self.logger.error('Process variable "mapping_out" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "mapping_out" must be provided in the process arguments.')
+
+        # get process datasets
+        if 'datasets' in kwargs:
+            process_datasets = kwargs['datasets']
+        else:
+            self.logger.error('Process variable "datasets" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "datasets" must be provided in the process arguments.')
+
+        # get process results
+        if 'results' in kwargs:
+            process_results = kwargs['results']
+        else:
+            self.logger.error('Process variable "results" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "results" must be provided in the process arguments.')
+
+        # get process fx
+        if 'function' in kwargs:
+            process_fx = kwargs.pop('function')
+        else:
+            self.logger.error('Process variable "function" must be provided in the process arguments.')
+            raise RuntimeError('Process variable "function" must be provided in the process arguments.')
+
+        # get process fx
+        if 'args' in kwargs:
+            process_args = kwargs['args']
+        else:
+            process_args = {}
+
+        # define process options
+        option_process = {**process_args, **self.options}
+
+        # check data in/out format
+        if not isinstance(self.data_in, dict):
+            self.logger.error('Datasets input must be a Dataset.')
+            raise RuntimeError('Datasets input must be a Dataset.')
+        if not isinstance(self.data_out, dict):
+            self.logger.error('Datasets output must be a Dataset.')
+            raise RuntimeError('Datasets output must be a Dataset.')
+
+        # get function name
+        function_name = function_obj.__name__
+        # get deps in/out
+        deps_input, deps_output = self.deps_in, self.deps_out
+
+        # initialize process or not
+        process_init, process_obj_previous = False, None
+        if process_mode == 'start':
+            process_init = True
+            process_wf = workflow_name
+        elif process_mode == 'unique':
+            process_init = True
+            process_wf = workflow_name
+        elif process_mode == 'intermediate':
+            process_obj_previous = self.processes[-1]
+            if (process_obj_previous is not None) and (workflow_name not in process_obj_previous.workflow_name):
+                process_init = True
+            process_wf = workflow_name
+        elif process_mode == 'end':
+            process_obj_previous = self.processes[-1]
+            if (process_obj_previous is not None) and (workflow_name not in process_obj_previous.workflow_name):
+                process_init = True
+            process_wf = workflow_name
+        else:
+            raise RuntimeError('Process mode must be "start", "intermediate", "unique" or "end".')
 
         # create the process input
         if process_init:
-            if isinstance(self.data_in, dict):
-                in_keys = list(self.data_in.keys())
-                if process_var_reference in in_keys:
-                    this_input = self.data_in[process_var_reference]
-                else:
-                    self.logger.error(
-                        f'Input data for variable "{process_var_reference}" not found in the input data collection.'
-                    )
-                    raise RuntimeError(
-                        f'Input data for variable "{process_var_reference}" not found in the input data collection.')
-            elif isinstance(self.data_in, DataLocal):
-                this_input = self.data_in
-            else:
-                self.logger.error('Input data must be DataLocal or dictionary of DataLocal instance.')
-                raise RuntimeError('Input data must be DataLocal or dictionary of DataLocal instance.')
 
-            if self.deps_in is not None:
-                if isinstance(self.deps_in, dict):
-                    deps_input = self.deps_in[process_var_reference]
-                else:
-                    self.logger.error('Input deps must be dictionary instance.')
-                    raise RuntimeError('Input deps must be dictionary instance.')
-            else:
-                deps_input = None
-        else:
-            deps_input = process_previous.out_deps
-            process_previous = self.processes[-1]
-            this_input = process_previous.out_obj
+            # define process settings for the method 1
+            this_input, this_type = {}, {}
 
-        # create the temporary input (for making output)
-        if isinstance(this_input, list):
-            tmp_input = this_input[-1]
+            # get input keys for the selected workflow
+            in_keys = [key for key in self.data_in.keys() if key.split('|')[0] == workflow_name]
+            for step_key in in_keys:
+                in_flag = False
+                for process_key, process_mapper in process_mapping_in.items():
+
+                    step_collection = process_mapper['collection']
+                    step_type = process_mapper['type']
+
+                    if step_key == step_collection:
+                        tmp_input = self.data_in[step_key]
+                        if isinstance(tmp_input, list) and len(tmp_input) == 1:
+                            tmp_input = tmp_input[0]
+                        this_input[step_key] = tmp_input
+                        this_type[step_key] = step_type
+                        in_flag = True
+
+                if not in_flag:
+                    raise RuntimeError(f'Dataset defined by {step_key} is not found in the mapping structure')
         else:
-            tmp_input = this_input
+            # define process settings for the method n
+            deps_input = process_obj_previous.out_deps
+            process_obj_previous = self.processes[-1]
+            this_input = process_obj_previous.out_obj
+
+        # check input type
+        if not isinstance(this_input, dict):
+            raise TypeError(f"Object 'this_input' must be a dictionary, got {type(this_input).__name__}.")
+        # check input content
+        if not this_input:
+            raise ValueError("Object 'this_input' dictionary is empty.")
+
+        # get input at last key
+        last_key = next(reversed(this_input))
+        tmp_output = this_input[last_key]
 
         # create the process output
         this_output = self.make_output(
-            tmp_input, process_output, function, message=False, **kwargs)
+            in_obj=tmp_output, out_obj=process_output, function=function_obj,
+            variable=process_tag, workflow=process_wf, mapping=process_mapping_out,
+            message=False, **kwargs)
 
         # create the process container
         this_process = ProcessorContainer(
-            function = function,
-            in_obj = this_input, in_opts=self.options,
-            in_deps=deps_input, out_deps=None,
+            function = function_obj,
+            in_obj = this_input, in_opts=option_process,
+            in_deps=deps_input, out_deps=deps_output,
+            out_obj = this_output, out_opts=option_process,
             args = kwargs,
-            out_obj = this_output, out_opts=self.options, logger=self.logger, tag=process_var_reference,)
+            logger=self.logger)
 
         # check if break point is required
         if this_process.break_point:
@@ -315,90 +603,164 @@ class OrchestratorBase:
         self.processes.append(this_process)
 
     # method to wrap the run of the orchestrator
-    def run(self, time: Union[pd.Timestamp, str, pd.DatetimeIndex, None] = None, **kwargs) -> None:
+    def run(self,
+            time: Union[pd.Timestamp, str, pd.DatetimeIndex, None] = None,
+            group: str = 'by:step', **kwargs) -> None:
 
         # info orchestrator start
         self.logger.info_up('Run orchestrator ...')
 
         # check time availability
-        if time is not None:
-            self.logger.info('Active dynamic mode')
-        else:
-            self.logger.info('Active static mode')
+        if time is None:
+            self.logger.info_status("RunExecution -- TYPE static")
             time = pd.Timestamp.now()
+        else:
+            self.logger.info_status("RunExecution -- TYPE dynamic")
 
-        # group process by variable
-        proc_group = group_process(self.processes, proc_tag='reference')
+        # update orchestrator properties
+        self.time, self.group = time, group
 
         # manage process execution and process output
         if len(self.processes) == 0:
-
             # exit no processes declared
-            self.logger.error('No processes have been added to the workflow.')
-            raise ValueError('No processes have been added to the workflow.')
+            self.logger.error('No processes have been added to the workflow. Exit')
+            raise ValueError('Check the messages to found the issue in adding processes.')
 
-        elif isinstance(self.processes[-1].out_obj, DataMem) or \
-            (isinstance(self.processes[-1].out_obj, DataLocal) and hasattr(self, 'tmp_dir')):
+        # get global process obj and id
+        process_last, id_last = self.processes[-1], len(self.processes) - 1
 
-            # path normalization check
-            tmp_dir = os.path.normpath(self.tmp_dir)
-            out_dir = os.path.normpath(self.processes[-1].out_obj.dir_name)
+        # iterate over process(es)
+        data_out_collections = None
+        for proc_id, proc_obj in enumerate(self.processes):
 
-            # check the output datasets
-            if (tmp_dir in out_dir) and self.data_out is not None:
+            # get mode
+            proc_mode, proc_tag = proc_obj.mode, proc_obj.tag
 
-                # get the output element(s)
-                proc_elements = list(self.data_out.values())
-                # check the output element(s)
-                proc_bucket = []
-                for proc_obj in proc_elements:
+            # info status process
+            self.logger.info_status(f"RunExecution -- PROCESS | STEP | ID: {proc_id} | MODE: {proc_mode} | TAG: {proc_tag}")
 
-                    if isinstance(proc_obj, list):
-                        proc_obj = proc_obj[0]
+            # Set by process mode
+            if proc_mode in ('end', 'unique'):
 
-                    if proc_obj not in proc_bucket:
-                        #proc_obj.logger = self.logger.compare(proc_obj.logger)
-                        proc_bucket.append(proc_obj)
+                # Get data from self or process(es)
+                out_collections = self.data_out
+                default_obj = proc_obj.out_obj
+                tmp_obj = copy(proc_obj)
 
-                # assign the output element(s)
-                if len(proc_bucket) == 1:
+                # Iterate over default objects
+                for workflow_default, data_default in default_obj.items():
 
-                    # set the output object and dump state (to use the selected output format)
-                    self.processes[-1].out_obj = proc_bucket[0].copy()
-                    self.processes[-1].dump_state = True
+                    # Define data and workflow out
+                    data_out, workflow_out = None, None
+                    if not isinstance(out_collections, dict):
+                        raise TypeError('out_collections must be a dictionary.')
 
-                elif len(proc_bucket) > 1:
+                    for key_tmp, data_tmp in out_collections.items():
+                        workflow_tmp = key_tmp.split('|', 1)[0]
+                        if workflow_tmp in workflow_default:
 
-                    # iterate over all variable groups
-                    for proc_key, proc_obj in proc_group.items():
+                            # validate output list
+                            if not isinstance(data_tmp, list) or len(data_tmp) != 1:
+                                raise ValueError(f'Output "{key_tmp}" must contain exactly one object.')
 
-                        proc_out = self.data_out[proc_key].copy()[0]
+                            data_out = data_tmp[0]
+                            workflow_out = workflow_tmp
+                            break
 
-                        proc_last = proc_obj[-1]
-                        proc_idx = self.processes.index(proc_last)
+                    # Check data and workflow out
+                    if data_out is None or workflow_out is None:
+                        raise RuntimeError(f'Output data not found for workflow "{workflow_default}".')
 
-                        self.processes[proc_idx].out_obj = proc_out
-                        self.processes[proc_idx].dump_state = True
+                    # status process output
+                    self.logger.info_status(
+                        f"RunExecution -- PROCESS | OUTPUT | DUMP: {self.io_mode} | "
+                        f"TYPE_IN: {self.type_in} | TYPE_OUT: {self.type_out}"
+                    )
 
+                    # manage io type
+                    if (self.type_in == 'collections' and self.type_out == 'single') and self.group == 'by:step':
+
+                        # initialize data collection object
+                        if data_out_collections is None:
+                            data_out_collections = DataCollection(logger=self.logger)
+
+                        # add output object
+                        for out_key, out_config in out_collections.items():
+
+                            # filter by workflow
+                            if out_key.split('|', 1)[0] != workflow_out:
+                                continue
+
+                            # check that exactly one object is available
+                            if not isinstance(out_config, list) or len(out_config) != 1:
+                                raise ValueError(
+                                    f'Output "{out_key}" must contain exactly one object. '
+                                    f'Found: {len(out_config) if isinstance(out_config, list) else type(out_config).__name__}'
+                                )
+
+                            # add current DataLocal to collection
+                            data_out_collections.add(out_key, out_config[0])
+
+                        # Assign collection only at the last process
+                        if proc_id == id_last:
+                            self.processes[proc_id].out_obj[workflow_default] = data_out_collections
+                            self.processes[proc_id].dump_state = True
+
+                    elif (self.type_in == 'collections' and self.type_out == 'single') and self.group == 'by:period':
+
+                        # assign DataLocal at the end of time period
+                        self.processes[proc_id].out_obj[workflow_default] = data_out
+                        self.processes[proc_id].dump_state = True
+
+                    elif self.type_in == 'single' and self.type_out == 'single':
+
+                        # assign individual DataLocal
+                        self.processes[proc_id].out_obj[workflow_default] = data_out
+                        self.processes[proc_id].dump_state = True
+
+                    elif self.type_in == 'single' and self.type_out == 'collections':
+
+                        # assign individual DataLocal
+                        self.processes[proc_id].out_obj[workflow_default] = data_out
+                        self.processes[proc_id].dump_state = True
+
+                    elif self.type_in == 'collections' and self.type_out == 'collections':
+                        raise NotImplementedError(
+                            f'Not implemented IO "{self.type_in} :: {self.type_out}" for IO mode "{self.io_mode}". ')
+
+                    else:
+                        raise ValueError(f'Unsupported IO input type "{self.type_in}" for IO mode "{self.io_mode}".')
+
+            elif proc_mode in ('start', 'intermediate'):
+                pass
             else:
-                # exit if no output dataset defined
-                self.logger.error('No output dataset has been set.')
-                raise ValueError('No output dataset has been set.')
+                raise ValueError(f'Unsupported process mode "{proc_mode}". Expected: start, intermediate, end, unique.')
 
         # normalize time steps
         time_steps = normalize_to_datetime_index(time)
-        # check time steps
-        if len(time_steps) == 0:
-            return None
 
-        # check group tag in kwargs (by_time disables memory) --> da controllare con merge time
-        if 'group' in kwargs:
-            group_type = kwargs['group']
-            if group_type == 'by_time':
-                # if group by time the algorithm will pass a list of time steps to each process (memory disabled)
-                # merger by time requires all time steps at once
-                time_steps = _merge_by_time(time_steps)
-                self.memory_active = False
+        # check time steps
+        if time_steps is None or len(time_steps) == 0:
+            return None
+        # validate time steps
+        if not isinstance(time_steps, pd.DatetimeIndex):
+            self.logger.error('Time must be a DatetimeIndex.')
+            raise TypeError('Time must be a DatetimeIndex.')
+
+        # defined group time or objects
+        if self.group == 'by:step':
+            # info status group
+            self.logger.info_status(f"RunExecution -- GROUP {self.group}")
+            time_steps = _by_step(time_steps)
+        elif self.group == 'by:period':
+            self.logger.info_status(f"RunExecution -- GROUP {self.group}")
+            time_steps = _merge_by_period(time_steps)
+        elif self.group == 'by:file':
+            self.logger.info_status(f"RunExecution -- GROUP {self.group}")
+            time_steps = _merge_by_file(time_steps)
+        else:
+            self.logger.error(f"Group {self.group} not supported.")
+            raise NotImplementedError('Case not implemented yet.')
 
         # iterate over time steps
         for ts in time_steps:
@@ -420,18 +782,6 @@ class OrchestratorBase:
 
     # method to run single time step
     def run_single_ts(self, time: Union[pd.Timestamp, str, pd.DatetimeIndex], **kwargs) -> None:
-
-        # time formatting
-        if isinstance(time, str):
-            time = convert_time_format(time, 'str_to_stamp')
-        elif isinstance(time, pd.DatetimeIndex):
-            tmp = [convert_time_format(ts, 'str_to_stamp') for ts in time]
-            time = deepcopy(tmp)
-        elif isinstance(time, pd.Timestamp):
-            pass
-        else:
-            self.logger.error('Time must be a string or a DatetimeIndex.')
-            raise ValueError('Time must be a string or a DatetimeIndex.')
 
         # run all processes if no breakpoints
         if len(self.break_points) == 0:
@@ -461,134 +811,212 @@ class OrchestratorBase:
         self.clean_up()
 
     # method to iterate over process(es)
-    def _run_processes(self, processes, time: dt.datetime, **kwargs) -> None:
+    def _run_processes(self, processes, time: Union[dt.datetime, list[dt.datetime]], **kwargs) -> None:
 
         # return if no processes
         if not processes: return None
 
         # group process by variable
-        proc_group = group_process(processes)
+        proc_group = ProcessorContainer.group_processes(self.processes, fields='workflow_name')
 
         # iterate over all variable groups
-        proc_memory, proc_ws = None, {}
-        for proc_var, proc_list in proc_group.items():
+        for group_id, (proc_workflow, proc_list) in enumerate(proc_group.items()):
 
-            # VARIABLE BLOCK START
-            self.logger.info_up(f'Variable "{proc_var}" ...')
-
-            # get the variable mapping
-            proc_vars_map = self.mapper.get_pairs(name=proc_var, type='reference')
+            # end workflow end
+            self.logger.info_up(f'Workflow "{proc_workflow}" ...')
 
             # iterate over all processes for this variable
-            proc_result, proc_return, proc_wf_current = None, [], None
-            proc_current, proc_previous = None, None
+            proc_current, proc_previous, proc_history, proc_memory = None, None, {}, False
             for proc_id, proc_obj in enumerate(proc_list):
 
-                # PROCESS BLOCK START
-                self.logger.info_up(f'Process "{proc_obj.fx_name}" ...')
+                # set proc current
+                self.process_current = copy(proc_obj)
 
-                # check process dump state
-                proc_dump = proc_obj.dump_state
+                # get process fx and tag
+                proc_fx, proc_tag = proc_obj.fx_name, proc_obj.tag
+                # get process workflow name and id
+                proc_wflow_name, proc_wflow_id = proc_obj.workflow_name, proc_obj.workflow_id
+                # get process mode and dump
+                proc_mode, proc_dump = proc_obj.mode, proc_obj.dump_state
+                # get process datasets and results
+                proc_datasets, proc_results = proc_obj.datasets, proc_obj.results
 
+                # start process block
+                self.logger.info_up(f'Process "{proc_fx}" ...')
+
+                # get collections of tags and objects
+                proc_tag_collections = self.process_tag
+                proc_history_obj_collections = self.process_history
+
+                # define process ids
+                proc_id_current = proc_id
+                proc_id_previous = proc_id - 1 if proc_id > 0 else None
+                # define process tags
+                proc_tag_current = proc_tag
+                proc_tag_previous = proc_tag_collections[proc_id - 1] if proc_id > 0 else None
+                # define process history tags
+                proc_history_id_current = f'process_{proc_id_current}'
+                proc_history_id_previous = (f'process_{proc_id_previous}' if proc_id_previous is not None else None)
+
+                # define proc args
+                proc_args = {}
+                # execute process
                 try:
-                    # if previous process returned None → skip
-                    if proc_id > 0 and proc_return[proc_id - 1] is None:
-                        self.logger.warning(
-                            f'Process "{proc_obj.fx_name}" ... SKIPPED. Previous process was NoneType'
-                        )
-                        proc_return.append(None)
-                        continue
+                    # initialize process collections
+                    proc_args['collections_history'], proc_args['collections_tags'] = {}, []
+                    proc_args['results_history'] = {}
 
-                    # previous workflow name
-                    proc_previous = proc_current
-                    proc_wf_previous = proc_result.name if proc_result is not None else None
+                    # manage previous process
+                    proc_history_obj_previous = {}
+                    if proc_id_previous is not None:
 
-                    # organize kwargs
-                    local_kwargs = dict(kwargs)
-                    local_kwargs.update({
-                        'id': proc_id,
-                        'collections': proc_ws,
-                        #'workflow': proc_wf_previous,
-                        'workflow': proc_previous,
-                        'memory_active': self.memory_active,
-                        **proc_vars_map
-                    })
+                        # get previous process objects matching the workflow
+                        proc_history_obj_tmp = {
+                            key: value
+                            for key, value in proc_history_obj_collections.items()
+                            if key.startswith(f"{proc_wflow_name}")
+                        }
 
-                    # inject memory if available
-                    if proc_memory is not None:
-                        local_kwargs.setdefault('memory', {})
-                        #if proc_wf_previous not in local_kwargs['memory']:
-                        if proc_previous not in local_kwargs['memory']:
-                            #local_kwargs['memory'][proc_wf_previous] = proc_memory
-                            local_kwargs['memory'][proc_previous] = proc_memory
+                        # check previous process objects
+                        if not proc_history_obj_tmp or all(value is None for value in proc_history_obj_tmp.values()):
 
-                    # run process
-                    proc_result, proc_memory = proc_obj.run(time, **local_kwargs)
-                    proc_current = proc_var
+                            self.logger.warning(
+                                f'Process "{proc_fx}" ... SKIPPED. '
+                                f'Previous process for workflow "{proc_wflow_name}" was NoneType'
+                            )
+                            proc_history_obj_previous = {}
+                            continue
 
-                    # determine current workflow name
-                    if proc_result is not None:
-                        if isinstance(proc_result, xr.DataArray):
-                            proc_wf_current = proc_result.name
-                        elif isinstance(proc_result, xr.Dataset):
-                            proc_wf_current = list(proc_result.data_vars.keys())
                         else:
-                            self.logger.error('Process output must be a DataArray.')
-                            raise ValueError('Process output must be a DataArray.')
-                    else:
-                        proc_wf_current = proc_vars_map['workflow']
+                            # create previous process history
+                            proc_history_obj_previous = copy(proc_history_obj_tmp)
 
+                        # get keys history and previous process(es)
+                        key_previous = list(proc_history_obj_previous.keys())
+                        key_history = list(self.process_history.keys())
+                        # check validity of previous process
+                        if len(key_previous) != 1 or key_previous[0] not in key_history:
+                            raise RuntimeError(f'Previous process for workflow "{proc_wflow_name}" was NoneType or not available')
+
+                        proc_args['collections_history'] = self.process_history
+                        proc_args['collections_tags'] = self.process_tag
+
+                    # define process args
+                    proc_args['memory_active'] = self.memory_active
+                    proc_args['process_id'] = proc_id_current
+                    proc_args['process_tag'] = proc_tag_current
+                    proc_args['workflow_name'] = proc_wflow_name
+                    proc_args['workflow_id'] = proc_wflow_id
+                    proc_args['group_id'] = group_id
+                    # collect results from other workflow(s) if available
+                    proc_args['results_history'] = self.result_history
+
+                    # run process (return obj or dict just to test for iterations ... )
+                    proc_result, proc_memory = proc_obj.run(time, **proc_args)
+
+                    # manage history process
                     if not proc_dump:
 
-                        # store process result
-                        proc_return.append(proc_result)
+                        # check expected process results
+                        available_variables = list(proc_result.keys())
+                        for variable_result in proc_results.values():
+                            tag_result = f'{proc_workflow}|{variable_result}'
+                            if tag_result not in available_variables:
+                                error_message = (
+                                    f'Variable "{tag_result}" not found in process results. '
+                                    f'Available variables: {", ".join(available_variables)}'
+                                )
+                                self.logger.error(error_message)
+                                raise RuntimeError(error_message)
 
-                        # DETAIL: if skipped / empty
+                        # alert if result obj is defined by NoneType
                         if proc_result is None:
-                            self.logger.warning(
-                                f'Process "{proc_obj.fx_name}" ... SKIPPED. Data not available'
-                            )
+                            self.logger.warning(f'Process "{proc_fx}" ... SKIPPED. Data not available')
 
-                        # assign current workflow to workspace
-                        proc_ws[proc_current] = proc_return[-1]
+                        # check result format
+                        if not isinstance(proc_result, dict):
+                            self.logger.error(f'Process "{proc_fx}" ... FAILED')
+                            raise RuntimeError(f'Object result must be defined by Dict. Found type: {type(proc_result).__name__}')
+
+                        # store process result
+                        self.process_id = proc_id
+                        self.process_tag.append(proc_tag)
+                        # set proc previous
+                        self.process_previous = copy(proc_obj)
+
+                        # get workflow from new result
+                        proc_workflows = {key.split("|", 1)[0] for key in proc_result.keys()}
+
+                        # remove previous entries belonging to the same workflow
+                        self.process_history = {
+                            key: value
+                            for key, value in self.process_history.items()
+                            if key.split("|", 1)[0] not in proc_workflows
+                        }
+
+                        # update with new result
+                        self.process_history.update(proc_result)
 
                     else:
                         # dump state active the data in memory is cleared (empty dict)
-                        proc_ws.pop(proc_current, None)
+                        self.process_current, self.process_previous = None, None
+                        self.process_history, self.process_id, self.process_tag = {}, [], []
+                        self.result_history = {}
+
+                except Exception as exc:
+
+                    # capture expections
+                    self.logger.exception(f'Process "{proc_fx}" ... FAILED: {exc}')
+
+                    # create obj proc_history
+                    proc_history_obj_current = {proc_history_id_current: None}
+
+                    # optional: keep history aligned with process ids
+                    self.process_history[proc_wflow_name].update(proc_history_obj_current)
+                    self.process_tag.append(proc_tag)
+
+                    # propagate exception
+                    raise
 
                 finally:
-                    # PROCESS BLOCK END
-                    self.logger.info_down(f'Process "{proc_obj.fx_name}" ... DONE')
+                    # end process block
+                    self.logger.info_down(f'Process "{proc_fx}" ... DONE')
 
-            # VARIABLE BLOCK END
-            self.logger.info_down(f'Variable "{proc_var}" ... DONE')
+            # end workflow end
+            self.logger.info_down(f'Workflow "{proc_workflow}" ... DONE')
 
-            # Normalize proc_wf_current
-            if isinstance(proc_wf_current, list):
-                proc_wf_tmp = ":".join(str(wf) for wf in proc_wf_current)
-            else:
-                proc_wf_tmp = str(proc_wf_current)
-
-            # re-assign current workflow to workspace
-            proc_wf_current = proc_wf_tmp
-            #proc_ws[proc_wf_current] = proc_return[-1]
-            #proc_ws[proc_current] = proc_return[-1]
 # ----------------------------------------------------------------------------------------------------------------------
 
-def _merge_by_time(times):
-    return [times]
+# ----------------------------------------------------------------------------------------------------------------------
+# HELPERS
+# helper to create a data key
+def create_key(workflow: Union[str, None] = None, variable: Union[str, None] = None, separator: str = ":",) -> str:
+    # check workflow and variable
+    if workflow is None or variable is None:
+        raise ValueError("Workflow and variable must be defined.")
+    # create key
+    return separator.join([str(workflow), str(variable),])
 
+# method to manage single time step
+def _by_step(times):
+    return times
+# method to manage multiple time steps by file
+def _merge_by_period(times, separator='|'):
+    return [pd.DatetimeIndex(times).rename(f'time{separator}by:period')]
+# method to manage multiple time steps by file
+def _merge_by_file(times, separator='|'):
+    return [pd.DatetimeIndex(times).rename(f'time{separator}by:file')]
+
+# helper to merge by process
+@deprecated(since='2026-10-07')
 def _merge_by_process(containers):
     merged = {}
-
     for pc in containers:
         process, key, variable, sources = pc.args  # adapt if attribute name differs
-
         base_key = (process, variable)
 
         # split existing sources
         src_list = sources.split(',')
-
         if base_key not in merged:
             merged[base_key] = set(src_list)
         else:
@@ -598,19 +1026,38 @@ def _merge_by_process(containers):
     for (process, variable), src_set in merged.items():
         src_str = ",".join(sorted(src_set))
         key = f"{variable}:{src_str}"
-
-        result.append(
-            ProcessorContainer((process, key, variable, src_str))
-        )
+        result.append(ProcessorContainer((process, key, variable, src_str)))
 
     return result
 
-
-# ----------------------------------------------------------------------------------------------------------------------
 # helper to format time for logging
-def pretty_time(ts):
+@with_logger(var_name='logger_stream')
+def pretty_time_OLD(ts, logger_stream=None):
 
+    # Handle DatetimeIndex
     if isinstance(ts, pd.DatetimeIndex):
+
+        # Check empty index
+        if len(ts) == 0:
+            logger_stream.warning('DatetimeIndex is empty. No time steps available.')
+            return "NO TIME STEPS AVAILABLE"
+
+        # Check missing timestamps
+        if ts.hasnans:
+            logger_stream.warning('DatetimeIndex contains NaT values.')
+            ts = ts.dropna()
+            if len(ts) == 0:
+                logger_stream.warning('DatetimeIndex contains no valid timestamps.')
+                return "NO TIME STEPS AVAILABLE"
+
+        # Check time ordering
+        if not ts.is_monotonic_increasing:
+            logger_stream.warning('DatetimeIndex is not sorted in ascending order.')
+        # Check duplicated timestamps
+        if ts.has_duplicates:
+            logger_stream.warning('DatetimeIndex contains duplicated timestamps.')
+
+        # Format single timestamp
         if len(ts) == 1:
             return ts[0].strftime("%Y-%m-%d %H:%M")
         else:
@@ -618,9 +1065,17 @@ def pretty_time(ts):
             end = ts[-1].strftime("%Y-%m-%d %H:%M")
             return f"{start} :: {end} ({len(ts)} steps)"
 
+    # Handle single timestamp
     elif isinstance(ts, pd.Timestamp):
+
+        if pd.isna(ts):
+            logger_stream.warning('Timestamp is NaT.')
+            return "INVALID TIME STAMPS"
+
         return ts.strftime("%Y-%m-%d %H:%M")
 
+    # Handle unsupported types
     else:
+        logger_stream.warning(f'Unsupported time type "{type(ts).__name__}". Using string representation.')
         return str(ts)
 # ----------------------------------------------------------------------------------------------------------------------

@@ -3,20 +3,149 @@ Library Features:
 
 Name:          lib_io_tiff
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260824'
-Version:       '1.0.0'
+Date:          '20261015'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from __future__ import annotations
 
+import os
 import numpy as np
+import xarray as xr
 import rasterio
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.io_toolkit.lib_io_utils import make_file_path
+
+# common decorators
+from shybox import with_logger, deprecated
 # ----------------------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read file (internal for back compatibility
+@deprecated(use='read_tiff_base', future_removal=True)
+def _read_file_internal(path, file_variable=None):
+
+    # open raster file
+    with rasterio.open(path) as src:
+
+        # read first band with mask
+        tmp = src.read(1, masked=True)
+
+        # get raster metadata
+        transform = src.transform
+        crs = src.crs
+
+        # check raster orientation
+        if transform.b != 0 or transform.d != 0:
+            raise NotImplementedError("Rotated or sheared raster grids are not supported.")
+
+        # compute pixel-center coordinates
+        x = transform.c + (np.arange(src.width) + 0.5) * transform.a
+        y = transform.f + (np.arange(src.height) + 0.5) * transform.e
+
+        # convert masked values to NaN
+        data_values = np.asarray(tmp.filled(np.nan), dtype=float)
+
+        # ensure coordinates are ascending
+        if x.size > 1 and x[1] < x[0]:
+            x = x[::-1]
+            data_values = data_values[:, ::-1]
+        if y.size > 1 and y[1] < y[0]:
+            y = y[::-1]
+            data_values = data_values[::-1, :]
+
+        # define variable name
+        if isinstance(file_variable, list):
+            file_variable = file_variable[0] if file_variable else None
+
+        if file_variable is None:
+            file_variable = "DATA"
+
+        # create DataArray
+        data = xr.DataArray(
+            data_values,
+            dims=("latitude", "longitude"),
+            coords={"latitude": y, "longitude": x}, name=file_variable)
+
+        # store geographical metadata
+        data.attrs.update({"crs": crs.to_string() if crs is not None else None, "transform": tuple(transform)})
+
+    return data
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to read tiff
+@with_logger(var_name='logger_stream')
+def read_tiff_base(
+        file_name: str, var_name: str = "data", file_mandatory: bool = False,
+        coord_name_x: str = "longitude", coord_name_y: str = "latitude",
+        no_data: float = None, dtype=None):
+
+    # check file
+    if file_name is None:
+        raise ValueError("'file_name' must be defined.")
+
+    # check file availability
+    if not os.path.exists(file_name):
+        if file_mandatory:
+            logger_stream.error(f'Mandatory file "{file_name}" was not found.')
+            raise FileNotFoundError('Mandatory file not found: "{file_name}"')
+        else:
+            logger_stream.warning(f'Optional file "{file_name}" was not found. File will be skipped.')
+            return None
+
+    # read raster
+    with rasterio.open(file_name) as src:
+
+        # read first band
+        data = src.read(1)
+        # get metadata
+        transform = src.transform
+        crs = src.crs
+        profile = src.profile.copy()
+        src_nodata = src.nodata
+
+        # cast dtype if requested
+        if dtype is not None:
+            data = data.astype(dtype)
+
+        # get raster shape
+        nrows, ncols = data.shape
+
+        # compute cell-center coordinates
+        x_coords = transform.c + (np.arange(ncols) + 0.5) * transform.a
+        y_coords = transform.f + (np.arange(nrows) + 0.5) * transform.e
+
+        # choose nodata
+        nodata_value = (no_data if no_data is not None else src_nodata)
+
+        # mask nodata
+        if nodata_value is not None:
+            data = np.where(data == nodata_value, np.nan, data)
+
+        # create DataArray
+        da = xr.DataArray(
+            data,
+            dims=(coord_name_y, coord_name_x),
+            coords={
+                coord_name_y: y_coords,
+                coord_name_x: x_coords,
+            },
+            name=var_name
+        )
+
+        # store raster metadata
+        da.attrs["transform"] = transform
+        da.attrs["crs"] = crs
+        da.attrs["nodata"] = nodata_value
+        da.attrs["profile"] = profile
+
+    return da
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write tiff file
@@ -44,9 +173,13 @@ def write_tiff_base(
     if crs is None: crs = attrs.get("crs", None)
 
     # check transform
-    if transform is None: raise ValueError('Raster transform is not defined.')
+    if transform is None:
+        logger_stream.error('Geographical info "transform" is defined by NoneType')
+        raise ValueError('Raster transform is not defined.')
     # check crs
-    if crs is None:raise ValueError('Raster CRS is not defined.')
+    if crs is None:
+        logger_stream.error('Geographical info "crs" is defined by NoneType')
+        raise ValueError('Raster CRS is not defined.')
 
     # write GeoTIFF
     with rasterio.open(

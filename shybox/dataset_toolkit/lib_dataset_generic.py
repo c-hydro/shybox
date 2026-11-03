@@ -25,22 +25,23 @@ import numpy as np
 import pandas as pd
 import inspect
 
-import rasterio as rio
-
 try:
     import geopandas as gpd
 except ImportError:
     pass
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 
 from shybox.generic_toolkit.lib_utils_file import fix_file_path
 from shybox.io_toolkit.lib_io_ascii_grid import read_grid
-from shybox.io_toolkit.lib_io_ascii_points import read_points_1d
+from shybox.io_toolkit.lib_io_ascii_points import read_points_1d, read_points_2d, read_points_registry
 from shybox.io_toolkit.lib_io_ascii_hmc import read_sections_db, read_sections_data, read_sections_registry, write_sections_data
+from shybox.io_toolkit.lib_io_tiff import read_tiff_base, _read_file_internal
+from shybox.io_toolkit.lib_io_grib import read_datasets_grib
 from shybox.io_toolkit.lib_io_gzip import uncompress_and_remove
+from shybox.io_toolkit.lib_io_nc_generic import to_nc_attrs
 from shybox.io_toolkit.lib_io_nc_s3m import read_datasets_s3m, write_dataset_s3m
-from shybox.io_toolkit.lib_io_nc_hmc import read_datasets_hmc, write_dataset_hmc, write_ts_hmc
+from shybox.io_toolkit.lib_io_nc_hmc import read_forcing_hmc, read_results_hmc, write_dataset_hmc, write_ts_hmc
 from shybox.io_toolkit.lib_io_nc_other import read_dataset_itwater, write_dataset_itwater
 from shybox.geo_toolkit.lib_geo_watersheds import read_geo, create_grid
 from shybox.generic_toolkit.lib_utils_file import has_compression_extension
@@ -50,7 +51,7 @@ from shybox.generic_toolkit.lib_utils_code import deprecated
 from shybox.generic_toolkit.lib_utils_debug import plot_data
 
 # wrappers
-from shybox.io_toolkit.tiff_wrapper import write_tiff_watershed
+from shybox.io_toolkit.tiff_wrapper import write_tiff_watershed, write_tiff_grid2d
 
 # manage logger
 try:
@@ -81,9 +82,10 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write a string to a {file_format} file.')
         
     elif isinstance(data, dict):
-        if file_format not in ['json', 'ascii', 'txt', 'tiff', 'tif']:
+
+        if file_format not in ['json', 'ascii', 'txt', 'tiff', 'tif', 'csv', 'netcdf', 'geotiff']:
             raise ValueError(f'Cannot write a dictionary to a {file_format} file.')
-        
+
     elif 'gpd' in globals() and isinstance(data, gpd.GeoDataFrame):
         if file_format not in ['shp', 'json']:
             raise ValueError(f'Cannot write a geopandas dataframe to a {file_format} file.')
@@ -148,9 +150,9 @@ def get_format_from_path(path: str) -> str:
 # method to read from file
 @with_logger(var_name="logger_stream")
 def read_from_file(
-        path, file_format: Optional[str] = None, file_args: Optional[dict] = {},
-        file_type: Optional[str] = None, file_variable: (str, list) = 'na') \
-        -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+        path: str,
+        file_format: Optional[str] = None, file_args: Optional[dict] = None, file_type: Optional[str] = None,
+        file_variable: str | list[str] | None = "na") -> Union[xr.DataArray, xr.Dataset, pd.DataFrame]:
 
     # add suppress warnings
     rxr_logger = logging.getLogger('rioxarray')
@@ -199,6 +201,20 @@ def read_from_file(
             # read data 1d format
             data = read_points_1d(file_path=path, header=True, **method_args)
 
+        elif file_type == 'points_2d':
+
+            # select args to configure method
+            method_args = set_method_args(method=read_points_2d, args=file_args)
+            # read section database (flood-proofs format)
+            data = read_points_2d(file_path=path, **method_args)
+
+        elif file_type == 'points_registry':
+
+            # select args to configure method
+            method_args = set_method_args(method=read_points_registry, args=file_args)
+            # read section database (flood-proofs format)
+            data = read_points_registry(file_path=path, **method_args)
+
         elif file_type == 'points_section_db':
 
             # select args to configure method
@@ -238,59 +254,33 @@ def read_from_file(
     # read the data from a geotiff (and similar formats)
     elif file_format in ['tiff', 'geotiff', 'tif']:
 
-        if file_variable is not None:
-            if not file_variable:
-                file_variable = 'variable'
+        # define default variable name
+        if file_variable is None:
+            file_variable = 'variable'
 
-        # data = rxr.open_rasterio(path) # if no epsg are provided ... we have to set a geo template
-        with rio.open(path) as src:
+        # read the netcdf file according to the file type
+        if file_type in ['grid', 'grid_2d']:
 
-            # Read band with mask
-            tmp = src.read(1, masked=True)
-            # Extract transform
-            transform = src.transform
+            # check if file_variable is a list
+            if isinstance(file_variable, list):
+                file_variable = file_variable[0] if file_variable else 'variable'
 
-            # Build coordinate arrays correctly
-            # Note: transform * (col, row) gives (x, y)
-            # But you can also compute linearly using transform coefficients:
-            x = transform[2] + np.arange(src.width) * transform[0]
-            y = transform[5] + np.arange(src.height) * transform[4]
+            # validate variable type
+            if not isinstance(file_variable, str):
+                raise TypeError(f"GeoTIFF variable name must be a string. Got {type(file_variable).__name__}.")
 
-            # Flip y if descending (common in rasters)
-            if y[1] < y[0]:
-                y = y[::-1]
-                tmp = tmp[::-1, :]
-
-            # If masked, convert to np.nan (optional)
-            if np.ma.isMaskedArray(tmp):
-                data_values = tmp.filled(np.nan)
-            else:
-                data_values = tmp
-
-            # Create DataArray
-            data = xr.DataArray(
-                data_values,
-                dims=("latitude", "longitude"),
-                coords={"latitude": y, "longitude": x},
-                name=file_variable
-            )
-
-        if 'band' in list(data.dims):
-            if data.band.size == 1:
-                data = data.squeeze('band', drop = True)
-
-        if isinstance(data, xr.DataArray):
-            if file_variable is not None:
-                if isinstance(file_variable, list):
-                    file_variable = file_variable[0]
-                data.name = file_variable
+            # read tiff using base method
+            data = read_tiff_base(file_name=path, var_name=file_variable)
+        else:
+            # read tiff usign an internal method for back compatibility
+            logger_stream.warning(f'File type not defined for tiff reading: {file_type}. Using default reader.')
+            data = _read_file_internal(path)
 
     # read the data from a netcdf (and similar formats)
     elif file_format in ['netcdf', 'nc', 'nc4']:
 
         # check if the file is compressed
         has_compression = has_compression_extension(path)
-
         # uncompress the file if needed
         if has_compression:
             file = uncompress_and_remove(path)
@@ -302,10 +292,16 @@ def read_from_file(
             data = xr.open_dataset(file)
         elif file_type == 'grid_s3m' or file_type == 'forcing_s3m':
             data = read_datasets_s3m(path=file)
-        elif file_type == 'grid_hmc' or file_type == 'forcing_hmc':
-            data = read_datasets_hmc(path=file)
+        elif file_type == 'results_hmc':
+            data = read_results_hmc(path=file)
+        elif file_type == 'forcing_hmc':
+            data = read_forcing_hmc(path=file)
         elif file_type == 'grid_itwater': # it_water project
             data = read_dataset_itwater(path=file)
+        elif file_type in ['grid_hmc']:
+            logger_stream.error(f'File type is not supported for netcdf reading: {file_type}. '
+                                f'Check the available readers.')
+            raise IOError('Reader is not supported for netcdf reading')
         else:
             logger_stream.warning(f'File type not defined for netcdf reading: {file_type}. Using default reader.')
             data = xr.open_dataset(file)
@@ -322,40 +318,21 @@ def read_from_file(
     # read the data from a grib (and similar formats)
     elif file_format == 'grib':
 
+        # check if the file is compressed
         has_compression = has_compression_extension(path)
-
+        # uncompress the file if needed
         if has_compression:
             file = uncompress_and_remove(path)
         else:
             file = path
 
-        # read the grib file
-        data = xr.open_dataset(file, engine="cfgrib")
-
-        # 1) Preserve the original reference time
-        #    (rename 'time' -> 'time_start' to keep it)
-        if "time" not in data.coords:
-            raise ValueError("Dataset has no 'time' coordinate.")
-        data = data.rename({"time": "time_start"})
-
-        # 2) Sanity check
-        if "step" not in data.coords and "step" not in data.dims:
-            logger_stream.error("Dataset has no 'step' coordinate/dimension from cfgrib.")
-            raise ValueError("Dataset has no 'step' coordinate/dimension from cfgrib.")
-
-        # 3) Compute valid timestamps and assign them back onto the 'step' coordinate
-        #    (this keeps the dimension name 'step' but makes its values datetimes)
-        valid_time = data["time_start"] + data["step"]
-        data = data.assign_coords(step=valid_time)
-        # 4) Sort by the new datetime 'step' (handy if steps weren't monotonic)
-        data = data.sortby("step")
-
-        # 5) Optional: prove it's now a DatetimeIndex
-        assert np.issubdtype(data["step"].dtype, np.datetime64), "step is not datetime64 after conversion"
-
-        # check if there is a single variable in the dataset
-        if len(data.data_vars) == 1:
-            data = data[list(data.data_vars)[0]]
+        # read grib data
+        if file_type == 'grid_3d':
+            data = read_datasets_grib(file)
+        else:
+            logger_stream.error(f'File type is not supported for grib reading: {file_type}. '
+                                f'Check the available readers.')
+            raise IOError('Reader is not supported for netcdf reading')
 
         # remove the uncompressed file if needed
         if has_compression:
@@ -384,9 +361,8 @@ def write_to_file(data, path,
                   file_format: Optional[str] = None, file_type: Optional[str] = None,
                   append = False, **kwargs) -> None:
 
-    time = None
-    if 'time' in kwargs:
-        time = kwargs.pop('time')
+    # get time info (if available)
+    time = kwargs.pop('time', None)
 
     # check path
     path = fix_file_path(path)
@@ -395,9 +371,9 @@ def write_to_file(data, path,
     if file_format is None:
         file_format = get_format_from_path(path)
 
-    # manage dir name
-    dir = os.path.dirname(path)
-    if len(dir) > 0:
+    # manage folder name
+    folder = os.path.dirname(path)
+    if len(folder) > 0:
         os.makedirs(os.path.dirname(path), exist_ok = True)
     if not os.path.exists(path):
         append = False
@@ -406,9 +382,11 @@ def write_to_file(data, path,
     if file_format == 'ascii':
         if file_type == 'hydrograph_hmc':
             write_sections_data(path=path, df=data)
+        elif file_type == 'time_series_hmc':
+            write_sections_data(path=path, df=data)
         else:
             logger_stream.error(f'File type {file_type} not supported for format ascii writing.')
-            raise NotImplemented(f'File type {file_type} not supported for format ascii writing.')
+            raise NotImplementedError(f'File type {file_type} not supported for format ascii writing.')
 
     # write the data to a csv
     elif file_format == 'csv':
@@ -454,13 +432,26 @@ def write_to_file(data, path,
     # write the data to a geotiff
     elif file_format == 'geotiff':
 
-        data.rio.to_raster(path, compress = 'LZW')
+        # check file type
+        if file_type == 'default':
+            # dump rastar
+            data.rio.to_raster(path, compress="LZW", dtype="float32")
+        else:
+            logger_stream.error(f'File type not supported for geotiff writing: {file_type}')
+            raise ValueError(f'File type not supported for geotiff writing: {file_type}')
 
     elif file_format == 'tiff' or file_format == 'tif':
+
+        # check file type
         if file_type == 'geo_watershed':
 
             # wrap the tiff base for watershed case
             write_tiff_watershed(data, file_path=path, **kwargs)
+
+        elif file_type == 'grid_2d':
+
+            # wrap the tiff base for grid 2d case
+            write_tiff_grid2d(data, file_path=path, **kwargs)
 
         else:
             logger_stream.error(f'File type not supported for tiff writing: {file_type}')
@@ -469,24 +460,36 @@ def write_to_file(data, path,
     # write the data to a netcdf
     elif file_format == 'netcdf':
 
+        # check file type
         if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
-            write_dataset_hmc(path=path, data=data, time=time, attrs_data=None, **kwargs)
+
+            # get units and mapping
+            variable_units = kwargs.pop('units', None)
+            variable_mapping = kwargs.pop('map', None)
+
+            # write hmc forcing datasets
+            write_dataset_hmc(path=path, data=data, time=time, attrs_data=None,
+                              var_units=variable_units, var_mapping=variable_mapping,
+                              **kwargs)
+
         elif file_type in ['time_series_hmc', 'ts_hmc']:
 
-            units, map = None, None
-            if 'units' in kwargs:
-                units = kwargs.pop('units')
-            if 'map' in kwargs:
-                map = kwargs.pop('map')
+            # get units and mapping
+            variable_units = kwargs.pop('units', None)
+            variable_mapping = kwargs.pop('map', None)
+            # write hmc time-series datasets
+            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None,
+                         data_units=variable_units, data_map=variable_mapping, **kwargs)
 
-            write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None, data_units=units, data_map=map,
-                         **kwargs)
         elif file_type in ['grid_s3m', 'forcing_s3m']:
             write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
             write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['default']:
-            data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
+            # adjust attributes to avoid not permitted format
+            obj_data = to_nc_attrs(data)
+            # dump to nc file
+            obj_data.to_netcdf(path, format='NETCDF4', engine='netcdf4')
         else:
             logger_stream.error(f'File type not supported for netcdf writing: {file_type}')
             raise ValueError(f'File type not supported for netcdf writing: {file_type}')
@@ -494,11 +497,11 @@ def write_to_file(data, path,
     # write the data to a png or pdf (i.e. move the file)
     elif file_format == 'file':
         os.rename(data, path)
-
     else:
         logger_stream.error(f'File format not supported: {file_format}')
         raise ValueError(f'File format not supported: {file_format}')
 
+# method to remove file
 def rm_file(path) -> None:
     os.remove(path)
 # ----------------------------------------------------------------------------------------------------------------------
@@ -544,6 +547,7 @@ def withxrds(func):
             return func(*args, **kwargs)
     return wrapper
 
+@deprecated(since='2026-10-06')
 def with_dict(func):
     def wrapper(*args, **kwargs):
         if isinstance(args[0], dict):
@@ -578,39 +582,111 @@ def straighten_dims(data: xr.DataArray, default_name: str='variable') -> xr.Data
         logger_stream.info(f"Check DataArray: {var_name} ... DONE.")
         return data
 
-# flat dims
+# method to flat dims
 @withxrds
 def flat_dims(data: xr.DataArray, dim_x: str = 'longitude', dim_y: str = 'latitude'):
 
-    x, y = data[dim_x].values, data[dim_y].values
+    # find available spatial coordinates
+    def find_coord(name, alternatives):
+        if name in data.coords:
+            return name
+        return next((coord for coord in alternatives if coord in data.coords), None)
+
+    # detect longitude and latitude
+    dim_x = find_coord(dim_x, ['longitude', 'lon', 'x', 'Longitude', 'X', 'Lon', 'LON'])
+    dim_y = find_coord(dim_y, ['latitude', 'lat', 'y', 'Latitude', 'Y', 'Latitude', 'LAT'])
+
+    # check coordinates
+    if dim_x is None or dim_y is None:
+        raise ValueError(f"Spatial coordinates not found. Available coordinates: {list(data.coords)}")
+
+    # flatten longitude coordinates
+    x = data[dim_x].values
     if x.ndim == 2:
         x = x[0, :]
-        data = data.drop_vars([dim_x])
-        data[dim_x] = xr.DataArray(x, dims=dim_x)
+        x_dim = data[dim_x].dims[1]
+        data = data.drop_vars(dim_x)
+        data = data.assign_coords({dim_x: (x_dim, x)})
+
+    # flatten latitude coordinates
+    y = data[dim_y].values
     if y.ndim == 2:
         y = y[:, 0]
-        data = data.drop_vars([dim_y])
-        data[dim_y] = xr.DataArray(y, dims=dim_y)
+        y_dim = data[dim_y].dims[0]
+        data = data.drop_vars(dim_y)
+        data = data.assign_coords({dim_y: (y_dim, y)})
 
     return data
 
 # method to map dims
-@deprecated(use="map_dims", since="2026-01-27", use_new=False)
-@withxrds
-def map_dims_OLD(data: xr.DataArray, dims_geo: dict= None, **kwargs) -> xr.DataArray:
-    # check if dims mapping is required
-    if dims_geo is not None:
-
-        for dim_in, dim_out in dims_geo.items():
-            if dim_in in list(data.dims):
-                data = data.rename({dim_in: 'var_tmp'})
-                data = data.rename({'var_tmp': dim_out})
-    return data
-
 @withxrds
 def map_dims(data: xr.DataArray,
-             dims_geo: dict | None = None, *, create_dim_coords: bool = True,
-             **kwargs) -> xr.DataArray:
+             dims_geo: dict | None = None, *,
+             create_dim_coords: bool = True, **kwargs) -> xr.DataArray:
+
+    # if not defined return data
+    if not dims_geo:
+        return data
+
+    # iterate over dimensions and coordinates mapping
+    for dim_in, dim_out in dims_geo.items():
+
+        # skip unchanged names
+        if dim_in == dim_out:
+            continue
+
+        # rename dimensions
+        if dim_in in data.dims:
+
+            # target coordinate already exists and is compatible
+            if dim_out in data.coords and data[dim_out].dims == (dim_in,):
+                data = data.swap_dims({dim_in: dim_out})
+
+            # target name is available
+            elif dim_out not in data.dims and dim_out not in data.coords:
+                data = data.rename({dim_in: dim_out})
+
+            else:
+                logging.warning(
+                    f'Cannot rename dimension "{dim_in}" to "{dim_out}": '
+                    'target name already exists or coordinate is incompatible.'
+                )
+                continue
+
+        # rename coordinates that are not dimensions
+        elif dim_in in data.coords:
+
+            if dim_out not in data.dims and dim_out not in data.coords:
+                data = data.rename({dim_in: dim_out})
+            else:
+                logging.warning(
+                    f'Cannot rename coordinate "{dim_in}" to "{dim_out}": target name already exists.'
+                )
+
+    # ensure each mapped dimension has a coordinate
+    for dim_out in dims_geo.values():
+
+        if dim_out not in data.dims:
+            continue
+
+        # create missing dimension coordinates
+        if dim_out not in data.coords:
+            if not create_dim_coords:
+                continue
+            data = data.assign_coords({dim_out: np.arange(data.sizes[dim_out])})
+
+        # ensure dimension coordinate is indexed
+        if dim_out in data.coords and data[dim_out].dims == (dim_out,):
+            if dim_out not in data.indexes:
+                data = data.set_index({dim_out: dim_out})
+
+    return data
+
+@deprecated(use="map_dims", since="2026-10-16", use_new=False)
+@withxrds
+def map_dims_OLD(data: xr.DataArray,
+             dims_geo: dict | None = None, *, create_dim_coords: bool = True, **kwargs) -> xr.DataArray:
+
     if not dims_geo:
         return data
 
@@ -733,7 +809,80 @@ def map_coords(data: xr.DataArray, coords_geo: dict = None, *, drop_in: bool = F
 
 # method to map vars
 @withxrds
-def map_vars(
+def map_vars(data: xr.DataArray, vars_data: Optional[Dict[str, str]] = None, **kwargs) -> xr.DataArray | None:
+
+    """
+    Rename DataArray.name based on vars_data.
+
+    Dimensions and coordinates are preserved unchanged.
+
+    Behavior:
+    - If vars_data is None -> return data unchanged.
+    - If data.name is None -> set to the first mapping value.
+    - If data.name matches a key -> rename key -> value.
+    - If data.name matches a value -> rename value -> key.
+    - Otherwise -> return None.
+    """
+
+    # no variable mapping
+    if vars_data is None:
+        return data
+
+    # get current variable name
+    name = data.name
+    # missing variable name
+    if name is None:
+
+        try:
+            var_out = next(iter(vars_data.values()))
+        except StopIteration:
+            return None
+
+        if isinstance(var_out, str):
+            data.name = var_out
+        elif isinstance(var_out, dict):
+            data.name = var_out.get('var_out')
+        else:
+            raise RuntimeError(f"Unsupported vars_data definition: {var_out}")
+
+        return data
+
+    # forward mapping: var_in -> var_out
+    if name in vars_data:
+        var_out = vars_data[name]
+        if isinstance(var_out, str):
+            data.name = var_out
+        elif isinstance(var_out, dict):
+            data.name = var_out.get('var_out')
+        else:
+            raise RuntimeError(f"Unsupported vars_data definition: {var_out}")
+        return data
+
+    # reverse mapping: var_out -> var_in
+    for var_in, var_out in vars_data.items():
+
+        if isinstance(var_out, str):
+            if var_out == name:
+                data.name = var_in
+                return data
+
+        elif isinstance(var_out, dict):
+
+            var_name = var_out.get('var_out')
+            if var_name == name:
+                data.name = var_in
+                return data
+
+        else:
+            raise RuntimeError(f"Unsupported vars_data definition: {var_out}")
+
+    # no mapping found
+    return None
+
+# method to map vars
+@deprecated(use="map_vars", since="2026-01-27", use_new=True)
+@withxrds
+def map_vars_OLD(
     data: xr.DataArray,
     vars_data: Optional[Dict[str, str]] = None,
     **kwargs
@@ -771,14 +920,21 @@ def map_vars(
 
     # Reverse mapping: var_out -> var_in
     for var_in, var_out in vars_data.items():
-        if var_out == name:
-            data.name = var_in
+        if isinstance(var_out, str):
+            if var_out == name:
+                data.name = var_in
+                return data
+        elif isinstance(var_out, dict):
+            var_name = var_out['var_out']
+            data.name = var_name
             return data
+        else:
+            raise RuntimeError(f"Unsupported vars_data: {var_out}")
 
     # No rule matched
     return None
 
-
+@deprecated(since="2026-09-30")
 @withxrds
 def select_by_vars(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (xr.DataArray, None):
     if vars_data is not None:
@@ -794,8 +950,9 @@ def select_by_vars(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (xr.
     return data
 
 # method to select time
+@deprecated(since="2026-11-02")
 @withxrds
-def select_by_time(
+def select_by_time_OLD(
     da: xr.DataArray,
     when,
     *,
@@ -858,6 +1015,7 @@ def select_by_time(
             return da.isel(time=idx)
 
     return None
+
 # ensure that time are defined by dates and not by numbers
 @withxrds
 def straighten_time(data: xr.DataArray, time_file: pd.Timestamp = None,
@@ -952,7 +1110,10 @@ def straighten_data(
         da = da.rename({"y": dim_y})
 
     return da
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+@deprecated(since="2026-09-30")
 @withxrds
 def reset_nan(data: xr.DataArray, nan_value = None) -> xr.DataArray:
     """
@@ -973,7 +1134,9 @@ def reset_nan(data: xr.DataArray, nan_value = None) -> xr.DataArray:
         data.attrs['_FillValue'] = new_fill_value
 
     return data
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # method to select variable
 @withxrds
 def select_variable(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (str, None):
@@ -989,76 +1152,108 @@ def select_variable(data: xr.DataArray, vars_data: dict = None, **kwargs) -> (st
         var_select = data.name
 
     return var_select
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # method to select time
 @withxrds
 def select_by_time(
-    da: xr.DataArray,
-    when,
-    *,
-    tolerance: str | pd.Timedelta = "1H",
-    active: bool = False
-):
+        da: xr.DataArray,
+        when: Union[str, pd.Timestamp, pd.DatetimeIndex],
+        *,
+        tolerance: str | pd.Timedelta = "1h", active: bool = False) -> xr.DataArray | None:
     """
-    Select a time from a DataArray with optional tolerance logic.
+    Select one or multiple timestamps from a DataArray.
 
-    Parameters
-    ----------
-    da : xr.DataArray
-        Must have a 'time' coordinate.
-    when : str | pandas.Timestamp | numpy.datetime64
-        Target timestamp.
-    tolerance : str | pandas.Timedelta, default "1H"
-        Max time difference allowed when no exact match is found.
-    active : bool, default False
-        If False: choose the previous time within tolerance (default behaviour).
-        If True: choose the nearest time within tolerance (any side).
+    Supports:
+        - pd.Timestamp: select a single time
+        - pd.DatetimeIndex: select multiple times
 
-    Returns
-    -------
-    xr.DataArray | None
-        The selected data (0D) or None if no valid time found.
+    If active=False, select the previous available time within tolerance.
+    If active=True, select the nearest available time within tolerance.
+
+    Returns None if no valid time selection is found.
     """
-    # if no time selection is required
+
+    # If no time selection is required
     if when is None:
         return da
-    # return the data if are 2d
-    if len(da.dims) == 2 and when is not None:
+    # Return data if it is 2D (no time selection required)
+    if len(da.dims) == 2:
         return da
 
-    # if variable time is not in the data array
+    # Check time coordinate
     if "time" not in da.coords:
         raise ValueError("DataArray must have a 'time' coordinate.")
 
-    ts = pd.to_datetime(when)
-    times = pd.to_datetime(da.time.values)
-    tol = pd.to_timedelta(tolerance.lower())
+    # Normalize requested time
+    multiple_time = isinstance(when, pd.DatetimeIndex)
 
-    # if exact match exists
-    if ts in times:
-        return da.sel(time=ts)
-
-    # find candidate times within tolerance
-    diffs = times - ts
-    diffs_abs = abs(diffs)
-
-    if active:
-        # select nearest time (before or after) within tolerance
-        idx = diffs_abs.argmin()
-        if diffs_abs[idx] <= tol:
-            return da.isel(time=idx)
+    if multiple_time:
+        requested_times = when
     else:
-        # select previous time (before only)
-        mask_prev = diffs <= pd.Timedelta(0)
-        if not mask_prev.any():
-            return None
-        diffs_prev = diffs_abs.where(mask_prev, pd.NaT)
-        idx = diffs_prev.argmin()
-        if pd.notna(diffs_prev[idx]) and diffs_prev[idx] <= tol:
-            return da.isel(time=idx)
+        requested_times = pd.DatetimeIndex([pd.Timestamp(when)])
 
-    return None
+    # Check empty requested times
+    if requested_times.empty:
+        return None
 
+    # Get available times and tolerance
+    times = pd.DatetimeIndex(pd.to_datetime(da.time.values))
+    tol = pd.to_timedelta(tolerance)
+
+    # Check empty available times
+    if times.empty:
+        return None
+
+    # Initialize selected indices
+    selected_indices = []
+    # Iterate over requested timestamps
+    for ts in requested_times:
+
+        # Check exact match
+        if ts in times:
+            idx = times.get_indexer([ts])[0]
+            selected_indices.append(idx)
+            continue
+
+        # Compute time differences
+        diffs = times - ts
+        diffs_abs = abs(diffs)
+
+        if active:
+
+            # Select nearest time (before or after)
+            idx = diffs_abs.argmin()
+            if diffs_abs[idx] <= tol:
+                selected_indices.append(idx)
+
+        else:
+
+            # Select previous time only
+            mask_prev = diffs <= pd.Timedelta(0)
+            if not mask_prev.any():
+                continue
+
+            # Find nearest previous time
+            candidate_indices = np.flatnonzero(mask_prev)
+            idx = candidate_indices[diffs_abs[mask_prev].argmin()]
+
+            if diffs_abs[idx] <= tol:
+                selected_indices.append(idx)
+
+    # No valid time found
+    if not selected_indices:
+        return None
+    # Return multiple time selections
+    if multiple_time:
+        return da.isel(time=selected_indices)
+
+    # Return single time selection
+    return da.isel(time=selected_indices[0])
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
 # method to select da by mapping (mapping_str = variable:workflow)
 @with_logger(var_name="logger_stream")
 @withxrds
@@ -1132,11 +1327,14 @@ def select_da_by_mapping(data: xr.DataArray,
     else:
         logger_stream.error(f'Invalid mapping_use: {mapping_use!r}')
         raise ValueError(f"Invalid mapping_use: {mapping_use!r}")
+# ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
 # method to rename da variables use variable template
+@deprecated(since="2026-09-30")
 @with_logger(var_name="logger_stream")
 @withxrds
-def rename_da_by_template(
+def rename_da_by_template_OLD(
     da: xr.DataArray,
     variable_template: dict = None,
     sep: str =":",
@@ -1188,7 +1386,7 @@ def rename_da_by_template(
 
     if target_name == old_name:
         info = {"status": "no_op", "old_name": old_name, "new_name": target_name}
-        return da
+        return da, info
 
     da_new = da.rename(target_name)
     info_new = {
@@ -1197,10 +1395,38 @@ def rename_da_by_template(
         "mode": "value" if use_value else "key",
         "case_sensitive": case_sensitive}
 
-    return da_new
+    return da_new, info
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to set data type
+@withxrds
+def set_type(data: xr.DataArray, nan_value=None) -> xr.DataArray:
+    """Optimize data type while preserving name, coordinates and attributes."""
+
+    if not isinstance(data, xr.DataArray):
+        raise TypeError("Input data must be an xr.DataArray.")
+
+    # convert only if necessary
+    if data.dtype == np.float64:
+        data = data.astype(np.float32, copy=False, keep_attrs=True)
+
+    # replace missing values only if requested
+    if nan_value is not None:
+        data_name = data.name
+        data_attrs = data.attrs.copy()
+
+        data = reset_nan(data, nan_value)
+
+        # restore metadata
+        data.name = data_name
+        data.attrs = data_attrs
+
+    return data
 
 @withxrds
-def set_type(data: xr.DataArray, nan_value = None) -> xr.DataArray:
+@deprecated(use='set_type', since="2026-10-12")
+def set_type_OLD(data: xr.DataArray, nan_value = None) -> xr.DataArray:
     """
     Make sure that the data is the smallest possible.
     """
@@ -1265,4 +1491,3 @@ def set_method_args(
 
     return selected_args
 # ----------------------------------------------------------------------------------------------------------------------
-

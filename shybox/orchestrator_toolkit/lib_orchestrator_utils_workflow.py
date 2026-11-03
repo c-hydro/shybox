@@ -3,16 +3,68 @@ Class Features
 
 Name:          lib_orchestrator_utils_workflow
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260123'
-Version:       '1.0.0'
+Date:          '20261102'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from __future__ import annotations
-from collections import defaultdict
+import pandas as pd
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+# common decorators
+from shybox import with_logger, deprecated
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# helper to format time for logging
+@with_logger(var_name='logger_stream')
+def pretty_time(ts, logger_stream=None):
+
+    # Handle DatetimeIndex
+    if isinstance(ts, pd.DatetimeIndex):
+
+        # Check empty index
+        if len(ts) == 0:
+            logger_stream.warning('DatetimeIndex is empty. No time steps available.')
+            return "NO TIME STEPS AVAILABLE"
+
+        # Check missing timestamps
+        if ts.hasnans:
+            logger_stream.warning('DatetimeIndex contains NaT values.')
+            ts = ts.dropna()
+            if len(ts) == 0:
+                logger_stream.warning('DatetimeIndex contains no valid timestamps.')
+                return "NO TIME STEPS AVAILABLE"
+
+        # Check time ordering
+        if not ts.is_monotonic_increasing:
+            logger_stream.warning('DatetimeIndex is not sorted in ascending order.')
+        # Check duplicated timestamps
+        if ts.has_duplicates:
+            logger_stream.warning('DatetimeIndex contains duplicated timestamps.')
+
+        # Format single timestamp
+        if len(ts) == 1:
+            return ts[0].strftime("%Y-%m-%d %H:%M")
+        else:
+            start = ts[0].strftime("%Y-%m-%d %H:%M")
+            end = ts[-1].strftime("%Y-%m-%d %H:%M")
+            return f"{start} :: {end} ({len(ts)} steps)"
+
+    # Handle single timestamp
+    elif isinstance(ts, pd.Timestamp):
+
+        if pd.isna(ts):
+            logger_stream.warning('Timestamp is NaT.')
+            return "INVALID TIME STAMPS"
+
+        return ts.strftime("%Y-%m-%d %H:%M")
+
+    # Handle unsupported types
+    else:
+        logger_stream.warning(f'Unsupported time type "{type(ts).__name__}". Using string representation.')
+        return str(ts)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -27,15 +79,32 @@ def normalize_deps(deps):
         return {i + 1: v for i, v in enumerate(deps)}
     else:
         logger_stream.error(f"Unsupported deps type: {type(deps)}")
+        raise RuntimeError('Object deps must be defined by dict (or list with keys defined by ints)')
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to count variables in package
+def _count_vars(data_packages):
+
+    # normalize packages
+    if isinstance(data_packages, dict):
+        packages = data_packages.values()
+    elif isinstance(data_packages, (list, tuple)):
+        packages = data_packages
+    else:
+        packages = [data_packages]
+    # count variables
+    n_vars = 0
+    for data_package in packages:
+        n_vars += len(data_package.variable_template['vars_data'])
+
+    return n_vars
+
 @with_logger(var_name='logger_stream')
 def count_variables(data_package_in, data_package_out, options):
 
-    n_vars_in = len(data_package_in.variable_template['vars_data'].keys())
-    n_vars_out = len(data_package_out.variable_template['vars_data'].keys())
+    n_vars_in = _count_vars(data_package_in)
+    n_vars_out = _count_vars(data_package_out)
 
     expected = options.get("variables", {})
     expected_in, expected_out = expected.get("in", None), expected.get("out", None)
@@ -66,6 +135,7 @@ def as_list(maybe_seq):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to remove none values from a list
+@deprecated(since='2026-10-08')
 @with_logger(var_name='logger_stream')
 def remove_none(obj: (list, dict) = None) -> (list, dict):
 
@@ -83,29 +153,6 @@ def remove_none(obj: (list, dict) = None) -> (list, dict):
     else:
         logger_stream.error(f"Unsupported object type: {type(obj)}")
         raise TypeError(f"Unsupported object type: {type(obj)}")
-# ----------------------------------------------------------------------------------------------------------------------
-
-# ----------------------------------------------------------------------------------------------------------------------
-# method to group processes by attribute
-@with_logger(var_name='logger_stream')
-def group_process(proc_list, proc_tag="reference"):
-    proc_group = defaultdict(list)
-    for proc in proc_list:
-        if proc_tag == "reference":
-            if not hasattr(proc, "reference") or proc.reference is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'reference' attribute.")
-            proc_group[proc.reference].append(proc)
-        elif proc_tag == "workflow":
-            if not hasattr(proc, "workflow") or proc.workflow is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'workflow' attribute.")
-            proc_group[proc.workflow].append(proc)
-        elif proc_tag == "tag":
-            if not hasattr(proc, "tag") or proc.tag is None:
-                logger_stream.error(f"Process object {proc!r} has no valid 'tag' attribute.")
-            proc_group[proc.tag].append(proc)
-        else:
-            logger_stream.error(f"Invalid proc_tag '{proc_tag}'. Must be 'reference', 'workflow' or 'tag'.")
-    return dict(proc_group)
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -199,6 +246,7 @@ def _make_report_line(k, s):
     )
 
 # method to ensure workflows
+@deprecated(since='2026-10-08')
 @with_logger(var_name='logger_stream')
 def ensure_workflows(
     data_package_in: list,

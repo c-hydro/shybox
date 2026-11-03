@@ -222,6 +222,23 @@ def _fill_obj_recursive(obj, tags: dict, strict: bool, unresolved: set, none_as_
 
         # normalize path-like strings (remove accidental `//`)
         s = _normalize_path_like_string(s)
+
+        # Check for remaining placeholders and replace using tags
+        if "{" in s and "}" in s:
+
+            def replace_remaining(match: re.Match) -> str:
+                key = match.group(1)
+
+                if key in tags:
+                    value = tags[key]
+                    if value is not None:
+                        return str(value)
+
+                unresolved.add(key)
+                return match.group(0)
+
+            s = _PLACEHOLDER_RE.sub(replace_remaining, s)
+
         return s
 
     # int, float, None, etc.

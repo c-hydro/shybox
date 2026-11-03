@@ -6,24 +6,34 @@ Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
 Date:          '20260309'
 Version:       '1.1.0'
 """
-import numpy as np
+
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import pandas as pd
 
 from shybox.logging_toolkit.lib_logging_utils import with_logger
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process, with_dict_input
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
 @as_process(
-    input_type='pandas', output_type='pandas',
+    input_type='pandas',
+    input_adapter={
+        'data':[
+            {'method': 'mapping_keys_by_separator', 'kwargs': {'key_separator':'|', 'other_separator':'::'}},
+            {'method': 'adapter_variables_to_group', 'kwargs': {}}]
+    },
+    args_adapter=None,
+    output_adapter={
+        'data': {"method": "fx_to_dict", "kwargs": {}},
+    },
+    output_type='pandas',
     lazy_undefined_args=True, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
 def join_time_series_by_registry(
-        datasets: dict[str, pd.DataFrame | None],
+        data: dict[str, pd.DataFrame | None],
         sections_hmc: pd.DataFrame = None,
         sections_db: pd.DataFrame = None,
         name: str = "time_series_hmc",
@@ -34,8 +44,8 @@ def join_time_series_by_registry(
 
     var_time_name = "time"
 
-    if not isinstance(datasets, dict) or not datasets:
-        logger_stream.warning("'datasets' should be a non-empty dictionary. Return NoneType object.")
+    if not isinstance(data, dict) or not data:
+        logger_stream.warning("'data' should be a non-empty dictionary. Return NoneType object.")
         return None
 
     if sections_hmc is None or sections_hmc.empty:
@@ -45,8 +55,8 @@ def join_time_series_by_registry(
         logger_stream.warning("'sections_db' should be a non-empty DataFrame.")
         return None
 
+    # manage names basin, db and missing
     names_domains, names_db, names_missing = [], [], []
-
     if sections_hmc is not None and sections_db is not None:
         names_domains, names_db, names_missing = _join_tags(sections_hmc, sections_db,)
     else:
@@ -60,7 +70,7 @@ def join_time_series_by_registry(
     names_data_common = None
 
     # PREPARE AVAILABLE DATASETS
-    for tmp_key, dataset_df in datasets.items():
+    for tmp_key, dataset_df in data.items():
 
         if mapping is not None:
             if tmp_key in list(mapping.keys()):
@@ -188,7 +198,7 @@ def join_time_series_by_registry(
         )
 
     # RESTORE ORIGINAL DATASET ORDER
-    original_keys = [str(key) for key in datasets.keys()]
+    original_keys = [str(key) for key in data.keys()]
 
     ordered_keys = (
             [key for key in original_keys if key in datasets_prepared]

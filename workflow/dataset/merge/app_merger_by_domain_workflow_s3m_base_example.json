@@ -69,38 +69,38 @@
       }
     },
     "data_source": {
-      "dset_01": {
+      "dset_1": {
         "path": "{path_source_root}/Liguria/{path_source_time}",
         "file_name": "S3M_{file_source_time}.nc.gz"
       },
-      "dset_02": {
+      "dset_2": {
         "path": "{path_source_root}/Valle_Aosta/{path_source_time}",
         "file_name": "S3M_{file_source_time}.nc.gz"
       },
-      "dset_03": {
+      "dset_3": {
         "path": "{path_source_root}/Piemonte/{path_source_time}",
         "file_name": "S3M_{file_source_time}.nc.gz"
       }
     },
     "data_destination": {
-      "dset_01": {
+      "snow_mask": {
         "path": "{path_destination_root}/{path_destination_time}",
         "file_name": "snow_mask.{file_destination_time}.tiff",
-        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "WF_SNOW_MASK",
+        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "SNOW_MASK_GRID",
         "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
         "vars_data": {"snow_mask": "SNOW_MASK_OUT"}
       },
-      "dset_02": {
+      "rain_eff": {
         "path": "{path_destination_root}/{path_destination_time}",
         "file_name": "rain_eff.{file_destination_time}.tiff",
-        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "WF_RAIN_EFF",
+        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "RAIN_EFF_GRID",
         "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
         "vars_data": {"rain_eff": "RAIN_EFF_OUT"}
       },
-      "dset_03": {
+      "snow_albedo": {
         "path": "{path_destination_root}/{path_destination_time}",
         "file_name": "albedo.{file_destination_time}.tiff",
-        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "WF_SNOW_ALBEDO",
+        "format": "geotiff", "type": "grid_2d", "mode": "local", "variable": "SNOW_ALBEDO_GRID",
         "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
         "vars_data": {"snow_albedo": "SNOW_ALBEDO_OUT"}
       }
@@ -108,24 +108,42 @@
   },
   "workflow": {
     "options": {
-        "intermediate_output": "Tmp",
-        "tmp_dir": "{path_tmp}"
+        "intermediate_output": "Tmp", "tmp_dir": "{path_tmp}",
+        "io_config": {"mode": "many_data_tiles_to_one_file"}
     },
     "process_list": {
-        "WF_SNOW_MASK": [
-            {"function": "merge_data_by_ref", "method": "nn", "max_distance": 25000, "neighbours": 7,
+        "WORKFLOW_SNOW_MASK": [
+            {"function": "merge_data_by_ref",
+              "datasets": {"data|{id}": "snow_mask"},
+              "results": {"data": "snow_mask"},
+              "method": "nn", "max_distance": 25000, "neighbours": 7,
              "fill_value": null, "var_no_data": 0},
-            {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+            {"function": "mask_data_by_ref",
+              "datasets": {"data": "snow_mask"},
+              "results": {"data": "SNOW_MASK_OUT"},
+              "ref_value": -9999, "mask_no_data": null}
         ],
-        "WF_RAIN_EFF": [
-            {"function": "merge_data_by_ref", "method": "nn", "max_distance": 25000, "neighbours": 7,
+        "WORKFLOW_RAIN_EFF": [
+            {"function": "merge_data_by_ref",
+              "datasets": {"data|{id}": "rain_eff"},
+              "results": {"data": "rain_eff"},
+              "method": "nn", "max_distance": 25000, "neighbours": 7,
              "fill_value": null, "var_no_data": -9999},
-            {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+            {"function": "mask_data_by_ref",
+              "datasets": {"data": "rain_eff"},
+              "results": {"data": "RAIN_EFF_OUT"},
+              "ref_value": -9999, "mask_no_data": null}
         ],
-        "WF_SNOW_ALBEDO": [
-            {"function": "merge_data_by_ref", "method": "nn", "max_distance": 25000, "neighbours": 7,
+        "WORKFLOW_SNOW_ALBEDO": [
+            {"function": "merge_data_by_ref",
+              "datasets": {"data|{id}": "snow_albedo"},
+              "results": {"data": "snow_albedo"},
+              "method": "nn", "max_distance": 25000, "neighbours": 7,
              "fill_value": null, "var_no_data": -9999},
-            {"function": "mask_data_by_ref", "ref_value": -9999, "mask_no_data": null}
+            {"function": "mask_data_by_ref",
+              "datasets": {"data": "snow_albedo"},
+              "results": {"data": "SNOW_ALBEDO_OUT"},
+              "ref_value": -9999, "mask_no_data": null}
         ]
     }
   },

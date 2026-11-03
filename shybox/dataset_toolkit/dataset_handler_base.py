@@ -33,10 +33,12 @@ from shybox.default.lib_default_geo import crs_wkt as default_crs_wkt
 from shybox.dataset_toolkit.lib_dataset_parse import substitute_string, extract_date_and_tags
 from shybox.dataset_toolkit.lib_dataset_generic import (
     get_format_from_path, map_dims, map_coords, map_vars, flat_dims,
-    straighten_data, straighten_time, straighten_dims, select_by_time, rename_da_by_template, select_da_by_mapping,
+    straighten_data, straighten_time, straighten_dims, select_by_time, select_da_by_mapping,
     set_type, check_data_format, select_variable)
 from shybox.generic_toolkit.lib_utils_debug import plot_data
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+
+# common decorators
+from shybox import with_logger, deprecated
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -68,7 +70,8 @@ class Dataset(ABC, metaclass=DatasetMeta):
     # default attributes
     _defaults = {
         'type': None, 'time_signature' : 'end', "workflow": 'undefined', "layout": 'undefined',
-        'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}}
+        'mode': 'local', 'format': 'tmp', 'variable': 'undefined', 'units': {}, 'placeholder': {},
+        'data_id': -1, 'data_role': 'data', 'io': 'undefined'}
 
     def __init__(self, **kwargs):
 
@@ -79,14 +82,33 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # ensure message (active or not)
         self.message = kwargs.pop('message', True)
 
-        # info dataset initialization start
-        if self.message:
-            self.logger.info(f'Dataset obj {self.__str__()} ... ')
-
         # define loc_pattern BEFORE using it
         self.loc_pattern = None
         if 'loc_pattern' in kwargs:
             self.loc_pattern = kwargs.pop('loc_pattern', None)
+        # define variable
+        self.file_variable = self._defaults['variable']
+        if 'file_variable' in kwargs:
+            self.file_variable = kwargs.pop('file_variable')
+        # define data id
+        self.data_id = self._defaults['data_id']
+        if 'data_id' in kwargs:
+            self.data_id = kwargs.pop('data_id')
+
+        # define variable list for info
+        variable_list = (
+            ', '.join(self.file_variable)
+            if isinstance(self.file_variable, (list, tuple))
+            else self.file_variable
+        )
+
+        # info dataset initialization start
+        if self.message:
+            self.logger.info(f'Configure dataset for variables [{variable_list}] from {self.loc_pattern} ... ')
+            if not np.isfinite(self.data_id):
+                self.logger.info_up(f'Initialize dataset object ... ')
+            else:
+                self.logger.info_up(f'Initialize dataset object [ID: {self.data_id}] ... ')
 
         # substitute "now" with the current time
         if self.loc_pattern is not None:
@@ -110,9 +132,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'file_type' in kwargs:
             self.file_type = kwargs.pop('file_type')
 
-        self.file_variable = self._defaults['variable']
-        if 'file_variable' in kwargs:
-            self.file_variable = kwargs.pop('file_variable')
+        self.file_io = self._defaults['io']
+        if 'file_io' in kwargs:
+            self.file_io = kwargs.pop('file_io')
 
         self.units = self._defaults['units']
         if 'units' in kwargs:
@@ -126,9 +148,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'nan_value' in kwargs:
             self.nan_value = kwargs.pop('nan_value')
 
-        self.data_id = -1
-        if 'data_id' in kwargs:
-            self.data_id = kwargs.pop('data_id')
+        self.data_role = self._defaults['data_role']
+        if 'data_role' in kwargs:
+            self.data_role = kwargs.pop('data_role')
 
         self.data_as_is = False
         if 'data_as_is' in kwargs:
@@ -146,6 +168,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'variable_template' in kwargs:
             self.variable_template = kwargs.pop('variable_template')
 
+        self.variable_role = {'ND': 'NA'}
+        if 'variable_role' in kwargs:
+            self.variable_role = kwargs.pop('variable_role')
+
+        # manage time information
         self.time_reference, self.time_freq, self.time_period, self.time_direction = None, None, None, None
         if 'time_reference' in kwargs:
             self.time_reference = kwargs.pop('time_reference')
@@ -166,6 +193,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'file_workflow' in kwargs:
             self.file_workflow = kwargs.pop('file_workflow')
 
+        self.file_placeholder = self._defaults['placeholder']
+        if 'file_placeholder' in kwargs:
+            self.file_placeholder = kwargs.pop('file_placeholder')
+
         self.warnings_on_reading = True
         if 'warnings_on_reading' in kwargs:
             self.warnings_on_reading = kwargs.pop('warnings_on_reading')
@@ -181,6 +212,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         self.memory_active = True
         self.memory_data = None
+        self.memory_time = []
 
         # readability fields
         self.readable: bool = False
@@ -194,14 +226,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # info dataset initialization end
         if self.message:
-            self.logger.info(f'Dataset obj {self.__str__()} ... INITIALIZED')
+            if not np.isfinite(self.data_id):
+                self.logger.info_down(f'Initialize dataset object {self.__str__()} ... DONE')
+            else:
+                self.logger.info_down(f'Initialize dataset object [ID: {self.data_id}] ... DONE')
+            self.logger.info(f'Configure dataset for variables [{variable_list}] from {self.loc_pattern} ... DONE')
 
     # method to return information as a string representation
     def __repr__(self):
         return (f"{self.__class__.__name__}("
                 f"{self.file_name!r}, {self.file_mode!r}, {self.data_layout!r}, {self.file_type!r}, "
                 f"{self.file_format!r}, {self.file_variable!r}, {self.file_namespace!r},"
-                f"status={self.status!r}, id={self.data_id!r})")
+                f"role:{self.data_role!r}, status={self.status!r}, id={self.data_id!r})")
 
     # method to extract information from string representation
     def __str__(self):
@@ -285,7 +321,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # 2) Size sanity
             try:
                 if p.stat().st_size < min_size_bytes:
-                    self.warnings.append(f"File is empty (<{min_size_bytes} bytes).")
+                    if self.file_io == 'derived':
+                        self.logger.info(f"File derived from other variables.")
+                    else:
+                        self.warnings.append(f"File is empty (<{min_size_bytes} bytes).")
                     readable = False
             except OSError as e:
                 self.warnings.append(f"Could not stat file: {e}")
@@ -293,7 +332,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # 3) Required type present
         if require_type and (self.file_type is None):
-            self.warnings.append("file_type is None.")
+            if self.file_io == 'derived':
+                pass
+            else:
+                self.warnings.append("file_type is None.")
             readable = False
 
         # 4) Temporary markers
@@ -301,18 +343,27 @@ class Dataset(ABC, metaclass=DatasetMeta):
         fmt_lower = (self.file_format or "").lower()
         if any(re.search(rf"(^|[^a-z]){re.escape(m)}([^a-z]|$)", name_lower)
                for m in temp_markers) or (fmt_lower in temp_markers):
-            self.warnings.append("Temporary file detected (name/format contains tmp/temp).")
+            if self.file_io == 'derived':
+                self.logger.info("Temporary file detected (name/format contains tmp/temp).")
+            else:
+                self.warnings.append("Temporary file detected (name/format contains tmp/temp).")
             readable = False
 
         # 5) Allowed format set
         if fmt_lower and (fmt_lower not in allowed_formats):
-            self.warnings.append(f"Format '{self.file_format}' is not in allowed_formats={allowed_formats}.")
+            if self.file_io == 'derived':
+                pass
+            else:
+                self.warnings.append(f"Format '{self.file_format}' is not in allowed_formats={allowed_formats}.")
 
         # 6) Extension vs declared format
         ext = p.suffix.lower().lstrip(".")
         if ext and (ext not in allowed_formats):
             if ext not in allowed_compressions:
-                self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
+                if self.file_io == 'derived':
+                    pass
+                else:
+                    self.warnings.append(f"Extension '.{ext}' is not in allowed_formats={allowed_formats}.")
 
         # 7) Expected mode
         if expected_mode and (self.file_mode != expected_mode):
@@ -365,18 +416,22 @@ class Dataset(ABC, metaclass=DatasetMeta):
     # method to update data object
     def update(self, in_place = False, **kwargs):
 
+        new_file_variable = self.file_variable
         new_file_name = substitute_string(self.file_name, kwargs)
         new_loc_pattern = substitute_string(self.loc_pattern, kwargs)
 
         if in_place:
             self.file_name = new_file_name
+            self.file_variable = new_file_variable
             self.loc_pattern = self.get_key(**kwargs)
             self.tags.update(kwargs)
             return self
         else:
             new_options = self.options.copy()
             new_options.update(
-                {'loc_pattern': new_loc_pattern, 'file_name': new_file_name, 'logger': self.logger})
+                {'loc_pattern': new_loc_pattern,
+                 'file_name': new_file_name, 'file_variable': new_file_variable,
+                 'logger': self.logger})
 
             new_dataset = self.__class__(**new_options)
             new_dataset.__dict__.update(self.__dict__)
@@ -451,6 +506,15 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self._variable = value
 
     @property
+    def data_id(self):
+        return self._data_id
+    @data_id.setter
+    def data_id(self, value):
+        if value is None or value < 0 or not np.isfinite(value):
+            value = np.nan
+        self._data_id = value
+
+    @property
     def has_version(self):
         return '{file_version}' in self.loc_pattern
 
@@ -486,6 +550,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             else:
                 self.logger.error("Invalid time_reference: length greater than 1.")
                 raise ValueError("time_reference must be a single timestamp or a length-1 DatetimeIndex.")
+
         elif isinstance(time_reference, str):
             try:
                 time_reference = pd.to_datetime(time_reference)
@@ -493,33 +558,40 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.logger.error(f"Invalid time_reference string: {e}")
                 raise ValueError(f"Invalid time_reference string: {e}")
 
-        # Early exits for missing params
-        if time_reference is None or time_direction is None:
-            return None
-        if time_direction != "single" and time_period is None:
+        # Early exit for missing reference
+        if time_reference is None:
             return None
 
-        # Validate time_period when used
-        if time_direction != "single":
-            if not isinstance(time_period, int) or time_period <= 0:
-                self.logger.error("Invalid time_period: must be a positive integer.")
-                raise ValueError("time_period must be a positive integer.")
-
-        # Compute times
-        if time_direction == "backward":
-            time_obj = pd.date_range(
-                end=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize
-            )
-        elif time_direction == "forward":
-            time_obj = pd.date_range(
-                start=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize
-            )
-        elif time_direction == "single":
+        # Validate time_direction
+        if time_direction not in {"forward", "backward", "single", "current"}:
+            self.logger.error(f"Invalid time_direction: {time_direction}")
+            raise ValueError("time_direction must be 'forward', 'backward', 'single', or 'current'.")
+        # Handle single time immediately
+        if time_direction in {"single", "current"}:
             ts = time_reference.normalize() if time_normalize else time_reference
-            time_obj = pd.DatetimeIndex([ts])
-        else:
-            self.logger.error("Invalid time_direction: must be 'forward', 'backward', or 'single'.")
-            raise ValueError("Invalid time_direction. Use 'forward', 'backward', or 'single'.")
+            return pd.DatetimeIndex([ts])
+
+        # Early exit for missing period
+        if time_period is None:
+            return None
+
+        # Validate time_period
+        if not isinstance(time_period, int) or time_period < 0:
+            self.logger.error("Invalid time_period: must be a non-negative integer.")
+            raise ValueError("time_period must be a non-negative integer.")
+
+        # Handle zero period as single time
+        if time_period == 0:
+            self.logger.warning(
+                f"Time period is 0 but time_direction is '{time_direction}'. Using 'current' time configuration.")
+            ts = time_reference.normalize() if time_normalize else time_reference
+            return pd.DatetimeIndex([ts])
+
+        # Compute expected times
+        if time_direction == "backward":
+            time_obj = pd.date_range(end=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize)
+        else:  # forward
+            time_obj = pd.date_range(start=time_reference, freq=time_freq, periods=time_period, normalize=time_normalize)
 
         return time_obj
 
@@ -606,12 +678,29 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         return all_tags
 
+    # method to get placeholders from string
+    def get_placeholders(self, value):
+        # check value type
+        if not isinstance(value, str): return False, []
+        # get placeholders
+        placeholders = re.findall(r"\{([^{}]+)\}", value)
+        # print placeholders
+        if placeholders:
+            self.logger.info(f"Placeholders found: {placeholders}")
+            return True, placeholders
+        return False, []
+
     # method to get attribute
-    def get_attribute(self, attribute: str) -> (str, int, float, dict, list, pd.Timestamp, None):
+    def get_attribute(self, attribute: str, default: Union[str, None] = None) \
+            -> Union[str, int, float, dict, list, pd.Timestamp, None]:
+        # normalize attribute name
+        attribute = attribute.lstrip("_")
+        # check public and private attribute names
         if attribute in self.__dict__:
             return self.__dict__[attribute]
-        else:
-            return None
+        if f"_{attribute}" in self.__dict__:
+            return self.__dict__[f"_{attribute}"]
+        return default
 
     # method to check if time step available in the datasets
     def check_time_step(self, time: (pd.Timestamp, None)) -> (int, bool):
@@ -721,6 +810,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         return time
 
+    @deprecated(since='2026-10-09')
     def namespace(self, variable, workflow):
         # If both are lists, build a list of SimpleNamespace objects
         if isinstance(variable, list) and isinstance(workflow, list):
@@ -748,8 +838,22 @@ class Dataset(ABC, metaclass=DatasetMeta):
         else:
             self.logger.warning("Variable template does not contain 'coords_geo' definition.", UserWarning)
 
-        # get full location of file (based on time)
-        full_location = self.get_key(time, **kwargs)
+        # select time reference
+        if time is None:
+            time_reference = pd.Timestamp(self.time_reference)
+            time_data = None
+        elif isinstance(time, pd.DatetimeIndex):
+            time_reference = pd.Timestamp(self.time_reference)
+            time_data = time
+        elif isinstance(time, pd.Timestamp):
+            time_reference = time
+            time_data = time
+        else:
+            self.logger.error(f'Check your time reference: {time}')
+            raise ValueError(f"Invalid time reference: {time}")
+
+        # get full location of file (based on time reference)
+        full_location = self.get_key(time_reference, **kwargs)
 
         # check memory active (if defined true or false)
         if 'memory_active' in kwargs:
@@ -761,76 +865,91 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # check if data is already in memory
             if self.memory_data is not None:
 
-                # info log start (memory case)
-                log_data('start', name=name, time=time, from_memory=True)
+                # check if time is store in memorized steps
+                if time_reference in self.memory_time:
 
-                # get data from memory
-                data = deepcopy(self.memory_data)
+                    # info log start (memory case)
+                    log_data('start', name=name, time=time_reference, from_memory=True)
 
-                # get variables
-                variable = select_variable(data, **self.variable_template)
+                    # get data from memory
+                    data = deepcopy(self.memory_data)
 
-                # if there is no structure_template for the dataset, create it from the data
-                structure_template = self.get_structure_template(make_it=False, **kwargs)
-                if structure_template is None:
-                    self.set_structure_template(data, template_key=variable, **kwargs)
+                    # get variables
+                    variable = select_variable(data, **self.variable_template)
+
+                    # if there is no structure_template for the dataset, create it from the data
+                    structure_template = self.get_structure_template(make_it=False, **kwargs)
+                    if structure_template is None:
+                        self.set_structure_template(data, template_key=variable, **kwargs)
+                    else:
+                        # otherwise, update the data in the template
+                        # (this will make sure there is no errors in the coordinates due to minor rounding)
+                        attrs = data.attrs
+                        data = self.set_data_to_structure_template(data, structure_template)
+                        data.attrs.update(attrs)
+
+                    data.attrs.update({'source_location': full_location})
+
+                    # check data type
+                    if isinstance(data, xr.DataArray):
+                        data.name = self.memory_data.name
+                    elif isinstance(data, xr.Dataset):
+                        pass
+                    else:
+                        self.logger.error('Invalid data type in memory.')
+                        raise ValueError(f"Invalid data type: {type(data)}")
+
+                    # select by time
+                    data = select_by_time(data, when=time_data, tolerance='1H')
+
+                    # check data after selecting by time
+                    if data is None:
+                        self.logger.warning(f'Data is defined by NoneType after selecting by time {time_data}.')
+                        # info get data end
+                        self.logger.info_down(f'Get data for time {time_reference} ... SKIPPED. Time is not available')
+                        return None
+
+                    # select data using a 'variable:workflow' mapping string (from reference or variable)
+                    reference, variable = kwargs.pop('reference', None), kwargs.pop('variable', None)
+                    if reference is not None or variable is not None:
+                        for key in (reference, variable):
+                            tmp = select_da_by_mapping(data, mapping_str=key)
+                            if tmp is not None:
+                                data = tmp
+                                break
+
+                    # check data after selecting by variables
+                    if data is None:
+                        self.logger.warning(f'Data is defined by NoneType after selecting by variables {reference}.')
+                        # info get data end
+                        self.logger.info_down(f'Get data for time {time} ... SKIPPED. Variables are not available')
+                        return None
+
+                    # info log start (memory case)
+                    log_data('end', name=name, time=time_reference, from_memory=True)
+
+                    return data
+
                 else:
-                    # otherwise, update the data in the template
-                    # (this will make sure there is no errors in the coordinates due to minor rounding)
-                    attrs = data.attrs
-                    data = self.set_data_to_structure_template(data, structure_template)
-                    data.attrs.update(attrs)
-
-                data.attrs.update({'source_location': full_location})
-
-                # check data type
-                if isinstance(data, xr.DataArray):
-                    data.name = self.memory_data.name
-                elif isinstance(data, xr.Dataset):
+                    self.logger.info(
+                        f"Data are stored, but time {time_reference} is not found in the available "
+                        f"memory time range [{self.memory_time[0]} -> {self.memory_time[-1]}]."
+                    )
                     pass
-                else:
-                    self.logger.error('Invalid data type in memory.')
-                    raise ValueError(f"Invalid data type: {type(data)}")
-
-                # select by time
-                data = select_by_time(data, when=time, tolerance='1H')
-
-                # check data after selecting by time
-                if data is None:
-                    self.logger.warning(f'Data is defined by NoneType after selecting by time {time}.')
-                    # info get data end
-                    self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
-                    return None
-
-                # select data using a 'variable:workflow' mapping string (from reference or variable)
-                reference, variable = kwargs.pop('reference', None), kwargs.pop('variable', None)
-                if reference is not None or variable is not None:
-                    for key in (reference, variable):
-                        tmp = select_da_by_mapping(data, mapping_str=key)
-                        if tmp is not None:
-                            data = tmp
-                            break
-
-                # select by variables
-                #data = select_by_vars(data, vars=self.variable_template)
-
-                # check data after selecting by variables
-                if data is None:
-                    self.logger.warning(f'Data is defined by NoneType after selecting by variables {reference}.')
-                    # info get data end
-                    self.logger.info_down(f'Get data for time {time} ... SKIPPED. Variables are not available')
-                    return None
-
-                # info log start (memory case)
-                log_data('end', name=name, time=time, from_memory=True)
-
-                return data
-
             else:
-                 pass
+                self.logger.info(f'Memory is active but data are not stored')
+                pass
 
         # info log start (source case)
-        log_data('start', name=name, time=time, from_memory=False)
+        log_data('start', name=name, time=time_reference, from_memory=False)
+
+        # check full location of file
+        flag_placeholders, list_placeholders = self.get_placeholders(full_location)
+        if flag_placeholders:
+            self.logger.warning(
+                f'File location "{full_location}" contains unresolved placeholders: '
+                f'{", ".join(map(str, list_placeholders))}'
+            )
 
         # file format specific reading
         if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
@@ -841,7 +960,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
                 # return data as is (if specified)
                 if as_is:
-                    log_data('end', name=name, time=time, from_memory=False)
+                    log_data('end', name=name, time=time_reference, from_memory=False)
                     return data
 
                 # check if data is xarray DataArray
@@ -855,7 +974,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                     data = flat_dims(data)
 
                 # info log end (source case)
-                log_data('end', name=name, time=time, from_memory=False)
+                log_data('end', name=name, time=time_reference, from_memory=False)
 
                 return data
 
@@ -867,18 +986,18 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 else:
                     self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
                     # info get data end (source case)
-                    log_data('end', name=name, time=time, from_memory=False)
+                    log_data('end', name=name, time=time_reference, from_memory=False)
                     return None
 
         # check if data is available
-        if self.check_data(time, **kwargs):
+        if self.check_data(time_reference, **kwargs):
 
             # get data
             data = self._read_data(full_location, **self.variable_template)
 
             # return data as is (if specified)
             if as_is:
-                log_data('end', name=name, time=time, from_memory=False)
+                log_data('end', name=name, time=time_reference, from_memory=False)
                 return data
 
             # ensure that the data dimensions are not empty
@@ -927,6 +1046,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
             # store in memory (if active)
             if self.memory_active:
                 self.memory_data = deepcopy(data)
+                if time_reference is not None:
+                    self.memory_time.append(time_reference)
+                else:
+                    self.logger.warning(f'Memory data is stored for {full_location} '
+                                        f'but time is set to NoneType.')
 
         else:
             # check data mandatory or not
@@ -937,7 +1061,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
                 self.logger.warning(f'Could not resolve data from {full_location}. Returning None.')
 
                 # info get data end (source case)
-                log_data('end', name=name, time=time, from_memory=False)
+                log_data('end', name=name, time=time_reference, from_memory=False)
                 return None
 
         # if there is no template for the dataset, create it from the data
@@ -961,12 +1085,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
         data.attrs.update({'source_location': full_location})
 
         # select by time
-        data = select_by_time(data, when=time, tolerance='1H')
+        data = select_by_time(data, when=time_data, tolerance='1H')
         # check data after selecting by time
         if data is None:
-            self.logger.warning(f'Data is defined by NoneType after selecting by time {time}.')
+            self.logger.warning(f'Data is defined by NoneType after selecting by time {time_data}.')
             # info get data end
-            self.logger.info_down(f'Get data for time {time} ... SKIPPED. Time is not available')
+            self.logger.info_down(f'Get data for time {time_reference} ... SKIPPED. Time is not available')
             return None
 
         # select data using a 'variable:workflow' mapping string (from reference or variable)
@@ -987,7 +1111,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
             return None
 
         # info get data end (source case)
-        log_data('end', name=name, time=time, from_memory=False)
+        log_data('end', name=name, time=time_reference, from_memory=False)
 
         return data
 
@@ -998,6 +1122,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         return data
 
     @staticmethod
+    @deprecated(since='2026-10-09')
     def select_dataarray_by_mapping(ds, mapping_str):
         """
         Select a DataArray from an xarray.Dataset using a 'name:var' mapping string.
@@ -1048,9 +1173,32 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if isinstance(time, list) and len(time) == 1:
             time = time[0]
 
-        # define the output file
+        # get the out file
         out_file = self.get_key(time, **kwargs)
+        # get the out placeholders
+        out_placeholder = self.file_placeholder
+
+        # check and replace out placeholders
+        if out_placeholder:
+            if not isinstance(out_placeholder, dict):
+                raise TypeError('File placeholders must be defined by a dictionary.')
+            for placeholder, value in out_placeholder.items():
+                # define placeholder tag
+                placeholder_tag = "{" + placeholder + "}"
+                # replace only if the placeholder exists in the filename
+                if placeholder_tag in out_file:
+                    out_file = out_file.replace(placeholder_tag, "NA" if value is None else str(value))
+        # define out path and name
         out_path, out_name = os.path.dirname(out_file), os.path.basename(out_file)
+
+        # update variable from metadata (if available)
+        if 'variable_names' in list(metadata.keys()):
+            variable = metadata.pop('variable_names')
+
+        # flatten single-key dictionary
+        if isinstance(data, dict):
+            if len(data) == 1:
+                data = next(iter(data.values()))
 
         # case of file-like data
         if self.file_format == 'file':
@@ -1059,13 +1207,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
         # case of csv, json, txt, shp afiles
         if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
+
             append = kwargs.pop('append', False)
             self._write_data(data, out_file, append = append)
             return
-
-        # update variable from metadata (if available)
-        if 'variables' in list(metadata.keys()):
-            variable = metadata.pop('variables')
 
         # case of pandas DataFrame
         if isinstance(data, pd.DataFrame):
@@ -1080,8 +1225,10 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # case of dictionary
         if isinstance(data, dict):
             if data:
-                append = kwargs.pop('append', False)
-                self._write_data(data, out_file, append=append, **kwargs)
+                # define output options
+                out_opt = {'time': time, 'ref': kwargs.pop('ref', None), **kwargs}
+                # write output datasets
+                self._write_data(data, out_file, **out_opt)
                 return
             else:
                 self.logger.warning('Output Dictionary is empty and writing data is not activated.')
@@ -1115,15 +1262,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self.logger.warning('Output object is defined by NoneType before adjusting data orientation.')
         if out_obj is None:
             self.logger.warning('Output object is defined by NoneType after adjusting data orientation.')
-
-        # map the data variables
-        if out_obj is not None:
-            out_obj = rename_da_by_template(out_obj, variable_template=self.variable_template)
-            out_obj = map_vars(out_obj, **self.variable_template)
-        else:
-            self.logger.warning('Output object is defined by NoneType before mapping data variables.')
-        if out_obj is None:
-            self.logger.warning('Output object is defined by NoneType after mapping data variables.')
 
         # map the data dimensions
         if out_obj is not None:
@@ -1169,7 +1307,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
 
     # method to create data
     def create_data(self, mapping, name: str='variable'):
-
 
         # get information from classes
         obj_info = self.info
@@ -1260,12 +1397,20 @@ class Dataset(ABC, metaclass=DatasetMeta):
     def _check_data(self, data_key) -> bool:
         raise NotImplementedError
 
-    # methods to manipulate the data
+    # Methods to manipulate the data
     def get_key(self, time: Union[pd.Timestamp, dt.datetime] = None, **kwargs):
-        
+
+        # Get time signature
         time = self.get_time_signature(time)
+        # Get raw key
         raw_key = substitute_string(self.loc_pattern, kwargs)
-        key = time.strftime(raw_key) if time is not None else raw_key
+
+        # Return raw key if time is None or NaT
+        if time is None or pd.isna(time):
+            return raw_key
+        # Format key using time
+        key = time.strftime(raw_key)
+
         return key
 
     # methods to organize the structure template
@@ -1318,50 +1463,58 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # iterate over all keys
         for step_key in template_key:
 
+            # get template object
             if isinstance(template_array, xr.Dataset):
-                self._structure_template[step_key] = {'crs': crs_wkt,
-                                        '_FillValue' : template_array[step_key].attrs.get('_FillValue'),
-                                        'dims_names' : template_array[step_key].dims,
-                                        'spatial_dims' : (template_array[step_key].longitude.name, template_array[step_key].latitude.name),
-                                        'dims_starts': {},
-                                        'dims_ends': {},
-                                        'dims_lengths': {}}
+                template_obj = template_array[step_key]
             elif isinstance(template_array, xr.DataArray):
-                self._structure_template[step_key] = {
-                    'crs': crs_wkt,
-                    '_FillValue': template_array.attrs.get('_FillValue'),
-                    'dims_names': template_array.dims,
-                    'spatial_dims': (template_array.longitude.name,
-                                     template_array.latitude.name),
-                    'dims_starts': {},
-                    'dims_ends': {},
-                    'dims_lengths': {}
-                }
+                template_obj = template_array
             else:
                 self.logger.error('Invalid template array type.')
                 raise ValueError('Invalid template array type.')
 
-        # ensure structure template for dataset case
-        if isinstance(template_array, xr.Dataset):
-            # copy the template structure for
-            for step_key in template_key:
+            # get dimensions
+            dims_names = template_obj.dims
+
+            # get spatial dimensions (expected y, x)
+            if len(dims_names) < 2:
+                raise ValueError(f'Variable "{step_key}" must have at least two spatial dimensions {dims_names}.')
+
+            spatial_dims = dims_names[-2:]
+
+            # warn if spatial dimensions are not recognized
+            if spatial_dims[0] not in {'latitude', 'lat', 'y'} or spatial_dims[1] not in {'longitude', 'lon', 'x'}:
+                self.logger.warning(
+                    f'Unexpected spatial dimensions {spatial_dims} for variable "{step_key}". '
+                    'Expected (latitude, longitude), (lat, lon), or (y, x).'
+                )
+
+            # define template structure
+            self._structure_template[step_key] = {
+                'crs': crs_wkt,
+                '_FillValue': template_obj.attrs.get('_FillValue'),
+                'dims_names': dims_names,
+                'spatial_dims': spatial_dims,
+                'dims_starts': {}, 'dims_ends': {}, 'dims_lengths': {}
+            }
+
+            # add dataset variables
+            if isinstance(template_array, xr.Dataset):
                 self._structure_template[step_key]['variables'] = list(template_array.data_vars)
 
-        # ensure dimensions info for all keys
-        for step_key in template_key:
-            for dim in template_array.dims:
+            # get dimensions information
+            for dim in dims_names:
 
-                if isinstance(template_array, xr.DataArray):
-                    this_dim_values = template_array[dim].data
-                elif isinstance(template_array, xr.Dataset):
-                    this_dim_values = template_array[step_key][dim].data
+                # check dimension coordinate availability
+                if dim in template_obj.coords:
+                    this_dim_values = template_obj[dim].data
                 else:
-                    self.logger.error('Invalid template array type.')
-                    raise ValueError('Invalid template array type.')
+                    # use positional indexes when dimension coordinates are missing
+                    this_dim_values = range(template_obj.sizes[dim])
 
-                start = this_dim_values[0]
-                end = this_dim_values[-1]
-                length = len(this_dim_values)
+                # get dimension information
+                start, end, length = this_dim_values[0], this_dim_values[-1], len(this_dim_values)
+
+                # store dimension information
                 self._structure_template[step_key]['dims_starts'][dim] = self._safe_dim(start)
                 self._structure_template[step_key]['dims_ends'][dim] = self._safe_dim(end)
                 self._structure_template[step_key]['dims_lengths'][dim] = length
@@ -1423,6 +1576,7 @@ class Dataset(ABC, metaclass=DatasetMeta):
         
         return data
 
+    # method to set time metadata
     def set_metadata(self, data: (xr.DataArray, xr.Dataset),
                      time: Union[pd.Timestamp, dt.datetime] = None,
                      time_format: str = '%Y-%m-%d', **kwargs) -> xr.DataArray:
@@ -1454,36 +1608,35 @@ class Dataset(ABC, metaclass=DatasetMeta):
 # helpers
 # print logging message
 @with_logger(var_name="logger_stream")
+# Helper to print logging messages
+@with_logger(var_name="logger_stream")
 def log_data(stage, name=None, time=None, from_memory=False, reference=None):
 
-    # determine tag
+    # Determine tag
     tag = "memory" if from_memory else "source"
-    # build the base message
+    # Check if time is None or NaT
+    is_static = time is None or (isinstance(time, (pd.Timestamp, dt.datetime)) and pd.isna(time))
+    
+    # Build the base message
     if name is not None:
-        if time is not None:
+        if not is_static:
             base = f'Get data for variable "{name}" at time "{time}"'
         else:
             base = f'Get data for variable "{name}" static'
     else:
-        if time is not None:
+        if not is_static:
             base = f'Get data at time "{time}"'
         else:
-            base = f'Get data static'
+            base = 'Get data static'
 
     # Stage: START
     if stage == "start":
         logger_stream.info_up(f'[{tag}] {base} ...')
-
     # Stage: END
     elif stage == "end":
         logger_stream.info_down(f'[{tag}] {base} ... DONE')
-
     # Stage: SKIP
     elif stage == "skip":
-        logger_stream.warning(
-            f'Data is defined by NoneType after selecting by variables {reference}.'
-        )
-        logger_stream.info_down(
-            f'[{tag}] {base} ... SKIPPED. Variables are not available'
-        )
+        logger_stream.warning(f'Data is defined by NoneType after selecting by variables {reference}.')
+        logger_stream.info_down(f'[{tag}] {base} ... SKIPPED. Variables are not available')
 # ----------------------------------------------------------------------------------------------------------------------

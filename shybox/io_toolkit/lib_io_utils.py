@@ -3,21 +3,23 @@ Library Features:
 
 Name:          lib_io_utils
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20240801'
-Version:       '1.0.0'
+Date:          '20260923'
+Version:       '1.1.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
 import re
+import os
 import dateutil.parser as dparser
 import numpy as np
 import pandas as pd
 import xarray as xr
 
-from datetime import datetime
 from pathlib import Path
+
+from shybox.generic_toolkit.lib_utils_tmp import ensure_folder_tmp
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -40,6 +42,30 @@ def make_file_path(path, create_folder=True):
     return file_path, file_folder, file_name
 # ----------------------------------------------------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------------------------------------------------
+# method to search a common path in a list of path(s)
+def search_common_path(path_names: list = None, path_extra='common'):
+
+    # check available paths
+    if path_names is not None and path_names != []:
+
+        # get folders only
+        folder_names = [os.path.dirname(path_name) for path_name in path_names]
+        try:
+            # get common folder
+            part_common = os.path.commonpath(folder_names)
+        except ValueError:
+            part_common = None
+        # check if a meaningful common folder exists
+        if part_common and part_common != os.path.sep:
+            path_name = os.path.join(part_common, path_extra)
+        else:
+            path_name = ensure_folder_tmp()
+    else:
+        path_name = ensure_folder_tmp()
+
+    return path_name
+# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to extract time from string

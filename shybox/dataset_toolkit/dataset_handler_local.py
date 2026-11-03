@@ -3,8 +3,8 @@ Class Features
 
 Name:          dataset_handler_local
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260123'
-Version:       '1.1.0'
+Date:          '20260903'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -67,16 +67,26 @@ class DataLocal(Dataset):
         "point": "points",
     }
 
+    # default property
+    _defaults_property = {
+        'data_role': {'NA', 'NA'}
+    }
+
     _default_vars_wf = ["variable"]
 
     def __init__(self,
-                 path: Optional[str] = None, file_name: Optional[str] = None,
-                 logger: Optional[LoggingManager] = None, file_io: str = None,
-                 message: bool = True,
+                 path: Optional[str] = None,
+                 file_name: Optional[str] = None, file_io: str = None,
+                 file_variable: str = None, file_workflow : str = None,
+                 logger: Optional[LoggingManager] = None,
+                 message: bool = True, tag: str = type,
                  **kwargs):
 
         # set data local logger
         self.logger = logger or LoggingManager(name="DataLocal")
+
+        # info logger start
+        self.logger.info_up(f"Initialize object {tag} ... ")
 
         # store path
         self.path = path
@@ -89,7 +99,8 @@ class DataLocal(Dataset):
         if 'file_deps' in kwargs:
             self.file_deps = kwargs.pop('file_deps')
         else:
-            self.file_deps = []
+            self.file_deps = {}
+
         # check data layout
         if 'data_layout' in kwargs:
             self.data_layout = kwargs.pop('data_layout')
@@ -106,6 +117,11 @@ class DataLocal(Dataset):
             self.data_id = kwargs.pop('data_id')
         else:
             self.data_id = -1
+        # check data_role (to define if Data is data, deps, auxiliary ... )
+        if 'data_role' in kwargs:
+            self.data_role = kwargs.pop('data_role')
+        else:
+            self.data_role = 'data'
 
         # determine directory name
         if path is not None:
@@ -119,7 +135,7 @@ class DataLocal(Dataset):
         else:
             self.dir_name = ensure_folder_tmp()
 
-        self._file_io = None  # internal storage
+        self._file_io = 'undefined'  # internal storage
         if file_io is not None:
             self.file_io = file_io  # triggers the setter
 
@@ -141,9 +157,14 @@ class DataLocal(Dataset):
         else:
             self.delimiter = ';'
 
-        # handle file_template normalization
-        file_variable = kwargs.get('file_variable', 'variable')
-        n_vars = kwargs.pop('n_vars', 1) or 1
+        # check file variable not NoneType obj
+        if file_variable is None:
+            self.logger.error("The file_variable is defined by NoneType.")
+            raise RuntimeError("The file_variable must be defined by string.")
+        # check file variable type
+        if not isinstance(file_variable, str):
+            self.logger.error(f"The file_variable must be a string. Found type: {type(file_variable).__name__}.")
+            raise RuntimeError("The file_variable must be defined by string.")
 
         # variable template normalization
         variable_template = kwargs.pop('variable_template', None)
@@ -152,6 +173,13 @@ class DataLocal(Dataset):
         elif not isinstance(variable_template, dict):
             self.logger.error("Variable template must be a dict if provided.")
             raise ValueError("Variable template must be a dict if provided.")
+
+        # variable role normalization
+        if isinstance(self.data_role, str):
+            variable_role = {file_variable: self.data_role}
+        else:
+            self.logger.error("Attribute data_role must be a str")
+            raise RuntimeError("Check your settings in the DataObject definition")
 
         # define dims and vars - layout handling (backward compatible)
         layout_raw = getattr(self, "data_layout", "geo") or "geo"
@@ -169,15 +197,19 @@ class DataLocal(Dataset):
         if 'data_as_is' in kwargs:
             self.data_as_is = kwargs.pop('data_as_is')
 
+        # define dimension(s)
         dims_user = (
                 variable_template.get(dims_key_default)
                 or variable_template.get("dims_geo")
+                or variable_template.get("dims_data")
                 or variable_template.get("dims_point")
                 or variable_template.get("dims_time")
         )
+        # define coord(s)
         coords_user = (
                 variable_template.get(coords_key_default)
                 or variable_template.get("coords_geo")
+                or variable_template.get("coords_data")
                 or variable_template.get("coords_point")
                 or variable_template.get("coords_time")
         )
@@ -191,21 +223,27 @@ class DataLocal(Dataset):
             if file_variable:
                 vars_data = {file_variable: file_variable}
             else:
-                vars_data = {f"var_{i}": f"var{i}" for i in range(1, int(n_vars) + 1)}
+                self.logger.error("Attribute vars_data must be defined by dictionary.")
+                raise ValueError("Attribute vars_data must be defined by dictionary.")
 
         # units nad ensure units are defined for all variables
         units = variable_template.get("units", {})
         units = {var_name: units.get(var_name, "NA") for var_name in vars_data}
 
-        # select file_workflow based on file_io (defined in calling code)
-        if self.file_io == 'input':
-            file_workflow = list(vars_data.values())
-        elif self.file_io == 'output':
-            file_workflow = list(vars_data.keys())
-        elif self.file_io == 'derived':
-            file_workflow = list(vars_data.values())
-        else:
-            file_workflow = variable_template.get("vars_wf") or self._default_vars_wf
+        # select file_workflow based on args or file_io (defined in calling code)
+        if file_workflow is None:
+                self.logger.error("Attribute file_workflow must be defined by string.")
+                raise ValueError("Attribute file_workflow must be defined by string.")
+
+
+        # add placeholder for file (for example if output file needs some extra definitions to fill the string)
+        file_placeholder = kwargs.pop('file_placeholder', {})
+        # check placeholder format
+        if not isinstance(file_placeholder, dict):
+            logger_stream.error('File placeholder must be a dictionary. Exit.')
+            raise TypeError(f'File placeholder must be a dictionary. Got {type(file_placeholder).__name__}.')
+        # replace undefined values with "NA"
+        file_placeholder = {key: "NA" if value is None else value for key, value in file_placeholder.items()}
 
         # ensure valid structure
         if not all(isinstance(x, dict) for x in (dims_geo, coords_geo, vars_data)):
@@ -225,23 +263,30 @@ class DataLocal(Dataset):
             'message': message,
             'units': units,
             'variable_template': {"dims_geo": dims_geo, "coords_geo": coords_geo, "vars_data": vars_data},
+            'variable_role': variable_role,
             "data_layout": layout_norm,
             "data_id": self.data_id,
+            "data_role": self.data_role,
             "data_as_is": self.data_as_is,
             "data_mandatory": self.data_mandatory,
+            'file_io': self.file_io,
             'file_variable': file_variable,
-            'file_workflow': file_workflow
+            'file_workflow': file_workflow,
+            'file_placeholder': file_placeholder
         })
 
         # initialize parent class
         super().__init__(**kwargs)
 
+        # info logger end
+        self.logger.info_down(f"Initialize object {tag} ... DONE")
+
+    # LOC PATTERS MANAGEMENT
     @property
     def loc_pattern(self):
         if self.dir_name is None or self.file_name is None:
             return None
         return os.path.join(self.dir_name, self.file_name)
-
     @loc_pattern.setter
     def loc_pattern(self, path):
         if path is not None:
@@ -250,34 +295,72 @@ class DataLocal(Dataset):
         else:
             self.dir_name, self.file_name = None, None
 
+    # FILE IO MANAGEMENT
     @property
     def file_io(self):
         """Get the file_io value."""
         return self._file_io
-
     @file_io.setter
     def file_io(self, value):
         """Set the file_io value, ensuring it is valid."""
-        if value not in {'input', 'output', 'derived','tmp'}:
-            raise ValueError(f"Invalid file_io '{value}'. Must be one of {'input', 'output', 'derived', 'tmp'}.")
+        if value not in {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}:
+            self.logger.error("attribute 'file_io' has not the expected value.")
+            raise ValueError(f"attribute 'file_io' value is '{value}'. "
+                             f"Must be one of {'input', 'output', 'derived', 'tmp', 'undefined', 'geo'}.")
         self._file_io = value
 
+    # FILE DEPS MANAGEMENT
+    @property
+    def file_deps(self):
+        """Get file dependencies."""
+        return self._file_deps
+    @file_deps.setter
+    def file_deps(self, value):
+        """Set file dependencies."""
+        if value is None or isinstance(value, list):
+            self.logger.warning(f"file_deps must be a dict, got {type(value).__name__}. Using an empty dictionary.",)
+            value = {}
+        elif not isinstance(value, dict):
+            self.logger.error("attribute 'file_deps' is not in expected format.")
+            raise TypeError(f"attribute 'file_deps' must be a dict, got {type(value).__name__}.")
+        self._file_deps = value
+
+    ## DATA MANAGEMENT
+    @property
+    def data_role(self):
+        if not hasattr(self, '_data_role'):
+            self._data_role = self._defaults_property['data_role']
+        return self._data_role
+    @data_role.setter
+    def data_role(self, value):
+        if value not in ['data', 'deps', 'ancillary', 'auxiliary']:
+            self.logger.error(f"attribute 'data role' has defined by not expected value")
+            raise ValueError(f"attribute 'data_role' value is '{value}'. "
+                             f"Must be one of {'data', 'deps', 'ancillary', 'auxiliary'}.")
+        self._data_role = value
+
+    # method to apply time to path
     def path(self, time: Optional[pd.Timestamp] = None, **kwargs):
         return self.get_key(time, **kwargs)
 
     ## INPUT/OUTPUT METHODS
     # method to read data
     def _read_data(self, path: str,
-                   vars_data: dict = None, vars_geo: dict = None, dims_geo: dict = None,
-                   **kwargs) -> (xr.DataArray, xr.Dataset, pd.DataFrame):
+                   vars_data: dict | None = None, vars_geo: dict | None = None, dims_geo: dict | None = None,
+                   **kwargs) -> xr.DataArray | xr.Dataset | pd.DataFrame:
 
         # message info start
         self.logger.info_up(f"Read data from {path} ... ")
 
-        # set variable if defined
-        variable = None
-        if 'variable' in kwargs:
-            variable = kwargs['variable']
+        # set variable from kwargs or vars_data
+        variable = kwargs.get('variable', None)
+        # if variable field is not provided get from class the variable name
+        if variable is None:
+            if vars_data is None:
+                vars_data = self.variable_template.get('vars_data', {})
+            if isinstance(vars_data, dict) and vars_data:
+                values = list(vars_data.values())
+                variable = values[0] if len(values) == 1 else values
 
         # method to read data from file
         data = read_from_file(

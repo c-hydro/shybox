@@ -69,28 +69,28 @@
       }
     },
     "data_source": {
-      "dset_01": {
+      "RAIN_EFF": {
         "path": "{path_source_root}/{path_source_time}",
         "file_name": "REff.{file_source_time}.tiff"
       },
-      "dset_02": {
+      "SNOW_MASK": {
         "path": "{path_source_root}/{path_source_time}",
         "file_name": "SnowMask.{file_source_time}.tiff"
       }
     },
     "data_destination": {
-      "dset_01": {
+      "RAIN_EFF": {
         "path": "{path_destination_root}/{path_destination_time}",
         "file_name": "REFF_{file_destination_time}.nc",
-        "format": "netcdf", "type": "grid_3d_itwater", "mode": "local", "variable": "rain_eff",
+        "format": "netcdf", "type": "grid_3d_itwater", "mode": "local", "variable": "RAIN_EFF_3D",
         "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
         "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
         "vars_data": {"rain_eff": "RAIN_EFF"}
       },
-      "dset_02": {
+      "SNOW_MASK": {
         "path": "{path_destination_root}/{path_destination_time}",
         "file_name": "SNOWMASK_{file_destination_time}.nc",
-        "format": "netcdf", "type": "grid_3d_itwater", "mode": "local", "variable": "snow_mask",
+        "format": "netcdf", "type": "grid_3d_itwater", "mode": "local", "variable": "SNOW_MASK_3D",
         "dims_geo": {"longitude": "longitude", "latitude": "latitude"},
         "vars_geo": {"longitude": "longitude", "latitude": "longitude"},
         "vars_data": {"snow_mask": "SNOW_MASK"}
@@ -98,26 +98,33 @@
     }
   },
   "workflow": {
-    "WORKFLOW_DSET_01": {
+    "WORKFLOW_RAIN_EFF": {
         "options": {
           "intermediate_output": "Tmp",
-          "tmp_dir": "{path_tmp}/workflow_dset_01/"
+          "tmp_dir": "{path_tmp}/workflow_dset_01/",
+          "io_config": {"mode": "many_data_times_to_one_file"}
         },
-        "process_list": {
-            "rain_eff": [{"function": "merge_data_by_time"}]
-        }
+        "process_list": [
+          {"function": "merge_data_by_time",
+            "datasets": {"data|{t}": "rain_eff"},
+            "results": {"data": "RAIN_EFF"},
+            "ref_value": -9999, "mask_no_data": null}
+          ]
     },
-    "WORKFLOW_DSET_02": {
+    "WORKFLOW_SNOW_MASK": {
         "options": {
             "intermediate_output": "Tmp",
-            "tmp_dir": "{path_tmp}/workflow_dset_02/"
+            "tmp_dir": "{path_tmp}/workflow_dset_02/",
+            "io_config": {"mode": "many_data_times_to_one_file"}
         },
-        "process_list": {
-            "snow_mask": [{"function": "merge_data_by_time"}]
-        }
+        "process_list": [
+          {"function": "merge_data_by_time",
+            "datasets": {"data|{t}": "snow_mask"},
+            "results": {"data": "SNOW_MASK"},
+            "ref_value": -9999, "mask_no_data": null}
+        ]
     }
-
-},
+  },
   "log": {
     "path": "{path_log}",
     "file_name": "merger_by_time_s3m.txt"

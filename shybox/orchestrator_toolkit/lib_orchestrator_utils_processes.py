@@ -3,8 +3,8 @@ Library Features:
 
 Name:          lib_orchestrator_utils_processes
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260123'
-Version:       '1.1.0'
+Date:          '20260831'
+Version:       '1.0.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -12,20 +12,10 @@ import functools
 import warnings
 import inspect
 import pandas as pd
-import xarray as xr
 
-import rioxarray as rxr
-import tempfile
-import os
-
-try:
-    from osgeo import gdal  # optional
-except Exception:  # pragma: no cover
-    gdal = None
-
-from osgeo import gdal
-from typing import Iterable
-
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_checker import check_data_type
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_adapters_registry import (
+    ADAPTERS_TYPE, ADAPTERS_FX_TS, ADAPTERS_FX_MAPS)
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -41,409 +31,387 @@ _ext_map = {
     'shape': 'json', 'dict': 'json', 'geojson': 'json',
     'text': 'txt', 'txt': 'txt'
 }
-# ----------------------------------------------------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------------------------------------------------------
-# method to decorate processing functions
-def as_process(input_type: str = 'xarray', output_type: str = 'xarray', **decorator_attrs):
-    """
-    Decorate a processing function that has signature like:
-        func(data, *args, **kwargs)
+# manage adapters
+ADAPTERS_COLLECTIONS = {**ADAPTERS_FX_TS, **ADAPTERS_FX_MAPS, **ADAPTERS_TYPE}
+# --------------------------------------------------------------------------------------------------------------
 
-    Conventions:
-      - input_type:  'pandas' | 'xarray' | 'gdal' | 'file'
-      - output_type: 'pandas' | 'xarray' | 'gdal' | 'file' | 'tif' | 'tiff' |
-                     'table' | 'csv' | 'pandas' | 'shape' | 'dict' | 'geojson' |
-                     'text' | 'txt'
-    """
+# --------------------------------------------------------------------------------------------------------------
+# decoretor method
+def as_process(
+        input_type=None, input_adapter=None,
+        output_type=None, output_adapter=None,
+        args_adapter=None,
+        **process_attrs):
+
+    # initialize adapters
+    input_adapter = input_adapter or {}
+    output_adapter = output_adapter or {}
+    args_adapter = args_adapter or {}
+    # --------------------------------------------------------------------------------------------------------------
+
+    # --------------------------------------------------------------------------------------------------------------
+    # set decoretor
     def decorator(func):
 
+        # --------------------------------------------------------------------------------------------------------------
+        # get function signature
+        func_signature = inspect.signature(func)
+        func_parameters = func_signature.parameters
+
+        # get explicit function arguments
+        func_args = {
+            param_name for param_name, param_obj in func_parameters.items()
+            if param_obj.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+        }
+
+        # check if function accepts **kwargs
+        func_has_kwargs = any(param_obj.kind == inspect.Parameter.VAR_KEYWORD for param_obj in func_parameters.values())
+
+        # validate input adapters
+        for variable_name, adapter_obj in input_adapter.items():
+
+            # check variable against function signature
+            if variable_name not in func_args and not func_has_kwargs:
+                raise RuntimeError(
+                    f'Input adapter variable "{variable_name}" is not available in function "{func.__name__}" signature.')
+
+            # configure adapter pipeline
+            adapter_configs = __configure_adapter(adapter_obj)
+            # validate each adapter in the pipeline
+            for adapter_config in adapter_configs:
+
+                # get adapter information
+                adapter_name = adapter_config.get('method', None)
+                adapter_kwargs = adapter_config.get('kwargs', {}) or {}
+
+                # adapter method is mandatory
+                if adapter_name is None:
+                    raise RuntimeError(f'Input adapter for variable "{variable_name}" does not define a method.')
+                # check adapter in registry
+                if adapter_name not in ADAPTERS_COLLECTIONS:
+                    raise RuntimeError(f'Adapter "{adapter_name}" is not available for variable "{variable_name}".')
+
+        # validate args adapters
+        for arg_name, adapter_obj in args_adapter.items():
+
+            # check argument against function signature
+            if arg_name not in func_args and not func_has_kwargs:
+                raise RuntimeError(
+                    f'Argument adapter "{arg_name}" is not available in function "{func.__name__}" signature.')
+
+            # configure adapter pipeline
+            adapter_configs = __configure_adapter(adapter_obj)
+            # validate each adapter in the pipeline
+            for adapter_config in adapter_configs:
+
+                # get adapter information
+                adapter_name = adapter_config.get('method', None)
+                adapter_kwargs = adapter_config.get('kwargs', {}) or {}
+
+                # adapter method is mandatory
+                if adapter_name is None:
+                    raise RuntimeError(f'Argument adapter for "{arg_name}" does not define a method.')
+                # check adapter in registry
+                if adapter_name not in ADAPTERS_COLLECTIONS:
+                    raise RuntimeError(
+                        f'Adapter "{adapter_name}" is not available for argument "{arg_name}".')
+
+        # --------------------------------------------------------------------------------------------------------------
+
+        # --------------------------------------------------------------------------------------------------------------
+        # wrapper to decorate function
         @functools.wraps(func)
         @with_logger(var_name='logger_stream')
         def wrapper(data, *args, **kwargs):
-            created_temp_paths = []
 
-            # normalize and convert input data
-            def _to_gdal(obj):
-                # Convert DataArray/Dataset → GDAL (or path to file that GDAL can open)
-                if isinstance(obj, (xr.DataArray, xr.Dataset)):
-                    gd = xarray_to_gdal(obj)
-                    return gd
-                return obj  # assume already GDAL or path
+            # ----------------------------------------------------------------------------------------------------------
+            # get map and behaviour in
+            variable_in = kwargs.pop('variable_in', None)
+            in_map, in_behaviour = __get_variables_object(variable_in)
+            in_kwargs = {'mapping': in_map, 'behaviour': in_behaviour}
+            # get map and behaviour out
+            variable_out = kwargs.pop('variable_out', None)
+            out_map, out_behaviour = __get_variables_object(variable_out)
+            out_kwargs = {'mapping': out_map, 'behaviour': out_behaviour}
+            # ----------------------------------------------------------------------------------------------------------
 
-            def _from_file(obj):
-                # Convert file path → xarray
-                return file_to_xarray(obj)
+            # ----------------------------------------------------------------------------------------------------------
+            # check data format (in)
+            if not isinstance(data, dict):
+                data = __try_to_adjust_data(data, in_map)
 
-            def _to_file(obj):
-                # Convert xarray → file path; track for later cleanup if desired
-                path = xarray_to_file(obj)  # returns a temp path (assumed)
-                created_temp_paths.append(path)
-                return path
+            # check input (if expected or not)
+            input_check = check_data_type(obj_data=data, string_data=input_type)
+            # warn input
+            if not input_check:
+                logger_stream.warning(f'Decorator "as_process": data type mismatch. '
+                                      f'Expected "{input_type}", got "{type(data).__name__}".')
+            # ----------------------------------------------------------------------------------------------------------
 
-            # Convert the incoming `data` according to input_type
-            if input_type not in ('pandas', 'xarray', 'gdal', 'file'):
-                warnings.warn(f"Unknown input_type '{input_type}', leaving data as-is.")
+            # ----------------------------------------------------------------------------------------------------------
+            # apply adapters to data variables
+            for variable_name, adapter_obj in input_adapter.items():
 
-            def _convert_single(obj):
-                if input_type == 'gdal':
-                    return _to_gdal(obj)
-                elif input_type == 'file':
-                    # If caller passed a file path, we want xarray obj here:
-                    return _from_file(obj)
-                else:
-                    return obj  # 'xarray' passthrough
+                # check variable against function signature
+                if variable_name not in func_args and not func_has_kwargs:
+                    continue
 
-            # handle different data structures: dict, list/tuple, or single object
-            if isinstance(data, dict):
+                # configure adapters
+                adapter_configs = __configure_adapter(adapter_obj)
 
-                # Defer conversion of individual values to the function (dict can contain multiple fields)
-                normalized_data = {k: _convert_single(v) for k, v in data.items()}
+                # apply adapters sequentially
+                data_tmp = data
+                for adapter_config in adapter_configs:
 
-            elif isinstance(data, (list, tuple)):
+                    # get adapter information
+                    adapter_name = adapter_config.get('method', None)
+                    adapter_kwargs = adapter_config.get('kwargs', {}) or {}
+                    # add in kwargs
+                    adapter_kwargs = {**adapter_kwargs, **in_kwargs}
 
-                # iterate over items, convert each, and flatten if needed (e.g. list of lists)
-                normalized_data = []
-                for v in data:
+                    # check if adapter name is defined
+                    if adapter_name is None:
+                        continue
 
-                    # manage value (keep if not None, skip if None unless lazy_undefined_value is set)
-                    value = _convert_single(v)
-                    if value is None:
-                        if 'lazy_undefined_value' in decorator_attrs:
-                            pass
-                        else:
-                            continue
-                    # values is a list/tuple
-                    if isinstance(value, (list, tuple)):
-                        for item in value:
+                    # check adapter in the registry
+                    if adapter_name not in ADAPTERS_COLLECTIONS:
+                        raise RuntimeError(f'Adapter "{adapter_name}" is not available for variable "{variable_name}".')
 
-                            # manage None values in list/tuple: skip if None or keep if lazy_undefined_value is set
-                            if item is not None:
-                                normalized_data.append(item)
-                            else:
-                                if 'lazy_undefined_value' in decorator_attrs:
-                                    normalized_data.append(decorator_attrs['lazy_undefined_value'])
-                                else:
-                                    pass
+                    # get adapter
+                    adapter_fx = ADAPTERS_COLLECTIONS[adapter_name]
+                    # apply adapter
+                    data_tmp = adapter_fx(data_tmp, **adapter_kwargs)
 
-                    else:
-                        normalized_data.append(value)
+                # update adapted data
+                data = data_tmp
+            # ----------------------------------------------------------------------------------------------------------
 
-            else:
-                normalized_data = _convert_single(data)
+            # ----------------------------------------------------------------------------------------------------------
+            # apply adapters to function args
+            for arg_name, adapter_obj in args_adapter.items():
 
-            # call the wrapped function with normalized data
-            try:
-                if isinstance(normalized_data, dict):
+                # skip unavailable argument
+                if arg_name not in kwargs:
+                    continue
 
-                    # dict: merge with kwargs (dict takes precedence)
-                    merged_kwargs = {**kwargs, **normalized_data}
-                    result = func(*args, **merged_kwargs)
+                # normalize adapter configuration
+                adapter_configs = __configure_adapter(adapter_obj)
 
-                elif isinstance(normalized_data, (list, tuple)):
+                # get current argument value
+                arg_value = kwargs[arg_name]
+                # apply adapters sequentially
+                for adapter_config in adapter_configs:
 
-                    # get the function signature to determine parameter names
-                    signature = inspect.signature(func)
+                    # get adapter object(s)
+                    adapter_name, adapter_kwargs = adapter_config['method'], adapter_config['kwargs']
 
-                    # Debug: show function and its parameters
-                    logger_stream.info(f"Function: {func.__name__}")
-                    logger_stream.info(f"Signature: {signature}")
-                    logger_stream.info(f"Parameters: {list(signature.parameters.keys())}")
+                    # check adapter availability
+                    if adapter_name not in ADAPTERS_COLLECTIONS:
+                        raise RuntimeError(f'Adapter "{adapter_name}" is not available for argument "{arg_name}".')
 
-                    # get optional keys used to build the dynamic dictionary input
-                    file_keys = kwargs.get("keys", [])
+                    # get adapter function
+                    adapter_fx = ADAPTERS_COLLECTIONS[adapter_name]
+                    # apply adapter
+                    arg_value = adapter_fx(arg_value, **adapter_kwargs)
 
-                    # Find required positional parameters that have not been provided
-                    params = []
-                    for index, param in enumerate(signature.parameters.values()):
+                # update argument
+                kwargs[arg_name] = arg_value
 
-                        is_required = param.default is inspect.Parameter.empty
+            # ----------------------------------------------------------------------------------------------------------
 
-                        if param.default is None:
-                            if param.name in file_keys:
-                                is_required = True
+            # ----------------------------------------------------------------------------------------------------------
+            # get time
+            time = kwargs.pop('time', None)
+            # add time
+            data['time'] = time
 
-                        is_positional = param.kind in (
-                            inspect.Parameter.POSITIONAL_ONLY,
-                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                        )
+            # execute fx
+            result = func(**data, **kwargs)
+            # ----------------------------------------------------------------------------------------------------------
 
-                        is_provided = index < len(args) or param.name in kwargs
+            # ----------------------------------------------------------------------------------------------------------
+            # apply adapters to result variables
+            for variable_name, adapter_obj in output_adapter.items():
 
-                        if is_positional and is_required and not is_provided:
-                            params.append(param)
+                # configure adapters
+                adapter_configs = __configure_adapter(adapter_obj)
 
-                    # Debug: show parameters found
-                    logger_stream.info(f"Missing required parameters: {[param.name for param in params]}")
+                # apply adapters sequentially
+                result_tmp = result
+                for adapter_config in adapter_configs:
 
-                    # order based on file_keys
-                    order = {key: i for i, key in enumerate(file_keys)}
-                    params.sort(key=lambda param: order.get(param.name, len(order)))
+                    # get adapter information
+                    adapter_name = adapter_config.get('method', None)
+                    adapter_kwargs = adapter_config.get('kwargs', {}) or {}
+                    # add in kwargs
+                    adapter_kwargs = {**adapter_kwargs, **out_kwargs}
 
-                    # map normalized data to function parameters
-                    if len(params) == 1:
+                    # check if adapter name is defined
+                    if adapter_name is None:
+                        continue
 
-                        param_name = params[0].name
-                        if isinstance(normalized_data, (list, tuple)):
+                    # check adapter in the registry
+                    if adapter_name not in ADAPTERS_COLLECTIONS:
+                        raise RuntimeError(f'Adapter "{adapter_name}" is not available for variable "{variable_name}".')
 
-                            if file_keys is not None:
-                                sel_keys = (
-                                    list(file_keys)
-                                    if isinstance(file_keys, (list, tuple))
-                                    else [file_keys]
-                                )
+                    # get adapter
+                    adapter_fx = ADAPTERS_COLLECTIONS[adapter_name]
+                    # apply adapter
+                    result_tmp = adapter_fx(result_tmp, **adapter_kwargs)
 
-                                if len(sel_keys) != len(normalized_data):
-                                    count_data = {}
-                                    for step_data in normalized_data:
-                                        name_data = step_data.name
-                                        if name_data not in count_data:
-                                            count_data[name_data] = 1
-                                        else:
-                                            count_data[name_data] += 1
-                                    for key_data, count_data in count_data.items():
-                                        count_keys = sel_keys.count(key_data)
-                                        if count_keys == count_data:
-                                            sel_keys = sel_keys[0:count_keys]
-                                        else:
-                                            raise ValueError(
-                                                f"Cannot build '{param_name}' dictionary: "
-                                                f"{len(sel_keys)} keys for "
-                                                f"{len(normalized_data)} normalized objects."
-                                            )
+                # update adapted data
+                result = result_tmp
+            # ----------------------------------------------------------------------------------------------------------
 
-                                if len(set(sel_keys)) == 1:
-                                    param_value = {sel_keys[0]: normalized_data}
-                                else:
-                                    param_value = dict(zip(sel_keys, normalized_data))
+            # ----------------------------------------------------------------------------------------------------------
+            # check output format
+            if not isinstance(result, dict):
+                result = __try_to_adjust_result(result, out_map)
 
-                            else:
-                                param_value = {
-                                    f"obj_{index + 1}": obj
-                                    for index, obj in enumerate(normalized_data)
-                                }
+            # check output (if expected or not)
+            output_check = check_data_type(obj_data=result, string_data=output_type)
 
-                        else:
-                            param_value = normalized_data
+            # warn output
+            if not output_check:
+                logger_stream.warning(f'Decorator "as_process": result type mismatch. '
+                                      f'Expected "{output_type}", got "{type(result).__name__}".')
 
-                        normalized_dict = {param_name: param_value}
-
-                    else:
-                        param_names = [param.name for param in params]
-                        normalized_dict = dict(zip(param_names, normalized_data))
-
-                    lazy_undefined_args = False
-                    if 'lazy_undefined_args' in decorator_attrs and decorator_attrs['lazy_undefined_args']:
-                        lazy_undefined_args = decorator_attrs['lazy_undefined_args']
-
-                    # check for missing required parameters (those that are not in normalized_dict and have no default)
-                    missing = [p.name for p in params if p.name not in normalized_dict and p.default is inspect._empty]
-                    if missing:
-                        if not lazy_undefined_args:
-                            raise TypeError(f"Function '{func.__name__}' missing required arguments: {missing}")
-                        else:
-                            lazy_undefined_value = None
-                            if 'lazy_undefined_value' in decorator_attrs:
-                                lazy_undefined_value = decorator_attrs['lazy_undefined_value']
-                            lazy_kwargs = {k: lazy_undefined_value for k in missing}
-                    else:
-                        lazy_kwargs = {}
-
-                    # organize the call kwargs: normalized_dict takes precedence over kwargs
-                    extended_kwargs = {**normalized_dict, **kwargs, **lazy_kwargs}
-                    result = func(*args, **extended_kwargs)
-
-                elif isinstance(normalized_data, pd.DataFrame):
-                    result = func(normalized_data, *args, **kwargs)
-
-                elif isinstance(normalized_data, pd.Series):
-                    result = func(normalized_data, *args, **kwargs)
-
-                elif (isinstance(normalized_data, (xr.DataArray, xr.Dataset))
-                      or (gdal and isinstance(normalized_data, gdal.Dataset))):
-                    result = func(normalized_data, *args, **kwargs)
-                else:
-                    raise TypeError(f'Unsupported data type: {type(normalized_data)}')
-            finally:
-                # If we created temp files for input ('file' path generation etc.), decide if you want to keep or remove.
-                # In your original code you removed the input when input_type == 'file', but that was ambiguous.
-                # Here we only remove paths we KNOW we created.
-                for p in created_temp_paths:
-                    try:
-                        remove(p)
-                    except Exception:
-                        pass  # best-effort cleanup
-
-            # convert the result according to output_type
-            # Keep naming consistent: we interpret output_type as the format you WANT to return.
-            if output_type == 'xarray':
-                # If result is GDAL/path, bring it back to xarray
-                if gdal and isinstance(result, gdal.Dataset):
-                    result = gdal_to_xarray(result)
-                elif isinstance(result, (str, bytes)):  # path-like
-                    result = gdal_to_xarray(result)
-                # else assume it is already xarray
-            elif output_type in ('gdal', 'tif', 'tiff'):
-                # If result is xarray, convert to GDAL-compatible (or a tif path)
-                if isinstance(result, (xr.DataArray, xr.Dataset)):
-                    result = xarray_to_gdal(result)
-                # else assume it is already GDAL/path
-            elif output_type in ('file',):
-                # If result is xarray, write to a file and return path
-                if isinstance(result, (xr.DataArray, xr.Dataset)):
-                    result = xarray_to_file(result)  # returns path
-            elif output_type in ('table', 'csv', 'pandas', 'shape', 'dict', 'geojson', 'text', 'txt'):
-                # leave as-is; your concrete functions should return the correct objects
-                pass
-            else:
-                warnings.warn(f"Unknown output_type '{output_type}', returning result unchanged.")
-
+            # return result
             return result
+            # ----------------------------------------------------------------------------------------------------------
 
-        # add the output_ext attribute
-        setattr(wrapper, 'output_ext', _ext_map.get(output_type, 'txt'))
+        # --------------------------------------------------------------------------------------------------------------
+        # set output extension
+        wrapper.output_ext = _ext_map.get( output_type,'txt')
 
-        # attach extra attributes
-        for key, value in decorator_attrs.items():
+        # set wrapper attributes
+        wrapper.input_type = input_type
+        wrapper.output_type = output_type
+        wrapper.input_adapter = input_adapter
+        wrapper.output_adapter = output_adapter
+        wrapper.args_adapter = args_adapter
+
+        # set process attributes
+        for key, value in process_attrs.items():
             setattr(wrapper, key, value)
 
-        # register the process
+        # update processes global
         PROCESSES[func.__name__] = wrapper
 
         return wrapper
+        # --------------------------------------------------------------------------------------------------------------
 
     return decorator
 # ----------------------------------------------------------------------------------------------------------------------
-from functools import wraps
-# ----------------------------------------------------------------------------------------------------------------------
-def with_dict_input(func):
-    """
-    Recursively walk through nested dictionaries.
-
-    Supported leaves:
-        - list[pd.DataFrame | pd.Series | None]
-
-    Examples:
-        list
-        dict -> list
-        dict -> dict -> list
-        dict -> dict -> dict -> list
-
-    The dictionary structure is preserved in the output.
-    """
-
-    @wraps(func)
-    def wrapper(data, *args, **kwargs):
-
-        def process(obj, path="data"):
-
-            # CASE 1: dictionary -> recursively process every key
-            if isinstance(obj, dict):
-                result = {}
-                for key, value in obj.items():
-                    result[key] = process(value,path=f"{path}.{key}")
-                return result
-
-            # CASE 2: list -> expected time series
-            if isinstance(obj, (list, tuple)):
-
-                # empty list
-                if len(obj) == 0:
-                    return func(obj,*args,**kwargs)
-
-                # validate elements
-                valid_types = (pd.DataFrame, pd.Series, type(None),)
-                if all(isinstance(item, valid_types) for item in obj):
-                    return func(obj, *args, **kwargs)
-                raise TypeError(f"Unsupported list content at '{path}'. Expected DataFrame, Series or None.")
-
-            # CASE 3: unsupported leaf
-            raise TypeError(f"Unsupported data type at '{path}': {type(obj).__name__}")
-
-        return process(data)
-
-    return wrapper
-# ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# methods to decorate other methods
-def with_list_input(func):
-    def wrapper(data, *args, **kwargs):
-        if isinstance(data, Iterable) and not isinstance(data, str) and not isinstance(data, xr.DataArray):
-            return [func(i, *args, **kwargs) for i in data]
+# HELPERS
+# helper to configure adapter(s)
+def __configure_adapter(adapter_obj):
+
+    # list of adapters
+    if isinstance(adapter_obj, list):
+        adapter_list = adapter_obj
+    # single adapter
+    else:
+        adapter_list = [adapter_obj]
+
+    # iterate over configuration(s)
+    adapter_configs = []
+    for adapter_item in adapter_list:
+        # simple form
+        if isinstance(adapter_item, str):
+            adapter_name = adapter_item
+            adapter_kwargs = {}
+        # extended form
+        elif isinstance(adapter_item, dict):
+            adapter_name = adapter_item.get('method')
+            adapter_kwargs = adapter_item.get('kwargs', {}) or {}
         else:
-            return func(data, *args, **kwargs)
-    return wrapper
-# ----------------------------------------------------------------------------------------------------------------------
+            raise TypeError(
+                f'Adapter configuration must be a string, dictionary or list. Found: {type(adapter_item).__name__}')
 
-# ----------------------------------------------------------------------------------------------------------------------
-# method to remove file
-@with_list_input
-def remove(filename: str):
-    if os.path.exists(filename): os.remove(filename)
-# ----------------------------------------------------------------------------------------------------------------------
+        if adapter_name is None:
+            raise ValueError('Adapter configuration requires a "method".')
 
-# ----------------------------------------------------------------------------------------------------------------------
-# method to dump data to file
-@with_list_input
-def xarray_to_file(data_array: xr.DataArray) -> str:
-    # Create a temporary file
-    temp_file = tempfile.NamedTemporaryFile(suffix='.tif', delete=False)
-    temp_file.close()
+        # save configuration template
+        adapter_configs.append({'method': adapter_name,'kwargs': adapter_kwargs})
 
-    # Save the DataArray to the temporary file
-    data_array.rio.to_raster(temp_file.name, compress='LZW')
+    return adapter_configs
 
-    # Move the temporary file to the desired filename
-    return temp_file.name
-# ----------------------------------------------------------------------------------------------------------------------
+# helper to get variables objects
+def __get_variables_object(variable_mapping: dict) -> tuple[dict, dict]:
 
-# ----------------------------------------------------------------------------------------------------------------------
-# method to read data from file to xarray
-@with_list_input
-def file_to_xarray(file_path: str) -> xr.DataArray:
-    # Open the raster as xarray DataArray
-    da = rxr.open_rasterio(file_path)
+    # initialize mapping and behaviour collections
+    mapping, behaviour = {}, {}
+    # iterate over groups
+    for group_name, group_info in variable_mapping.items():
+        # get group mapping
+        mapping[group_name] = group_info.get('mapping', {})
+        # get group behaviour
+        behaviour[group_name] = group_info.get('behaviour', None)
 
-    # If it's single-band, squeeze the band dimension
-    if "band" in da.dims and da.sizes.get("band", 1) == 1:
-        da = da.squeeze("band", drop=True)
+    return mapping, behaviour
 
-    return da
-# ----------------------------------------------------------------------------------------------------------------------
+# helper to try to adjust data object(s)
+@with_logger(var_name='logger_stream')
+def __try_to_adjust_data(data, mapping):
 
-# ----------------------------------------------------------------------------------------------------------------------
-# method to read data from file (xarray)
-@with_list_input
-def xarray_to_gdal(data_array: xr.DataArray) -> gdal.Dataset:
-    temp_file = xarray_to_file(data_array)
+    # info warning
+    logger_stream.warning(
+        'Method as_process expected "data" in dictionary format. '
+        'Trying to normalize "data" using output mapping. Method not implemented yet.'
+    )
 
-    # Open the temporary file with GDAL
-    gdal_dataset = gdal.Open(temp_file)
-    # Optionally, delete the temporary file after opening it with GDAL
-    os.remove(temp_file)
+    return data
 
-    return gdal_dataset
-# ----------------------------------------------------------------------------------------------------------------------
+# helper to try to adjust result object(s)
+@with_logger(var_name='logger_stream')
+def __try_to_adjust_result(result, mapping):
 
-# ----------------------------------------------------------------------------------------------------------------------
-# method to convert data to file (xarray)
-@with_list_input
-def gdal_to_xarray(dataset: gdal.Dataset) -> xr.DataArray:
+    # info warning
+    logger_stream.warning(
+        'Method as_process expected "result" in dictionary format. '
+        'Trying to normalize "result" using output mapping.'
+    )
 
-    # Create a temporary file
-    temp_file = tempfile.NamedTemporaryFile(suffix='.tif', delete=False)
-    temp_file.close()
+    # check mapping
+    if not isinstance(mapping, dict) or not mapping:
+        logger_stream.error('Output mapping is not defined or is not a dictionary')
+        raise RuntimeError('Unable to normalize result without a valid output mapping')
 
-    # Save the Dataset to the temporary file
-    driver = gdal.GetDriverByName('GTiff')
-    driver.CreateCopy(temp_file.name, dataset, options=['COMPRESS=LZW'])
+    # normalize result to list
+    if isinstance(result, (list, tuple)):
+        result_values = list(result)
+    else:
+        result_values = [result]
 
-    # Open the temporary file with xarray
-    data_array = rxr.open_rasterio(temp_file.name)
+    # get final mapped output variables
+    result_keys = [
+        mapped_value
+        for mapping_obj in mapping.values()
+        if isinstance(mapping_obj, dict)
+        for mapped_value in mapping_obj.values()
+    ]
 
-    # Optionally, delete the temporary file after opening it with GDAL
-    os.remove(temp_file.name)
+    # check number of returned objects
+    if len(result_values) != len(result_keys):
+        logger_stream.error(
+            f'Unable to normalize process result: '
+            f'{len(result_values)} returned object(s), '
+            f'{len(result_keys)} expected output variable(s). '
+            f'Expected variables: {result_keys}'
+        )
 
-    return data_array
+        raise RuntimeError('Process result size does not match expected output variables')
+
+    # organize result
+    result = dict(zip(result_keys, result_values))
+
+    return result
 # ----------------------------------------------------------------------------------------------------------------------

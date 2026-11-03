@@ -1,10 +1,10 @@
 """
 Library Features:
 
-Name:          lib_io_nc_custom
+Name:          lib_io_nc_other
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20250127'
-Version:       '1.0.0'
+Date:          '20261014'
+Version:       '1.1.0'
 """
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
@@ -15,7 +15,9 @@ import pandas as pd
 from copy import deepcopy
 
 from shybox.geo_toolkit.lib_geo_coords import find_geo_names, check_geo_orientation, fix_geo_orientation
-from shybox.logging_toolkit.lib_logging_utils import with_logger
+
+# common decoretor
+from shybox import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,15 +56,12 @@ def read_dataset_itwater(
         logger_stream.info(f"  Lon in [-180,180]: {report_before['lon_in_-180_180']} -> {report_after['lon_in_-180_180']}")
 
         if fix:
-            logger_stream.info("")
             if actions:
-                logger_stream.info("Fix actions applied:")
+                logger_stream.info_status("Fix actions applied:")
                 for a in actions:
-                    logger_stream.info(f"  - {a}")
+                    logger_stream.info_status(f"  - {a}")
             else:
-                logger_stream.info("Fix requested, but no changes were needed.")
-
-        logger_stream.info("=============================")
+                logger_stream.info_status("Fix requested, but no changes were needed.")
 
     return ds
 
@@ -71,12 +70,27 @@ def read_dataset_itwater(
 # ----------------------------------------------------------------------------------------------------------------------
 # method to write nc file (xarray library for itwater dataset)
 @with_logger(var_name='logger_stream')
-def write_dataset_itwater(path: str, data: xr.Dataset, time: pd.DatetimeIndex, attrs_data: dict = None,
-                          var_time: str = 'nt', var_x: str = 'lon', var_y: str = 'lat',
-                          dim_time: str = 'nt', dim_x: str = 'lon', dim_y: str = 'lat',
-                          dset_mode: str ='w', dset_engine: str = 'netcdf4',
-                          dset_compression: int =5, dset_format: str ='NETCDF4',
-                          no_data = -9999, **kwargs) -> None:
+def write_dataset_itwater(
+        path: str, data: xr.Dataset | xr.DataArray,
+        time: pd.DatetimeIndex, attrs_data: dict = None,
+        var_time: str = 'nt', var_x: str = 'lon', var_y: str = 'lat',
+        dim_time: str = 'nt', dim_x: str = 'lon', dim_y: str = 'lat',
+        dset_mode: str = 'w', dset_engine: str = 'netcdf4',
+        dset_compression: int = 5, dset_format: str = 'NETCDF4',
+        no_data=-9999, **kwargs) -> None:
+
+    # check and normalize input data
+    if isinstance(data, xr.DataArray):
+        # recover variable name
+        var_name = data.name
+        if var_name is None:
+            var_name = "DATA"
+            logger_stream.warning(f"DataArray name is not defined. Using default name '{var_name}'.")
+        # convert DataArray to Dataset
+        data = data.to_dataset(name=var_name)
+
+    elif not isinstance(data, xr.Dataset):
+        raise TypeError(f"Data must be an xarray Dataset or DataArray. Got {type(data)}.")
 
     if os.path.exists(path):
         os.remove(path)
