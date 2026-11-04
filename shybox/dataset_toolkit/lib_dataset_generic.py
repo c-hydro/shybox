@@ -53,6 +53,7 @@ from shybox.generic_toolkit.lib_utils_debug import plot_data
 # wrappers
 from shybox.io_toolkit.tiff_wrapper import write_tiff_watershed, write_tiff_grid2d
 from shybox.io_toolkit.nc_wrapper import write_nc_rfarm_ensemble
+from shybox.io_toolkit.json_wrapper import write_json_time_series_sections
 
 # manage logger
 try:
@@ -92,7 +93,7 @@ def check_data_format(data, file_format: str) -> None:
             raise ValueError(f'Cannot write a geopandas dataframe to a {file_format} file.')
                 
     elif 'pd' in globals() and isinstance(data, pd.DataFrame):
-        if file_format not in ['csv', 'netcdf', 'ascii', 'txt']:
+        if file_format not in ['csv', 'netcdf', 'ascii', 'txt', 'json']:
             raise ValueError(f'Cannot write a pandas dataframe to a {file_format} file.')
     
     elif format not in 'file':
@@ -329,7 +330,8 @@ def read_from_file(
 
         # read grib data
         if file_type == 'grid_3d':
-            data = read_datasets_grib(file)
+            method_args = set_method_args(method=read_datasets_grib, args=file_args)
+            data = read_datasets_grib(file, **method_args)
         else:
             logger_stream.error(f'File type is not supported for grib reading: {file_type}. '
                                 f'Check the available readers.')
@@ -372,9 +374,13 @@ def write_to_file(data, path,
     if file_format is None:
         file_format = get_format_from_path(path)
 
+    section_json = file_format == 'json' and file_type in ['time_series_hmc', 'ts_hmc']
+    if section_json and append:
+        raise ValueError('Time-series JSON writes a complete run; append is not supported.')
+
     # manage folder name
     folder = os.path.dirname(path)
-    if len(folder) > 0:
+    if len(folder) > 0 and not section_json:
         os.makedirs(os.path.dirname(path), exist_ok = True)
     if not os.path.exists(path):
         append = False
@@ -398,6 +404,20 @@ def write_to_file(data, path,
 
     # write the data to a json
     elif file_format == 'json':
+        if file_type in ['time_series_hmc', 'ts_hmc']:
+            options = dict(kwargs.pop('out_opts', {}) or {})
+            options.update(kwargs)
+            mapping = options.pop('map', None)
+            if mapping and 'data_map' not in options and isinstance(data, pd.DataFrame) and isinstance(data.columns, pd.MultiIndex):
+                # Ignore mappings of workflow containers; only map actual series.
+                selected = {key: value for key, value in mapping.items()
+                            if key in data.columns.get_level_values(0)}
+                if selected:
+                    options['data_map'] = selected
+            # Orchestrators also forward process/ref options; pass only writer arguments.
+            options = set_method_args(write_json_time_series_sections, options,
+                                      exclude=['data', 'file_path', 'time'])
+            return write_json_time_series_sections(data, path, time=time, **options)
         # write a dictionary to a json
         if isinstance(data, dict):
             for key in data.keys():

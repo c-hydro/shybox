@@ -21,7 +21,7 @@ ARGS_DEFAULT = {'min_r2': 0.7, 'min_n_updating': 20}
 
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to interpolate data
-@as_process(input_type='pandas',
+@as_process(input_type='xarray',
             input_adapter=None,
             args_adapter=None,
             output_adapter={

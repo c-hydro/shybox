@@ -22,19 +22,20 @@ from shybox.logging_toolkit.lib_logging_utils import with_logger
 # method to compute Relative Humidity from specific humidity, dew point and air temperature
 @as_process(input_type='xarray', output_type='xarray')
 def compute_data_rh(
-        q: xr.DataArray, td: xr.DataArray, t: xr.DataArray, p: (xr.DataArray, float, int) = 1013.25,
+        q: xr.DataArray = None, td: xr.DataArray = None, t: xr.DataArray = None,
+        p: (xr.DataArray, float, int) = 1013.25,
         mask_format: str = 'float', mask_no_data: (float, int) = -9999.0, clip: bool = True,
         return_diag: bool = False, p_units: str = 'hPa',  # 'hPa' or 'Pa'
         **kwargs):
 
     """
-    Compute Relative Humidity (%) from specific humidity (kg/kg), dew point (K), and air temperature (K),
+    Compute Relative Humidity (%) from dew point (K) and air temperature (K),
     following the same structure and masking logic of your template function.
 
     Parameters
     ----------
-    q : xr.DataArray
-        Specific humidity [kg/kg]
+    q : xr.DataArray, optional
+        Specific humidity [kg/kg], required only when return_diag=True.
     td : xr.DataArray
         Dew point temperature [K]
     t : xr.DataArray
@@ -66,7 +67,9 @@ def compute_data_rh(
     """
 
     # check mandatory argument(s)
-    variables_required = {'q': q, 'td': td, 't': t,}
+    variables_required = {'td': td, 't': t}
+    if return_diag:
+        variables_required['q'] = q
     for var_name, var_data in variables_required.items():
         if var_data is None:
             raise ValueError(f'Variable "{var_name}" is defined by NoneType.')

@@ -9,9 +9,11 @@ Version 1.6.0 (development) [2026-11-04]
 ****************************************
 
 - APP: Add point interpolation and time-series averaging (9828719).
-- APP: Add JSON-driven Flask dashboard, calendar, section maps, deterministic/ensemble hydrographs and setup (working tree).
+- APP: Add JSON-driven Flask dashboard, calendar, section maps, deterministic/ensemble hydrographs and setup.
+- APP: Adapt ICON-IT VdA conversion to filtered GRIB2 inputs and hourly, rainfall-conserving forcing.
+- WORKFLOW: Add per-section or collection JSON time-series exports with configurable metadata and atomic writes.
 - WORKFLOW: Integrate RainFARM ensembles, pickle/NetCDF/Zarr ancillary storage and native NetCDF output (b947ffe, 3c22162).
-- PACKAGE: Refactor datasets, processes and decorators; fix time parsing and missing RFarm slopes (4c8620d..3c22162).
+- PACKAGE: Refactor orchestration; fix time/slopes, RFarm output paths, temporary filenames and NetCDF scale metadata.
 - DOCUMENTATION: Publish docs edition 0.1.0, Sphinx CI, local images and README links (4b0580b, b947ffe, 8eaae8c).
 
 Version 1.2.4 [2026-08-27]
