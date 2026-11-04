@@ -1,0 +1,536 @@
+#!/usr/bin/python3
+"""
+SHYBOX - FLOOD-PROOFS ICON-IT TO HMC FORCING - VALLE D’AOSTA
+
+__date__ = '20261104'
+__version__ = '1.4.0'
+__author__ =
+    'Fabio Delogu (fabio.delogu@cimafoundation.org),
+     Andrea Libertino (andrea.libertino@cimafoundation.org)'
+__library__ = 'shybox'
+
+General command line:
+python app_converter_workflow_hmc_fp_icon_vda.py -settings_file app_converter_workflow_hmc_fp_icon_vda.json -time "2026-11-04 00:00"
+
+Examples of environment variables declarations:
+export DOMAIN_NAME='vda';
+export TIME_PERIOD=72;
+export TIME_START='2026-11-04 00:00';
+export TIME_END='2026-11-04 00:00';
+export PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_vda/converter_nwp/geo/';
+export PATH_SRC='/home/fabio/Desktop/shybox/dset/case_study_vda/converter_nwp/data/';
+export PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_vda/converter_nwp/data/icon_nc/';
+export PATH_LOG='/home/fabio/Desktop/shybox/exec/case_study_vda/converter_nwp/log/';
+export PATH_TMP='/home/fabio/Desktop/shybox/exec/case_study_vda/converter_nwp/tmp/';
+
+Input: cima_icon-it_YYYYMMDD_HH.grib2 (one GRIB2 with all fields).
+Terrain: geo/land/vda.dem.txt. TIME_PERIOD counts hourly output intervals
+AFTER initialization: 72 produces +1h through +72h, with no extrapolation.
+Rain is cumulative kg/m2: difference and uniformly subdivide the native
+three-hour totals into hourly mm. Temperature/dew point and wind components
+are linearly interpolated in time. Radiation uses the existing rain-based
+astronomic approximation; the GRIB net/averaged fields are not IFS SSRD/STRD.
+The source is cropped to a buffered target rectangle before temporal expansion;
+intermediate process maps use the orchestrator's Memory storage.
+If inherited system libraries conflict with Conda ecCodes, launch from a clean
+Conda environment (the converter does not modify LD_LIBRARY_PATH).
+
+Version(s):
+20261104 (1.4.0) --> ICON-IT GRIB2 and VdA adaptation of the current IFS orchestrator
+20261002 (1.4.0) --> Update of codes to new orchestrator methods
+20260203 (1.3.0) --> Update of codes to classes structure
+20251116 (1.2.0) --> Release for shybox package (hmc datasets converter base configuration)
+"""
+
+# ----------------------------------------------------------------------------------------------------------------------
+# libraries
+import logging
+import time
+import os
+
+import pandas as pd
+
+from shybox.time_toolkit.lib_utils_time import (select_time_range, select_time_format)
+
+from shybox.config_toolkit.arguments_handler import ArgumentsManager
+from shybox.config_toolkit.config_handler import ConfigManager
+
+# fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
+from shybox.processing_grid_toolkit.grids_adapter import exec_interpolate_data_generic
+from shybox.processing_grid_toolkit.lib_proc_mask import mask_data_by_ref
+from shybox.processing_grid_toolkit.lib_proc_compute_temperature import convert_temperature_units
+from shybox.processing_grid_toolkit.lib_proc_compute_wind import compute_data_wind_speed
+from shybox.processing_grid_toolkit.lib_proc_compute_humidity import compute_data_rh
+from shybox.processing_grid_toolkit.lib_proc_compute_radiation import compute_data_astronomic_radiation
+
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
+from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.logging_toolkit.logging_handler import LoggingManager
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# algorithm information
+project_name = 'shybox'
+alg_name = 'ICON-IT forecast converter for HMC - Valle d’Aosta'
+alg_type = 'Package'
+alg_version = '1.4.0'
+alg_release = '2026-11-04'
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# main function
+def main(view_table: bool = False):
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## SETTINGS MANAGEMENT
+    # get file settings
+    alg_args_obj = ArgumentsManager(settings_folder=os.path.dirname(os.path.realpath(__file__)))
+    alg_args_file, alg_args_time = alg_args_obj.get()
+
+    # crete configuration object
+    alg_cfg_obj = ConfigManager.from_source(
+        alg_args_file,
+        root_key="configuration",
+        auto_validate=True, auto_fill_lut=True,
+        flat_variables=True, flat_key_mode='value')
+    # view lut section
+    alg_cfg_lut = alg_cfg_obj.get_section(section='lut')
+    alg_cfg_obj.view(section=alg_cfg_lut, table_name='lut', table_print=view_table)
+
+    # get application section
+    alg_cfg_application = alg_cfg_obj.get_section(section='application')
+    # fill application section
+    alg_cfg_application = alg_cfg_obj.fill_obj_from_lut(
+        section=alg_cfg_application,
+        resolve_time_placeholders=False, time_keys=('time_start', 'time_end', 'time_period'),
+        template_keys=('file_time_destination',)
+    )
+    # view application section
+    alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=view_table)
+
+    # get workflow section
+    alg_cfg_workflow = alg_cfg_obj.fill_obj_from_lut(
+        section=alg_cfg_obj.get_section(section='workflow'), resolve_time_placeholders=False)
+    # view workflow section
+    alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=view_table)
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## LOGGING MANAGEMENT
+    # set logging instance
+    LoggingManager.setup(
+        logger_folder=alg_cfg_application['log']['path'],
+        logger_file=alg_cfg_application['log']['file_name'],
+        logger_format="%(asctime)s %(name)-15s %(levelname)-8s %(message)-80s %(filename)-20s:[%(lineno)-6s - %(funcName)-20s()]",
+        handlers=['file', 'stream'],
+        force_reconfigure=True,
+        arrow_base_len=3, arrow_prefix='-', arrow_suffix='>',
+        warning_dynamic=False, error_dynamic=False, warning_fixed_prefix="===> ", error_fixed_prefix="===> ",
+        level=10
+    )
+
+    # define logging instance
+    logging_handle = LoggingManager(
+        name="shybox_algorithm_converter_fp_icon_vda",
+        level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
+        set_as_current=True)
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## INFO START
+    # info algorithm (start)
+    logging_handle.info_header(LoggingManager.rule_line("=", 78))
+    logging_handle.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')')
+    logging_handle.info_header('START ... ', blank_after=True)
+
+    # time algorithm
+    start_time = time.time()
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## TIME MANAGEMENT (GLOBAL)
+    # Time generic configuration
+    if alg_args_time is not None:
+        alg_cfg_application['time']['start'] = alg_args_time
+        alg_cfg_application['time']['end'] = alg_args_time
+    alg_reference_time = select_time_range(
+        time_start=alg_cfg_application['time']['start'],
+        time_end=alg_cfg_application['time']['end'],
+        time_frequency=alg_cfg_application['time']['frequency'],
+        ensure_range=False, flat_if_single=True)
+    if isinstance(alg_reference_time, pd.DatetimeIndex):
+        raise ValueError('Convert one ICON initialization per invocation; set TIME_START equal to TIME_END.')
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## GEO MANAGEMENT
+    # geographic reference
+    geo_data = DataLocal(
+        path=alg_cfg_application['geo']['terrain']['path'],
+        file_name=alg_cfg_application['geo']['terrain']['file_name'],
+        data_role='auxiliary',
+        file_type='grid_2d', file_format='ascii', file_mode='local', file_variable='terrain', file_workflow='GEO', file_io='input',
+        variable_template={
+            "dims_geo": {"x": "longitude", "y": "latitude"},
+            "vars_geo": {"x": "longitude", "y": "latitude"}
+        },
+        time_signature=None, time_direction=None,
+        logger=logging_handle, message=False
+    )
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## TIME MANAGEMENT (STEP)
+    # time dataset info
+    time_data_length = int(alg_cfg_application['time']['dataset']) + 1
+    time_data_start = select_time_format(alg_reference_time, time_format='%Y-%m-%d %H:%M')
+    # time analysis info
+    time_anls_length = int(alg_cfg_application['time']['analysis'])
+    if time_anls_length < 1:
+        raise ValueError('TIME_PERIOD must contain at least one hourly output interval.')
+    time_anls_period = select_time_range(
+        time_start=alg_reference_time + pd.Timedelta(hours=1), time_period=time_anls_length, time_frequency='h')
+    time_anls_start = select_time_format(time_anls_period[0], time_format='%Y-%m-%d %H:%M')
+    time_anls_end = select_time_format(time_anls_period[-1], time_format='%Y-%m-%d %H:%M')
+
+    # update the applications obj
+    alg_cfg_application = alg_cfg_obj.fill_section_with_times(
+        alg_cfg_application,
+        time_values={
+            'file_time_destination': "",
+            'path_time_source': alg_reference_time, 'file_time_source': alg_reference_time,
+            'path_time_destination': alg_reference_time, 'path_time_run': alg_reference_time}
+    )
+
+    # view application section
+    alg_cfg_obj.view(section=alg_cfg_application, table_name='application [time info]', table_print=True)
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## DATASETS MANAGEMENT
+    # Read only a buffered rectangle around the target domain, before expanding time.
+    terrain = geo_data.get_data()
+    source_margin = float(alg_cfg_application.get('source_margin_degrees', 0.25))
+    if source_margin <= 0:
+        raise ValueError('source_margin_degrees must be positive.')
+    source_bounds = [float(terrain.longitude.min()) - source_margin,
+                     float(terrain.latitude.min()) - source_margin,
+                     float(terrain.longitude.max()) + source_margin,
+                     float(terrain.latitude.max()) + source_margin]
+
+
+    # RAIN DATASETS
+    # rain handler source
+    rain_data_src = DataLocal(
+        path=alg_cfg_application['data_source']['RAIN']['path'],
+        file_name=alg_cfg_application['data_source']['RAIN']['file_name'],
+        file_args={**alg_cfg_application['data_source']['RAIN'].get('file_args', {}), 'spatial_bounds': source_bounds},
+        file_type='grid_3d', file_format='grib', file_mode='local',
+        file_variable='RAIN_DATA_SRC', file_workflow='RAIN_WORKFLOW', file_io='input',
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"tp": "rain"}
+        },
+        time_signature='period',
+        time_reference=alg_reference_time + pd.Timedelta(hours=1),
+        time_period=time_data_length - 1, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # rain handler destination
+    rain_data_dst = DataLocal(
+        path=alg_cfg_application['data_destination']['path'],
+        file_name=alg_cfg_application['data_destination']['file_name'],
+        time_signature='step',
+        file_format='netcdf', file_type='grid_hmc', file_mode='local',
+        file_variable='RAIN_DATA_DST', file_workflow='RAIN_WORKFLOW', file_io='output',
+        variable_template={
+            "dims_geo": {"longitude": "west_east", "latitude": "south_north","time": "time"},
+            "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+            "vars_data": {"rain": "Rain"},
+            "units": {"rain": "mm"},
+        },
+        time_period=1, time_format='%Y%m%d%H%M',
+        logger=logging_handle, message=False
+    )
+
+    # AIR TEMPERATURE DATASETS
+    # air_t handler source
+    air_t_data_src = DataLocal(
+        path=alg_cfg_application['data_source']['AIR_T']['path'],
+        file_name=alg_cfg_application['data_source']['AIR_T']['file_name'],
+        file_args={**alg_cfg_application['data_source']['AIR_T'].get('file_args', {}), 'spatial_bounds': source_bounds},
+        file_type='grid_3d', file_format='grib', file_mode='local',
+        file_variable='AIR_T_DATA_SRC', file_workflow='AIR_T_WORKFLOW', file_io='input',
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"t2m": "air_temperature"}
+        },
+        time_signature='period',
+        time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # air_t handler destination
+    air_t_data_dst = DataLocal(
+        path=alg_cfg_application['data_destination']['path'],
+        file_name=alg_cfg_application['data_destination']['file_name'],
+        time_signature='step',
+        file_format='netcdf', file_type='grid_hmc', file_mode='local',
+        file_variable='AIR_T_DATA_DST', file_workflow='AIR_T_WORKFLOW', file_io='output',
+        variable_template={
+            "dims_geo": {"longitude": "west_east", "latitude": "south_north","time": "time"},
+            "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+            "vars_data": {"air_temperature": "AirTemperature"},
+            "units": {"air_temperature": "Celsius"},
+        },
+        time_period=1, time_format='%Y%m%d%H%M',
+        logger=logging_handle, message=False
+    )
+
+    # RELATIVE HUMIDITY DATASETS
+    # dew point temperature handler source
+    td_data_src = DataLocal(
+        path=alg_cfg_application['data_source']['DEW_POINT']['path'],
+        file_name=alg_cfg_application['data_source']['DEW_POINT']['file_name'],
+        file_args={**alg_cfg_application['data_source']['DEW_POINT'].get('file_args', {}), 'spatial_bounds': source_bounds},
+        file_type='grid_3d', file_format='grib', file_mode='local',
+        file_variable='DEW_POINT_DATA_SRC', file_workflow='RH_WORKFLOW', file_io='input',
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"d2m": "dew_point_temperature"}
+        },
+        time_signature='period',
+        time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
+        logger=logging_handle
+    )
+
+    # relative humidity handler source (derived)
+    rh_data_src = DataLocal(
+        path=None,
+        file_name=None,
+        file_type=None, file_format='tmp', file_mode='local',
+        file_variable='RH_DATA_SRC', file_workflow='RH_WORKFLOW', file_io='derived',
+        file_deps={
+            't': air_t_data_src,
+            'td': td_data_src
+        },
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"rh": "relative_humidity"}
+        },
+        time_signature='period',
+        time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
+        logger=logging_handle
+    )
+
+    # Relative Humidity destination handler
+    rh_data_dst = DataLocal(
+        path=alg_cfg_application['data_destination']['path'],
+        file_name=alg_cfg_application['data_destination']['file_name'],
+        time_signature='step',
+        file_format='netcdf', file_type='grid_hmc', file_mode='local',
+        file_variable='RH_DATA_DST',
+        file_workflow='RH_WORKFLOW', file_io='output',
+        variable_template={
+            "dims_geo": {"longitude": "west_east", "latitude": "south_north","time": "time"},
+            "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+            "vars_data": {"relative_humidity": "RelHumidity"},
+            "units": {"relative_humidity": "%"},
+        },
+        time_period=1, time_format='%Y%m%d%H%M',
+        logger=logging_handle, message=False
+    )
+
+    # WIND SPEED DATASETS
+    # wind u component handler source
+    wind_u_data_src = DataLocal(
+        path=alg_cfg_application['data_source']['WIND_U']['path'],
+        file_name=alg_cfg_application['data_source']['WIND_U']['file_name'],
+        file_args={**alg_cfg_application['data_source']['WIND_U'].get('file_args', {}), 'spatial_bounds': source_bounds},
+        file_type='grid_3d', file_format='grib', file_mode='local',
+        file_variable='WIND_U_DATA_SRC', file_workflow='WIND_SPEED_WORKFLOW', file_io='input',
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"u10": "wind_u"}
+        },
+        time_signature='period',
+        time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # wind v component handler source
+    wind_v_data_src = DataLocal(
+        path=alg_cfg_application['data_source']['WIND_V']['path'],
+        file_name=alg_cfg_application['data_source']['WIND_V']['file_name'],
+        file_args={**alg_cfg_application['data_source']['WIND_V'].get('file_args', {}), 'spatial_bounds': source_bounds},
+        file_type='grid_3d', file_format='grib', file_mode='local',
+        file_variable='WIND_V_DATA_SRC', file_workflow='WIND_SPEED_WORKFLOW', file_io='input',
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"v10": "wind_v"}
+        },
+        time_signature='period',
+        time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
+        logger=logging_handle, message=False
+    )
+
+    # wind speed handler source (derived)
+    wind_speed_data_src = DataLocal(
+        path=None,
+        file_name=None,
+        file_type=None, file_format='tmp', file_mode='local',
+        file_variable='WIND_SPEED_DATA_SRC', file_workflow='WIND_SPEED_WORKFLOW', file_io='derived',
+        file_deps={
+            'u': wind_u_data_src,
+            'v': wind_v_data_src,
+        },
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"ws": "wind_speed"}
+        },
+        time_signature='period',
+        time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
+        logger=logging_handle
+    )
+
+    # wind speed handler destination
+    wind_speed_data_dst = DataLocal(
+        path=alg_cfg_application['data_destination']['path'],
+        file_name=alg_cfg_application['data_destination']['file_name'],
+        time_signature='step',
+        file_format='netcdf', file_type='grid_hmc', file_mode='local',
+        file_variable='WIND_SPEED_DATA_DST',
+        file_workflow='WIND_SPEED_WORKFLOW', file_io='output',
+        variable_template={
+            "dims_geo": {"longitude": "west_east", "latitude": "south_north","time": "time"},
+            "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+            "vars_data": {"wind_speed": "Wind"},
+            "units": {"wind_speed": "m/s"},
+        },
+        time_period=1, time_format='%Y%m%d%H%M',
+        logger=logging_handle, message=False
+    )
+
+    # INCOMING RADIATION DATASETS
+    # incoming radiation handler source (derived)
+    inc_rad_data_src = DataLocal(
+        path=None,
+        file_name=None,
+        file_type=None, file_format='tmp', file_mode='local',
+        file_variable='INC_RAD_DATA_SRC', file_workflow='INC_RAD_WORKFLOW', file_io='derived',
+        file_deps={
+            'rain': rain_data_src,
+        },
+        variable_template={
+            "dims_geo": {"longitude": "longitude", "latitude": "latitude", "step": "time"},
+            "vars_data": {"inc_rad": "incoming_radiation"}
+        },
+        time_signature='period',
+        time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
+        logger=logging_handle
+    )
+
+
+    # Incoming Radiation destination handler
+    inc_rad_data_dst = DataLocal(
+        path=alg_cfg_application['data_destination']['path'],
+        file_name=alg_cfg_application['data_destination']['file_name'],
+        time_signature='step',
+        file_format='netcdf', file_type='grid_hmc', file_mode='local',
+        file_variable='INC_RAD_DATA_DST',
+        file_workflow='INC_RAD_WORKFLOW', file_io='output',
+        variable_template={
+            "dims_geo": {"longitude": "west_east", "latitude": "south_north","time": "time"},
+            "coord_geo": {"Longitude": "longitude", "Latitude": "latitude"},
+            "vars_data": {"incoming_radiation": "IncRadiation"},
+            "units": {"incoming_radiation": "W/m^2"},
+        },
+        time_period=1, time_format='%Y%m%d%H%M',
+        logger=logging_handle, message=False
+    )
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## ORCHESTRATOR MANAGEMENT
+    # Check the actual filtered file, initialization and horizon before writing any outputs.
+    rain_forecast = rain_data_src.get_data(as_is=True)
+    if pd.Timestamp(rain_forecast.time_start.item()) != pd.Timestamp(alg_reference_time):
+        raise ValueError('GRIB initialization differs from the requested run time.')
+    if pd.Timestamp(time_anls_end) > pd.Timestamp(rain_forecast.step.values[-1]):
+        raise ValueError('Requested TIME_PERIOD extends beyond the ICON forecast horizon.')
+    del rain_forecast
+
+    # orchestrator settings
+    orc_process = Orchestrator.configure(
+        data_package_in={
+            'RAIN_DATA_SRC': rain_data_src,
+            'AIR_T_DATA_SRC': air_t_data_src,
+            'RH_DATA_SRC': rh_data_src,
+            'INC_RAD_SRC' : inc_rad_data_src,
+            'WIND_SPEED_DATA_SRC': wind_speed_data_src}
+        ,
+        data_package_out={
+            'RAIN_DATA_DST': rain_data_dst,
+            'AIR_T_DATA_DST': air_t_data_dst,
+            'RH_DATA_DST': rh_data_dst,
+            'INC_RAD_DST' : inc_rad_data_dst,
+            'WIND_SPEED_DATA_DST': wind_speed_data_dst}
+        ,
+        data_ref=geo_data,
+        priority=['RH_WORKFLOW'],
+        configuration=alg_cfg_workflow, logger=logging_handle,
+        tag_orchestrator='multi_variables', tag_logger='OrchestratorGrid',
+    )
+    # orchestrator exec
+    orc_process.run(time=pd.date_range(start=time_anls_start, end=time_anls_end, freq='h'))
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    ## INFO END
+    # info algorithm (end)
+    alg_time_elapsed = round(time.time() - start_time, 1)
+
+    logging_handle.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')', blank_before=True)
+    logging_handle.info_header('TIME ELAPSED: ' + str(alg_time_elapsed) + ' seconds')
+    logging_handle.info_header('... END')
+    logging_handle.info_header('Bye, Bye')
+    logging_handle.info_header(LoggingManager.rule_line("=", 78))
+    # ------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# method to update time reference
+def update_time_reference(
+        time_period_start, time_period_end, time_start_anls, time_end_anls):
+
+    # Update period start
+    if time_period_start != time_start_anls:
+        new_start = max(time_period_start, time_start_anls)
+
+        if new_start >= time_end_anls:
+            raise ValueError(
+                f"Invalid update: start {new_start} is not < analysis end {time_end_anls}"
+            )
+        time_period_start = new_start
+
+    # Update period end
+    if time_period_end != time_end_anls:
+        new_end = min(time_period_end, time_end_anls)
+
+        if new_end <= time_start_anls:
+            raise ValueError(
+                f"Invalid update: end {new_end} is not > analysis start {time_start_anls}"
+            )
+        time_period_end = new_end
+
+    return time_period_start, time_period_end
+# ----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
+# call script from external library
+if __name__ == "__main__":
+    # run script
+    main(view_table=True)
+# ----------------------------------------------------------------------------------------------------------------------

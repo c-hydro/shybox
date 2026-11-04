@@ -1321,8 +1321,9 @@ def _parse_time_stamps(time: Union[pd.Timestamp, pd.DatetimeIndex, list]) -> lis
 
 # helper to parse time according to signature
 @with_logger(var_name='logger_stream')
-def _parser_time_signature(time: list[pd.Timestamp], time_signature: str) \
-        -> pd.Timestamp | tuple[pd.Timestamp, pd.Timestamp] | list[pd.Timestamp]:
+def _parser_time_signature(time: list[pd.Timestamp | pd.DatetimeIndex] | pd.DatetimeIndex,
+                           time_signature: str) \
+        -> pd.Timestamp | tuple[pd.Timestamp, pd.Timestamp] | list[pd.Timestamp | pd.DatetimeIndex] | pd.DatetimeIndex:
 
     # signatures keeping original time
     if time_signature in ('step', 'current'):
@@ -1330,7 +1331,13 @@ def _parser_time_signature(time: list[pd.Timestamp], time_signature: str) \
 
     # signatures requiring time values
     if time_signature in ('range', 'start/end', 'period', 'start', 'end'):
-        if not time:
+        # File grouping may wrap the complete DatetimeIndex in a single-item
+        # list. Select endpoints from the index, not from its outer wrapper.
+        while (isinstance(time, (list, tuple)) and len(time) == 1
+               and isinstance(time[0], (pd.DatetimeIndex, list, tuple))):
+            time = time[0]
+        # DatetimeIndex does not support truth-value testing.
+        if len(time) == 0:
             logger_stream.error(f'Time cannot be empty for time signature "{time_signature}".')
             raise ValueError(f'Time cannot be empty for time signature "{time_signature}".')
 

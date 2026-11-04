@@ -281,8 +281,10 @@ def main(view_table: bool = False):
     destination_data_time_series = DataLocal(
         path=alg_cfg_application['dynamic_data_dst']['path'],
         file_name=alg_cfg_application['dynamic_data_dst']['file_name'],
-        data_layout='time_series', file_args={},
-        file_type='time_series_hmc', file_format='netcdf', file_mode='local',
+        data_layout='time_series',
+        file_args=alg_cfg_application['dynamic_data_dst'].get('file_args', {}),
+        file_type='time_series_hmc',
+        file_format=alg_cfg_application['dynamic_data_dst'].get('format', 'netcdf'), file_mode='local',
         file_variable='VARS_TS', file_workflow='TIME_SERIES_WORKFLOW', file_io='output',
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},

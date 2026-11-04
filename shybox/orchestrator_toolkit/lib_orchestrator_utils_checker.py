@@ -10,6 +10,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import logging
+from os import PathLike
 
 import pandas as pd
 import xarray as xr
@@ -59,6 +60,14 @@ def check_data_type(obj_data, string_data: str = 'pandas', logger=None) -> bool:
         is_data = check_pandas(obj_data)
     elif string_data == 'xarray':
         is_data = check_xarray(obj_data)
+    elif string_data == 'file':
+        # File-backed processes return variable -> member -> local path.
+        def is_file_reference(value):
+            if isinstance(value, dict):
+                return bool(value) and all(is_file_reference(item) for item in value.values())
+            return isinstance(value, (str, PathLike))
+
+        is_data = isinstance(obj_data, dict) and is_file_reference(obj_data)
     elif string_data == 'tiff':
         is_data = True
     else:

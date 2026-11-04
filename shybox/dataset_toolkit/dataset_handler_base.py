@@ -1209,6 +1209,9 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
 
             append = kwargs.pop('append', False)
+            if self.file_format == 'json' and self.file_type in ['time_series_hmc', 'ts_hmc']:
+                self._write_data(data, out_file, append=append, time=time, **kwargs)
+                return
             self._write_data(data, out_file, append = append)
             return
 

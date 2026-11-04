@@ -861,7 +861,7 @@ def write_dataset_hmc(
     variable_x[:, :] = np.transpose(np.rot90(ref_value_x, -1))
 
     if not set_scale_factor:
-        variable_x.setncattr('scale_factor', 1)
+        variable_x.setncattr('scale_factor', 1.0)
 
     # variable geo y
     set_scale_factor = False
@@ -883,7 +883,7 @@ def write_dataset_hmc(
     variable_y[:, :] = np.transpose(np.rot90(ref_value_y, -1))
 
     if not set_scale_factor:
-        variable_y.setncattr('scale_factor', 1)
+        variable_y.setncattr('scale_factor', 1.0)
 
     # variable geo system
     variable_system = handle.createVariable(var_system, 'i')
@@ -922,7 +922,7 @@ def write_dataset_hmc(
         # get default attributes
         variable_format = attrs_data.get('format', 'f4')
         fill_value = attrs_data.get('fill_value', -9999.0)
-        scale_factor = attrs_data.get('scale_factor', 1)
+        scale_factor = attrs_data.get('scale_factor', 1.0)
         # get units
         units = var_units.get(variable_name, 'NA')
 
@@ -966,7 +966,7 @@ def write_dataset_hmc(
 
         # set default scale factor
         if not set_scale_factor and scale_factor is not None:
-            var_handle.setncattr('scale_factor', scale_factor)
+            var_handle.setncattr('scale_factor', float(scale_factor))
         # set default units
         if not set_units and units is not None:
             var_handle.setncattr('units', str(units))
