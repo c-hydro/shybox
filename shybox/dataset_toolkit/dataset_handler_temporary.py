@@ -52,14 +52,30 @@ class DataTemporary:
         if not isinstance(prefix, str) or not prefix or '/' in prefix or '\\' in prefix:
             raise ValueError('prefix must be a nonempty directory-name prefix, without path separators.')
 
-    def create_run(self, prefix=None):
+    def create_run(self, folder: str = None, file_name: str = None, prefix: str = None):
         """Create isolated storage, inheriting settings and the configured prefix."""
+
+        # resolve filename and prefix
         prefix = self.prefix if prefix is None else prefix
+        file_name = self.file_name if file_name is None else file_name
+
+        # check prefix
         self._check_prefix(prefix)
-        Path(self.folder_name).mkdir(parents=True, exist_ok=True)
-        folder = tempfile.mkdtemp(prefix=prefix, dir=self.folder_name)
-        return type(self)(folder_name=folder, file_name=self.file_name,
-                          writer_type=self.writer_type, prefix=prefix)
+
+        # ensure root folder exists
+        root_folder = Path(self.folder_name)
+        root_folder.mkdir(parents=True, exist_ok=True)
+
+        # resolve run folder
+        if folder is None:
+            run_folder = Path(tempfile.mkdtemp(prefix=prefix, dir=root_folder))
+        else:
+            run_folder = Path(folder)
+            run_folder.mkdir(parents=True, exist_ok=True)
+
+        # create isolated storage instance
+        return type(self)(folder_name=str(run_folder), file_name=self.file_name,
+            writer_type=self.writer_type, prefix=prefix)
 
     def path(self, **tags):
         """Resolve arbitrary filename tags; never allow tags to escape the folder."""

@@ -435,7 +435,7 @@ def write_to_file(data, path,
 
         # check file type
         if file_type == 'default':
-            # dump rastar
+            # dump raster
             data.rio.to_raster(path, compress="LZW", dtype="float32")
         else:
             logger_stream.error(f'File type not supported for geotiff writing: {file_type}')
