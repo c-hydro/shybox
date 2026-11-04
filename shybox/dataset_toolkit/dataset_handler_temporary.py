@@ -74,7 +74,7 @@ class DataTemporary:
             run_folder.mkdir(parents=True, exist_ok=True)
 
         # create isolated storage instance
-        return type(self)(folder_name=str(run_folder), file_name=self.file_name,
+        return type(self)(folder_name=str(run_folder), file_name=file_name,
             writer_type=self.writer_type, prefix=prefix)
 
     def path(self, **tags):

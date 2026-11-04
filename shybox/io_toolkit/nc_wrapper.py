@@ -168,11 +168,11 @@ def write_nc_rfarm_ensemble(obj, file_path, ref, *, var_name='Rain', var_freq='h
                                terrain_name=terrain_name, compression_level=compression_level)
 
         # check if file is saved or not
-        if not path_output.is_file():
+        if not member_path_output.is_file():
             raise RuntimeError(f'RainFARM did not create the expected NetCDF file: {member_path_output}')
 
         # manifest of file written
-        member_written[f'{member_id:03d}'] = str(path_output)
+        member_written[f'{member_id:03d}'] = str(member_path_output)
 
         # remove pickle temporary file
         if os.path.exists(member_path_pickle):

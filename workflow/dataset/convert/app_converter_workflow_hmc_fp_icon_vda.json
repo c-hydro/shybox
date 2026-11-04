@@ -1,0 +1,417 @@
+{
+  "__comment__": "configuration file for the datasets information",
+  "configuration": {
+    "priority": {
+      "reference": "environment",
+      "other": "user"
+    },
+    "flags": {
+      "update_namelist": true,
+      "update_execution": true
+    },
+    "variables": {
+      "lut": {
+        "user": {
+          "path_time_source": null,
+          "file_time_source": null,
+          "path_time_run": null,
+          "path_time_destination": null,
+          "file_time_destination": null,
+          "time_rounding": "H",
+          "time_frequency": "H",
+          "time_direction": "forward",
+          "file_log": "{execution_name}_{domain_name}.log",
+          "execution_name": "hmc_dataset",
+          "execution_mode": "nwp_fp_icon_vda"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "path_root_source": "PATH_SRC",
+          "path_root_destination": "PATH_DST",
+          "time_period": "TIME_PERIOD",
+          "time_start": "TIME_START",
+          "time_end": "TIME_END",
+          "path_log": "PATH_LOG",
+          "path_tmp": "PATH_TMP",
+          "path_geo": "PATH_GEO"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_root_source": "string",
+        "path_time_source": "time",
+        "file_time_source": "time",
+        "path_root_destination": "string",
+        "path_time_destination": "time",
+        "file_time_destination": "time",
+        "path_time_run": "time",
+        "time_period": "int",
+        "time_direction": "string",
+        "time_start": "time",
+        "time_end": "time",
+        "time_rounding": "string",
+        "time_frequency": "string",
+        "path_log": "string",
+        "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string",
+        "execution_mode": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_geo": "string",
+        "path_root_source": "string",
+        "path_time_source": "%Y%m%d",
+        "file_time_source": "%Y%m%d_%H",
+        "path_root_destination": "string",
+        "path_time_destination": "%Y/%m/%d/",
+        "file_time_destination": "%Y%m%d%H%M",
+        "path_time_run": "%H00",
+        "time_period": "int",
+        "time_direction": "string",
+        "time_start": "%Y%m%d",
+        "time_end": "%Y%m%d",
+        "time_rounding": "string",
+        "time_frequency": "string",
+        "path_log": "string",
+        "file_log": "string",
+        "path_tmp": "string",
+        "execution_name": "string",
+        "execution_mode": "string"
+      }
+    },
+    "application": {
+      "info": {
+        "domain_name": "{domain_name}"
+      },
+      "time": {
+        "start": "{time_start}",
+        "end": "{time_end}",
+        "frequency": "H",
+        "format": "%Y-%m-%d %H:%M",
+        "analysis": "{time_period}",
+        "dataset": "{time_period}"
+      },
+      "geo": {
+        "terrain": {
+          "path": "{path_geo}/land/",
+          "file_name": "{domain_name}.dem.txt"
+        }
+      },
+      "data_source": {
+        "RAIN": {
+          "path": "{path_root_source}/",
+          "file_name": "cima_icon-it_{file_time_source}.grib2",
+          "file_args": {
+            "filter_by_keys": {
+              "shortName": "tp",
+              "typeOfLevel": "surface",
+              "level": 0,
+              "stepType": "accum"
+            },
+            "indexpath": "",
+            "time_frequency": "h",
+            "accumulated": true
+          }
+        },
+        "AIR_T": {
+          "path": "{path_root_source}/",
+          "file_name": "cima_icon-it_{file_time_source}.grib2",
+          "file_args": {
+            "filter_by_keys": {
+              "shortName": "2t",
+              "typeOfLevel": "heightAboveGround",
+              "level": 2,
+              "stepType": "instant"
+            },
+            "indexpath": "",
+            "time_frequency": "h",
+            "accumulated": false
+          }
+        },
+        "DEW_POINT": {
+          "path": "{path_root_source}/",
+          "file_name": "cima_icon-it_{file_time_source}.grib2",
+          "file_args": {
+            "filter_by_keys": {
+              "shortName": "2d",
+              "typeOfLevel": "heightAboveGround",
+              "level": 2,
+              "stepType": "instant"
+            },
+            "indexpath": "",
+            "time_frequency": "h",
+            "accumulated": false
+          }
+        },
+        "WIND_U": {
+          "path": "{path_root_source}/",
+          "file_name": "cima_icon-it_{file_time_source}.grib2",
+          "file_args": {
+            "filter_by_keys": {
+              "shortName": "10u",
+              "typeOfLevel": "heightAboveGround",
+              "level": 10,
+              "stepType": "instant"
+            },
+            "indexpath": "",
+            "time_frequency": "h",
+            "accumulated": false
+          }
+        },
+        "WIND_V": {
+          "path": "{path_root_source}/",
+          "file_name": "cima_icon-it_{file_time_source}.grib2",
+          "file_args": {
+            "filter_by_keys": {
+              "shortName": "10v",
+              "typeOfLevel": "heightAboveGround",
+              "level": 10,
+              "stepType": "instant"
+            },
+            "indexpath": "",
+            "time_frequency": "h",
+            "accumulated": false
+          }
+        }
+      },
+      "data_destination": {
+        "__comment_": "{path_root_destination}/{path_time_destination}/{path_time_run}/{domain_name}",
+        "path": "{path_root_destination}/{path_time_destination}/{domain_name}/",
+        "file_name": "hmc.forcing-grid.{file_time_destination}.nc",
+        "format": "netcdf",
+        "type": "hmc",
+        "mode": "grid"
+      },
+      "log": {
+        "path": "{path_log}",
+        "file_name": "converter_hmc_forcing_fp_icon_vda.txt"
+      },
+      "tmp": {
+        "path": "{path_tmp}",
+        "file_name": null
+      },
+      "source_margin_degrees": 0.25
+    }
+  },
+  "workflow": {
+    "options": {
+      "__comment__": "dump_mode -- default: one_data_to_one_file, other: many_data_to_one_file",
+      "io_config": {
+        "mode": "many_data_files_to_one_file"
+      },
+      "intermediate_output": "Memory",
+      "tmp_dir": "{path_tmp}"
+    },
+    "process_list": {
+      "AIR_T_WORKFLOW": [
+        {
+          "function": "exec_interpolate_data_generic",
+          "datasets": {
+            "data": "air_temperature"
+          },
+          "results": {
+            "data": "air_temperature"
+          },
+          "args": {
+            "method": "nn",
+            "neighbours": 7,
+            "fill_value": null,
+            "radius_of_influence": 25000
+          }
+        },
+        {
+          "function": "mask_data_by_ref",
+          "datasets": {
+            "data": "air_temperature"
+          },
+          "results": {
+            "data": "air_temperature"
+          },
+          "args": {
+            "ref_value": -9999,
+            "mask_no_data": null
+          }
+        },
+        {
+          "function": "convert_temperature_units",
+          "datasets": {
+            "data": "air_temperature"
+          },
+          "results": {
+            "data": "AirTemperature"
+          },
+          "args": {
+            "to_celsius": true
+          }
+        }
+      ],
+      "RAIN_WORKFLOW": [
+        {
+          "function": "exec_interpolate_data_generic",
+          "datasets": {
+            "data": "rain"
+          },
+          "results": {
+            "data": "rain"
+          },
+          "args": {
+            "method": "nn",
+            "neighbours": 7,
+            "fill_value": null,
+            "radius_of_influence": 25000
+          }
+        },
+        {
+          "function": "mask_data_by_ref",
+          "datasets": {
+            "data": "rain"
+          },
+          "results": {
+            "data": "Rain"
+          },
+          "args": {
+            "ref_value": -9999,
+            "mask_no_data": null
+          }
+        }
+      ],
+      "WIND_U_WORKFLOW": [],
+      "WIND_V_WORKFLOW": [],
+      "WIND_SPEED_WORKFLOW": [
+        {
+          "function": "compute_data_wind_speed",
+          "datasets": {
+            "u": "wind_u",
+            "v": "wind_v"
+          },
+          "results": {
+            "data": "wind_speed"
+          },
+          "args": {
+            "ref_value": -9999,
+            "mask_no_data": null
+          }
+        },
+        {
+          "function": "exec_interpolate_data_generic",
+          "datasets": {
+            "data": "wind_speed"
+          },
+          "results": {
+            "data": "wind_speed"
+          },
+          "args": {
+            "method": "nn",
+            "neighbours": 7,
+            "fill_value": null,
+            "radius_of_influence": 22000
+          }
+        },
+        {
+          "function": "mask_data_by_ref",
+          "datasets": {
+            "data": "wind_speed"
+          },
+          "results": {
+            "data": "Wind"
+          },
+          "args": {
+            "ref_value": -9999,
+            "mask_no_data": null
+          }
+        }
+      ],
+      "DEW_POINT_WORKFLOW": [],
+      "RH_WORKFLOW": [
+        {
+          "function": "compute_data_rh",
+          "datasets": {
+            "t": "air_temperature",
+            "td": "dew_point_temperature"
+          },
+          "results": {
+            "data": "relative_humidity"
+          },
+          "args": {
+            "ref_value": -9999,
+            "mask_no_data": null
+          }
+        },
+        {
+          "function": "exec_interpolate_data_generic",
+          "datasets": {
+            "data": "relative_humidity"
+          },
+          "results": {
+            "data": "relative_humidity"
+          },
+          "args": {
+            "method": "nn",
+            "neighbours": 7,
+            "fill_value": null,
+            "radius_of_influence": 22000
+          }
+        },
+        {
+          "function": "mask_data_by_ref",
+          "datasets": {
+            "data": "relative_humidity"
+          },
+          "results": {
+            "data": "RelHumidity"
+          },
+          "args": {
+            "ref_value": -9999,
+            "mask_no_data": null
+          }
+        }
+      ],
+      "INC_RAD_WORKFLOW": [
+        {
+          "function": "compute_data_astronomic_radiation",
+          "datasets": {
+            "rain": "rain"
+          },
+          "results": {
+            "data": "incoming_radiation"
+          },
+          "args": {
+            "time_delta": "1h",
+            "return_vars": "k",
+            "mask_no_data": null
+          }
+        },
+        {
+          "function": "exec_interpolate_data_generic",
+          "datasets": {
+            "data": "incoming_radiation"
+          },
+          "results": {
+            "data": "incoming_radiation"
+          },
+          "args": {
+            "method": "nn",
+            "neighbours": 7,
+            "fill_value": null,
+            "radius_of_influence": 22000
+          }
+        },
+        {
+          "function": "mask_data_by_ref",
+          "datasets": {
+            "data": "incoming_radiation"
+          },
+          "results": {
+            "data": "IncRadiation"
+          },
+          "args": {
+            "ref_value": -9999,
+            "mask_no_data": null
+          }
+        }
+      ]
+    }
+  }
+}
