@@ -2,83 +2,86 @@
 Changelog
 =========
 
-Unreleased [2026-11-03]
-***********************
-DOCUMENTATION:
-    - add documentation edition 0.1.0, covering installation, configuration,
-      workflows, development and publication;
-    - publish the documentation at https://shybox.readthedocs.io/en/latest/;
-    - configure Read the Docs and add a Sphinx documentation CI build;
-    - update the README repository layout and environment setup commands;
-    - add the Read the Docs link and documentation status badge to the README.
-    - bundle documentation images locally and add alpine photographs, model
-      branding, a CIMA sidebar logo and responsive documentation styling.
+Dates follow main/* release tags where available; other legacy dates are retained.
+References identify source commits; development entries do not announce a tagged release.
 
-PACKAGE:
-    - integrate the fproofs processing, orchestration and dataset handling
-      refactor into main, including updated workflow drivers;
-    - reconcile soil-moisture dictionary input handling with the hydro adapter.
+Version 1.6.0 (development) [2026-11-04]
+****************************************
 
-----
+- APP: Add point interpolation and time-series averaging (9828719).
+- APP: Add JSON-driven Flask dashboard, calendar, section maps, deterministic/ensemble hydrographs and setup (working tree).
+- WORKFLOW: Integrate RainFARM ensembles, pickle/NetCDF/Zarr ancillary storage and native NetCDF output (b947ffe, 3c22162).
+- PACKAGE: Refactor datasets, processes and decorators; fix time parsing and missing RFarm slopes (4c8620d..3c22162).
+- DOCUMENTATION: Publish docs edition 0.1.0, Sphinx CI, local images and README links (4b0580b, b947ffe, 8eaae8c).
+
+Version 1.2.4 [2026-08-27]
+**************************
+
+- APP: Add watershed delineation from section coordinates (d3f850f).
+- WORKFLOW: Improve evapotranspiration merging over a reference domain (3fab4e4).
+- PACKAGE: Correct missing-data handling in the HMC evapotranspiration merger (08a08da, 37c46de).
+
+Version 1.2.3 [2026-08-21]
+**************************
+
+- APP: Add geographic domain-mask management (198a322).
+- WORKFLOW: Add evapotranspiration map merging over a reference domain (4c890df).
+- PACKAGE: Include HMC simulated/observed NetCDF time-series fixes (79bd9a4, e7720e2, 6f2c986).
 
 Version 1.2.2 [2026-08-18]
 **************************
 
-----
+- APP: Update observed-point conversion and HMC simulated/observed NetCDF time-series applications (566ff6e).
+- WORKFLOW: Fix generation of simulation and observation time-series results (29785ef).
 
-Version 1.2.1 [2026-08-10]
+Version 1.2.1 [2026-08-12]
 **************************
 
-----
+- APP: Update applications generating time series from observed-point files (dff80ae).
+- ENVIRONMENT: Update the corresponding Docker application configuration (dff80ae).
 
-Version 1.2.0 [2026-08-04]
+Version 1.2.0 [2026-08-06]
 **************************
 
-----
+- APP: Add observed/simulated hydrograph analysis and discharge-comparison tools (eb4faf3, eddc5af).
+- WORKFLOW: Add soil-moisture tile merging and evapotranspiration processing (70c1f23, 403898e).
+- PACKAGE: Improve time selection, mandatory-file checks and IFS rainfall conversion (31a4b81, 9010b81, dc48622).
+- ENVIRONMENT: Update converter, runner and analyzer containers (26c0a93, 9683dff).
 
-Version 1.1.0 [2025-11-21]
+Version 1.1.0 [2026-01-16]
 **************************
 
-----
+- APP: Introduce the Continuum web dashboard and HMC/S3M workflow updates (8f8a268, 63db3e3, 233c4ba).
+- WORKFLOW: Refactor workflows around configuration, logging, time and grid/time-series orchestrators (2d7f2eb).
+- PACKAGE: Add model execution metadata and fix sequential-stream logging deadlocks (04e2f1a, 19a46f0).
+- PACKAGE: Add time-series dataset handlers and default to stream logging (5af2d35, 8823b2b).
 
 Version 1.0.4 [2025-11-21]
 **************************
-PACKAGE:
-	- class to manage arguments;
-	- class to manage configurations;
-	- class to manage logging;
-	- update conda installer method.
 
-WORKFLOWS:
-    - extend the process suite;
-	- extend the time management system;
-	- extend the workflow management system;
-	- fix bugs in selecting versions models.
+- WORKFLOW: Extend process, time and workflow management; improve model-version selection.
+- PACKAGE: Introduce argument, configuration and logging managers.
+- ENVIRONMENT: Update the Conda installer.
 
 Version 1.0.3 [2025-11-16]
 **************************
-APPS:
-	- converter and merger for hmc model (new datasets);
-	- runner for hmc model;
-	- upgrade the time management system;
-	- upgrade the logging system, improve workflows and fix bugs in applications and methods.
+
+- APP: Extend HMC converter, merger and runner applications to additional datasets.
+- WORKFLOW: Improve time management, logging and application execution.
 
 Version 1.0.2 [2025-07-16]
 **************************
-APPS:
-	- converter and merger for hmc model;
-	- runner for hmc model
+
+- APP: Add HMC converter, merger and model-runner applications.
 
 Version 1.0.1 [2025-03-15]
 **************************
-APPS:
-	- converter and merger for s3m model;
-	- runner for s3m model
 
-Version 1.0.0 [2024-12-02]
+- APP: Add S3M converter, merger and model-runner applications.
+
+Version 1.0.0 [2025-01-24]
 **************************
-PACKAGE:
-    - beta release (first development and codes refactoring);
-    - set the package structure and main classes.
-    - set the environment management system.
+
+- PACKAGE: Establish the beta package layout, base classes and initial code refactoring (c19fbf8).
+- ENVIRONMENT: Introduce environment management.
 
