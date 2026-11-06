@@ -28,7 +28,7 @@ The HMC analyzer joins simulated and observed series with a section registry. It
 
 - **NetCDF:** one file containing time, sections, variables and section metadata.
 - **JSON per section:** `layout: "sections"` with a filename such as `hydrograph_{section_tag}.json`.
-- **JSON collection:** `layout: "single"` with one JSON array containing all section objects.
+- **JSON collection:** `layout: "collections"` with one JSON array containing all section objects.
 
 The JSON writer preserves the Continuum comma-separated string format, supports configurable run/section/variable mappings, and writes one section at a time. It checks filename collisions and replaces output files atomically. See [time-series JSON configuration](docs/workflows.rst#time-series-json-output).
 
@@ -87,7 +87,7 @@ Choose a driver and its JSON example under `workflow/`. Set the input/output pat
 
 ```bash
 python workflow/analyzer/app_analyzer_workflow_hmc_time_series_main.py \
-  -settings_file workflow/analyzer/app_analyzer_workflow_hmc_time_series_destine_marche.json \
+  -settings_file workflow/analyzer/app_analyzer_workflow_hmc_time_series_destine_marche_netcdf.json \
   -time "2026-08-11 12:00"
 ```
 

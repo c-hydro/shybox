@@ -126,8 +126,8 @@
     },
     "dynamic_data_dst": {
       "path": "{path_base_destination}/{path_time_destination}/",
-      "file_name": "hmc.series_{domain_name}_{file_time_destination}.nc",
-      "format": "netcdf",
+      "file_name": "hmc.series_{domain_name}_{file_time_destination}_{section}.json",
+      "format": "json",
       "type": null,
       "mode": "time_series",
       "_variable": ["discharge", "discharge", "discharge", "air_temperature"],
@@ -148,7 +148,7 @@
     "options": {
         "intermediate_output": "Tmp",
         "tmp_dir": "{path_tmp}",
-        "io_config": {"mode": "many_data_ts_to_one_file"}
+        "io_config": {"mode": "many_data_ts_to_multiple_files"}
     },
     "process_list": {
         "TIME_SERIES_WORKFLOW": [
@@ -165,7 +165,7 @@
     }
   },
   "log": {
-    "path": "{path_log}/{domain_name}", "file_name": "analyzer_time_series_hmc.txt",
+    "path": "{path_log}/{domain_name}", "file_name": "analyzer_time_series_hmc_json.txt",
     "handlers": ["file","stream"]
   },
   "tmp": {

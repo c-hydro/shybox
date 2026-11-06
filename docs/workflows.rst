@@ -51,7 +51,7 @@ or as Continuum hydrograph JSON. Select the destination format in
          "run_name": "nwp_ecmwf0100_realtime_marche",
          "run_var": "deterministic"
        },
-       "data_map": {
+       "var_mapping": {
          "discharge_sim_analysis": "time_series_discharge_simulated",
          "discharge_sim_openloop": "time_series_discharge_simulated_openloop",
          "discharge_obs": "time_series_discharge_observed",
@@ -61,7 +61,7 @@ or as Continuum hydrograph JSON. Select the destination format in
    }
 
 To write all sections into one JSON array instead, set ``layout`` to
-``single`` and use a filename without section placeholders, such as
+``collections`` and use a filename without section placeholders, such as
 ``hmc.series_{domain_name}_{file_time_destination}.json``. The run and time
 placeholders are resolved by the existing workflow; section placeholders are
 resolved by the JSON wrapper. Existing NetCDF settings remain supported.
@@ -71,12 +71,13 @@ resolved by the JSON wrapper. Existing NetCDF settings remain supported.
 analyzer DataFrame with exactly two column levels: variable and section tag.
 The section registry comes from ``data.attrs['data']`` or an explicit
 ``sections_db``/``attrs_data`` argument, and is matched by its unique ``tag``
-field. Missing section/variable combinations are exported as missing series.
+field. The registry must be a pandas DataFrame; sections absent from it are
+warned about and skipped. Missing section/variable combinations are exported as missing series.
 The wrapper processes one section at a time and returns a tag-to-file manifest
-for ``sections``, or the collection filename for ``single``.
+for ``sections``, or the collection filename for ``collections``.
 
-``shybox/io_toolkit/lib_io_json.py`` provides ``json_time_series`` to build one
-section object and ``write_json_time_series`` to write it. These accept a
+``shybox/io_toolkit/lib_io_json.py`` provides ``create_json_time_series`` to build one
+section object and ``write_json_time_series_by_section`` to write it. These accept a
 single-section DataFrame with a DatetimeIndex and variable columns. Metadata
 and series are strings, following the legacy Continuum format. ``time_period``
 uses ``YYYY-MM-DD HH:MM``; each ``time_series_*`` field is a comma-separated
@@ -99,7 +100,7 @@ time. Restart and simulation-start times are not inferred from series bounds.
 Without an explicit variable mapping, simulated analysis supplies the legacy
 ``time_series_discharge_simulated`` field when present; otherwise open-loop
 discharge supplies it. When both exist, open-loop gets its own field. Use
-``data_map`` to select the primary series explicitly; it takes precedence over
+``var_mapping`` to select the primary series explicitly; it takes precedence over
 an orchestrator's variable mapping. Additional available rainfall or
 soil-moisture variables can also be mapped; this writer does not calculate them.
 
@@ -110,7 +111,10 @@ is not changed. Files are replaced atomically; append is unsupported.
 
 Per-section filenames require at least one of ``{section_tag}``, ``{section}``,
 ``{section_id}``, ``{section_code}``, ``{section_name}`` or ``{basin}``.
-Filename values are sanitized and collisions are rejected before writing.
+Only ``:``, ``!`` and ``|`` in filename values become underscores; collisions
+are rejected before writing. For ``collections``, section placeholders trigger
+a warning and use the literal value ``collections``. ``single`` remains an alias
+for the collection layout.
 Ensemble columns are rejected: the probabilistic analyzer/output schema is
 a separate development step. The new Flask dashboard currently reads NetCDF;
 connecting these JSON outputs to it requires a JSON reader.

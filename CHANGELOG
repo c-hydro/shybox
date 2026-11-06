@@ -5,6 +5,15 @@ Changelog
 Dates follow main/* release tags where available; other legacy dates are retained.
 References identify source commits; development entries do not announce a tagged release.
 
+Version 1.6.0 (development) [2026-11-06]
+****************************************
+
+- WORKFLOW: Add separate JSON and NetCDF analyzer examples and refine converter settings.
+- PACKAGE: Filter variables inside time-series DataFrames and list all workflows in collection dump logs.
+- PACKAGE: Simplify writer dispatch and pass section registries as DataFrames.
+- PACKAGE: Refine JSON mappings, collection filenames and separator handling; retain atomic output.
+- DOCUMENTATION: Align JSON API examples and remove obsolete IFS sample files.
+
 Version 1.6.0 (development) [2026-11-04]
 ****************************************
 

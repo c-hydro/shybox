@@ -404,38 +404,33 @@ def write_to_file(data, path,
 
     # write the data to a json
     elif file_format == 'json':
+
         if file_type in ['time_series_hmc', 'ts_hmc']:
-            options = dict(kwargs.pop('out_opts', {}) or {})
-            options.update(kwargs)
-            mapping = options.pop('map', None)
-            if mapping and 'data_map' not in options and isinstance(data, pd.DataFrame) and isinstance(data.columns, pd.MultiIndex):
-                # Ignore mappings of workflow containers; only map actual series.
-                selected = {key: value for key, value in mapping.items()
-                            if key in data.columns.get_level_values(0)}
-                if selected:
-                    options['data_map'] = selected
-            # Orchestrators also forward process/ref options; pass only writer arguments.
-            options = set_method_args(write_json_time_series_sections, options,
-                                      exclude=['data', 'file_path', 'time'])
-            return write_json_time_series_sections(data, path, time=time, **options)
-        # write a dictionary to a json
-        if isinstance(data, dict):
-            for key in data.keys():
-                if isinstance(data[key], np.ndarray):
-                    data[key] = data[key].tolist
-                elif isinstance(data[key], dt.datetime):
-                    data[key] = data[key].isoformat()
-            if append:
-                with open(path, 'r') as f:
-                    old_data = json.load(f)
-                old_data = [old_data] if not isinstance(old_data, list) else old_data
-                old_data.append(data)
-                data = old_data
-            with open(path, 'w') as f:
-                json.dump(data, f, indent = 4)
-        # write a geodataframe to a json
-        elif isinstance(data, gpd.GeoDataFrame):
-            data.to_file(path, driver = 'GeoJSON')
+
+            kwargs.setdefault('var_mapping', kwargs.pop('map', None))
+            return write_json_time_series_sections(data, path, time=time, **kwargs)
+
+        else:
+
+            # write a dictionary to a json
+            if isinstance(data, dict):
+                for key in data.keys():
+                    if isinstance(data[key], np.ndarray):
+                        data[key] = data[key].tolist
+                    elif isinstance(data[key], dt.datetime):
+                        data[key] = data[key].isoformat()
+                if append:
+                    with open(path, 'r') as f:
+                        old_data = json.load(f)
+                    old_data = [old_data] if not isinstance(old_data, list) else old_data
+                    old_data.append(data)
+                    data = old_data
+                with open(path, 'w') as f:
+                    json.dump(data, f, indent = 4)
+
+            # write a geo dataframe to a json
+            elif isinstance(data, gpd.GeoDataFrame):
+                data.to_file(path, driver = 'GeoJSON')
 
     # write a geo dataframe to a shapefile
     elif file_format == 'shp':
@@ -454,8 +449,8 @@ def write_to_file(data, path,
     elif file_format == 'geotiff':
 
         # check file type
-        if file_type == 'default':
-            # dump raster
+        if file_type in (None, 'default'):
+            # dump raster (backward to old settings)
             data.rio.to_raster(path, compress="LZW", dtype="float32")
         else:
             logger_stream.error(f'File type not supported for geotiff writing: {file_type}')
@@ -507,6 +502,7 @@ def write_to_file(data, path,
         elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
             write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['default']:
+
             # adjust attributes to avoid not permitted format
             obj_data = to_nc_attrs(data)
             # dump to nc file

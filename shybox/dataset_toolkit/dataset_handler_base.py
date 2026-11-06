@@ -1205,14 +1205,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
             self._write_data(data, out_file)
             return
 
-        # case of csv, json, txt, shp afiles
+        # case of csv, json, txt, shp and ascii files
         if self.file_format in ['csv', 'json', 'txt', 'shp', 'ascii']:
 
             append = kwargs.pop('append', False)
-            if self.file_format == 'json' and self.file_type in ['time_series_hmc', 'ts_hmc']:
-                self._write_data(data, out_file, append=append, time=time, **kwargs)
-                return
-            self._write_data(data, out_file, append = append)
+            self._write_data(data, out_file, append=append, time=time, **kwargs)
             return
 
         # case of pandas DataFrame
