@@ -9,7 +9,7 @@ import pandas as pd
 import xarray as xr
 
 from shybox.io_toolkit.lib_io_json import (
-    json_time_series, write_json_time_series, write_json_time_series_collection,
+    create_json_time_series, write_json_time_series_by_section, write_json_time_series_by_collection,
 )
 from shybox.io_toolkit.json_wrapper import write_json_time_series_sections
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
@@ -80,8 +80,8 @@ class TestTimeSeriesJSON(unittest.TestCase):
         sections = self.write()
         self.assertEqual(payload[0]['time_period'], json.loads(Path(sections['burano:cagli']).read_text())['time_period'])
 
-    def test_variable_and_metadata_mapping_and_primary_selection(self):
-        paths = self.write(data_map={'discharge_sim_openloop': 'time_series_discharge_simulated'},
+    def test_variable_and_metavar_mappingping_and_primary_selection(self):
+        paths = self.write(var_mapping={'discharge_sim_openloop': 'time_series_discharge_simulated'},
                            section_map={'section_code': 'id'})
         payload = json.loads(Path(paths['burano:cagli']).read_text())
         self.assertEqual(payload['section_code'], '88')
@@ -90,8 +90,29 @@ class TestTimeSeriesJSON(unittest.TestCase):
 
     def test_openloop_only_defaults_to_legacy_simulated_field(self):
         frame = self.data.xs('burano:cagli', axis=1, level=1)[['discharge_sim_openloop']]
-        payload = json_time_series(frame)
+        payload = create_json_time_series(frame)
         self.assertEqual(payload['time_series_discharge_simulated'], '-9998.0,1.4,1.3')
+
+    def test_generic_mapping_is_applied_by_serializer_for_original_or_renamed_columns(self):
+        renamed = self.data.rename(columns={'discharge_sim_analysis': 'discharge_simulated'}, level=0)
+        cases = [
+            (self.data, {'discharge_sim_analysis': 'discharge_simulated'}),
+            (renamed, {'discharge_sim_analysis': 'discharge_simulated'}),
+        ]
+        for index, (frame, mapping) in enumerate(cases):
+            with self.subTest(index=index):
+                path = self.root / f'mapped_{index}.json'
+                write_to_file(frame, str(path), file_format='json', file_type='time_series_hmc',
+                              layout='single', map=mapping)
+                payload = json.loads(path.read_text())[0]
+                self.assertEqual(payload['time_series_discharge_simulated'], '-9999.0,1.56,1.55')
+
+    def test_explicit_mapping_selects_primary_series(self):
+        frame = self.data.xs('burano:cagli', axis=1, level=1)
+        payload = create_json_time_series(frame,
+            var_mapping={'discharge_sim_openloop': 'time_series_discharge_simulated'})
+        self.assertEqual(payload['time_series_discharge_simulated'], '-9998.0,1.4,1.3')
+        self.assertNotIn('time_series_discharge_simulated_analysis', payload)
 
     def test_original_dataframe_and_registry_are_not_modified(self):
         original = self.data.copy(deep=True)
@@ -112,10 +133,31 @@ class TestTimeSeriesJSON(unittest.TestCase):
         self.assertEqual(list(self.root.iterdir()), [])
 
     def test_registry_tags_are_required_unique_and_not_positional(self):
-        for registry in (self.registry.iloc[:1], pd.concat([self.registry, self.registry.iloc[:1]]),
+        for registry in (pd.concat([self.registry, self.registry.iloc[:1]]),
                          self.registry.drop(columns='tag')):
             with self.subTest(registry=registry.shape), self.assertRaises(ValueError):
                 self.write(sections_db=registry)
+
+    def test_registry_must_be_dataframe_and_missing_sections_are_skipped(self):
+        for registry in (self.registry.to_dict(), {'sections': self.registry}):
+            with self.subTest(registry=type(registry)), self.assertRaises(TypeError):
+                self.write(sections_db=registry)
+        paths = self.write(sections_db=self.registry.iloc[:1])
+        self.assertEqual(list(paths), ['foglia:montecchio'])
+
+    def test_collection_section_placeholders_use_literal_collections(self):
+        path = write_json_time_series_sections(
+            self.data, self.root / 'all_{section_name}.json', layout='collections')
+        self.assertEqual(Path(path).name, 'all_collections.json')
+        self.assertEqual(len(json.loads(Path(path).read_text())), 2)
+
+    def test_filename_tag_replaces_only_selected_separators(self):
+        from shybox.io_toolkit.json_wrapper import _parse_tag
+        self.assertEqual(_parse_tag('a:b!c|d e@f'), 'a_b_c_d e@f')
+
+    def test_container_mapping_does_not_select_series(self):
+        with self.assertRaisesRegex(ValueError, 'At least one'):
+            self.write(var_mapping={'VARS_TS': 'VARS_TS'})
 
     def test_atomic_collection_keeps_previous_file_on_failure(self):
         path = self.root / 'all.json'
@@ -124,7 +166,7 @@ class TestTimeSeriesJSON(unittest.TestCase):
             yield {'section_id': '88'}
             raise ValueError('bad section')
         with self.assertRaisesRegex(ValueError, 'bad section'):
-            write_json_time_series_collection(path, records())
+            write_json_time_series_by_collection(path, records())
         self.assertEqual(path.read_text(), 'previous')
         self.assertEqual(list(self.root.iterdir()), [path])
 
@@ -132,20 +174,20 @@ class TestTimeSeriesJSON(unittest.TestCase):
         frame = self.data.xs('burano:cagli', axis=1, level=1).copy()
         frame.index = pd.DatetimeIndex([self.times[0]] * 3)
         with self.assertRaisesRegex(ValueError, 'unique'):
-            json_time_series(frame)
+            create_json_time_series(frame)
         frame.index = self.times
         with self.assertRaisesRegex(ValueError, 'Multiple variables'):
-            json_time_series(frame, data_map={'discharge_sim_analysis': 'discharge', 'discharge_sim_openloop': 'discharge'})
-        with self.assertRaisesRegex(ValueError, 'not found'):
-            json_time_series(frame, data_map={'rain_obs': 'rain_observed'})
+            create_json_time_series(frame, var_mapping={'discharge_sim_analysis': 'discharge', 'discharge_sim_openloop': 'discharge'})
+        with self.assertRaisesRegex(ValueError, 'At least one'):
+            create_json_time_series(frame, var_mapping={'rain_obs': 'rain_observed'})
         with self.assertRaisesRegex(ValueError, 'exactly one'):
-            json_time_series(frame, time=self.times)
+            create_json_time_series(frame, time=self.times)
         with self.assertRaisesRegex(ValueError, 'finite'):
-            json_time_series(frame, data_no_value=np.nan)
+            create_json_time_series(frame, data_no_value=np.nan)
 
     def test_direct_single_section_writer(self):
         path = self.root / 'one.json'
-        write_json_time_series(path, self.data.xs('burano:cagli', axis=1, level=1),
+        write_json_time_series_by_section(path, self.data.xs('burano:cagli', axis=1, level=1),
                                section_metadata={'section_name': 'CagliPonteCavour'}, run_metadata=self.run)
         self.assertEqual(json.loads(path.read_text())['section_name'], 'CagliPonteCavour')
 
@@ -195,7 +237,7 @@ class TestTimeSeriesJSON(unittest.TestCase):
                             file_format='json', file_type='time_series_hmc', file_io='output',
                             file_variable='VARS_TS', data_layout='time_series', time_signature='step',
                             file_workflow='TIME_SERIES_WORKFLOW',
-                            file_args={'run_metadata': self.run, 'data_map': {
+                            file_args={'run_metadata': self.run, 'var_mapping': {
                                 'discharge_sim_analysis': 'time_series_discharge_simulated'}})
         handler.write_data({'time_series': self.data}, time=pd.Timestamp('2024-11-27 13:00'),
                            out_opts={'intermediate_output': 'Tmp', 'io_config': {'mode': 'many_data_ts_to_one_file'},

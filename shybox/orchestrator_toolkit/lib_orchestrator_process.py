@@ -786,13 +786,27 @@ class ProcessorContainer:
         # dump state if required from the process (if collections are available)
         elif self.dump_state:
 
-            # info dump start
-            self.logger.info_up(f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... ")
-
             # get data and metadata from memory
-            fx_collections_tags = kwargs.pop('collections_tags', [])
+            fx_collections_tags = list(kwargs.pop('collections_tags', []) or [])
             fx_collections_history = kwargs.pop('collections_history', {})
             fx_collections_metadata = kwargs.pop('collections_metadata', {})
+
+            # Tags can include future processes; name only collected workflows.
+            fx_collected_workflows = {
+                tag.split('|', 1)[0].removeprefix('workflow.')
+                for tag in fx_collections_history
+            }
+            if fx_mode in ('end', 'unique'):
+                fx_collected_workflows.add(fx_workflow_name.removeprefix('workflow.'))
+            fx_dump_workflows = dict.fromkeys(
+                tag.split('|', 1)[0].removeprefix('workflow.')
+                for tag in [*fx_collections_tags, fx_tag]
+                if tag.split('|', 1)[0].removeprefix('workflow.') in fx_collected_workflows
+            )
+            fx_dump_tag = ', '.join(fx_dump_workflows) or fx_tag
+
+            # info dump start
+            self.logger.info_up(f"Dump :: collections :: {fx_dump_tag} - {message} [mode: {self.mode}] ... ")
 
             # check fx mode
             if fx_mode == 'end' or fx_mode == 'unique':
@@ -854,7 +868,7 @@ class ProcessorContainer:
                     ref_obj = self.ref
                     if isinstance(ref_obj, dict):
                         for key, value in ref_obj.items():
-                            if isinstance(value, DataMemory) or isinstance(ref_obj, DataLocal):
+                            if isinstance(value, (DataMemory, DataLocal)):
                                 value = value.get_data()
                             kwargs[key] = value
                     elif ref_obj is not None:
@@ -894,23 +908,12 @@ class ProcessorContainer:
                     # get output variable mapping
                     vars_data = out_handler.variable_template.get("vars_data", {})
 
-                    # filter and rename output variables
-                    if vars_data:
-                        fx_output_filtered = {}
-                        for var_key, var_name in vars_data.items():
+                    # Filter collection keys or variables inside a joined DataFrame.
+                    fx_output_filtered = _filter_output_collections(fx_collections_output, vars_data)
 
-                            # check if variable already uses the output name
-                            if var_name in fx_collections_output:
-                                fx_output_filtered[var_name] = fx_collections_output[var_name]
-                            # otherwise, check the original variable key
-                            elif var_key in fx_collections_output:
-                                fx_output_filtered[var_name] = fx_collections_output[var_key]
-                            else:
-                                self.logger.warning(
-                                    f'Output variable "{var_key}" or "{var_name}" not found in collections. Skipping.')
-                    else:
-                        # if not vars data available
-                        fx_output_filtered = copy(fx_collections_output)
+                    # DataFrame column renaming belongs to the writer, alongside units.
+                    kwargs['map'] = vars_data
+                    kwargs['units'] = out_handler.variable_template.get('units', {})
 
                     # write filtered collections
                     if fx_output_filtered:
@@ -919,7 +922,7 @@ class ProcessorContainer:
                         )
                         # info dump end
                         self.logger.info_down(
-                            f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... DONE")
+                            f"Dump :: collections :: {fx_dump_tag} - {message} [mode: {self.mode}] ... DONE")
 
                         # end of processes
                         return True, False
@@ -927,7 +930,7 @@ class ProcessorContainer:
                         self.logger.warning("No matching output variables found in collections. Writing skipped.")
                         # info dump end
                         self.logger.info_down(
-                            f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... SKIPPED")
+                            f"Dump :: collections :: {fx_dump_tag} - {message} [mode: {self.mode}] ... SKIPPED")
 
                         # end of processes
                         return None, False
@@ -944,7 +947,7 @@ class ProcessorContainer:
 
                     # info dump end - skipped - collections empty
                     self.logger.warning(f'Collections {collection_source} is empty. Nothing to dump.')
-                    self.logger.info_down(f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... SKIPPED")
+                    self.logger.info_down(f"Dump :: collections :: {fx_dump_tag} - {message} [mode: {self.mode}] ... SKIPPED")
 
                 # end of processes
                 return None, False
@@ -953,7 +956,7 @@ class ProcessorContainer:
 
                 # info dump end - skipped - collections not found
                 self.logger.warning('Process step is not defined by tag end/unique. Nothing to dump. ')
-                self.logger.info_down(f"Dump :: collections :: {fx_tag} - {message} [mode: {self.mode}] ... SKIPPED")
+                self.logger.info_down(f"Dump :: collections :: {fx_dump_tag} - {message} [mode: {self.mode}] ... SKIPPED")
 
                 # end of processes
                 return None, False
@@ -1084,10 +1087,10 @@ def _group_tag(data: dict, separator: str = "::", flatten_single: bool = False) 
         elif "|" in data_base:
 
             # example: data|q_sim_open_loop@time|0
-            # output: data!q_sim_open_loop -> value
+            # output: data|q_sim_open_loop -> value
             data_group, data_name = data_base.split("|", 1)
 
-            group_key = f"{data_group}!{data_name}"
+            group_key = f"{data_group}|{data_name}"
             item_key = time_suffix if time_sep else None
 
         # case 4: unique or multiple time variables
@@ -1217,6 +1220,45 @@ def _normalize_local_data(data_raw):
 
 # check if data is available
 @with_logger(var_name="logger_stream")
+def _filter_output_collections(collections, vars_data):
+    """Select outer variables or variable columns in joined time-series frames.
+
+    A joined frame remains under its collection key. Its first column level
+    identifies variables; subsequent levels identify sections. Keep source
+    column names so the writer can apply variable, unit and JSON field mappings
+    together. Neither the input frame nor its registry attributes are modified.
+    """
+    if not vars_data:
+        return copy(collections)
+
+    filtered, matched, selected_keys = {}, set(), set()
+    for source, target in vars_data.items():
+        key = target if target in collections else source
+        if key in collections:
+            filtered[target] = collections[key]
+            matched.add(source)
+            selected_keys.add(key)
+
+    for key, data in collections.items():
+        if key in selected_keys or not isinstance(data, pd.DataFrame):
+            continue
+        variables = (data.columns.get_level_values(0)
+                     if isinstance(data.columns, pd.MultiIndex) else data.columns)
+        positions = []
+        for source, target in vars_data.items():
+            name = target if target in variables else source
+            if name in variables:
+                positions.extend(np.flatnonzero(variables == name).tolist())
+                matched.add(source)
+        if positions:
+            filtered[key] = data.iloc[:, list(dict.fromkeys(positions))].copy()
+
+    for source, target in vars_data.items():
+        if source not in matched:
+            logger_stream.warning(f'Output variable "{source}" or "{target}" not found in collections. Skipping.')
+    return filtered
+
+
 def _is_empty_fx_data(fx_data):
     """Return True if fx_data is None, empty, or contains only None / empty data structures."""
     # Case 1: None

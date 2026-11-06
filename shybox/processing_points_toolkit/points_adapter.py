@@ -329,6 +329,8 @@ def exec_interpolate_points_air_temperature(
     logger_stream.info(f' ::: Time: "{time}"')
     logger_stream.info(f' ::: Points available: {point_values.size}')
 
+    ### inserire le parti di vda ###
+
     # method to interpolate points
     grid_values = interpolate_points2grid_base(
         point_values, point_lons, point_lats,

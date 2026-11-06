@@ -229,7 +229,8 @@ def main(view_table: bool = False):
             "vars_data": {"AIR_T_CODE": "air_temperature_code"}
         },
         time_signature='period',
-        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period,
+        time_freq='h', time_direction='forward',
         logger=logging_handle, message=False
     )
 
@@ -247,7 +248,8 @@ def main(view_table: bool = False):
             "vars_data": {"AIR_T_VALUE": "air_temperature_value"}
         },
         time_signature='period',
-        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period, time_freq='h', time_direction='forward',
+        time_reference=alg_reference_time, time_period=alg_cfg_time.time_period,
+        time_freq='h', time_direction='forward',
         logger=logging_handle, message=False
     )
 
@@ -266,7 +268,7 @@ def main(view_table: bool = False):
             }
         },
         time_signature='end', time_reference=alg_reference_time,
-        time_period=1, time_format='%Y%m%d%H%M',
+        time_period=1, time_format='%Y%m%d%H%M', time_direction='current',
         logger=logging_handle, message=False
     )
     # ------------------------------------------------------------------------------------------------------------------
