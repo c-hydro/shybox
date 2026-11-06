@@ -72,6 +72,11 @@ class OrchestratorBase:
             "type_out": "single",
             "description": "Merge multiple time-series into one file",
         },
+        "many_data_ts_to_multiple_files": {
+            "type_in": "collections",
+            "type_out": "collections",
+            "description": "Merge multiple time-series into multiple time-series file",
+        },
         "many_data_variables_to_one_file": {
             "type_in": "collections",
             "type_out": "single",
@@ -404,7 +409,7 @@ class OrchestratorBase:
         output_type = self.options['intermediate_output']
         if output_type == 'Memory':
             # NOTE. Update class definition ...
-            out_obj = DataMemory(loc_pattern=path_name_out)
+            out_obj = DataMemory(loc_pattern=path_name_out, logger=self.logger)
         elif output_type == 'Tmp':
 
             # prepare file name (temporary)
@@ -725,8 +730,10 @@ class OrchestratorBase:
                         self.processes[proc_id].dump_state = True
 
                     elif self.type_in == 'collections' and self.type_out == 'collections':
-                        raise NotImplementedError(
-                            f'Not implemented IO "{self.type_in} :: {self.type_out}" for IO mode "{self.io_mode}". ')
+
+                        # assign DataLocal at the end of time period
+                        self.processes[proc_id].out_obj[workflow_default] = data_out
+                        self.processes[proc_id].dump_state = True
 
                     else:
                         raise ValueError(f'Unsupported IO input type "{self.type_in}" for IO mode "{self.io_mode}".')

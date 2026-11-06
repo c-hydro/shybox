@@ -387,9 +387,10 @@ class DataLocal(Dataset):
         else:
             self.logger.info_up(f"Write data to {path} ... ")
 
+        # merge configured writer defaults; call-time arguments take precedence.
+        kwargs = {**(self.file_args or {}), **kwargs}
+
         # method to write data to file
-        if self.file_format == 'json' and self.file_type in ['time_series_hmc', 'ts_hmc']:
-            kwargs = {**self.file_args, **kwargs}
         write_to_file(
             data,
             path, file_format=self.file_format, file_type=self.file_type, file_mode=self.file_mode,

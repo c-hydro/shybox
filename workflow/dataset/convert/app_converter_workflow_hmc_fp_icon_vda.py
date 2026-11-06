@@ -175,7 +175,7 @@ def main(view_table: bool = False):
             "vars_geo": {"x": "longitude", "y": "latitude"}
         },
         time_signature=None, time_direction=None,
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='geo reference'
     )
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -234,14 +234,13 @@ def main(view_table: bool = False):
         time_signature='period',
         time_reference=alg_reference_time + pd.Timedelta(hours=1),
         time_period=time_data_length - 1, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='rain source'
     )
 
     # rain handler destination
     rain_data_dst = DataLocal(
         path=alg_cfg_application['data_destination']['path'],
         file_name=alg_cfg_application['data_destination']['file_name'],
-        time_signature='step',
         file_format='netcdf', file_type='grid_hmc', file_mode='local',
         file_variable='RAIN_DATA_DST', file_workflow='RAIN_WORKFLOW', file_io='output',
         variable_template={
@@ -250,8 +249,8 @@ def main(view_table: bool = False):
             "vars_data": {"rain": "Rain"},
             "units": {"rain": "mm"},
         },
-        time_period=1, time_format='%Y%m%d%H%M',
-        logger=logging_handle, message=False
+        time_period=1, time_format='%Y%m%d%H%M', time_signature='step',
+        logger=logging_handle, message=False, tag='rain destination'
     )
 
     # AIR TEMPERATURE DATASETS
@@ -268,14 +267,13 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='air temperature source'
     )
 
     # air_t handler destination
     air_t_data_dst = DataLocal(
         path=alg_cfg_application['data_destination']['path'],
         file_name=alg_cfg_application['data_destination']['file_name'],
-        time_signature='step',
         file_format='netcdf', file_type='grid_hmc', file_mode='local',
         file_variable='AIR_T_DATA_DST', file_workflow='AIR_T_WORKFLOW', file_io='output',
         variable_template={
@@ -284,8 +282,8 @@ def main(view_table: bool = False):
             "vars_data": {"air_temperature": "AirTemperature"},
             "units": {"air_temperature": "Celsius"},
         },
-        time_period=1, time_format='%Y%m%d%H%M',
-        logger=logging_handle, message=False
+        time_period=1, time_format='%Y%m%d%H%M', time_signature='step',
+        logger=logging_handle, message=False, tag='air temperature destination'
     )
 
     # RELATIVE HUMIDITY DATASETS
@@ -302,7 +300,7 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
-        logger=logging_handle
+        logger=logging_handle, tag='dew point temperature source'
     )
 
     # relative humidity handler source (derived)
@@ -321,14 +319,13 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
-        logger=logging_handle
+        logger=logging_handle, tag='dew point temperature destination'
     )
 
     # Relative Humidity destination handler
     rh_data_dst = DataLocal(
         path=alg_cfg_application['data_destination']['path'],
         file_name=alg_cfg_application['data_destination']['file_name'],
-        time_signature='step',
         file_format='netcdf', file_type='grid_hmc', file_mode='local',
         file_variable='RH_DATA_DST',
         file_workflow='RH_WORKFLOW', file_io='output',
@@ -338,8 +335,8 @@ def main(view_table: bool = False):
             "vars_data": {"relative_humidity": "RelHumidity"},
             "units": {"relative_humidity": "%"},
         },
-        time_period=1, time_format='%Y%m%d%H%M',
-        logger=logging_handle, message=False
+        time_period=1, time_format='%Y%m%d%H%M', time_signature='step',
+        logger=logging_handle, message=False, tag='relative humidity destination'
     )
 
     # WIND SPEED DATASETS
@@ -356,7 +353,7 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='wind u component source'
     )
 
     # wind v component handler source
@@ -372,7 +369,7 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag='wind v component source'
     )
 
     # wind speed handler source (derived)
@@ -391,14 +388,13 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
-        logger=logging_handle
+        logger=logging_handle, tag='wind speed source'
     )
 
     # wind speed handler destination
     wind_speed_data_dst = DataLocal(
         path=alg_cfg_application['data_destination']['path'],
         file_name=alg_cfg_application['data_destination']['file_name'],
-        time_signature='step',
         file_format='netcdf', file_type='grid_hmc', file_mode='local',
         file_variable='WIND_SPEED_DATA_DST',
         file_workflow='WIND_SPEED_WORKFLOW', file_io='output',
@@ -408,8 +404,8 @@ def main(view_table: bool = False):
             "vars_data": {"wind_speed": "Wind"},
             "units": {"wind_speed": "m/s"},
         },
-        time_period=1, time_format='%Y%m%d%H%M',
-        logger=logging_handle, message=False
+        time_period=1, time_format='%Y%m%d%H%M', time_signature='step',
+        logger=logging_handle, message=False, tag='wind speed destination'
     )
 
     # INCOMING RADIATION DATASETS
@@ -428,15 +424,13 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=time_data_start, time_period=time_data_length, time_freq='h', time_direction='forward',
-        logger=logging_handle
+        logger=logging_handle,  tag='incoming radiation source'
     )
-
 
     # Incoming Radiation destination handler
     inc_rad_data_dst = DataLocal(
         path=alg_cfg_application['data_destination']['path'],
         file_name=alg_cfg_application['data_destination']['file_name'],
-        time_signature='step',
         file_format='netcdf', file_type='grid_hmc', file_mode='local',
         file_variable='INC_RAD_DATA_DST',
         file_workflow='INC_RAD_WORKFLOW', file_io='output',
@@ -446,8 +440,8 @@ def main(view_table: bool = False):
             "vars_data": {"incoming_radiation": "IncRadiation"},
             "units": {"incoming_radiation": "W/m^2"},
         },
-        time_period=1, time_format='%Y%m%d%H%M',
-        logger=logging_handle, message=False
+        time_period=1, time_format='%Y%m%d%H%M', time_signature='step',
+        logger=logging_handle, message=False, tag='incoming radiation destination'
     )
     # ------------------------------------------------------------------------------------------------------------------
 
