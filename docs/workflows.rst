@@ -21,7 +21,9 @@ Model execution
 ``workflow/runner/`` contains HMC and S3M runners. These use utilities under
 ``shybox/runner_toolkit/`` to prepare namelists and launch model executables.
 Supply an executable compatible with the selected namelist template, input
-datasets and model version.
+datasets and model version. Follow :doc:`runners` for complete HMC and S3M
+configuration recipes, dry-run/launch commands, time conventions and ensemble
+path isolation.
 
 Geographic preparation and analysis
 -----------------------------------

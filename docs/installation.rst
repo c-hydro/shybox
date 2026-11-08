@@ -13,13 +13,14 @@ use the standard-library ``tomllib`` module directly.
 
    git clone https://github.com/c-hydro/shybox.git
    cd shybox
-   git switch fproofs
+   git switch main
    bash setup_shybox_base.sh
    source ./conda/shybox_base_settings
    export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
-The ``fproofs`` branch is the development baseline for this documentation
-edition. Pin a known branch or commit for reproducible runs. The setup script
+The ``main`` branch supplies the published documentation and maintained code.
+Development-preview chapters describe additional unreleased local work. Pin a
+known branch or commit for reproducible runs. The setup script
 creates or updates the ``shybox_base_libraries`` environment and writes an
 activation helper inside the repository-local ``conda/`` directory.
 
