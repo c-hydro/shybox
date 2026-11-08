@@ -109,10 +109,11 @@ Declare configurations under `runs` in [dashboard/config.json](dashboard/config.
 ## Documentation
 
 - [Read the Docs](https://shybox.readthedocs.io/en/latest/): installation, configuration and workflow guidance.
+- [HMC and S3M runner guide](docs/runners.rst): domain setup, namelists, dry runs and execution.
 - [Documentation sources](docs/index.rst), [development/build instructions](docs/development.rst) and [publishing instructions](docs/publishing.rst).
 - [CHANGELOG](CHANGELOG): package development and release history.
 
-The documentation edition **0.1.0** is numbered independently of the package. Its Sphinx build uses the dependencies in [docs/requirements.txt](docs/requirements.txt).
+The documentation edition **0.2.0** is numbered independently of the package. Its Sphinx build uses the dependencies in [docs/requirements.txt](docs/requirements.txt).
 
 ## License
 

@@ -1,6 +1,23 @@
 Documentation releases
 ======================
 
+0.2.0 — Runner guide and development previews
+---------------------------------------------
+
+Prepared on 8 November 2026 for SHYBOX |package_version|. Documentation is
+published from ``main`` and built as the Read the Docs ``latest`` version.
+
+* Add HMC/S3M setup recipes, namelist/time settings, dry-run/launch commands,
+  ensemble guidance and troubleshooting.
+* Add clearly labelled development previews for monitoring, Ruler and Hydrapp;
+  the associated uncommitted application code is not part of this publication.
+* Validate shell/JSON examples, exercise both base runners with a small test
+  executable, and build Sphinx with warnings treated as errors.
+
+The documentation edition does not change the package version or announce a
+model/software release. A new page is publicly available only after its remote
+Read the Docs build completes successfully.
+
 0.1.0 — First documentation edition
 -----------------------------------
 
