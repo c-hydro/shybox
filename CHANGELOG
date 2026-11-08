@@ -5,6 +5,11 @@ Changelog
 Dates follow main/* release tags where available; other legacy dates are retained.
 References identify source commits; development entries do not announce a tagged release.
 
+Version 1.6.0 (development) [2026-11-08]
+****************************************
+
+- DOCUMENTATION: Publish docs edition 0.2.0 with HMC/S3M runner recipes and labelled monitoring/Hydrapp development previews.
+
 Version 1.6.0 (development) [2026-11-06]
 ****************************************
 
@@ -95,4 +100,3 @@ Version 1.0.0 [2025-01-24]
 
 - PACKAGE: Establish the beta package layout, base classes and initial code refactoring (c19fbf8).
 - ENVIRONMENT: Introduce environment management.
-

@@ -10,7 +10,7 @@ project = 'SHYBOX'
 author = 'CIMA Research Foundation'
 copyright = '2026, CIMA Research Foundation'
 # Documentation editions are independent of package releases.
-release = '0.1.0'
+release = '0.2.0'
 version = release
 rst_epilog = f'\n.. |package_version| replace:: {metadata["version"]}\n'
 extensions = []

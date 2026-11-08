@@ -13,9 +13,9 @@ First project setup
 #. Choose **Add project** and select the SHYBOX repository. If requested, grant
    the Read the Docs GitHub App access to that repository.
 #. Use ``.readthedocs.yaml`` as the configuration file.
-#. Set the project's default branch to ``docs/0.1.0`` for this first documentation
-   edition. If an initial build used ``main``, change the default branch in the
-   project settings and trigger a fresh build of ``latest``.
+#. Set the project's default branch to ``main``. The public ``latest`` version
+   follows this branch; a successful build of a pull request is a preview,
+   not confirmation that ``latest`` has updated.
 #. Inspect the build log and open the resulting documentation URL.
 
 If automatic import is unavailable, choose manual configuration with repository
@@ -26,17 +26,18 @@ in Read the Docs; this guide does not assume a particular slug is available.
 Version management
 ------------------
 
-Documentation edition **0.1.0** is published from the dedicated Git branch
-``docs/0.1.0``. This keeps the first documentation release separate from ongoing
-model-integration changes and from package version |package_version|.
+Documentation edition **0.2.0** is published from ``main``. The initial edition
+used a dedicated documentation branch; that is no longer the source of the
+public ``latest`` version. Documentation edition numbers remain independent
+of package version |package_version|.
 
 Read the Docs versions correspond to Git branches or tags. In the project's
 **Versions** tab, activate the documentation branch if you also want a separately
 named version alongside ``latest``. The slash in a Git branch name may be
 normalized in the Read the Docs version URL.
 
-When documentation becomes part of the main release process, merge the sources
-into the appropriate maintained branch and select that branch as the default.
+Merge reviewed documentation into ``main`` and check both the GitHub build and
+the subsequent Read the Docs ``latest`` build.
 For a future package release, ensure its Git tag includes the documentation and
 configuration before activating the tag in Read the Docs. Do not expect older
 code tags without these files to build the new documentation.

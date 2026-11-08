@@ -47,3 +47,35 @@ and large datasets outside documentation releases.
 GitHub Actions builds the same documentation on documentation changes and
 pull requests. Read the Docs uses ``.readthedocs.yaml`` from the selected Git
 revision. Neither process runs the scientific models.
+
+Automated checks
+----------------
+
+The monitoring, resource, Hydrapp and expanded model/geo test suites below belong
+to the unreleased development checkout; their new paths are not yet in main.
+
+Run from the repository root using the SHYBOX scientific environment with Flask
+and psutil installed. The Hydrapp-only environment covers viewer dependencies;
+the model/geo suites also need the scientific/GIS environment. Hydrapp requirements
+include psutil and Matplotlib for resource collection and plotting.
+
+.. code-block:: bash
+
+   python -B -m unittest discover -s tests/runner -v
+   python -B -m unittest discover -s tests/geo -v
+   python -B -m unittest discover -s tests/monitoring -v
+   python -B -m unittest discover -s hydrapp/tests -v
+   python -B -m unittest discover -s tests/io -v
+   python -B -m unittest discover -s tests/orchestrator -v
+
+Runner coverage includes all registered HMC/S3M namelist versions, mandatory
+fields, Fortran round trips, output files, deterministic/parallel ensemble
+scheduling, retries, failures and member isolation. The HMC execution bridge
+rejects nonzero or unknown exit codes. Geo tests use small synthetic grids to
+verify orientation, coordinate drift/bounds and metric/geographic catchment area.
+Resource tests sample real small processes and check CSV/PNG and Ruler output.
+
+These checks do not compile or run native HMC/S3M simulations or validate forecast
+skill. Optional RainFARM/pysheds integrations and operational datasets need their
+own environments. Existing external-workspace examples are not a hermetic test
+suite. Avoid inheriting incompatible GIS/HDF5 library paths when running checks.
