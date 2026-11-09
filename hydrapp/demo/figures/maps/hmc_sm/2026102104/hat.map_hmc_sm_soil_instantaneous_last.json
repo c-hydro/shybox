@@ -1,0 +1,37 @@
+{
+    "analysis_attributes": {
+        "var_description": "hmc analysis",
+        "var_direction_window": "left",
+        "var_level": "soil",
+        "var_mode": "instantaneous",
+        "var_name_analysis": "soil_moisture_analysis",
+        "var_name_data": "soil_moisture_data",
+        "var_temporal_window": "last",
+        "var_type": "modelled"
+    },
+    "data_attributes": {
+        "Valid_range": "0,1",
+        "description": "soil moisture",
+        "grid_mapping": "epsg:4326",
+        "long_name": "soil_moisture",
+        "time_direction": "left",
+        "time_from": "202610190500",
+        "time_to": "202610210300",
+        "time_window": "last",
+        "units": "-",
+        "var_description": "hmc output based on observed datasets",
+        "var_mode": "deterministic",
+        "var_n": "1",
+        "var_name_data": "soil_moisture_data",
+        "var_name_file": "SM"
+    },
+    "graph_attributes": {
+        "var_background": "osm",
+        "var_color_label": "soil moisture",
+        "var_color_map": "cmap_sm",
+        "var_description": "Instantaneous Soil Moisture - HMC",
+        "var_dpi": "160",
+        "var_name_analysis": "soil_moisture_analysis",
+        "var_name_graph": "hmc_sm"
+    }
+}

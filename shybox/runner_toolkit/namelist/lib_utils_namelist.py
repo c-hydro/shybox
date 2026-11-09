@@ -54,7 +54,7 @@ def _parse_scalar(token: str) -> Any:
         if re.match(r"^[+-]?\d+$", token):
             return int(token)
         # fallback float
-        return float(token)
+        return float(token.replace("D", "e").replace("d", "e"))
     except ValueError:
         # last resort
         return token

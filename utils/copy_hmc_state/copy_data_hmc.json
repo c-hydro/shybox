@@ -1,0 +1,31 @@
+{
+  "vars": {
+    "time_run": "2024-10-16",
+    "time_template": "{yyyy}/{mm}/{dd}"
+  },
+
+  "domains": {
+    "MarcheDomain": {
+      "input": {
+        "grid": "/home/silvestro/Flood_Proofs_Italia2p0/MarcheDomain/dynamic_data/GaugeObservation2G/state/grid/{time}",
+        "point": "/home/silvestro/Flood_Proofs_Italia2p0/MarcheDomain/dynamic_data/GaugeObservation2G/state/point/{time}"
+      },
+      "output": {
+        "grid": "/home/silvestro/Flood_Proofs_Italia2p0/restart/MarcheDomain/{time}/grid",
+        "point": "/home/silvestro/Flood_Proofs_Italia2p0/restart/MarcheDomain/{time}/point"
+      }
+    },
+
+    "LiguriaDomain": {
+      "input": {
+        "grid": "/home/silvestro/Flood_Proofs_Italia2p0/LiguriaDomain/dynamic_data/GaugeObservation2G/state/grid/{time}",
+        "point": "/home/silvestro/Flood_Proofs_Italia2p0/LiguriaDomain/dynamic_data/GaugeObservation2G/state/point/{time}"
+      },
+      "output": {
+        "grid": "/home/silvestro/Flood_Proofs_Italia2p0/restart/LiguriaDomain/{time}/grid",
+        "point": "/home/silvestro/Flood_Proofs_Italia2p0/restart/LiguriaDomain/{time}/point"
+      }
+    }
+  }
+}
+

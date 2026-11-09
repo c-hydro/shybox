@@ -20,7 +20,10 @@ The current package metadata identifies version **1.6.0**. This README describes
 | RainFARM integration | NWP rainfall disaggregation, ensemble member handling and ancillary files. The adapter and native-output integration are under development. |
 | Temporary storage | Generic `DataTemporary` storage using pickle, or NetCDF/Zarr for xarray objects, with configurable folders, filenames and prefixes. |
 | Dataset I/O | Format-specific NetCDF, GRIB, GeoTIFF and CSV/ASCII handlers; HMC time-series export to NetCDF or Continuum hydrograph JSON. |
-| Dashboard | A Flask application with declared run configurations, calendar selection, section status maps, basin hydrographs, ensemble quantile bands and threshold exceedance probabilities. |
+| Hydrapp | Flask viewer in `hydrapp/`: HAT published maps/charts, date/window/source filters, interactive NetCDF section maps and deterministic/ensemble hydrographs. |
+| Publishing catalogue | Read-only legacy HAT PNG/JSON discovery, normalized metadata, image/metadata downloads and 23 portable demo products. |
+| Execution monitoring | Atomic start/heartbeat/end records, exit codes, retries, ensemble completeness, expected-run checks and a Hydrapp monitoring page. |
+| RAM and Ruler | JSON-configured PID/name/command selectors, optional descendants, RSS/VMS/peak history, daily CSV/PNG, host memory and Ruler disk/load/process reports, native workspaces/CSV and report figures. |
 
 ### Time-series output
 
@@ -36,7 +39,7 @@ The JSON writer preserves the Continuum comma-separated string format, supports 
 
 The time-series analyzer currently processes deterministic series. Aggregating probabilistic HMC member outputs into one ensemble time-series dataset remains to be implemented. The dashboard can read an existing NetCDF with an ensemble dimension; it does not combine separate member files or read the new hydrograph JSON exports yet.
 
-The dashboard's soil-moisture and discharge raster page is a placeholder awaiting gridded-data integration. Its implemented maps show section locations and threshold status. Map tiles and chart/map libraries require internet access.
+Hydrapp displays published raster figures and interactive section locations. Interactive raster overlays/pixel values and production map aggregation/rendering remain future work. The legacy PNG/JSON archive does not supply numerical series or raster values. Interactive map tiles and chart/map libraries require internet access; published figures and monitoring use local assets.
 
 ## Repository structure
 
@@ -47,8 +50,9 @@ shybox/
 │   ├── dataset/               # Conversion, merging and rainfall disaggregation
 │   ├── geo/                   # Geographic preparation and catchments
 │   ├── runner/                # HMC/S3M execution and HMC ensemble examples
-│   └── analyzer/              # HMC time-series analysis
-├── dashboard/                 # Flask dashboard, configuration, assets and tests
+│   ├── analyzer/              # HMC time-series analysis
+│   └── monitoring/            # Lifecycle, RAM, Ruler and run-status demos
+├── hydrapp/                   # Hydrapp viewer, portable demos, configuration and tests
 ├── web/                       # Earlier, unfinished visualization application
 ├── apps/                      # Additional applications and prototypes
 ├── docker/                    # Container definitions and entrypoints
@@ -60,7 +64,7 @@ shybox/
 ├── pyproject.toml             # Package metadata and external-toolkit declarations
 ├── setup_shybox_base.sh       # Base scientific environment
 ├── setup_shybox_geo.sh        # Geospatial environment
-└── setup_shybox_flask.sh      # Independent dashboard environment
+└── setup_shybox_hydrapp.sh      # Independent dashboard environment
 ```
 
 Local checkouts may also contain `conda/`, `dset/`, `exec/` and `tmp/` for environments, input datasets, execution results and ancillary files. These directories are ignored by Git.
@@ -93,18 +97,49 @@ python workflow/analyzer/app_analyzer_workflow_hmc_time_series_main.py \
 
 Workflow examples include development-machine paths and domain-specific settings; adapt them to your data. Obtain inputs from [SHYDATA](https://github.com/c-hydro/shydata) or your own operational sources. Model binaries and operational datasets are supplied separately.
 
-## Running the dashboard
+## Running Hydrapp
 
 From the repository root:
 
 ```bash
-./setup_shybox_flask.sh
-dashboard/.venv/bin/python -m dashboard.app --config dashboard/config.json
+bash setup_shybox_hydrapp.sh
+hydrapp/.venv/bin/python -m hydrapp.app --config hydrapp/config.demo.json
 ```
 
-Open **http://127.0.0.1:5050**. The setup script creates a dedicated virtual environment for Flask and its dependencies.
+Open **http://127.0.0.1:5050** for published figures, `/maps` for map previews and `/monitoring` for execution/RAM status. The old `dashboard/` application path is now `hydrapp/`. The setup script creates a dedicated Flask and monitoring environment.
 
-Declare configurations under `runs` in [dashboard/config.json](dashboard/config.json), including deterministic/probabilistic mode, NetCDF location, filename convention and ensemble dimension where applicable. Restart after changing the configuration; **Refresh runs** discovers new result files for loaded configurations. See [dashboard setup and data contract](dashboard/README.md).
+Declare configurations under `runs` in [hydrapp/config.json](hydrapp/config.json), including deterministic/probabilistic mode, NetCDF location, filename convention and ensemble dimension where applicable. Restart after changing the configuration; **Refresh runs** discovers new result files for loaded configurations. See [dashboard setup and data contract](hydrapp/README.md).
+
+## Monitoring examples
+
+Run with the SHYBOX scientific environment, from the repository root:
+
+```bash
+# Explicit monitor.start()/finish() around application code
+python -m workflow.monitoring.app_monitoring_main_example
+
+# Live status demo for hydrapp/config.demo.json, with real RAM/Ruler snapshots
+python -m workflow.monitoring.app_monitoring_status_demo --duration 60 --resources
+
+# Sample a specific process using a JSON configuration; replace 12345 with its PID
+python -m workflow.monitoring.app_monitoring_memory_example \
+  --config workflow/monitoring/ruler_monitoring.example.json --pid 12345 --samples 6 --plot
+```
+
+Hydrapp setup includes `psutil` and Matplotlib for the monitoring demos. Install
+`psutil` separately when using a different collector environment (`python -m pip install psutil`).
+Matplotlib is required for RAM figures. See [monitoring configuration](docs/monitoring.rst),
+[Hydrapp usage](docs/hydrapp.rst) and [runnable examples](workflow/monitoring/README.md).
+Lifecycle and resource output folders are configured independently. A stopped
+heartbeat is stale; output availability does not prove process success.
+
+## Verification
+
+The test suites cover HMC 3.1.6/3.2.0/3.3.0 and S3M 5.3.3 namelists,
+member scheduling/retries, execution status, resource/Ruler collection, coordinate
+alignment/catchment area, published assets and Flask routes. Tests use synthetic
+inputs and subprocesses; native HMC/S3M binaries and operational data are not bundled.
+See [test commands and limitations](docs/development.rst#automated-checks).
 
 ## Documentation
 
@@ -118,3 +153,5 @@ The documentation edition **0.2.0** is numbered independently of the package. It
 ## License
 
 SHYBOX is licensed under the [European Union Public License v1.2 (EUPL-1.2)](LICENSE).
+
+The integrated Ruler engine retains its [MIT licence and provenance](shybox/monitoring_toolkit/resources/ruler/SOURCE.md).

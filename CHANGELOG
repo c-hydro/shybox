@@ -10,13 +10,24 @@ Version 1.6.0 (development) [2026-11-08]
 
 - DOCUMENTATION: Publish docs edition 0.2.0 with HMC/S3M runner recipes and labelled monitoring/Hydrapp development previews.
 
+Version 1.6.0 (development) [2026-11-07]
+****************************************
+
+- APP: Rename the Flask viewer to Hydrapp; add legacy HAT map/chart browsing and 23 portable figure pairs.
+- APP: Add run-status demos, RAM snapshots/history and Ruler reports to the monitoring page.
+- WORKFLOW: Add JSON-configured process RAM, PID/child selection, status generation and Ruler examples.
+- PACKAGE: Group monitoring into common/execution/resources; integrate the full Ruler engine and fix model/namelist/geo issues.
+- TESTS: Cover HMC/S3M namelists, orchestration/retries, monitoring/resources, geo processing and Hydrapp assets.
+- DOCUMENTATION: Update README, monitoring/Hydrapp guides and credits; consolidate setup in setup_shybox_hydrapp.sh.
+
 Version 1.6.0 (development) [2026-11-06]
 ****************************************
 
+- APP: Add HAT-style execution monitoring page with UTC filters, history and ensemble summaries.
+- WORKFLOW: Add opt-in lifecycle/heartbeat JSON records, runner exit tracking and legacy reference-file support.
 - WORKFLOW: Add separate JSON and NetCDF analyzer examples and refine converter settings.
 - PACKAGE: Filter variables inside time-series DataFrames and list all workflows in collection dump logs.
-- PACKAGE: Simplify writer dispatch and pass section registries as DataFrames.
-- PACKAGE: Refine JSON mappings, collection filenames and separator handling; retain atomic output.
+- PACKAGE: Simplify writer dispatch and DataFrame registries; refine JSON mappings and atomic collection output.
 - DOCUMENTATION: Align JSON API examples and remove obsolete IFS sample files.
 
 Version 1.6.0 (development) [2026-11-04]
@@ -100,3 +111,4 @@ Version 1.0.0 [2025-01-24]
 
 - PACKAGE: Establish the beta package layout, base classes and initial code refactoring (c19fbf8).
 - ENVIRONMENT: Introduce environment management.
+

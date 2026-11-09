@@ -1,0 +1,123 @@
+{
+  "algorithm": {
+    "general": {
+      "title": "RULER - RUntime anaLyzER",
+      "web-site": "",
+      "source": "Python library developed by CIMA Research Foundation",
+      "history": "1.0.0 [20221227]",
+      "project-info": "Tools for getting information about machine, processes and disk",
+      "algorithm": "Package for making machine analysis"
+    },
+    "flags": {
+      "file": {
+        "clean_report_ancillary": false,
+        "clean_report_destination": false,
+        "clean_report_figure": false
+      },
+      "algorithm": {
+        "activate_report_organize": true,
+        "activate_report_dump": true,
+        "activate_report_view": true,
+        "activate_report_kill": false
+      }
+    },
+    "template": {
+      "process_name": "process_name_string",
+      "proc_n": "process_n_string",
+      "proc_pid": "process_pid_string",
+      "report_type": "report_type_string",
+      "report_id": "report_id_string",
+      "report_sub_path": "%Y/%m/%d",
+      "report_datetime": "%Y%m%d%H%M"
+    },
+    "tools": {
+      "tool_info_memory": {
+        "__comment__": "",
+        "prefix_name_virtual_memory": "virtual_memory",
+        "prefix_name_swap_memory": "swap_memory",
+        "separator_name": "_"
+      },
+      "tool_info_process": {
+        "__comment__": "process_memory_type: [full, partial], process_sort: [], process_filter: [all, ]",
+        "prefix_name": "process_memory_{proc_n}",
+        "separator_name": "_",
+        "process_memory_type": "partial",
+        "process_sort": "ascending",
+        "process_filter": "first",
+        "process_attributes": [
+          "pid",
+          "username",
+          "memory_info",
+          "memory_percent",
+          "name",
+          "cmdline",
+          "cpu_percent",
+          "cpu_times",
+          "create_time",
+          "status"
+        ]
+      },
+      "tool_info_disk": {
+        "__comment__": "",
+        "prefix_name": "disk_usage",
+        "separator_name": "_",
+        "disk_path": "/"
+      },
+      "tool_info_system_load": {
+        "__comment__": "",
+        "prefix_name": "system_load",
+        "separator_name": "_"
+      },
+      "tool_kill_process": {
+        "__comment__": "",
+        "prefix_name": "",
+        "separator_name": "_"
+      }
+    }
+  },
+  "process": {
+    "__comment__": "monitoring_time_period: [10sec, null], name: [ruler_loop.py, teams]",
+    "name": "workflow.monitoring.app_monitoring_ruler_workload",
+    "analysis_time_frequency": "2s",
+    "analysis_time_period": "2s",
+    "analysis_tools": [
+      "tool_info_memory",
+      "tool_info_process",
+      "tool_info_disk",
+      "tool_info_system_load"
+    ]
+  },
+  "report": {
+    "settings": {
+      "report_ancillary_id_start": 1,
+      "report_ancillary_max_row": 3,
+      "report_delimiter": ";"
+    },
+    "ancillary": {
+      "folder_name": "../../exec/monitoring_ruler/{report_sub_path}",
+      "file_name": "ruler_{report_datetime}_{report_id}.workspace"
+    },
+    "destination": {
+      "folder_name": "../../exec/monitoring_ruler/{report_sub_path}",
+      "file_name": "ruler_{report_datetime}.csv"
+    },
+    "figure": {
+      "folder_name": "../../exec/monitoring_ruler/{report_sub_path}",
+      "file_name": "ruler_{report_datetime}_{report_type}.png"
+    }
+  },
+  "time": {
+    "time_run": null,
+    "time_period": 0,
+    "time_frequency": "H",
+    "time_rounding": "H"
+  },
+  "log": {
+    "folder_name": "../../exec/monitoring_ruler/log",
+    "file_name": "report_analysis_logging.txt"
+  },
+  "tmp": {
+    "folder_name": "../../exec/monitoring_ruler/tmp",
+    "file_name": null
+  }
+}

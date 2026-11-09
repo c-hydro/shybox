@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitoring · {{ title }}</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='monitoring.css') }}">
+  <script defer src="{{ url_for('static', filename='monitoring.js') }}"></script>
+</head>
+<body>
+<header>
+  <a class="brand" href="/"><img src="{{ url_for('static', filename='img/app_logo_fcima.png') }}" alt="CIMA Foundation"><span>HYDRAPP <small>Powered by SHYBOX</small></span></a>
+  <nav aria-label="Main navigation">
+    <a href="/runs">01 <span>Runs & sections</span></a>
+    <a href="/time-series">02 <span>Time series</span></a>
+    <a href="/maps">03 <span>Gridded maps</span></a>
+    <a href="/monitoring" aria-current="page">04 <span>Monitoring</span></a>
+    {% if publications_enabled %}<a href="/figures">05 <span>Published figures</span></a>{% endif %}
+  </nav>
+</header>
+<main>
+  {% if demo_mode %}<p class="notice">Demonstration: archived figures and synthetic monitoring records.</p>{% endif %}
+  <div class="page-title"><div><p class="eyebrow">SHYBOX · EXECUTION MONITORING</p><h1>Applications & execution history</h1><p class="subtitle">Run timing, process exit status and output availability.</p></div><span id="last-update" class="badge">Waiting for status</span></div>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="notice">Enable JavaScript to load monitoring records.</p></noscript>
+  <section class="panel selectors" aria-label="Monitoring filters">
+    <label>Application<select id="application"><option value="">All applications</option></select></label>
+    <label>Model initialization date (UTC)<input id="date" type="date"></label>
+    <button id="refresh" class="button secondary" type="button">Refresh status</button>
+    <p class="hint wide">Refreshes every 30 seconds. Stale means the heartbeat stopped; it does not establish a process failure. An empty date shows all initialization dates.</p>
+  </section>
+  <section><h2>Declared applications</h2><div id="applications" class="collection-grid"></div></section>
+  <section class="panel"><div class="panel-heading"><h2>Execution attempts</h2><span id="execution-count" class="hint"></span></div>
+    <p class="hint">Times are UTC. Exit status and output availability are evaluated separately. Each ensemble member and retry has its own record.</p>
+    <div class="table-scroll monitoring-table"><table><thead><tr><th>Application / run</th><th>Initialization / member</th><th>Status</th><th>Started / finished</th><th>Duration</th><th>Exit code</th><th>Outputs / details</th></tr></thead><tbody id="executions"></tbody></table></div>
+  </section>
+  <section class="panel"><div class="panel-heading"><h2>Process RAM</h2><span id="memory-time" class="hint"></span></div>
+    <p id="memory-host" class="hint">No RAM collector configured.</p>
+    <div class="table-scroll"><table><thead><tr><th>Process</th><th>Last sample</th><th>RSS (MiB)</th><th>Peak RSS (MiB)</th><th>Processes</th><th>Level</th></tr></thead><tbody id="memory-targets"></tbody></table></div>
+    <details><summary>RAM history figure</summary><img id="memory-plot" alt="Process and host RAM history" style="width:100%;height:auto" hidden></details>
+    <details id="ruler-report" hidden><summary>Ruler · host and process report</summary><pre id="ruler-json" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details>
+  </section>
+  <details id="issues" class="panel" hidden><summary>Unreadable monitoring records</summary><ul id="issue-list"></ul></details>
+  <footer><span>SHYBOX / CONTINUUM</span><span>Execution summaries adapted from HAT Analyzer_Execution</span></footer>
+</main>
+</body>
+</html>

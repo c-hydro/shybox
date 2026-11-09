@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 
 import os
+from copy import deepcopy
 
 import pandas as pd
 from tabulate import tabulate
@@ -382,7 +383,7 @@ class NamelistStructureManager:
 
     # ------------------------------------------------------------------ #
     # method to auto-cast raw values
-    def _auto_cast_value(self, raw_value: Any, var_def: Var | None = None) -> Any:
+    def _auto_cast_value(self, raw_value: Any, var_def: Var | None = None, parameter_name: str = "") -> Any:
         """
         If raw_value is a string that looks numeric, cast it to int or float.
         Prefer the type of var_def.value (if provided and not None).
@@ -392,6 +393,13 @@ class NamelistStructureManager:
         if not isinstance(raw_value, str):
             return raw_value
 
+        if parameter_name.startswith('s') or (var_def is not None and isinstance(var_def.value, str)):
+            return raw_value
+        if parameter_name.startswith('d'):
+            try:
+                return float(raw_value)
+            except ValueError:
+                return raw_value
         s = raw_value.strip()
         if s == "":
             return raw_value  # keep empty string
@@ -464,7 +472,7 @@ class NamelistStructureManager:
                 for section_name, params in template.items():
                     if param_name in params:
                         var_def = params[param_name]
-                        casted_value = self._auto_cast_value(new_value, var_def)
+                        casted_value = self._auto_cast_value(new_value, var_def, param_name)
 
                         user_values.setdefault(section_name, {})
                         user_values[section_name][param_name] = casted_value
@@ -505,7 +513,7 @@ class NamelistStructureManager:
                                 )
                                 continue
 
-                            casted_value = self._auto_cast_value(pat_value, var_def)
+                            casted_value = self._auto_cast_value(pat_value, var_def, param_name)
                             user_values.setdefault(section_name, {})
                             user_values[section_name][param_name] = casted_value
 
@@ -564,7 +572,7 @@ class NamelistStructureManager:
             values[section_name] = {}
             for param_name, var in params.items():
                 if var.mode == Mode.DEFAULT:
-                    values[section_name][param_name] = var.value
+                    values[section_name][param_name] = deepcopy(var.value)
 
         # ------------------------------------------------------
         # 2. apply overrides
@@ -572,7 +580,7 @@ class NamelistStructureManager:
         if sectioned_user_values:
             for section_name, section_vals in sectioned_user_values.items():
                 values.setdefault(section_name, {})
-                values[section_name].update(section_vals)
+                values[section_name].update(deepcopy(section_vals))
 
         return values
 

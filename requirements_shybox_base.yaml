@@ -27,6 +27,7 @@ dependencies:
   - cartopy
 
   # Tools
+  - psutil
   - pip
 
   - pip:

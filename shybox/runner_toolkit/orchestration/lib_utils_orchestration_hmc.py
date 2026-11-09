@@ -229,8 +229,8 @@ def execute_hmc_member(member_tags, member_config, *, time_tags, dry_run=False, 
     # view execution info
     app_execution_obj.view(table_name='execution_info', table_print=view_table)
     # run execution obj
-    app_execution_info = app_execution_obj.run(
-        dry_run = app_execution.get("description", {}).get("dry_run", dry_run))
+    effective_dry_run = app_execution.get("description", {}).get("dry_run", dry_run)
+    app_execution_info = app_execution_obj.run(dry_run=effective_dry_run)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -249,12 +249,11 @@ def execute_hmc_member(member_tags, member_config, *, time_tags, dry_run=False, 
     # ------------------------------------------------------------------------------------------------------------------
     ## APPLICATION CHECKS
     # Do not mark failed subprocesses successful merely because run() returned.
-    if not dry_run:
-        # Fail closed until the actual ExecutionAnalyzer status contract is wired.
-        raise NotImplementedError('Map ExecutionAnalyzer success/returncode to a validated status here')
+    if not app_analyzer_obj.ok or (not effective_dry_run and app_analyzer_obj.exit_code != 0):
+        raise RuntimeError(f"HMC member {member_tags['run_id']} failed: exit_code={app_analyzer_obj.exit_code}, errors={app_analyzer_obj.errors}")
 
     return {'run_id': member_tags['run_id'], 'namelist': app_namelist['file']['location'],
-            'dry_run': dry_run, 'analysis': str(app_analyzer_obj)}
+            'dry_run': effective_dry_run, 'analysis': str(app_analyzer_obj)}
     # ------------------------------------------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------------------------------------------

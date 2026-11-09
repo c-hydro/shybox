@@ -1,0 +1,23 @@
+{
+  "monitoring": {
+    "folder": "../../exec/monitoring",
+    "stale_seconds": 180,
+    "applications": {
+      "marche_hmc": {
+        "name": "Marche · Continuum",
+        "run_name": "nwp_icon_marche",
+        "application": "hmc",
+        "run_domain": "marche",
+        "run_mode": "deterministic"
+      },
+      "marche_hmc_ensemble": {
+        "name": "Marche · Continuum ensemble",
+        "run_name": "nwp_icon_marche",
+        "application": "hmc",
+        "run_domain": "marche",
+        "run_mode": "probabilistic",
+        "ensemble_members": [1, 2, 3, 4, 5]
+      }
+    }
+  }
+}

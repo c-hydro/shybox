@@ -50,7 +50,14 @@ __issues__ = _urls.get("Issues", _METADATA_NA)
 # expose common decorators
 from shybox.logging_toolkit.lib_logging_utils import with_logger
 from shybox.generic_toolkit.lib_utils_code import deprecated
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
+
+def __getattr__(name):
+    # Monitoring/dashboard imports must not load the optional GIS adapters.
+    if name == 'as_process':
+        from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
+        globals()[name] = as_process
+        return as_process
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 # info
 __all__ = [

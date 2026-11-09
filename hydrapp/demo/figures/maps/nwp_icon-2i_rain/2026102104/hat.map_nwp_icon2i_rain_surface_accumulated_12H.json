@@ -1,0 +1,39 @@
+{
+    "analysis_attributes": {
+        "var_description": "nwp icon-2i analysis",
+        "var_direction_window": "right",
+        "var_level": "surface",
+        "var_mode": "accumulated",
+        "var_name_analysis": "rain_analysis",
+        "var_name_data": "rain_data",
+        "var_temporal_window": "12H",
+        "var_type": "forecast"
+    },
+    "data_attributes": {
+        "Valid_range": "0,None",
+        "fill_value": "-9999.0",
+        "format": "f4",
+        "grid_mapping": "crs",
+        "long_name": "total precipitation",
+        "standard_name": "unknown",
+        "time_direction": "right",
+        "time_from": "202610210400",
+        "time_to": "202610211500",
+        "time_window": "12H",
+        "units": "mm",
+        "var_description": "nwp icon-2i forecast",
+        "var_mode": "deterministic",
+        "var_n": "1",
+        "var_name_data": "rain_data",
+        "var_name_file": "Rain"
+    },
+    "graph_attributes": {
+        "var_background": "osm",
+        "var_color_label": "rain",
+        "var_color_map": "cmap_rain",
+        "var_description": "Accumulated Rain - NWP ICON-2I",
+        "var_dpi": "160",
+        "var_name_analysis": "rain_analysis",
+        "var_name_graph": "nwp_icon2i_rain"
+    }
+}

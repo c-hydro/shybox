@@ -1,0 +1,14 @@
+{
+  "memory_monitoring": {
+    "interval_seconds": 2,
+    "processes": {
+      "status_demo": {
+        "cmdline_contains": "workflow.monitoring.app_monitoring_status_demo",
+        "include_children": true,
+        "warning_rss_mib": 512,
+        "critical_rss_mib": 1024
+      }
+    },
+    "output": {"folder_name": "../../hydrapp/demo/memory"}
+  }
+}

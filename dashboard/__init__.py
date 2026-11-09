@@ -1,1 +1,0 @@
-"""SHYBOX hydrological dashboard."""

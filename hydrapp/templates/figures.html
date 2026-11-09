@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Published results · {{ title }}</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='figures.css') }}">
+  <script defer src="{{ url_for('static', filename='figures.js') }}"></script>
+</head>
+<body data-kind="{{ kind }}">
+<header>
+  <a class="brand" href="/"><img src="{{ url_for('static', filename='img/app_logo_fcima.png') }}" alt="CIMA Foundation"><span>HYDRAPP <small>Powered by SHYBOX</small></span></a>
+  <nav aria-label="Main navigation">
+    <a href="/figures" {% if kind == 'all' %}aria-current="page"{% endif %}>01 <span>Published results</span></a>
+    <a href="/figures/time-series" {% if kind == 'time_series' %}aria-current="page"{% endif %}>02 <span>Section charts</span></a>
+    <a href="/maps" {% if kind == 'maps' %}aria-current="page"{% endif %}>03 <span>Maps</span></a>
+    <a href="/monitoring">04 <span>Monitoring</span></a>
+  </nav>
+</header>
+<main>
+  {% if demo_mode %}<p class="notice">Demonstration: archived HAT figures from 21 October 2026 and synthetic monitoring records.</p>{% endif %}
+  <div class="page-title"><div><p class="eyebrow">HYDRAPP · PUBLISHED PRODUCTS</p><h1>{{ {'all':'Published results', 'maps':'Weather & model maps', 'time_series':'River section charts'}[kind] }}</h1><p class="subtitle">Browse published figures, aggregation windows and source-run information.</p></div><span id="figure-count" class="badge">Loading catalogue</span></div>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="notice">Enable JavaScript to browse published figures.</p></noscript>
+  <section class="panel selectors" aria-label="Figure selection">
+    <label>Product type<select id="kind"><option value="all">All products</option><option value="maps">Maps</option><option value="time_series">Section charts</option></select></label>
+    <label>Publication date (UTC)<input type="date" id="date"></label>
+    <label>Publication time<select id="publication"><option value="">All times</option></select></label>
+    <label>Collection<select id="group"><option value="">All collections</option></select></label>
+    <label>Basin<select id="basin"><option value="">All basins</option></select></label>
+    <label>Aggregation window<select id="window"><option value="">All windows</option></select></label>
+    <button type="button" id="refresh" class="button secondary">Refresh catalogue</button>
+    <p class="hint wide">Publication time identifies the archived product. Each source's model initialization is shown separately below the figure.</p>
+  </section>
+  <div class="figure-layout">
+    <section class="panel figure-list"><h2>Available products</h2><div id="products"></div></section>
+    <section class="panel figure-view"><div class="panel-heading"><h2 id="figure-title">Select a product</h2><span id="figure-window" class="badge"></span></div>
+      <p id="figure-summary" class="hint"></p>
+      <a id="full-image" target="_blank" rel="noopener" hidden><img id="figure-image" alt="" hidden></a>
+      <p id="empty-selection" class="hint">Select a product to view the published image.</p>
+      <div id="figure-actions" hidden><a id="download-image" class="button secondary" download>Download PNG</a> <a id="download-metadata" class="button secondary" download>Download metadata</a></div>
+      <dl id="figure-details" class="figure-details"></dl>
+      <div id="source-runs"></div>
+    </section>
+  </div>
+  <details id="issues" class="panel" hidden><summary>Catalogue issues</summary><ul id="issue-list"></ul></details>
+  <footer><span>HYDRAPP / SHYBOX</span><span><a href="/runs">Interactive river sections</a> · <a href="/time-series">Interactive hydrographs</a></span></footer>
+</main>
+</body>
+</html>

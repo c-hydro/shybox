@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="post" action="{{ url_for('run_job') }}">
+  <div class="tabs is-boxed">
+    <ul>
+      <li class="is-active"><a href="#tab-form" onclick="switchTab(event, 'tab-form')">Parameters</a></li>
+      <li><a href="#tab-raw" onclick="switchTab(event, 'tab-raw')">Raw JSON (read-only)</a></li>
+    </ul>
+  </div>
+
+  <div id="tab-form">
+    {% for title, fields in sections %}
+    <div class="box">
+      <h3 class="title is-5">{{ title }}</h3>
+      <div class="columns is-multiline">
+        {% for f in fields %}
+        <div class="column is-6">
+          <div class="field">
+            <label class="label is-small">{{ f.path }}</label>
+            <div class="control">
+              {% if f.input == "checkbox" %}
+                <label class="checkbox">
+                  <input type="checkbox" name="{{ f.path }}" {% if f.value %}checked{% endif %}>
+                  <span class="is-mono">{{ f.value }}</span>
+                </label>
+              {% elif f.input == "number" %}
+                <input class="input" type="number" name="{{ f.path }}" value="{{ f.value }}">
+              {% elif f.input == "datetime" %}
+                <input class="input" type="text" name="{{ f.path }}" value="{{ f.value }}" placeholder="YYYY-MM-DD HH:MM">
+                <p class="help">Use format <code>YYYY-MM-DD HH:MM</code> or a recognizable datetime.</p>
+              {% else %}
+                <input class="input is-mono" type="text" name="{{ f.path }}" value="{{ f.value }}">
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <div class="box">
+      <h3 class="title is-5">Run Options</h3>
+      <div class="field">
+        <label class="label">Override run time (-time)</label>
+        <div class="control">
+          <input class="input is-mono" type="text" name="_time_override" placeholder="YYYY-MM-DD HH:MM (optional)">
+        </div>
+        <p class="help">If empty, the app uses <code>environment.time_run</code> or the current UTC time.</p>
+      </div>
+
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox" name="_dry_run">
+          Dry run (requires support in the runner)
+        </label>
+      </div>
+
+      <div class="field is-grouped">
+        <div class="control">
+          <button class="button is-primary">Run</button>
+        </div>
+        <div class="control">
+          <a class="button is-light" href="{{ url_for('index') }}">Reset</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-raw" style="display:none;">
+    <div class="box">
+      <pre class="is-mono">{{ raw_cfg }}</pre>
+    </div>
+  </div>
+</form>
+
+<script>
+function switchTab(e, id) {
+  e.preventDefault();
+  document.getElementById('tab-form').style.display = (id==='tab-form') ? '' : 'none';
+  document.getElementById('tab-raw').style.display = (id==='tab-raw') ? '' : 'none';
+  const lis = e.target.closest('ul').querySelectorAll('li');
+  lis.forEach(li => li.classList.remove('is-active'));
+  e.target.closest('li').classList.add('is-active');
+}
+</script>
+{% endblock %}

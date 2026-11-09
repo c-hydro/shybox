@@ -1,0 +1,116 @@
+{
+  "title": "Hydrapp \u00b7 Demonstration",
+  "default_run": "marche_deterministic",
+  "missing_values": [
+    -9999,
+    -9998
+  ],
+  "overview": {
+    "period": "all",
+    "probability_cutoff": 0.5
+  },
+  "runs": {
+    "marche_deterministic": {
+      "name": "Marche \u00b7 Deterministic",
+      "enabled": true,
+      "mode": "deterministic",
+      "time_series": {
+        "folder": "../exec/case_study_marche/analyzer_hmc/data/time_series",
+        "file_pattern": "**/hmc.series_*.nc",
+        "run_time_regex": "(?P<time>\\d{12})\\.nc$",
+        "run_time_format": "%Y%m%d%H%M"
+      },
+      "maps": {
+        "enabled": false,
+        "variables": [
+          "soil_moisture",
+          "discharge"
+        ]
+      }
+    },
+    "marche_probabilistic": {
+      "name": "Marche \u00b7 Probabilistic",
+      "enabled": true,
+      "mode": "probabilistic",
+      "ensemble_dimension": "ensemble",
+      "quantiles": [
+        0.05,
+        0.25,
+        0.5,
+        0.75,
+        0.95
+      ],
+      "time_series": {
+        "folder": "../exec/case_study_marche/analyzer_hmc/data/time_series_ensemble",
+        "file_pattern": "**/hmc.series_*.nc",
+        "run_time_regex": "(?P<time>\\d{12})\\.nc$",
+        "run_time_format": "%Y%m%d%H%M"
+      },
+      "maps": {
+        "enabled": false,
+        "variables": [
+          "soil_moisture",
+          "discharge"
+        ]
+      }
+    }
+  },
+  "monitoring": {
+    "folder": "demo/monitoring",
+    "stale_seconds": 180,
+    "applications": {
+      "converter": {
+        "name": "Forcing converter",
+        "run_name": "hydrapp_demo",
+        "application": "converter"
+      },
+      "hmc": {
+        "name": "Continuum \u00b7 failed demo",
+        "run_name": "hydrapp_demo",
+        "application": "hmc"
+      },
+      "analyzer": {
+        "name": "Live analyzer",
+        "run_name": "hydrapp_demo",
+        "application": "analyzer"
+      },
+      "publisher": {
+        "name": "Stale publisher",
+        "run_name": "hydrapp_demo",
+        "application": "publisher"
+      },
+      "archive": {
+        "name": "Skipped archive",
+        "run_name": "hydrapp_demo",
+        "application": "archive"
+      },
+      "validation": {
+        "name": "Dry-run validation",
+        "run_name": "hydrapp_demo",
+        "application": "validation"
+      },
+      "expected": {
+        "name": "Missing expected run",
+        "run_name": "hydrapp_demo",
+        "application": "expected"
+      },
+      "ensemble_hmc": {
+        "name": "Ensemble members",
+        "run_name": "hydrapp_demo",
+        "application": "ensemble_hmc",
+        "ensemble_members": [
+          1,
+          2,
+          3
+        ]
+      }
+    },
+    "memory_file": "demo/memory/memory.latest.json",
+    "memory_plot": "demo/memory/memory.png"
+  },
+  "publications": {
+    "enabled": true,
+    "folder": "demo/figures"
+  },
+  "demo": true
+}

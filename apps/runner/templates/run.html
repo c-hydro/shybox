@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="box">
+  <h3 class="title is-5">Job <code>{{ job_id }}</code></h3>
+  <div class="buttons">
+    <a class="button is-link is-light" href="{{ url_for('download_config', job_id=job_id) }}">Download this run's config</a>
+    <a class="button" href="{{ url_for('index') }}">Back</a>
+  </div>
+  <pre class="log" id="log"></pre>
+</div>
+
+<script>
+async function fetchLog() {
+  try {
+    const res = await fetch("{{ url_for('logs', job_id=job_id) }}", {cache:"no-store"});
+    const text = await res.text();
+    const el = document.getElementById('log');
+    if (text) { el.textContent += text; el.scrollTop = el.scrollHeight; }
+  } catch(e) {
+  } finally {
+    setTimeout(fetchLog, 1500);
+  }
+}
+fetchLog();
+</script>
+{% endblock %}

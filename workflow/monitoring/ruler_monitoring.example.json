@@ -1,0 +1,23 @@
+{
+  "memory_monitoring": {
+    "interval_seconds": 5,
+    "processes": {
+      "continuum": {
+        "cmdline_contains": "HMC_Model_V3_",
+        "include_children": true,
+        "warning_rss_mib": 2048,
+        "critical_rss_mib": 4096
+      }
+    },
+    "output": {
+      "folder_name": "../../exec/monitoring_ram"
+    },
+    "ruler": {
+      "enabled": true,
+      "disk_paths": [
+        "/"
+      ],
+      "process_memory_type": "partial"
+    }
+  }
+}

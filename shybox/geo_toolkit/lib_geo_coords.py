@@ -374,7 +374,7 @@ def match_coords_to_reference(
         logger_stream.warning("============================")
 
         logger_stream.error('Shape mismatch between data and reference coordinates. Raising error.')
-        raise ValueError('Shape mismatch between data and reference coordinates.\n' + msg)
+        raise ValueError('Shape mismatch between data and reference coordinates.')
 
     # 2. BBOX check
     da_bbox = (
@@ -407,6 +407,7 @@ def match_coords_to_reference(
             raise ValueError('Data Bounding Box mismatch. Tolerance exceeded.')
         else:
             logger_stream.warning('Data BBox mismatch. Tolerance exceeded. Returning original data.')
+            return da
 
     # 3. Coordinate equality check
     # use tighter tolerance than bbox (same grid)

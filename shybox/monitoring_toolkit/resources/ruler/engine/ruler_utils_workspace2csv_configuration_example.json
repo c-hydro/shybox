@@ -1,0 +1,47 @@
+{
+  "algorithm": {
+    "general": {
+      "title": "RULER - UTILS - Workspace2CSV",
+      "web-site": "",
+      "source": "Python library developed by CIMA Research Foundation",
+      "history": "1.0.0 [20221227]",
+      "project-info": "Tools for converting workspace files to csv",
+      "algorithm": "Package for making machine analysis"
+    },
+    "flags": {
+      "clean_file_destination": true
+    },
+    "template": {
+      "process_name": "process_name_string",
+      "proc_n": "process_n_string",
+      "proc_pid": "process_pid_string",
+      "report_type": "report_type_string",
+      "report_id": "report_id_string",
+      "report_sub_path": "%Y/%m/%d",
+      "report_datetime": "%Y%m%d%H%M"
+    }
+  },
+  "process": {
+    "source_name": "*",
+    "destination_name": "hmc_core"
+  },
+  "report":{
+    "source": {
+      "folder_name": "/home/fabio/Desktop/PyCharm_Workspace/ruler-ws/report/cloud_20230114/",
+      "file_name": "report_analysis_{process_name}_{report_datetime}_{report_id}.workspace"
+    },
+    "destination": {
+      "__comment__": "tags: {report_sub_path} {process_name} {report_datetime}",
+      "folder_name": "/home/fabio/Desktop/PyCharm_Workspace/ruler-ws/report/cloud_20230114/",
+      "file_name": "report_analysis_{process_name}_{report_datetime}.csv"
+    }
+  },
+  "log": {
+    "folder_name": "/home/fabio/Desktop/PyCharm_Workspace/ruler-ws/log/",
+    "file_name": "ruler_utils_workspace2csv_logging.txt"
+  },
+  "tmp": {
+    "folder_name": "/home/fabio/Desktop/PyCharm_Workspace/ruler-ws/tmp/",
+    "file_name": null
+  }
+}

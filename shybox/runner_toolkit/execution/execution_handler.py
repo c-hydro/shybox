@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import threading
+import time
 import queue
 import json
 import pandas as pd
@@ -28,6 +29,8 @@ from shybox.runner_toolkit.execution.lib_utils_execution import (
     normalize_path,
     check_library_path,
 )
+
+from shybox.monitoring_toolkit.execution import RunMonitor
 
 from shybox.default.lib_default_time import time_format_algorithm
 from shybox.logging_toolkit.logging_handler import LoggingManager
@@ -69,6 +72,7 @@ class ExecutionManager:
         stream_output: bool = True,
         timeout: Optional[int] = None,
         logger: LoggingManager | None = None,
+        monitoring: Optional[Dict[str, Any]] = None,
     ) -> None:
 
         # Set up logger for this ConfigManager instance
@@ -80,6 +84,10 @@ class ExecutionManager:
         self.execution_update = execution_update
         self.stream_output = stream_output
         self.timeout = timeout
+        self.monitoring = dict(monitoring if monitoring is not None else execution_obj.get("monitoring", {}))
+        self.monitor = None
+        self._last_exit_code = None
+        self._execution_skipped = False
 
         # metadata from description
         desc = execution_obj.get("description", {})
@@ -198,24 +206,39 @@ class ExecutionManager:
         t_out.start()
         t_err.start()
 
-        # Consume lines until process exits and both pumps are done
-        while True:
-            try:
-                name, line = q.get(timeout=0.1)
-            except queue.Empty:
-                if proc.poll() is not None and not (t_out.is_alive() or t_err.is_alive()):
-                    break
-                continue
-
-            line = line.rstrip("\n")
-            if name == "stdout":
-                stdout_lines.append(line)
-                log.info(line)
-            else:
-                stderr_lines.append(line)
-                log.warning(line)
-
-        exit_code = proc.wait()
+        # Quiet streaming processes still need timeout/cancellation handling.
+        deadline = time.monotonic() + self.timeout if self.timeout is not None else None
+        try:
+            while True:
+                if deadline is not None and time.monotonic() >= deadline and proc.poll() is None:
+                    raise subprocess.TimeoutExpired(self.command, self.timeout)
+                try:
+                    name, line = q.get(timeout=0.1)
+                except queue.Empty:
+                    if proc.poll() is not None and not (t_out.is_alive() or t_err.is_alive()):
+                        break
+                    continue
+                line = line.rstrip("\n")
+                if name == "stdout":
+                    stdout_lines.append(line)
+                    log.info(line)
+                else:
+                    stderr_lines.append(line)
+                    log.warning(line)
+            exit_code = proc.wait()
+        except BaseException:
+            if proc.poll() is None:
+                proc.kill()
+            self._last_exit_code = proc.wait()
+            raise
+        finally:
+            # Descendants may retain pipes; do not wait indefinitely for them.
+            t_out.join(timeout=1)
+            t_err.join(timeout=1)
+            if not t_out.is_alive():
+                proc.stdout.close()
+            if not t_err.is_alive():
+                proc.stderr.close()
 
         stdout = "\n".join(stdout_lines) if stdout_lines else None
         stderr = "\n".join(stderr_lines) if stderr_lines else None
@@ -241,13 +264,57 @@ class ExecutionManager:
         log = self.log
         log_tag = self.exec_name
 
-        span = getattr(log, "span", None)
-        if callable(span):
-            with span(f"Run execution '{self.exec_name}'", tag=log_tag):
-                return self._run_core(log_tag, dry_run=dry_run)
-        else:
-            log.info(f"Run execution '{self.exec_name}'")
-            return self._run_core(log_tag, dry_run=dry_run)
+        self._last_exit_code = None
+        self._execution_skipped = False
+        self.monitor = None
+        if self.monitoring.get('enabled', False):
+            try:
+                options = dict(self.monitoring)
+                options.pop('enabled', None)
+                folder = options.pop('folder_name', str(Path(self.file_info).parent / 'monitoring'))
+                folder = os.path.expandvars(str(folder)).format_map(self.settings_obj)
+                metadata = {
+                    'run_name': self.settings_obj.get('run_name', self.exec_name),
+                    'application': self.exec_name,
+                    'run_time': self.time_obj if not isinstance(self.time_obj, dict) else self.time_obj.get('time_run'),
+                    'run_mode': self.exec_mode,
+                }
+                metadata.update(options)
+                for key, value in list(metadata.items()):
+                    if isinstance(value, str):
+                        metadata[key] = value.format_map(self.settings_obj)
+                self.monitor = RunMonitor(folder, **metadata)
+                skip = not dry_run and should_skip_execution(self.file_info, self.execution_update)
+                if not dry_run and not skip:
+                    self.monitor.start()
+            except Exception as exc:
+                log.warning(f'Monitoring initialization failed: {exc}')
+                self.monitor = None
+
+        try:
+            span = getattr(log, "span", None)
+            if callable(span):
+                with span(f"Run execution '{self.exec_name}'", tag=log_tag):
+                    result = self._run_core(log_tag, dry_run=dry_run)
+            else:
+                log.info(f"Run execution '{self.exec_name}'")
+                result = self._run_core(log_tag, dry_run=dry_run)
+        except BaseException as exc:
+            self._finish_monitor(status='cancelled' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed',
+                                 error=exc)
+            raise
+        status = 'dry_run' if dry_run else 'skipped' if self._execution_skipped else None
+        self._finish_monitor(status=status)
+        return result
+
+    def _finish_monitor(self, *, status=None, error=None):
+        if self.monitor is not None:
+            try:
+                self.monitor.finish(self._last_exit_code, status=status, error=error)
+                if self.monitor.heartbeat_error:
+                    self.log.warning(f'Monitoring heartbeat failed: {self.monitor.heartbeat_error}')
+            except Exception as exc:
+                self.log.warning(f'Monitoring completion failed: {exc}')
 
 
     # ------------------------------------------------------------------
@@ -276,6 +343,7 @@ class ExecutionManager:
         # 1. Skip logic (only for real runs)
         if not dry_run and should_skip_execution(self.file_info, self.execution_update):
             log.info(f'Execution info exists: "{self.file_info}" → skip run')
+            self._execution_skipped = True
             info = load_execution_info(self.file_info)
 
             # if older info had no checks, at least attach current quick checks
@@ -338,6 +406,8 @@ class ExecutionManager:
             stdout, stderr, exit_code = self._run_stream(log_tag)
         else:
             stdout, stderr, exit_code = self._run_buffer(log_tag)
+
+        self._last_exit_code = exit_code
 
         # stderr check (after IEEE cleanup)
         if stderr is not None:

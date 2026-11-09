@@ -4,3 +4,17 @@ Developers
 
 * Fabio Delogu <fabio.delogu@cimafoundation.org>
 * Andrea Libertino <andrea.libertino@cimafoundation.org>
+
+* Francesco Avanzi <francesco.avanzi@cimafoundation.org> (SHYBOX project author)
+
+Adapted components
+==================
+
+* HAT Analyzer_Execution / Analyzer_Datasets: Fabio Delogu and Flavio Pignone,
+  CIMA Research Foundation; legacy monitoring/publication formats and figure examples.
+* RULER - RUntime anaLyzER: Fabio Delogu, CIMA Research Foundation, Department of
+  Hydrology and Hydraulics. The integrated Ruler implementation retains the upstream
+  MIT licence and revision provenance in shybox/monitoring_toolkit/resources/ruler/engine/.
+
+Hydrapp is the SHYBOX Flask viewer, evolved from the earlier dashboard and HAT
+publication examples. Component credits do not change their original licences.

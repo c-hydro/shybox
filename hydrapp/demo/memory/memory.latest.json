@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "resource": "memory",
+  "generated_at": "2026-11-06T23:53:45.322782Z",
+  "host": {
+    "name": "delogu",
+    "memory_total_mib": 31757.49609375,
+    "memory_available_mib": 19761.30078125,
+    "memory_used_mib": 11996.1953125,
+    "memory_used_percent": 37.77437388982596
+  },
+  "targets": [
+    {
+      "label": "status_demo",
+      "status": "running",
+      "rss_mib": 18.02734375,
+      "vms_mib": 99.09765625,
+      "peak_rss_mib": 18.02734375,
+      "level": "normal",
+      "process_count": 1,
+      "processes": [
+        {
+          "pid": 3,
+          "name": "python"
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "ruler": {
+    "source": "c-hydro/ruler",
+    "revision": "6fbbf6303620d1d9036a8176d405a3c66ae1d0bd",
+    "memory": {
+      "virtual_memory_total": "31.0G",
+      "virtual_memory_available": "19.3G",
+      "virtual_memory_percent": 37.8,
+      "virtual_memory_used": "11.7G",
+      "virtual_memory_free": "1.9G",
+      "virtual_memory_active": "8.9G",
+      "virtual_memory_inactive": "18.3G",
+      "virtual_memory_buffers": "2.1G",
+      "virtual_memory_cached": "17.3G",
+      "virtual_memory_shared": "1.4G",
+      "virtual_memory_slab": "1.2G",
+      "swap_memory_total": "2.0G",
+      "swap_memory_used": "212.0M",
+      "swap_memory_free": "1.8G",
+      "swap_memory_percent": 10.4,
+      "swap_memory_sin": "12.3M",
+      "swap_memory_sout": "214.9M"
+    },
+    "disk": {
+      "/": {
+        "disk_usage_total": "68.2G",
+        "disk_usage_used": "54.8G",
+        "disk_usage_free": "9.9G",
+        "disk_usage_percent": 84.7
+      }
+    },
+    "load": {
+      "system_load_1m": 1.61,
+      "system_load_5m": 1.31,
+      "system_load_15m": 0.93
+    },
+    "processes": {
+      "status_demo": {
+        "pid_3_0_pid": 3,
+        "pid_3_0_rss": "18.0M",
+        "pid_3_0_vms": "99.1M",
+        "pid_3_0_shared": "7.8M",
+        "pid_3_0_text": "2.3M",
+        "pid_3_0_lib": "0.0B",
+        "pid_3_0_data": "19.5M",
+        "pid_3_0_dirty": "0.0B",
+        "pid_3_0_cpu_percent": 0.0,
+        "pid_3_0_status": "running",
+        "pid_3_0_name": "python",
+        "pid_3_0_memory_percent": 0.0568,
+        "pid_3_0_create_time": "2026-11-07 00:52:44",
+        "pid_3_0_user": 0.26,
+        "pid_3_0_system": 0.12,
+        "pid_3_0_children_user": 0.0,
+        "pid_3_0_children_system": 0.0,
+        "pid_3_0_iowait": 0.0,
+        "pid_3_0_cpu_affinity": "0,1,2,3,4,5,6,7,8,9,10,11",
+        "pid_3_0_cpu_n": 9,
+        "pid_3_0_percent_rss": 0.0568,
+        "pid_3_0_percent_vms": 0.312,
+        "pid_3_0_percent_shared": 0.0245,
+        "pid_3_0_percent_text": 0.0073,
+        "pid_3_0_percent_lib": 0.0,
+        "pid_3_0_percent_data": 0.0615,
+        "pid_3_0_percent_dirty": 0.0
+      }
+    },
+    "issues": []
+  }
+}
