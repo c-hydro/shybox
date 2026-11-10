@@ -15,10 +15,17 @@ S3M variant that matches your file formats and model configuration.
 is to transform rainfall forecasts into stochastic ensemble members, with
 intermediate results on disk and final model forcing written separately.
 
-Model execution
----------------
+Model forcing and execution
+---------------------------
 
-``workflow/runner/`` contains HMC and S3M runners. These use utilities under
+``workflow/runner/datasets/`` combines observed/forecast inputs into validated
+HMC/S3M forcing, including deterministic and ensemble sources. Follow
+:doc:`datasets` for configuration recipes, validity-time/source-cycle selection,
+file plans, availability windows, forecast fallback, gap policies and publication.
+The shared driver supports planning with ``--dry-run --plan-files`` and execution
+using the same JSON profile.
+
+``workflow/runner/execution/`` contains HMC and S3M runners. These use utilities under
 ``shybox/runner_toolkit/`` to prepare namelists and launch model executables.
 Supply an executable compatible with the selected namelist template, input
 datasets and model version. Follow :doc:`runners` for complete HMC and S3M

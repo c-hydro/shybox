@@ -61,12 +61,18 @@ include psutil and Matplotlib for resource collection and plotting.
 
 .. code-block:: bash
 
+   python -B -m unittest discover -s tests/dataset -p 'test_*.py' -v
    python -B -m unittest discover -s tests/runner -v
    python -B -m unittest discover -s tests/geo -v
    python -B -m unittest discover -s tests/monitoring -v
    python -B -m unittest discover -s hydrapp/tests -v
    python -B -m unittest discover -s tests/io -v
    python -B -m unittest discover -s tests/orchestrator -v
+
+Dataset coverage includes validity-time/cycle selection, deterministic/ensemble
+modes, file plans, observation-to-forecast fallback, source formats, interpolation,
+prepared-file copies, gap policies and model forcing round trips. See
+:doc:`datasets` for configuration and planning commands.
 
 Runner coverage includes all registered HMC/S3M namelist versions, mandatory
 fields, Fortran round trips, output files, deterministic/parallel ensemble

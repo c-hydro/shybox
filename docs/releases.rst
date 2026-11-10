@@ -1,6 +1,21 @@
 Documentation releases
 ======================
 
+0.3.0 — Dataset preparation guide
+---------------------------------
+
+Prepared on 10 November 2026 for SHYBOX |package_version|. Documentation is
+published from ``main``; Read the Docs ``latest`` follows its successful build.
+
+* Add a dedicated dataset guide with HMC/S3M setup, CLI planning/composition,
+  configuration, source mapping, validity times and forecast issue cycles.
+* Document DatasetManager file plans, availability windows, forecast fallback,
+  ensemble sources, spatial operations, gap policies and atomic publication.
+* Refresh the README, repository layout, navigation and related guide links.
+
+The dataset composer and reorganized runner paths describe the development
+checkout. Publishing these pages alone does not publish application code.
+
 0.2.0 — Runner guide and development previews
 ---------------------------------------------
 
