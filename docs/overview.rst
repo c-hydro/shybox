@@ -25,11 +25,14 @@ Repository layout
    ├── workflow/                  Workflow drivers and JSON examples
    │   ├── dataset/               Convert, merge and disaggregate data
    │   ├── geo/                   Prepare geographic information
-   │   ├── runner/                Configure and execute HMC/S3M
-   │   └── analyzer/              Analyze model output
+   │   ├── runner/
+   │   │   ├── datasets/          Plan and compose observed/forecast forcing
+   │   │   └── execution/         Configure and execute HMC/S3M
+   │   ├── analyzer/              Analyze model output
+   │   └── monitoring/            Monitor lifecycle and resources
+   ├── hydrapp/                   Flask figures, section maps and run monitoring
    ├── apps/                      Additional applications
-   ├── web/                       Flask result visualization interface
-   ├── exec/                      Case-study execution directories
+   ├── web/                       Earlier visualization application
    ├── docker/                    Container definitions and entrypoints
    ├── apptainer/                 Apptainer deployment notes
    ├── hpc/                       HPC execution material
@@ -39,7 +42,7 @@ Repository layout
    ├── pyproject.toml             Package metadata
    └── setup_shybox_*.sh          Conda environment setup
 
-Some local checkouts also contain ``conda/``, ``dset/`` and ``tmp/``. These
+Some local checkouts also contain ``conda/``, ``dset/``, ``exec/`` and ``tmp/``. These
 hold environments, datasets and temporary files and are ignored by Git.
 
 Core package
@@ -60,7 +63,7 @@ Core package
    * - ``processing_*_toolkit``
      - Implement grid, point, time-series, geographic and hydro calculations.
    * - ``runner_toolkit``
-     - Prepare model namelists and manage execution.
+     - Plan/compose forcing datasets, prepare model namelists and manage execution.
    * - ``external_toolkit``
      - Locate separately maintained libraries such as RFarm and PRISM.
    * - ``logging_toolkit`` / ``time_toolkit``

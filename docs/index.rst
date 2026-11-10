@@ -17,15 +17,16 @@ environmental data processing, snow modeling and hydrological modeling.
 It is developed by the CIMA Research Foundation for research and operational
 forecasting, including Flood-PROOFS systems.
 
-This is documentation edition **0.2.0**, describing the repository structure
+This is documentation edition **0.3.0**, describing the repository structure
 and development interfaces of SHYBOX |package_version|. Workflow compatibility
 depends on the selected code branch, model version and dataset configuration.
 
-The HMC/S3M runner guide documents the current runner interfaces. The
-:doc:`monitoring` and :doc:`hydrapp` chapters are development previews of
-unreleased local integrations; their new package paths are not yet available
-in the published ``main`` branch. Documentation publication does not release
-those application changes.
+The :doc:`datasets` guide covers observed/forecast forcing preparation,
+file planning, validation and ensemble composition. Continue with :doc:`runners`
+for HMC/S3M execution, then :doc:`workflows` for analysis and output formats.
+Dataset composition, the reorganized runner directories, :doc:`monitoring` and
+:doc:`hydrapp` describe the development checkout. Check that these paths exist
+in your revision; documentation publication does not release application changes.
 
 Start with :doc:`installation` to prepare the scientific environment, then
 follow :doc:`quickstart` to configure a workflow for your own datasets.
@@ -39,6 +40,7 @@ follow :doc:`quickstart` to configure a workflow for your own datasets.
    quickstart
    configuration
    workflows
+   datasets
    runners
    monitoring
    hydrapp

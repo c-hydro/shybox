@@ -4,7 +4,7 @@ Running HMC and S3M
 The runners create a model-specific Fortran namelist, prepare an executable,
 launch it and collect execution information. They do not download a model binary,
 build geographic datasets or convert forcing data. Prepare those inputs first,
-using :doc:`installation`, :doc:`quickstart` and the dataset workflows.
+using :doc:`installation`, :doc:`quickstart` and :doc:`datasets`.
 
 This guide uses the current base runners for one deterministic run. Their JSON
 examples need adaptation to your domain and executable. Commands below are run
@@ -27,8 +27,8 @@ Choose the runner and version
 
    * - Model
      - Template version
-     - Python driver in ``workflow/runner/``
-     - JSON example in ``workflow/runner/``
+     - Python driver in ``workflow/runner/execution/``
+     - JSON example in ``workflow/runner/execution/``
    * - HMC / Continuum
      - 3.3.0
      - ``app_runner_workflow_hmc_base_main.py``
@@ -106,7 +106,7 @@ paths below with existing files on your machine:
    export TIME_PERIOD="24"
 
    mkdir -p "$PATH_APP" "$PATH_DST" "$PATH_LOG"
-   cp workflow/runner/app_runner_workflow_hmc_base_example_v330.json \
+   cp workflow/runner/execution/app_runner_workflow_hmc_base_example_v330.json \
       "$SHYBOX_RUN_ROOT/settings.json"
 
 The base HMC example expects geographic and forcing subfolders under
@@ -167,7 +167,7 @@ With ``description.dry_run`` set to true in the copied HMC JSON:
 
 .. code-block:: bash
 
-   python -c 'from workflow.runner.app_runner_workflow_hmc_base_main import main; main(view_table=False, dry_run=True)' \
+   python -c 'from workflow.runner.execution.app_runner_workflow_hmc_base_main import main; main(view_table=False, dry_run=True)' \
       -settings_file "$SHYBOX_RUN_ROOT/settings.json"
 
 This generates the namelist and prepares/checks the executable without launching
@@ -184,7 +184,7 @@ Once the generated namelist and input datasets have been checked, change
 
 .. code-block:: bash
 
-   python -c 'from workflow.runner.app_runner_workflow_hmc_base_main import main; main(view_table=False, dry_run=False)' \
+   python -c 'from workflow.runner.execution.app_runner_workflow_hmc_base_main import main; main(view_table=False, dry_run=False)' \
       -settings_file "$SHYBOX_RUN_ROOT/settings.json"
 
 The HMC JSON value overrides the ``main()`` argument. Keep them consistent.
@@ -213,7 +213,7 @@ Copy the S3M 5.3.3 example into a separate working directory:
    export TIME_PERIOD="24"
 
    mkdir -p "$PATH_APP" "$PATH_DST" "$PATH_LOG"
-   cp workflow/runner/app_runner_workflow_s3m_base_example_v533.json \
+   cp workflow/runner/execution/app_runner_workflow_s3m_base_example_v533.json \
       "$SHYBOX_RUN_ROOT/settings.json"
 
 ``PATH_STATIC`` supplies the S3M geographic grids. The example uses dated
@@ -278,14 +278,14 @@ Generate and inspect the namelist before running the model:
 
 .. code-block:: bash
 
-   python -c 'from workflow.runner.app_runner_workflow_s3m_base_main import main; main(view_table=False, dry_run=True)' \
+   python -c 'from workflow.runner.execution.app_runner_workflow_s3m_base_main import main; main(view_table=False, dry_run=True)' \
       -settings_file "$SHYBOX_RUN_ROOT/settings.json"
 
 After validation, launch the executable:
 
 .. code-block:: bash
 
-   python -c 'from workflow.runner.app_runner_workflow_s3m_base_main import main; main(view_table=False, dry_run=False)' \
+   python -c 'from workflow.runner.execution.app_runner_workflow_s3m_base_main import main; main(view_table=False, dry_run=False)' \
       -settings_file "$SHYBOX_RUN_ROOT/settings.json"
 
 The S3M base driver passes its ``main(dry_run=...)`` argument to the execution
