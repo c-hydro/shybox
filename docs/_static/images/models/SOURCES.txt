@@ -1,0 +1,40 @@
+MODEL ILLUSTRATIONS — SOURCE AND ATTRIBUTION
+
+All assets below are stored within SHYBOX documentation and referenced through
+relative paths. No image download is needed to build or read the generated site.
+Imported on 2026-11-12. Images are unchanged from the listed sources.
+
+HMC / CONTINUUM
+
+Files:
+  hmc/continuum_water_fluxes.png
+    Original: hmc-dev/docs/img/hmc_physics/hmc_scheme_flux_partition.png
+  hmc/continuum_soil_vegetation.png
+    Original: hmc-dev/docs/img/hmc_physics/hmc_scheme_vegetation_infiltration_subflow.png
+
+Source: HMC development documentation, docs/description.rst and its figures.
+Repository: https://github.com/c-hydro/hmc-dev
+Credit: CIMA Research Foundation / Fabio Delogu.
+The source documentation identifies Fabio Delogu (2019) as its author;
+the accompanying hmc-dev repository supplies the EUPL-1.2 licence.
+Scientific context: Silvestro et al. (2012), DOI 10.5194/hessd-9-7639-2012;
+Silvestro et al. (2013), DOI 10.5194/hess-17-39-2013.
+
+S3M
+
+File: s3m/s3m_snow_glacier_fluxes.png
+Source: Avanzi et al. (2022), Geoscientific Model Development, 15, 4853–4879,
+Figure 1. DOI: https://doi.org/10.5194/gmd-15-4853-2022
+Original image:
+https://gmd.copernicus.org/articles/15/4853/2022/gmd-15-4853-2022-f01-web.png
+Credit: Avanzi et al. (2022); article distributed under CC BY 4.0.
+Licence: https://creativecommons.org/licenses/by/4.0/
+The original figure caption credits the background to the ESRI Satellite theme
+and identifies the Rutor glacier in northwestern Italy. That credit is retained
+in the documentation caption; third-party imagery retains its original rights.
+
+SHA-256 CHECKSUMS
+
+9f8c8ea87c79a966490b53663055f79a14804e1414bf78704f03baf6f3637d1b  hmc/continuum_soil_vegetation.png
+3ca75b93f096bd0ca1c6f11c5d90b15e15286d0ec487a4743a4133aaddc18188  hmc/continuum_water_fluxes.png
+398c3fa50276de402677e51f4dbc865f49ca84084d50353130c0fbf281cbf34b  s3m/s3m_snow_glacier_fluxes.png

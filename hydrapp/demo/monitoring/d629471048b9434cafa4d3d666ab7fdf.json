@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "execution_id": "d629471048b9434cafa4d3d666ab7fdf",
+  "run_name": "hydrapp_demo",
+  "application": "analyzer",
+  "run_time": "2026-11-06T23:00:00.000000Z",
+  "run_domain": null,
+  "run_mode": null,
+  "ensemble": null,
+  "task_id": null,
+  "host": "delogu",
+  "pid": 3,
+  "status": "succeeded",
+  "started_at": "2026-11-06T23:52:45.308307Z",
+  "updated_at": "2026-11-06T23:53:45.332530Z",
+  "finished_at": "2026-11-06T23:53:45.332476Z",
+  "exit_code": 0,
+  "duration_seconds": 60.024,
+  "error": null,
+  "outputs": [],
+  "output_status": "unknown",
+  "demo": true
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "execution_id": "0758656b9215494fbb0a614743ae8678",
+  "run_name": "hydrapp_demo",
+  "application": "validation",
+  "run_time": "2026-11-06T23:00:00.000000Z",
+  "run_domain": null,
+  "run_mode": null,
+  "ensemble": null,
+  "task_id": null,
+  "host": "delogu",
+  "pid": 3,
+  "status": "dry_run",
+  "started_at": null,
+  "updated_at": "2026-11-06T23:43:48.683161Z",
+  "finished_at": "2026-11-06T23:43:48.683150Z",
+  "exit_code": null,
+  "duration_seconds": null,
+  "error": null,
+  "outputs": [],
+  "output_status": "unknown",
+  "demo": true
+}

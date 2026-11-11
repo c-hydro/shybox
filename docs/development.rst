@@ -32,6 +32,13 @@ Open ``docs/_build/html/index.html`` to review the generated site. The build
 fails on warnings, including broken internal references and missing documents.
 Documentation source uses reStructuredText and the Read the Docs Sphinx theme.
 
+Keep documentation images in ``docs/_static/images/``. Model illustrations are
+organized under ``models/hmc/`` and ``models/s3m/`` within that directory; their
+source, attribution and licence notes are recorded in ``models/SOURCES.txt``.
+Use relative ``figure`` / ``image`` paths with alternative text and a source
+credit. Copy referenced assets into the documentation so builds do not depend
+on a developer's filesystem or an external image host.
+
 ``docs/conf.py`` reads package metadata from ``pyproject.toml`` without importing
 ``shybox``. Documentation builds therefore need neither Conda's GIS stack nor
 external toolkit downloads.
@@ -61,12 +68,18 @@ include psutil and Matplotlib for resource collection and plotting.
 
 .. code-block:: bash
 
+   python -B -m unittest discover -s tests/dataset -p 'test_*.py' -v
    python -B -m unittest discover -s tests/runner -v
    python -B -m unittest discover -s tests/geo -v
    python -B -m unittest discover -s tests/monitoring -v
    python -B -m unittest discover -s hydrapp/tests -v
    python -B -m unittest discover -s tests/io -v
    python -B -m unittest discover -s tests/orchestrator -v
+
+Dataset coverage includes validity-time/cycle selection, deterministic/ensemble
+modes, file plans, observation-to-forecast fallback, source formats, interpolation,
+prepared-file copies, gap policies and model forcing round trips. See
+:doc:`datasets` for configuration and planning commands.
 
 Runner coverage includes all registered HMC/S3M namelist versions, mandatory
 fields, Fortran round trips, output files, deterministic/parallel ensemble

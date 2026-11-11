@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "execution_id": "f7831dc9aac84263870a66526b198583",
+  "run_name": "hydrapp_demo",
+  "application": "hmc",
+  "run_time": "2026-11-06T23:00:00.000000Z",
+  "run_domain": null,
+  "run_mode": null,
+  "ensemble": null,
+  "task_id": null,
+  "host": "delogu",
+  "pid": 3,
+  "status": "failed",
+  "started_at": "2026-11-06T23:43:48.681722Z",
+  "updated_at": "2026-11-06T23:43:48.682372Z",
+  "finished_at": "2026-11-06T23:43:48.682358Z",
+  "exit_code": 2,
+  "duration_seconds": 0.001,
+  "error": "Synthetic input error for demonstration.",
+  "outputs": [],
+  "output_status": "unknown",
+  "demo": true
+}

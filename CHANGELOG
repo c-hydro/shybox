@@ -2,113 +2,124 @@
 Changelog
 =========
 
+Summaries follow GitHub commits on main and fproofs; uncommitted work is excluded.
 Dates follow main/* release tags where available; other legacy dates are retained.
-References identify source commits; development entries do not announce a tagged release.
+Development dates identify commits, not tagged releases; references are commit hashes.
+
+Version 1.6.0 (development) [2026-11-09]
+****************************************
+
+- APP: Rename the Flask dashboard to Hydrapp and add legacy HAT map/chart browsing (44922b3).
+- APP: Add execution monitoring, ensemble summaries, RAM history and Ruler reports (44922b3).
+- APP: Add a Flask runner interface and portable figure/memory demonstrations (44922b3).
+- WORKFLOW: Add lifecycle/heartbeat records, exit tracking and JSON monitoring examples (44922b3).
+- PACKAGE: Organize monitoring into common, execution and resources; integrate Ruler (44922b3).
+- PACKAGE: Fix namelist, orchestration and coordinate handling; add HMC state-copy utilities (44922b3).
+- TESTS: Cover monitoring, Hydrapp, RFarm, HMC/S3M namelists and orchestration (44922b3).
+- DOCUMENTATION: Update component credits and consolidate Hydrapp setup (44922b3).
 
 Version 1.6.0 (development) [2026-11-08]
 ****************************************
 
-- DOCUMENTATION: Publish docs edition 0.2.0 with HMC/S3M runner recipes and labelled monitoring/Hydrapp development previews.
-
-Version 1.6.0 (development) [2026-11-07]
-****************************************
-
-- APP: Rename the Flask viewer to Hydrapp; add legacy HAT map/chart browsing and 23 portable figure pairs.
-- APP: Add run-status demos, RAM snapshots/history and Ruler reports to the monitoring page.
-- WORKFLOW: Add JSON-configured process RAM, PID/child selection, status generation and Ruler examples.
-- PACKAGE: Group monitoring into common/execution/resources; integrate the full Ruler engine and fix model/namelist/geo issues.
-- TESTS: Cover HMC/S3M namelists, orchestration/retries, monitoring/resources, geo processing and Hydrapp assets.
-- DOCUMENTATION: Update README, monitoring/Hydrapp guides and credits; consolidate setup in setup_shybox_hydrapp.sh.
+- DOCUMENTATION: Publish documentation edition 0.2.0 with HMC/S3M runner recipes (7848d06).
+- DOCUMENTATION: Explain setup, dry runs, execution, restart times and ensembles (7848d06).
+- DOCUMENTATION: Label monitoring, Ruler and Hydrapp chapters as development previews (7848d06).
 
 Version 1.6.0 (development) [2026-11-06]
 ****************************************
 
-- APP: Add HAT-style execution monitoring page with UTC filters, history and ensemble summaries.
-- WORKFLOW: Add opt-in lifecycle/heartbeat JSON records, runner exit tracking and legacy reference-file support.
-- WORKFLOW: Add separate JSON and NetCDF analyzer examples and refine converter settings.
-- PACKAGE: Filter variables inside time-series DataFrames and list all workflows in collection dump logs.
-- PACKAGE: Simplify writer dispatch and DataFrame registries; refine JSON mappings and atomic collection output.
-- DOCUMENTATION: Align JSON API examples and remove obsolete IFS sample files.
+- WORKFLOW: Separate JSON and NetCDF analyzer examples and refine converter settings (aea3805).
+- PACKAGE: Filter variables within time-series DataFrames and simplify writer dispatch (aea3805).
+- PACKAGE: Refine JSON mappings, strict section registries and atomic collection filenames (aea3805).
+- PACKAGE: List all contributing workflows in collection output logs (aea3805).
+- DOCUMENTATION: Align JSON API examples and remove obsolete IFS sample files (aea3805).
 
 Version 1.6.0 (development) [2026-11-04]
 ****************************************
 
-- APP: Add point interpolation and time-series averaging (9828719).
-- APP: Add JSON-driven Flask dashboard, calendar, section maps, deterministic/ensemble hydrographs and setup.
-- APP: Adapt ICON-IT VdA conversion to filtered GRIB2 inputs and hourly, rainfall-conserving forcing.
-- WORKFLOW: Add per-section or collection JSON time-series exports with configurable metadata and atomic writes.
-- WORKFLOW: Integrate RainFARM ensembles, pickle/NetCDF/Zarr ancillary storage and native NetCDF output (b947ffe, 3c22162).
-- PACKAGE: Refactor orchestration; fix time/slopes, RFarm output paths, temporary filenames and NetCDF scale metadata.
-- DOCUMENTATION: Publish docs edition 0.1.0, Sphinx CI, local images and README links (4b0580b, b947ffe, 8eaae8c).
+- APP: Add point interpolation and time-series averaging applications (9828719).
+- APP: Add a Flask dashboard with calendar, section maps and ensemble hydrographs (78d4508).
+- APP: Convert ICON-IT VdA GRIB2 inputs into hourly forcing while conserving rainfall (78d4508).
+- WORKFLOW: Export section or collection JSON time series with configurable metadata (78d4508).
+- WORKFLOW: Integrate RainFARM ensembles and pickle/NetCDF/Zarr ancillary storage (b947ffe, 3c22162).
+- PACKAGE: Refactor orchestration and fix RFarm slopes, output paths and temporary files (78d4508).
+- PACKAGE: Correct NetCDF scale metadata (78d4508).
+- DOCUMENTATION: Add edition 0.1.0, Sphinx CI, bundled artwork and README links (4b0580b, 8532702).
 
 Version 1.2.4 [2026-08-27]
 **************************
 
-- APP: Add watershed delineation from section coordinates (d3f850f).
+- APP: Delineate watersheds from section coordinates (d3f850f).
 - WORKFLOW: Improve evapotranspiration merging over a reference domain (3fab4e4).
-- PACKAGE: Correct missing-data handling in the HMC evapotranspiration merger (08a08da, 37c46de).
+- PACKAGE: Fix missing-data values in the HMC evapotranspiration merger (08a08da, 37c46de).
 
 Version 1.2.3 [2026-08-21]
 **************************
 
 - APP: Add geographic domain-mask management (198a322).
-- WORKFLOW: Add evapotranspiration map merging over a reference domain (4c890df).
-- PACKAGE: Include HMC simulated/observed NetCDF time-series fixes (79bd9a4, e7720e2, 6f2c986).
+- WORKFLOW: Merge evapotranspiration maps over a reference domain (4c890df).
 
 Version 1.2.2 [2026-08-18]
 **************************
 
-- APP: Update observed-point conversion and HMC simulated/observed NetCDF time-series applications (566ff6e).
-- WORKFLOW: Fix generation of simulation and observation time-series results (29785ef).
+- APP: Update observed-point conversion and HMC simulation/observation time-series applications (566ff6e).
+- PACKAGE: Fix generation of simulated and observed NetCDF time series (29785ef, 79bd9a4, e7720e2, 6f2c986).
 
 Version 1.2.1 [2026-08-12]
 **************************
 
-- APP: Update applications generating time series from observed-point files (dff80ae).
-- ENVIRONMENT: Update the corresponding Docker application configuration (dff80ae).
+- APP: Update observed-point time-series applications and their Docker configuration (dff80ae).
 
 Version 1.2.0 [2026-08-06]
 **************************
 
 - APP: Add observed/simulated hydrograph analysis and discharge-comparison tools (eb4faf3, eddc5af).
 - WORKFLOW: Add soil-moisture tile merging and evapotranspiration processing (70c1f23, 403898e).
+- WORKFLOW: Extend point-to-time-series conversion and operational metadata (0427b3f, 32bb940).
 - PACKAGE: Improve time selection, mandatory-file checks and IFS rainfall conversion (31a4b81, 9010b81, dc48622).
 - ENVIRONMENT: Update converter, runner and analyzer containers (26c0a93, 9683dff).
 
 Version 1.1.0 [2026-01-16]
 **************************
 
-- APP: Introduce the Continuum web dashboard and HMC/S3M workflow updates (8f8a268, 63db3e3, 233c4ba).
-- WORKFLOW: Refactor workflows around configuration, logging, time and grid/time-series orchestrators (2d7f2eb).
-- PACKAGE: Add model execution metadata and fix sequential-stream logging deadlocks (04e2f1a, 19a46f0).
-- PACKAGE: Add time-series dataset handlers and default to stream logging (5af2d35, 8823b2b).
+- APP: Introduce the Continuum web dashboard and HMC/S3M runner updates (8f8a268, 63db3e3, 233c4ba).
+- WORKFLOW: Adopt configuration, logging, time and grid/time-series orchestrators (2d7f2eb).
+- PACKAGE: Add model execution metadata and fix stream-logging deadlocks (04e2f1a, 19a46f0).
+- PACKAGE: Add time-series dataset handlers and use stream logging by default (5af2d35, 8823b2b).
 
 Version 1.0.4 [2025-11-21]
 **************************
 
-- WORKFLOW: Extend process, time and workflow management; improve model-version selection.
-- PACKAGE: Introduce argument, configuration and logging managers.
-- ENVIRONMENT: Update the Conda installer.
+- WORKFLOW: Extend ICON/IFS forcing conversion and collection output handling (998a7e2, dd6a29d, 334625f).
+- PACKAGE: Combine argument and workflow configuration in JSON settings (998a7e2).
+- ENVIRONMENT: Update the Conda installer and converter Docker configuration (de3ff38, b63b602).
 
 Version 1.0.3 [2025-11-16]
 **************************
 
-- APP: Extend HMC converter, merger and runner applications to additional datasets.
-- WORKFLOW: Improve time management, logging and application execution.
+- APP: Extend HMC/S3M converter settings and add HMC container recipes (fcd9801, 085959e, 9d77c03).
+- WORKFLOW: Extend multi-tile/multi-variable processing and refactor logging/orchestration (d0d2d30, 66fcb54).
+- PACKAGE: Fix single-day time handling and add HMC 3.3.0 namelist templates (43149b3, 73aa81d).
 
 Version 1.0.2 [2025-07-16]
 **************************
 
-- APP: Add HMC converter, merger and model-runner applications.
+- APP: Add the HMC forcing converter workflow (1ac3fbf).
+- PACKAGE: Fix time merging and extend configurable runner namelist parameters (ed84990, ef0de48, c90022d).
+- DOCUMENTATION: Refresh workflow environment examples and project documentation (67d0c8d, 98fe1a4).
 
 Version 1.0.1 [2025-03-15]
 **************************
 
-- APP: Add S3M converter, merger and model-runner applications.
+- WORKFLOW: Add the dataset converter workflow and correct variable naming (48b05d9, f6765ab).
+- PACKAGE: Support multiple variables/times and HMC/S3M output files (c9f98c8, 6ea9d5a, 91fbb8b).
+- PACKAGE: Fix runner execution, environment run times and namelist templates (a66cb01, 5ef6de7, bd4c43b).
+- ENVIRONMENT: Add the base environment setup script and dependencies (a843ac3, 2c9b7fc).
 
 Version 1.0.0 [2025-01-24]
 **************************
 
-- PACKAGE: Establish the beta package layout, base classes and initial code refactoring (c19fbf8).
-- ENVIRONMENT: Introduce environment management.
-
+- PACKAGE: Establish the initial workflow, runner and generic toolkits (3910abf, edf56fa, 50453c7).
+- PACKAGE: Refactor base classes and initialize the data toolkit (c19fbf8, 984aa58, 05e2bb7).
+- PACKAGE: Add compressed/uncompressed NetCDF reading and compression defaults (818dd89, 0e118b2).
+- DOCUMENTATION: Initialize project documentation and the README (1944462, 669dad4).

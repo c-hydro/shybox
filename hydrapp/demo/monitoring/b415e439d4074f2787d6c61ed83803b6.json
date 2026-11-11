@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "execution_id": "b415e439d4074f2787d6c61ed83803b6",
+  "run_name": "hydrapp_demo",
+  "application": "ensemble_hmc",
+  "run_time": "2026-11-06T23:00:00.000000Z",
+  "run_domain": null,
+  "run_mode": "probabilistic",
+  "ensemble": 2,
+  "task_id": null,
+  "host": "delogu",
+  "pid": 4,
+  "status": "failed",
+  "started_at": "2026-11-06T23:44:13.306453Z",
+  "updated_at": "2026-11-06T23:44:13.306898Z",
+  "finished_at": "2026-11-06T23:44:13.306888Z",
+  "exit_code": 1,
+  "duration_seconds": 0.0,
+  "error": "Synthetic member failure.",
+  "outputs": [],
+  "output_status": "unknown",
+  "demo": true
+}

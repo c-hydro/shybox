@@ -419,7 +419,7 @@ def write_dataset_s3m(
         if variable_dims == 3:
 
             variable_tmp = np.zeros((n_time, n_rows, n_cols))
-            for i, t in enumerate(time.values):
+            for i in range(n_time):
                 tmp_data = variable_data[i, :, :]
                 tmp_data = np.transpose(np.rot90(tmp_data, -1))
                 variable_tmp[i, :, :] = tmp_data

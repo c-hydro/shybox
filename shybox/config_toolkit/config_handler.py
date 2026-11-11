@@ -966,13 +966,18 @@ class ConfigManager:
                 raise KeyError(f"Optional top-level section '{section_key}' not found.")
             return None
 
-        # ROOTED MODE: look under config[root_key]
-        if root_key not in config:
+        # ROOTED MODE: prefer an explicit top-level root; otherwise resolve it
+        # relative to the configured container (e.g. configuration.application).
+        if root_key in config:
+            root_dict = config[root_key]
+        else:
+            container = config.get(self._root_key, {}) if self._root_key is not None else {}
+            root_dict = container.get(root_key) if isinstance(container, dict) else None
+
+        if not isinstance(root_dict, dict):
             if raise_if_missing:
                 raise KeyError(f"Root key '{root_key}' not found.")
             return None
-
-        root_dict = config[root_key]
 
         if section_key not in root_dict:
             if raise_if_missing:

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "execution_id": "76d38fc7e7ed4dd3a15afea60612ae0c",
+  "run_name": "hydrapp_demo",
+  "application": "converter",
+  "run_time": "2026-11-06T23:00:00.000000Z",
+  "run_domain": null,
+  "run_mode": null,
+  "ensemble": null,
+  "task_id": null,
+  "host": "delogu",
+  "pid": 4,
+  "status": "succeeded",
+  "started_at": "2026-11-06T23:44:13.302567Z",
+  "updated_at": "2026-11-06T23:44:13.303182Z",
+  "finished_at": "2026-11-06T23:44:13.303170Z",
+  "exit_code": 0,
+  "duration_seconds": 0.001,
+  "error": null,
+  "outputs": [],
+  "output_status": "unknown",
+  "demo": true
+}

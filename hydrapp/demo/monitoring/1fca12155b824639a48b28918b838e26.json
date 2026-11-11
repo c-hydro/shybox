@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "execution_id": "1fca12155b824639a48b28918b838e26",
+  "run_name": "hydrapp_demo",
+  "application": "ensemble_hmc",
+  "run_time": "2026-11-06T23:00:00.000000Z",
+  "run_domain": null,
+  "run_mode": "probabilistic",
+  "ensemble": 1,
+  "task_id": null,
+  "host": "delogu",
+  "pid": 3,
+  "status": "succeeded",
+  "started_at": "2026-11-06T23:52:45.306609Z",
+  "updated_at": "2026-11-06T23:52:45.307358Z",
+  "finished_at": "2026-11-06T23:52:45.307348Z",
+  "exit_code": 0,
+  "duration_seconds": 0.001,
+  "error": null,
+  "outputs": [],
+  "output_status": "unknown",
+  "demo": true
+}

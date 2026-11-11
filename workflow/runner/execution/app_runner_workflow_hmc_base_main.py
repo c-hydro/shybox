@@ -125,7 +125,7 @@ def main(view_table: bool = False, dry_run : bool = False):
 
     # define logging instance
     logging_handle = LoggingManager(
-        name="shybox_algorithm_runner_hmc",
+        name="shybox_algorithm_runner_hmc_execution",
         level=logging.INFO, use_arrows=True, arrow_dynamic=True, arrow_tag="algorithm",
         set_as_current=True)
     # ------------------------------------------------------------------------------------------------------------------

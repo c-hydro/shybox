@@ -15,10 +15,18 @@ S3M variant that matches your file formats and model configuration.
 is to transform rainfall forecasts into stochastic ensemble members, with
 intermediate results on disk and final model forcing written separately.
 
-Model execution
----------------
+Model forcing and execution
+---------------------------
 
-``workflow/runner/`` contains HMC and S3M runners. These use utilities under
+``workflow/runner/datasets/`` plans observed/forecast inputs and configures
+per-variable ``DataLocal`` / orchestrator workflows. Follow :doc:`dataset_planning`
+for configuration, source cycles, file plans, availability windows, forecast
+fallback and member organization. The shared driver reports its plan with
+``--dry-run --plan-files``; processing uses the configured orchestrators
+explicitly. The separate development composition design, including gap policies
+and complete-run publication, is described in :doc:`datasets`.
+
+``workflow/runner/execution/`` contains HMC and S3M runners. These use utilities under
 ``shybox/runner_toolkit/`` to prepare namelists and launch model executables.
 Supply an executable compatible with the selected namelist template, input
 datasets and model version. Follow :doc:`runners` for complete HMC and S3M
@@ -31,6 +39,20 @@ Geographic preparation and analysis
 ``workflow/geo/`` provides geographic preparation drivers, including catchment
 processing. ``workflow/analyzer/`` contains model-output analysis drivers,
 including time-series analysis.
+
+For deterministic HMC time-series analysis, adapt the settings to your domain
+and run from the repository root with the scientific environment active:
+
+.. code-block:: bash
+
+   python workflow/analyzer/app_analyzer_workflow_hmc_time_series_main.py \
+     -settings_file workflow/analyzer/app_analyzer_workflow_hmc_time_series_destine_marche_deterministic_netcdf.json \
+     -time "2026-08-11 12:00"
+
+The analyzer joins simulated/observed data with a section registry. The selected
+destination configuration determines NetCDF or JSON output. Example filenames
+and domain paths depend on the checkout; configure the matching JSON before
+execution. See the next section for JSON output contracts.
 
 Time-series JSON output
 -----------------------
