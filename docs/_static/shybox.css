@@ -123,6 +123,26 @@
   border-radius: 6px;
 }
 
+.rst-content .shybox-model-figure {
+  margin: 26px auto;
+}
+
+.shybox-model-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: auto;
+  background: #fff;
+  border: 1px solid var(--shybox-line);
+}
+
+.rst-content .shybox-model-figure .caption {
+  margin-top: 10px;
+  color: #4d626b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .rst-content .shybox-models .caption,
 .rst-content .shybox-landscape .caption {
   margin-top: 10px;

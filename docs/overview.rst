@@ -2,9 +2,14 @@ Overview and repository structure
 =================================
 
 SHYBOX separates reusable processing code, workflow configuration and data
-distribution. It supports workflows around HMC (Hydrological Modeling Chain)
-and S3M (Distributed Snow Simulation System), alongside dataset conversion,
+distribution. It supports workflows around HMC (Hydrological Model Continuum)
+and S3M (Snow Multidata Mapping and Modeling), alongside dataset conversion,
 interpolation, merging and analysis.
+
+The model presentations are collected in :doc:`appendix_hmc` (Appendix A) and
+:doc:`appendix_s3m` (Appendix B). Algorithm procedures, configuration and operating
+examples are maintained in this documentation; the repository README provides
+a general project introduction.
 
 .. figure:: _static/images/Loghi_FP_Continuum_S3M.png
    :alt: Flood-PROOFS forecasting system, Continuum hydrological model and S3M cryospheric model logos.

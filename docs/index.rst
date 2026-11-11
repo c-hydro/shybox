@@ -57,6 +57,13 @@ follow :doc:`quickstart` to configure a workflow for your own datasets.
    releases
    license
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Model appendices
+
+   appendix_hmc
+   appendix_s3m
+
 Project resources
 -----------------
 

@@ -32,6 +32,13 @@ Open ``docs/_build/html/index.html`` to review the generated site. The build
 fails on warnings, including broken internal references and missing documents.
 Documentation source uses reStructuredText and the Read the Docs Sphinx theme.
 
+Keep documentation images in ``docs/_static/images/``. Model illustrations are
+organized under ``models/hmc/`` and ``models/s3m/`` within that directory; their
+source, attribution and licence notes are recorded in ``models/SOURCES.txt``.
+Use relative ``figure`` / ``image`` paths with alternative text and a source
+credit. Copy referenced assets into the documentation so builds do not depend
+on a developer's filesystem or an external image host.
+
 ``docs/conf.py`` reads package metadata from ``pyproject.toml`` without importing
 ``shybox``. Documentation builds therefore need neither Conda's GIS stack nor
 external toolkit downloads.
