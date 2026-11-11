@@ -40,7 +40,7 @@ class TestDataTemporary(unittest.TestCase):
                 DataTemporary('/tmp', name)
 
     def test_json_resolves_forecast_tags_but_preserves_member_placeholder(self):
-        settings_path = Path(__file__).resolve().parents[2] / (
+        settings_path = Path(__file__).resolve().parents[3] / (
             'workflow/dataset/disaggregate/app_rfarm_workflow_hmc_icon.json')
         env = {'DOMAIN_NAME': 'marche', 'PATH_SRC': '/tmp/input', 'PATH_DST': '/tmp/output',
                'TIME_PERIOD': '72', 'TIME_START': '2026-10-31 00:00', 'TIME_END': '2026-10-31 00:00',

@@ -10,7 +10,7 @@ project = 'SHYBOX'
 author = 'CIMA Research Foundation'
 copyright = '2026, CIMA Research Foundation'
 # Documentation editions are independent of package releases.
-release = '0.3.0'
+release = '0.4.0'
 version = release
 rst_epilog = f'\n.. |package_version| replace:: {metadata["version"]}\n'
 extensions = []
@@ -24,7 +24,7 @@ html_title = f'{project} documentation {release}'
 html_theme_options = {'navigation_depth': 3, 'collapse_navigation': False}
 html_static_path = ['_static']
 html_css_files = ['shybox.css']
-html_logo = '_static/images/app_logo_fcima.png'
+html_logo = '_static/images/cima-logo-white.png'
 html_context = {
     'display_github': True,
     'github_user': 'c-hydro',

@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use SHYBOX in your work, please cite this software."
+type: software
+title: "SHYBOX: Snow and Hydrologic Modeling Toolbox"
+version: 1.7.0
+date-released: 2026-11-12
+license: EUPL-1.2
+url: "https://github.com/c-hydro/shybox"
+repository-code: "https://github.com/c-hydro/shybox"
+abstract: >-
+  A Python toolbox for environmental data preparation, configuration and
+  execution of hydrological and snow models, and analysis and monitoring
+  of their results, developed by CIMA Research Foundation.
+authors:
+  - family-names: Delogu
+    given-names: Fabio
+    affiliation: CIMA Research Foundation
+    email: fabio.delogu@cimafoundation.org
+  - family-names: Libertino
+    given-names: Andrea
+    affiliation: CIMA Research Foundation
+    email: andrea.libertino@cimafoundation.org
+  - family-names: Avanzi
+    given-names: Francesco
+    affiliation: CIMA Research Foundation
+    email: francesco.avanzi@cimafoundation.org
+keywords:
+  - hydrology
+  - snow modeling
+  - environmental modeling
+  - flood forecasting

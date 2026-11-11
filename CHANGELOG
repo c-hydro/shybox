@@ -2,11 +2,38 @@
 Changelog
 =========
 
-Summaries follow GitHub commits on main and fproofs; uncommitted work is excluded.
-Dates follow main/* release tags where available; other legacy dates are retained.
-Development dates identify commits, not tagged releases; references are commit hashes.
+Version 1.7.0 is the consolidated main release. The 1.6.0–1.6.3 entries below
+number earlier development snapshots in chronological order; they do not create
+historical release tags. Legacy release dates follow main/* tags where available.
 
-Version 1.6.0 (development) [2026-11-09]
+Version 1.7.0 [2026-11-12]
+**************************
+
+- PACKAGE: Consolidate fproofs development and the latest main changes.
+- DATASETS: Add HMC/S3M dataset planning, source-cycle selection, availability
+  reporting and ensemble organization. Archive the unfinished forcing composer
+  and its design tests under experiments/dataset_composer/.
+- WORKFLOW: Separate runner execution and dataset preparation examples; split
+  deterministic/probabilistic JSON and NetCDF analyzer profiles.
+- APP: Include Hydrapp map/chart browsing, execution monitoring, ensemble
+  summaries, RAM history and Ruler reports, plus the Flask runner interface.
+- FIX: Preserve unique RainFARM run directories and the requested NetCDF/Zarr
+  writer when converting native ensemble output.
+- PACKAGE: Include RainFARM integration, JSON collection exports, ICON forcing
+  conversion, nested configuration fixes and corrected S3M NetCDF handling.
+- DOCUMENTATION: Update README, model appendices, dataset and runner guides;
+  add CITATION.cff with software citation metadata and align the Sphinx
+  palette and CIMA logo with the foundation website.
+- LABS: Add isolated JupyterLab setup and launch scripts with an optional
+  kernel registration for an existing JupyterLab installation.
+- LABS: Import the legacy HMC notebooks, scripts, configuration, helper library
+  and artwork under labs/hmc, preserving original authorship and licences.
+  This is an archival import; migration to current APIs is deferred.
+- MIGRATION: Runner entry points and settings now live in
+  workflow/runner/execution/; dataset examples live in workflow/runner/datasets/.
+  Analyzer settings now use explicit deterministic/probabilistic filenames.
+
+Version 1.6.3 (development) [2026-11-09]
 ****************************************
 
 - APP: Rename the Flask dashboard to Hydrapp and add legacy HAT map/chart browsing (44922b3).
@@ -18,14 +45,14 @@ Version 1.6.0 (development) [2026-11-09]
 - TESTS: Cover monitoring, Hydrapp, RFarm, HMC/S3M namelists and orchestration (44922b3).
 - DOCUMENTATION: Update component credits and consolidate Hydrapp setup (44922b3).
 
-Version 1.6.0 (development) [2026-11-08]
+Version 1.6.2 (development) [2026-11-08]
 ****************************************
 
 - DOCUMENTATION: Publish documentation edition 0.2.0 with HMC/S3M runner recipes (7848d06).
 - DOCUMENTATION: Explain setup, dry runs, execution, restart times and ensembles (7848d06).
 - DOCUMENTATION: Label monitoring, Ruler and Hydrapp chapters as development previews (7848d06).
 
-Version 1.6.0 (development) [2026-11-06]
+Version 1.6.1 (development) [2026-11-06]
 ****************************************
 
 - WORKFLOW: Separate JSON and NetCDF analyzer examples and refine converter settings (aea3805).

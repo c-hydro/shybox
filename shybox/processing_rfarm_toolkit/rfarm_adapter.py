@@ -188,10 +188,10 @@ def exec_rfarm_nwp(
         return None
 
     # load rfarm module
-    model_class = _load_rfarm_algorithm()
+    model_class = _load_rfarm_model()
 
     # define run instance
-    tmp_run_config = tmp_data.create_run(folder=folder_name_anc, file_name=file_name_anc)
+    tmp_run_config = tmp_data.create_run()
     # select run configuration (user or default)
     tmp_run_native = tmp_run_config if tmp_run_config.writer_type == 'pickle' else DataTemporary(
         folder_name=str(Path(tmp_run_config.folder_name) / 'native'), file_name='rf_{ensemble}.pkl',
@@ -241,7 +241,7 @@ def exec_rfarm_nwp(
         # get algorithm mode
         algorithm = model.lib_algorithm
         # check algorithm mode
-        model.lib_algorithm = lambda *args, **options: _check_rfarm_algorithm(algorithm, *args, **options)
+        model.lib_algorithm = lambda *args, **options: _checked_rfarm_algorithm(algorithm, *args, **options)
 
         # get member file(s)
         member_files = model.execute_run()
@@ -266,7 +266,7 @@ def exec_rfarm_nwp(
                 # read member data
                 member_data = tmp_run_native.read_data(tags=member_tags)
                 # write member data and store filename(s)
-                converted_files.append(tmp_run_native.write_data(member_data, tags=member_tags))
+                converted_files.append(tmp_run_config.write_data(member_data, tags=member_tags))
                 del member_data
 
             member_files = converted_files
@@ -298,7 +298,7 @@ def exec_rfarm_nwp(
 # ----------------------------------------------------------------------------------------------------------------------
 # helper to check RainFARM algorithm and deps
 @with_logger(var_name='logger_stream')
-def _check_rfarm_algorithm(algorithm, *args, **kwargs):
+def _checked_rfarm_algorithm(algorithm, *args, **kwargs):
 
     # get results
     result = algorithm(*args, **kwargs)
@@ -315,7 +315,7 @@ def _check_rfarm_algorithm(algorithm, *args, **kwargs):
 
 # helper to check rfarm model algorithm and deps
 @with_logger(var_name='logger_stream')
-def _load_rfarm_algorithm():
+def _load_rfarm_model():
 
     # check RainFARM in the external toolkits
     check_external_toolkit('rfarm', auto_install=False, raise_error=True)

@@ -1,8 +1,34 @@
-Documentation releases
-======================
+Software and documentation releases
+======================================================================
+
+SHYBOX 1.7.0 — Consolidated main release
+----------------------------------------------------------------------
+
+Released on 12 November 2026 as ``main/1.7.0``. This release combines dataset
+planning, reorganized HMC/S3M runners, Hydrapp, monitoring,
+RainFARM integration and JSON exports. It includes software citation metadata
+and an archival import of the HMC labs under ``labs/hmc/``.
+
+Runner entry points now live under ``workflow/runner/execution/``; dataset
+preparation profiles live under ``workflow/runner/datasets/``. Analyzer profiles
+use explicit deterministic/probabilistic filenames. The legacy labs have not
+been migrated to current APIs. See the repository ``CHANGELOG`` for details.
+
+Earlier development snapshots are numbered 1.6.0–1.6.3 in date order. Those
+entries document history and do not imply historical tagged releases.
+Documentation editions below keep their independent numbering.
+
+
+0.4.0 — CIMA theme and SHYBOX 1.7.0
+----------------------------------------------------------------------
+
+Prepared on 12 November 2026 for SHYBOX |package_version|. Adopt the CIMA
+website palette and official logo, add the JupyterLab setup guide, document
+the consolidated release and distinguish the unfinished composer prototype
+from the supported dataset planner.
 
 0.3.0 — Dataset preparation guide
----------------------------------
+----------------------------------------------------------------------
 
 Prepared on 10 November 2026 for SHYBOX |package_version|. Documentation is
 published from ``main``; Read the Docs ``latest`` follows its successful build.
@@ -13,11 +39,11 @@ published from ``main``; Read the Docs ``latest`` follows its successful build.
   ensemble sources, spatial operations, gap policies and atomic publication.
 * Refresh the README, repository layout, navigation and related guide links.
 
-The dataset composer and reorganized runner paths describe the development
-checkout. Publishing these pages alone does not publish application code.
+The reorganized runner paths and planner are included in SHYBOX 1.7.0.
+The forcing composer remains an unfinished design under ``experiments/``.
 
 0.2.0 — Runner guide and development previews
----------------------------------------------
+----------------------------------------------------------------------
 
 Prepared on 8 November 2026 for SHYBOX |package_version|. Documentation is
 published from ``main`` and built as the Read the Docs ``latest`` version.
@@ -34,7 +60,7 @@ model/software release. A new page is publicly available only after its remote
 Read the Docs build completes successfully.
 
 0.1.0 — First documentation edition
------------------------------------
+----------------------------------------------------------------------
 
 Prepared on 3 November 2026 for SHYBOX |package_version|, using the ``fproofs``
 development branch as the code baseline.

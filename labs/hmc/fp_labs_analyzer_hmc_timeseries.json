@@ -1,0 +1,250 @@
+{
+  "generic": {
+    "__comment__": "mode: interactive_local, interactive_remote, cmd",
+    "mode": "cmd",
+    "path_home": null,
+    "path_root_data_static": "$HOME/fp_labs_datasets/data_static/",
+    "path_root_data_dynamic_source": "$HOME/fp_labs_datasets/data_dynamic/time_series/",
+    "path_root_data_dynamic_destination_workspace": "$HOME/fp_labs_datasets/workspace/time_series/",
+    "path_root_data_dynamic_destination_plot": "$HOME/fp_labs_datasets/images/time_series/",
+    "domain_name": "marche",
+    "section_name": "Moie",
+    "basin_name": "Esino",
+    "type": "nrt"
+  },
+  "case_study": {
+    "__comment__" : "case_study: 2021-10-07 07:00",
+    "description": "evento_settembre_2022",
+    "time_analysis" : "2022-11-21 12:00",
+    "time_start": null,
+    "time_end": null,
+    "time_frequency": "H",
+    "time_period_right": 100,
+    "time_period_left": 100
+  },
+  "template": {
+    "path": {
+      "path_root_data_static": "string_path_root_data_static",
+      "path_root_data_dynamic_source": "string_path_root_data_dynamic_source",
+      "path_root_data_dynamic_destination_workspace": "string_path_root_data_dynamic_destination_workspace",
+      "path_root_data_dynamic_destination_plot": "string_path_root_data_dynamic_destination_plot"
+    },
+    "geo": {
+      "domain_name": "string_domain_name",
+      "section_name": "string_section_name",
+      "basin_name": "string_basin_name"
+    },
+    "time": {
+      "data_collections_datetime": "%Y%m%d%H%M",
+      "data_collections_sub_path": "%Y%m%d_%H",
+      "data_workspace_datetime": "%Y%m%d%H%M",
+      "data_workspace_sub_path": "%Y%m%d_%H",
+      "plot_ts_datetime": "%Y%m%d%H%M",
+      "plot_ts_sub_path": "%Y%m%d_%H"
+    }
+  },
+  "variables": {
+    "section": {
+      "time": "times",
+      "rain": "Rain:hmc_forcing_datasets:{basin_name}:{section_name}",
+      "soil_moisture": "SM:hmc_outcome_datasets:{basin_name}:{section_name}",
+      "discharge_simulated": "Discharge:section_discharge_sim:{basin_name}:{section_name}",
+      "discharge_observed": "Discharge:section_discharge_obs:{basin_name}:{section_name}"
+    },
+    "domain": {
+      "time": "times",
+      "rain": "Rain:hmc_forcing_datasets:DomainAverage",
+      "air_temperature": "AirTemperature:hmc_forcing_datasets:DomainAverage",
+      "relative_humidity": "RelHumidity:hmc_forcing_datasets:DomainAverage",
+      "incoming_radiation": "IncRadiation:hmc_forcing_datasets:DomainAverage",
+      "wind_speed": "Wind:hmc_forcing_datasets:DomainAverage"
+    }
+  },
+  "data" : {
+    "static": {
+      "terrain": {
+        "folder_name": "{path_root_data_static}/gridded_marche/",
+        "file_name": "marche.dem.txt"
+      },
+      "river_network": {
+        "folder_name": "{path_root_data_static}/gridded_marche/",
+        "file_name": "marche.choice.txt"
+      },
+      "sections": {
+        "folder_name": "{path_root_data_static}/shapefile_marche/",
+        "file_name": "fp_sections_marche.shp"
+      }
+    },
+    "dynamic": {
+      "source": {
+        "weather_stations": {
+          "flags": {
+            "activate": true,
+            "update": true
+          },
+          "collections_time_series": {
+            "folder_name": "{path_root_data_dynamic_source}/weather_stations/{data_collections_sub_path}/",
+            "file_name": "hmc.collections.{data_collections_datetime}.nc"
+          },
+          "info": {
+            "__comment__" : "case_study: 2021-10-15 00:00",
+            "run_type": "deterministic",
+            "run_description": "weather stations observed",
+            "run_ensemble": null,
+            "time_reference": "2022-09-15 10:00"
+          }
+        },
+        "nwp_deterministic_lami2i": {
+          "flags": {
+            "activate": true,
+            "update": true
+          },
+          "collections_time_series": {
+            "folder_name": "{path_root_data_dynamic_source}/nwp_lami2i_deterministic/{data_collections_sub_path}/",
+            "file_name": "hmc.collections.{data_collections_datetime}.nc"
+          },
+          "info": {
+            "__comment__" : "case_study: 2021-10-07 07:00",
+            "run_type": "deterministic",
+            "run_description": "nwp lami-2i deterministic",
+            "run_ensemble": null,
+            "time_reference": "2022-09-15 04:00"
+          }
+        },
+        "nwp_probabilistic_lami2i": {
+          "flags": {
+            "activate": true,
+            "update": false
+          },
+          "collections_time_series": {
+            "folder_name": "{path_root_data_dynamic_source}/nwp_lami2i_probabilistic/{data_collections_sub_path}/",
+            "file_name": "hmc.collections.{data_collections_datetime}_{ensemble_id}.nc"
+          },
+          "info": {
+            "__comment__" : "case_study: 2021-10-07 07:00",
+            "run_type": "probabilistic",
+            "run_description": "nwp lami-2i probabilistic",
+            "run_ensemble": 30,
+            "time_reference": "2022-09-15 04:00"
+          }
+        },
+        "nwp_deterministic_ecmwf0100": {
+          "flags": {
+            "activate": true,
+            "update": true
+          },
+          "collections_time_series": {
+            "folder_name": "{path_root_data_dynamic_source}/nwp_ecmwf0100_deterministic/{data_collections_sub_path}/",
+            "file_name": "hmc.collections.{data_collections_datetime}.nc"
+          },
+          "info": {
+            "__comment__" : "case_study: 2021-10-07 07:00",
+            "run_type": "deterministic",
+            "run_description": "nwp ecmwf0100 deterministic",
+            "run_ensemble": null,
+            "time_reference": "2022-09-15 06:00"
+          }
+        },
+        "nwp_probabilistic_ecmwf0100": {
+          "flags": {
+            "activate": true,
+            "update": false
+          },
+          "collections_time_series": {
+            "folder_name": "{path_root_data_dynamic_source}/nwp_ecmwf0100_probabilistic/{data_collections_sub_path}/",
+            "file_name": "hmc.collections.{data_collections_datetime}_{ensemble_id}.nc"
+          },
+          "info": {
+            "__comment__" : "case_study: 2021-10-07 07:00",
+            "run_type": "probabilistic",
+            "run_description": "nwp ecmwf0100 probabilistic",
+            "run_ensemble": 30,
+            "time_reference": "2022-09-15 10:00"
+          }
+        }
+      },
+      "destination": {
+        "weather_stations": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_workspace}/{data_workspace_sub_path}/",
+            "file_name": "hmc.weather_stations.{basin_name}_{section_name}.{data_workspace_datetime}.workspace"
+          },
+          "domain_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_workspace}/{data_workspace_sub_path}/",
+            "file_name": "hmc.weather_stations.domain_average.{data_workspace_datetime}.workspace"
+          }
+        },
+        "nwp_deterministic_lami2i": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_workspace}/{data_workspace_sub_path}/",
+            "file_name": "hmc.nwp_lami2i_deterministic.{basin_name}_{section_name}.{data_workspace_datetime}.workspace"
+          }
+        },
+        "nwp_probabilistic_lami2i": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_workspace}/{data_workspace_sub_path}",
+            "file_name": "hmc.nwp_lami2i_probabilistic.{basin_name}_{section_name}.{data_workspace_datetime}.workspace"
+          }
+        },
+        "nwp_deterministic_ecmwf0100": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_workspace}/{data_workspace_sub_path}/",
+            "file_name": "hmc.nwp_ecmwf0100_deterministic.{basin_name}_{section_name}.{data_workspace_datetime}.workspace"
+          }
+        },
+        "nwp_probabilistic_ecmwf0100": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_workspace}/{data_workspace_sub_path}",
+            "file_name": "hmc.nwp_ecmwf0100_probabilistic.{basin_name}_{section_name}.{data_workspace_datetime}.workspace"
+          }
+        }
+      },
+      "plot": {
+        "weather_stations": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_plot}/{data_workspace_sub_path}/",
+            "file_name": "hmc.weather_stations.{basin_name}_{section_name}.{data_workspace_datetime}.png",
+            "activate": true
+          },
+          "domain_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_plot}/{data_workspace_sub_path}/",
+            "file_name": "hmc.weather_stations.domain_average.{data_workspace_datetime}.png",
+            "activate": true
+          }
+        },
+        "nwp_deterministic_lami2i": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_plot}/{data_workspace_sub_path}/",
+            "file_name": "hmc.nwp_lami2i_deterministic.{basin_name}_{section_name}.{data_workspace_datetime}.png",
+            "activate": true
+          }
+        },
+        "nwp_probabilistic_lami2i": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_plot}/{data_workspace_sub_path}",
+            "file_name": "hmc.nwp_lami2i_probabilistic.{basin_name}_{section_name}.{data_workspace_datetime}.png",
+            "activate": true
+          }
+        },
+        "nwp_deterministic_ecmwf0100": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_plot}/{data_workspace_sub_path}/",
+            "file_name": "hmc.nwp_ecmwf0100_deterministic.{basin_name}_{section_name}.{data_workspace_datetime}.png",
+            "activate": true
+          }
+        },
+        "nwp_probabilistic_ecmwf0100": {
+          "section_time_series": {
+            "folder_name": "{path_root_data_dynamic_destination_plot}/{data_workspace_sub_path}",
+            "file_name": "hmc.nwp_ecmwf0100_probabilistic.{basin_name}_{section_name}.{data_workspace_datetime}.png",
+            "activate": true
+          }
+        }
+      }
+    }
+  },
+  "log": {
+    "folder_name": "$HOME/fp_labs_apps/tmp/",
+    "file_name": "fp_labs_time-series_logging.txt"
+  }
+}

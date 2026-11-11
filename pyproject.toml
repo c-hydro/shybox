@@ -3,11 +3,11 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.shybox]
-build_date = "2026-09-30"
+build_date = "2026-11-12"
 
 [project]
 name = "shybox"
-version = "1.6.0"
+version = "1.7.0"
 description = "A package to set and run snow and hydrological models and analyze results, developed by CIMA Research Foundation"
 
 authors = [

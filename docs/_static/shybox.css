@@ -1,8 +1,11 @@
-/* SHYBOX documentation: colors drawn from the existing alpine photographs. */
+/* CIMA palette: official website Elementor kit 16, retrieved 2026-11-12. */
 :root {
-  --shybox-ink: #18384b;
-  --shybox-water: #087e91;
-  --shybox-line: #d8e5e8;
+  --shybox-ink: #002d4b;
+  --shybox-water: #004070;
+  --cima-gray: #c6c6c6;
+  --cima-text: #444;
+  --cima-paper: #f4f4f4;
+  --shybox-line: #dedede;
 }
 
 .wy-nav-side {
@@ -10,13 +13,13 @@
 }
 
 .wy-side-nav-search {
-  background: #fff;
-  border-bottom: 4px solid var(--shybox-water);
-  color: var(--shybox-ink);
+  background: var(--shybox-ink);
+  border-bottom: 3px solid var(--cima-gray);
+  color: #fff;
 }
 
 .wy-side-nav-search > a {
-  color: var(--shybox-ink);
+  color: #fff;
 }
 
 .wy-side-nav-search a img.logo {
@@ -25,8 +28,9 @@
   max-width: 100%;
   margin: 4px auto 12px;
   padding: 0;
-  /* The supplied palette PNG uses transparent green lettering. */
-  background: #47704c;
+  /* Official white mark rendered in CIMA gray against the navy header. */
+  background: transparent;
+  filter: brightness(0) invert(77.65%);
 }
 
 .wy-side-nav-search input[type="text"] {
@@ -34,7 +38,7 @@
 }
 
 .wy-menu-vertical header, .wy-menu-vertical p.caption {
-  color: #7dd5dc;
+  color: var(--cima-gray);
 }
 
 .wy-nav-top {
@@ -50,11 +54,11 @@
 }
 
 .rst-content a {
-  color: #066d80;
+  color: var(--shybox-water);
 }
 
 .rst-content a:hover {
-  color: #064c59;
+  color: var(--shybox-ink);
   text-decoration: underline;
 }
 
@@ -78,7 +82,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(transparent 25%, rgb(8 28 40 / 88%));
+  background: linear-gradient(transparent 25%, rgb(0 45 75 / 90%));
   pointer-events: none;
 }
 
@@ -138,7 +142,7 @@
 
 .rst-content .shybox-model-figure .caption {
   margin-top: 10px;
-  color: #4d626b;
+  color: var(--cima-text);
   font-size: 0.9rem;
   line-height: 1.5;
 }
@@ -146,7 +150,7 @@
 .rst-content .shybox-models .caption,
 .rst-content .shybox-landscape .caption {
   margin-top: 10px;
-  color: #4d626b;
+  color: var(--cima-text);
   font-size: 0.9rem;
   line-height: 1.5;
 }
@@ -166,3 +170,22 @@
     font-size: 1.35rem;
   }
 }
+
+/* Neutral surfaces and navy interactions keep diagrams and text readable. */
+body, .wy-nav-content-wrap { background: var(--cima-paper); }
+.wy-nav-content { background: #fff; color: var(--cima-text); }
+.wy-menu-vertical a { color: #e4e4e4; }
+.wy-menu-vertical a:hover { background: var(--shybox-water); color: #fff; }
+.wy-menu-vertical li.current > a,
+.wy-menu-vertical li.toctree-l2.current > a {
+  color: var(--shybox-ink);
+  background: var(--cima-paper);
+}
+.wy-side-nav-search > div.version { color: var(--cima-gray); }
+.rst-content .note, .rst-content .admonition-todo { background: #edf2f5; }
+.rst-content .note .admonition-title { background: var(--shybox-water); }
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 3px solid #dd7500;
+  outline-offset: 2px;
+}
+.btn-neutral { color: var(--shybox-ink) !important; }

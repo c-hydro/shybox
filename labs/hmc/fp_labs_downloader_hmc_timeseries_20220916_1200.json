@@ -1,0 +1,169 @@
+{
+  "generic": {
+    "path_home": null,
+    "path_root_data_static_source": "/hydro/data/data_static/",
+    "path_root_data_static_destination": "$HOME/fp_labs_datasets/data_static/",
+    "path_root_data_dynamic_source": "/hydro/archive/",
+    "path_root_data_dynamic_destination": "$HOME/fp_labs_datasets/data_dynamic/time_series/",
+    "domain_name": "marche",
+    "analysis_name" : "evento_20220915",
+    "machine": {
+      "__comment__": "type: [local, remote]",
+      "type": "remote",
+      "user": "user",
+      "ip": "10.198.26.21"
+    },
+    "transfer_methods": {
+      "rsync" : {
+        "command_line": "rsync -avr --ignore-existing {machine_address}:{path_source} {path_destination}"}
+    }
+  },
+  "template": {
+    "transfer":{
+      "path_source": "string_path_source",
+      "path_destination": "string_path_destination",
+      "machine_address": "string_server_address"
+    },
+    "path": {
+      "path_root_data_static_source": "string_path_root_data_static_source",
+      "path_root_data_static_destination": "string_path_root_data_static_destination",
+      "path_root_data_dynamic_source": "string_path_root_data_dynamic_source",
+      "path_root_data_dynamic_destination": "string_path_root_data_dynamic_destination"
+    },
+    "time": {
+      "data_source_datetime": "%Y%m%d%H%M",
+      "data_source_sub_path": "%Y/%m/%d/%H",
+      "data_destination_datetime": "%Y%m%d%H%M",
+      "data_destination_sub_path": "%Y%m%d_%H"
+    },
+    "data" : {
+      "ensemble_id": "string_ensemble_id"
+    }
+  },
+  "data" : {
+    "static": {
+      "source": {
+        "terrain": {
+          "folder_name": "{path_root_data_static_source}/gridded_marche/",
+          "file_name": "marche.dem.txt",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": true
+        },
+        "river_network": {
+          "folder_name": "{path_root_data_static_source}/gridded_marche/",
+          "file_name": "marche.choice.txt",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": true
+        },
+        "sections": {
+          "folder_name": "{path_root_data_static_source}/shapefile_marche/",
+          "file_name": "fp_sections_marche.shp",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": true
+        }
+      },
+      "destination": {
+        "terrain": {
+          "folder_name": "{path_root_data_static_destination}/gridded_marche/",
+          "file_name": "marche.dem.txt"
+        },
+        "river_network": {
+          "folder_name": "{path_root_data_static_destination}/gridded_marche/",
+          "file_name": "marche.choice.txt"
+        },
+        "sections": {
+          "folder_name": "{path_root_data_static_destination}/shapefile_marche/",
+          "file_name": "fp_sections_marche.shp"
+        }
+      }
+    },
+    "dynamic": {
+      "source": {
+        "weather_stations": {
+          "folder_name": "{path_root_data_dynamic_source}/weather_stations_realtime_marche/{data_source_sub_path}/collections/",
+          "file_name": "hmc.collections.{data_source_datetime}.nc",
+          "time_reference": "2022-09-16 12:00",
+          "time_period": 10,
+          "time_frequency": "H",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": true,
+          "ensemble_n": null
+        },
+        "nwp_deterministic_lami2i": {
+          "folder_name": "{path_root_data_dynamic_source}/nwp_lami-2i_realtime_marche/{data_source_sub_path}/collections/",
+          "file_name": "hmc.collections.{data_source_datetime}.nc",
+          "time_reference": "2022-09-16 12:00",
+          "time_period": 24,
+          "time_frequency": "H",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": true,
+          "ensemble_n": null
+        },
+        "nwp_probabilistic_lami2i": {
+          "folder_name": "{path_root_data_dynamic_source}/rfarm_lami-2i_realtime_marche/{data_source_sub_path}/probabilistic_ensemble/collections/",
+          "file_name": "hmc.collections.{data_source_datetime}_{ensemble_id}.nc",
+          "time_reference": "2022-09-16 12:00",
+          "time_period": 24,
+          "time_frequency": "H",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": false,
+          "ensemble_n": 30
+        },
+        "nwp_deterministic_ecmwf0100": {
+          "folder_name": "{path_root_data_dynamic_source}/nwp_ecmwf0100_realtime_marche/{data_source_sub_path}/collections/",
+          "file_name": "hmc.collections.{data_source_datetime}.nc",
+          "time_reference": "2022-09-16 12:00",
+          "time_period": 24,
+          "time_frequency": "H",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": true,
+          "ensemble_n": null
+        },
+        "nwp_probabilistic_ecmwf0100": {
+          "folder_name": "{path_root_data_dynamic_source}/rfarm_ecmwf0100_realtime_marche/{data_source_sub_path}/probabilistic_ensemble/collections/",
+          "file_name": "hmc.collections.{data_source_datetime}_{ensemble_id}.nc",
+          "time_reference": "2022-09-16 12:00",
+          "time_period": 24,
+          "time_frequency": "H",
+          "transfer_method": "rsync",
+          "flag_active": true,
+          "flag_update": false,
+          "ensemble_n": 30
+        }
+      },
+      "destination": {
+        "weather_stations": {
+          "folder_name": "{path_root_data_dynamic_destination}/weather_stations/{data_destination_sub_path}/",
+          "file_name": "hmc.collections.{data_destination_datetime}.nc"
+        },
+        "nwp_deterministic_lami2i": {
+          "folder_name": "{path_root_data_dynamic_destination}/nwp_lami2i_deterministic/{data_destination_sub_path}/",
+          "file_name": "hmc.collections.{data_destination_datetime}.nc"
+        },
+        "nwp_probabilistic_lami2i": {
+          "folder_name": "{path_root_data_dynamic_destination}/nwp_lami2i_probabilistic/{data_destination_sub_path}",
+          "file_name": "hmc.collections.{data_destination_datetime}_{ensemble_id}.nc"
+        },
+        "nwp_deterministic_ecmwf0100": {
+          "folder_name": "{path_root_data_dynamic_destination}/nwp_ecmwf0100_deterministic/{data_destination_sub_path}/",
+          "file_name": "hmc.collections.{data_destination_datetime}.nc"
+        },
+        "nwp_probabilistic_ecmwf0100": {
+          "folder_name": "{path_root_data_dynamic_destination}/nwp_ecmwf0100_probabilistic/{data_destination_sub_path}",
+          "file_name": "hmc.collections.{data_destination_datetime}_{ensemble_id}.nc"
+        }
+      }
+    }
+  },
+  "log": {
+    "folder_name": "$HOME/fp_labs_apps/tmp/",
+    "file_name": "fp_data_downloader_time_series_20220916_12.txt"
+  }
+}

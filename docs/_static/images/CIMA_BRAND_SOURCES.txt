@@ -1,0 +1,9 @@
+CIMA documentation theme assets
+Source website: https://www.cimafoundation.org/en/
+Palette: https://www.cimafoundation.org/wp-content/uploads/elementor/css/post-16.css
+Logo: https://www.cimafoundation.org/wp-content/uploads/2022/07/Logo-DEF-NEG-BIANCO-241x300.png
+Retrieved: 2026-11-12
+Primary #002D4B; secondary #C6C6C6; text #444444; blue #004070;
+background #F4F4F4; focus accent #DD7500.
+The official white logo is displayed in gray on the navy sidebar using CSS.
+The logo remains CIMA Research Foundation's mark; no image geometry is changed.

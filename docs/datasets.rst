@@ -7,13 +7,15 @@ availability, reads each variable, validates it against the terrain grid and
 publishes a complete run with provenance. Deterministic fields can be shared
 across rainfall ensemble members.
 
-This guide describes the development composition design. The published planner
-and dataset workflow setup are documented in :doc:`dataset_planning`; their
-entry point configures ``DataLocal`` / ``OrchestratorConfig`` without publishing
-forcing files. The development composition interfaces below are separate. The new
-``workflow/runner/datasets/`` and ``shybox/runner_toolkit/datasets/`` interfaces
-must be present in your revision. Preparing this documentation does not publish
-the associated application code. Model execution is covered in :doc:`runners`.
+.. warning::
+
+   The composition API below is an unfinished design, archived with its tests
+   under ``experiments/dataset_composer/``. It is not a supported SHYBOX 1.7.0
+   package API. The supported planner and dataset workflow setup are documented
+   in :doc:`dataset_planning`; their CLI configures ``DataLocal`` /
+   ``OrchestratorConfig`` without publishing forcing files. Use the existing
+   converter, merger and disaggregation workflows to prepare model inputs.
+   Model execution is covered in :doc:`runners`.
 
 Choose the preparation stage
 ----------------------------
