@@ -8,7 +8,7 @@
 
 Prepare upstream products, compose observed/forecast forcing, execute a model, then analyze and monitor its results. Shared configuration, time, logging and processing components connect these stages.
 
-Package version: **1.6.0**. This README documents both published features and development interfaces. The `main` branch contains conversion, analysis, base runners under `workflow/runner/` and the Flask viewer under `dashboard/`. Hydrapp and monitoring are available on `fproofs`; the new forcing composer and the `runner/datasets/` / `runner/execution/` split describe pending development work. Commands below using these new paths require that development checkout. See [CHANGELOG](CHANGELOG) for commit-based history and [Read the Docs](https://shybox.readthedocs.io/en/latest/) for the published guide.
+Package version: **1.6.0**. This README documents both published features and development interfaces. The `main` branch contains the dataset planner, conversion, analysis, base runners under `workflow/runner/` and the Flask viewer under `dashboard/`. Hydrapp and monitoring are available on `fproofs`; the new forcing composer and the `runner/datasets/` / `runner/execution/` split describe pending development work. Commands below using these new paths require that development checkout. See [CHANGELOG](CHANGELOG) for commit-based history and [Read the Docs](https://shybox.readthedocs.io/en/latest/) for the published guide.
 
 ## Features
 
@@ -17,7 +17,7 @@ Package version: **1.6.0**. This README documents both published features and de
 | Prepare data | IFS/ICON and observed-data conversion; spatial interpolation, masking, resampling, point-to-time-series conversion and grid-to-section averaging. |
 | Derive hydrological inputs | Soil-moisture and evapotranspiration merging, watershed delineation, discharge return times and RainFARM rainfall disaggregation. |
 | Compose model forcing | Combine observed/forecast NetCDF, GeoTIFF, raw binary and ESRI ASCII sources into HMC/S3M NetCDF forcing, including gzip inputs and outputs. |
-| Plan and check coverage | `DatasetManager` exposes validity times, source issue cycles, per-variable/member file plans, unique-file counts, availability windows and forecast fallback for missing observations. |
+| Plan and check coverage | `DatasetPlanner` provides validity/source-cycle tables, per-variable/member paths, bounded availability checks, trailing observed-gap forecast fallback and ensemble file dictionaries. |
 | Transform and validate | Explicit cube splitting and nearest/linear spatial interpolation; prepared-file copying; terrain, time, units, dimensions and gap-policy checks before complete-run publication. |
 | Prepare ensembles | Member-specific rainfall with shared deterministic fields, configurable member identifiers, sequential composition and manifests for the complete ensemble. |
 | Execute models | HMC/S3M namelist preparation and executable management; HMC sequential/parallel ensemble scheduling, retries and member-specific paths. |
@@ -42,9 +42,34 @@ The scientific environments use **Python 3.12**. Geographic preparation can use 
 
 Supply operational inputs from [SHYDATA](https://github.com/c-hydro/shydata) or your own sources. Native HMC/S3M runs also require separately compiled, compatible model executables, geographic grids and any selected restart data. RFarm and PRISM repositories are declared in [pyproject.toml](pyproject.toml) and managed by `shybox/external_toolkit/`.
 
-## Prepare observed and forecast forcing
+## Plan datasets before model execution
 
-The forcing composer is under `workflow/runner/datasets/`; model launch is under `workflow/runner/execution/`. The shared dataset driver supports these profiles:
+`DatasetPlanner` is available on `main` in `shybox.runner_toolkit.datasets.planning_handler`. It builds observed/forecast time tables and per-variable/member file plans, checks a selected availability window, and fills a trailing observed gap from complete forecast sources. It plans filenames and checks file presence without opening arrays or launching a model.
+
+```python
+from shybox.runner_toolkit.datasets.planning_handler import DatasetPlanner
+
+# application contains resolved info, time, data_source and data_destination sections.
+planner = DatasetPlanner.from_application(application)
+planner.update_time(
+    n_step_to_check_obs=3, n_step_to_check_frc=1,
+    flag_adjust_obs_frc=True,
+    rules_to_fill_obs="fill_using_frc", rules_to_fill_frc=None,
+)
+files = planner.file_plan
+available = planner.file_available()
+missing = planner.file_not_available()
+summary = planner.file_table("source")
+by_member = planner.file_by_ensemble()
+```
+
+This checks only signed steps **-3 through +1**. Both limits default to `None`, disabling checks. Unchecked availability remains unknown; fallback requires all required forecast files and members. Repeated calls can restore observations that arrive later. Planner modes and `{time_mode}` filenames use `observed`/`forecast`.
+
+See the [dataset planning guide](docs/dataset_planning.rst) for a complete configuration, source `dims`, deferred time tags, ensemble aliases and the `{member: {time: {variable: filename}}}` result. The [runner guide](docs/runners.rst#dataset-planning-and-model-execution) explains how dataset planning relates to namelist and executable configuration. Prepare the actual model forcing files before execution; planning does not compose them.
+
+## Configure dataset workflows
+
+The dataset entry point under `workflow/runner/datasets/` configures `DataLocal` source/destination pairs and variable workflows in `OrchestratorConfig`, following the NWP converter pattern. Model launch is separate. The shared dataset driver supports these profiles:
 
 | Profile | Example in `workflow/runner/datasets/` |
 | --- | --- |
@@ -71,15 +96,13 @@ python -m workflow.runner.datasets.app_runner_workflow_hmc_datasets_main \
   -time "2026-11-09 09:35" --dry-run --plan-files
 ```
 
-The dry run calculates observed/forecast periods and prints source/destination paths and unique-file counts without reading data arrays or creating forcing outputs. It does write logs. The current CLI checks file availability only at signed steps **-4 through 0** around the observed cutoff; other availability flags remain null. A successful plan does not validate data contents or full-period coverage.
+The command plans paths, checks signed steps **-3 through +1**, and configures one orchestrator per ensemble member and validity time. It writes logs and prints a JSON report with `--dry-run`; `--plan-files` includes file rows. Setup does not read arrays or write forcing outputs.
 
-Remove `--dry-run --plan-files` to compose and validate the complete period. For probabilistic HMC, copy the ensemble profile and also set `PATH_FRC_RFARM` to the rainfall-member root. Its member range and integer format are configured in the LUT.
+Each source maps input fields to canonical variables and each destination collection maps canonical variables to model field names. Sources declare `dims: "2d"` or `"3d"`. The top-level `workflow.process_list` configures `RAIN_WORKFLOW`, `AIR_T_WORKFLOW`, `INC_RAD_WORKFLOW`, `REL_HUM_WORKFLOW` and `WIND_SPEED_WORKFLOW`. All variable workflows for an output step share one orchestrator, keeping fields for a combined forcing file together.
 
-Each source maps one input field to a canonical variable; destination mappings select model field names and units. Operations are explicit per source. The HMC profile copies complete, validated observed files with `as_is: true` and splits forecast cubes with `as_is: false`. `DatasetManager.update_time()` can replace a missing observed step with forecast when all required files exist for every member, and restore observations when they arrive later.
+The sample process lists pass data through; configure interpolation, masking and unit conversion explicitly. For probabilistic HMC, select its profile and set `PATH_FRC_RFARM`; its destination template declares a `run_{ensemble_member}` folder. Python callers can use `configure_dataset_workflows(planner, workflow_configuration)` from the dataset entry point and explicitly run the returned orchestrators when the inputs are ready.
 
-Outputs are staged and checked before publication. A run contains dated `obs/` and `frc/` files and `manifest.json`; ensembles add member folders such as `run_001/`. Existing run folders are rejected. Mandatory variables and first-step coverage are checked; later gaps require explicit tolerance and `persist` or `nodata` policy.
-
-Read the [dataset guide](docs/datasets.rst) for time/cycle rules, configuration, source formats, Python API, gap handling and troubleshooting. The development checkout also includes `workflow/runner/datasets/README.md` with the Marche launcher and source-level details.
+Read the [dataset planning and workflow guide](docs/dataset_planning.rst) for complete configuration, time references, bounded checks, fallback, ensemble grouping and workflow setup. The [forcing-composer guide](docs/datasets.rst) describes the separate development composition design, including its validation and publication policies.
 
 ## Execute models and analyze results
 

@@ -18,6 +18,36 @@ from the SHYBOX repository root.
    and model exit status when using an older revision. The optional monitoring
    integration below is a development preview until its code is published.
 
+Dataset planning and model execution
+------------------------------------
+
+Configure forcing coverage before selecting the model interval and launching an
+executable. ``DatasetPlanner`` is available on ``main`` and uses separate
+``info``, ``time``, ``data_source`` and ``data_destination`` dictionaries.
+It computes observed/forecast paths, checks only the requested signed time
+window and can replace a trailing observed gap with complete forecast files.
+Its tables use ``observed``/``forecast`` modes and include source cycles,
+availability and ensemble members.
+
+.. toctree::
+   :maxdepth: 2
+
+   dataset_planning
+
+The :doc:`dataset_planning` guide provides a complete configuration and Python
+example, deferred tags, ``dims="2d"`` / ``"3d"`` source references, window
+limits, forecast fallback, member-organized file dictionaries and per-variable
+``DataLocal`` / ``OrchestratorConfig`` setup in the dataset entry point. The separate
+:doc:`datasets` chapter covers the development forcing-composition workflow.
+
+For model execution, ``application_namelist`` configures the model/version,
+forcing paths, simulation interval, restart and output fields;
+``application_execution`` configures the binary, arguments, working copy and
+shared libraries. Planning does not modify either execution section or create
+forcing data. Prepare the planned files, align their interval and paths with
+the namelist, then use the model-specific recipes below. Isolate working and
+output paths per ensemble member.
+
 Choose the runner and version
 -----------------------------
 

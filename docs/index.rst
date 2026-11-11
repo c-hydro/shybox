@@ -21,6 +21,9 @@ This is documentation edition **0.3.0**, describing the repository structure
 and development interfaces of SHYBOX |package_version|. Workflow compatibility
 depends on the selected code branch, model version and dataset configuration.
 
+The :doc:`dataset_planning` guide covers the published dataset planner,
+bounded availability checks and the handoff to model execution.
+
 The :doc:`datasets` guide covers observed/forecast forcing preparation,
 file planning, validation and ensemble composition. Continue with :doc:`runners`
 for HMC/S3M execution, then :doc:`workflows` for analysis and output formats.

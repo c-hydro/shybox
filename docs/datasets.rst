@@ -7,7 +7,10 @@ availability, reads each variable, validates it against the terrain grid and
 publishes a complete run with provenance. Deterministic fields can be shared
 across rainfall ensemble members.
 
-This guide describes the development checkout. The new
+This guide describes the development composition design. The published planner
+and dataset workflow setup are documented in :doc:`dataset_planning`; their
+entry point configures ``DataLocal`` / ``OrchestratorConfig`` without publishing
+forcing files. The development composition interfaces below are separate. The new
 ``workflow/runner/datasets/`` and ``shybox/runner_toolkit/datasets/`` interfaces
 must be present in your revision. Preparing this documentation does not publish
 the associated application code. Model execution is covered in :doc:`runners`.
@@ -260,6 +263,10 @@ A cube's source date must remain its issue date when validity crosses midnight.
 Declare deferred date tags with null LUT values, ``format: "time"`` and a strftime
 ``template``. The ``*_forecast_nwp_valid`` and ``*_forecast_rfarm_valid`` tags
 explicitly use validity time for already separated forecast files.
+
+For the published metadata-only planner, use :doc:`dataset_planning`.
+It documents ``DatasetPlanner`` independently of the development composer
+below, including its grouped destinations and ``observed``/``forecast`` modes.
 
 Inspect and refresh a plan with DatasetManager
 ----------------------------------------------
