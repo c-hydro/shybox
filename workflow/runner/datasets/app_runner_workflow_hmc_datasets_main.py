@@ -31,29 +31,16 @@ python -m workflow.runner.datasets.app_runner_workflow_hmc_datasets_main \
     -settings_file workflow/runner/datasets/app_runner_workflow_hmc_datasets_forcing_probabilistic.json \
     -time "2026-11-09 09:35" --dry-run
 
-Dataset sources:
-Observed: all variables from PATH_OBS for both run modes.
-Forecast deterministic: all variables from ECMWF in PATH_FRC_NWP.
-Forecast probabilistic: rain members from PATH_FRC_RFARM; other variables from PATH_FRC_NWP.
-Time windows and shared obs/nwp/rfarm folder/file formats are declared in LUT/format/template.
-Interpolation and splitting are optional per-variable operations; all times are UTC.
-This entry point configures workflows without reading arrays or writing forcing.
-Use --dry-run --plan-files for a JSON planning/setup report. Python callers can
-run the returned orchestrators explicitly when the datasets are ready.
-
 Version(s):
 20261109 (1.0.0) --> HMC/S3M observed/forecast forcing preparation with ensemble support
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
-import json
 import logging
 import os
 import time
 from copy import deepcopy
-from importlib import import_module
-from pathlib import Path
 
 import pandas as pd
 
@@ -61,6 +48,10 @@ from shybox.config_toolkit.arguments_handler import ArgumentsManager
 from shybox.config_toolkit.config_handler import ConfigManager
 from shybox.runner_toolkit.datasets.planning_handler import DatasetPlanner
 from shybox.logging_toolkit.logging_handler import LoggingManager
+
+from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
+from shybox.orchestrator_toolkit.orchestrator_handler_config import config_process_by_variables
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -69,164 +60,18 @@ project_name = 'shybox'
 alg_name = 'Workflow for preparing HMC/S3M forcing datasets'
 alg_type = 'Package'
 alg_version = '1.0.0'
-alg_release = '2026-11-09'
+alg_release = '2026-11-13'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
-# script main
-def configure_dataset_workflows(planner, configuration, *, logger=None):
-    """Configure NWP-style DataLocal pairs and one orchestrator per member/time.
-
-    Every canonical variable uses its VARIABLE_WORKFLOW process list. All
-    variable workflows for an output step share an orchestrator, so fields
-    destined for the same file are assembled together. Return
-    {member: {validity_time: {source, destination, orchestrator}}} without
-    reading arrays or running processes. Use orchestrator.run(time=[stamp])
-    explicitly when ready to process the configured files.
-    """
-    from shybox.dataset_toolkit.dataset_handler_local import DataLocal
-    from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
-    from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import PROCESSES
-
-    if not isinstance(configuration, dict) or not isinstance(configuration.get('process_list'), dict):
-        raise ValueError('workflow.process_list must map VARIABLE_WORKFLOW names to process lists.')
-    configuration = deepcopy(configuration)
-    log = logger if logger is not None else planner.log
-    files = planner.file_plan
-    process_lists = configuration['process_list']
-    workflow_names = {variable: f'{variable.upper()}_WORKFLOW' for variable in files.variable.unique()}
-    for variable, name in workflow_names.items():
-        if not isinstance(process_lists.get(name), list) or not process_lists[name]:
-            raise ValueError(f'{variable}: workflow.process_list.{name} must contain at least one process.')
-
-    # Import the same process families used by the NWP converters to register them.
-    modules = {
-        'exec_interpolate_data_generic': 'grids_adapter',
-        'mask_data_by_ref': 'lib_proc_mask', 'mask_data_by_limits': 'lib_proc_mask',
-        'convert_temperature_units': 'lib_proc_compute_temperature',
-        'compute_data_wind_speed': 'lib_proc_compute_wind',
-        'compute_data_rh': 'lib_proc_compute_humidity',
-        'compute_data_astronomic_radiation': 'lib_proc_compute_radiation',
-    }
-    for name in workflow_names.values():
-        for process in process_lists[name]:
-            function = process.get('function')
-            if function not in PROCESSES and function in modules:
-                import_module('shybox.processing_grid_toolkit.' + modules[function])
-            if function not in PROCESSES:
-                raise ValueError(f'{name}: unregistered process {function!r}.')
-
-    options = configuration.setdefault('options', {})
-    options.setdefault('io_config', {'mode': 'many_data_files_to_one_file'})
-    options.setdefault('intermediate_output', 'Memory')
-    source_settings = {
-        group: {variable: cfg for cfg in sources.values() for variable in cfg['variable'].values()}
-        for group, sources in planner.application['data_source'].items()
-    }
-    destination_settings = planner.application['data_destination']
-    destinations_by_group = bool(set(destination_settings) & {'observed', 'forecast'})
-
-    geo_data = None
-    geo = planner.application.get('geo')
-    if geo and len(files):
-        geo = geo.get('terrain', geo)
-        path = Path(planner.fill_file_name(geo, files.time.iloc[0], source=False))
-        geo_data = DataLocal(
-            path=str(path.parent), file_name=path.name,
-            data_role='auxiliary', file_type='grid_2d', file_format=geo.get('format', 'ascii'),
-            file_mode='local', file_variable='terrain', file_workflow='GEO', file_io='input',
-            variable_template=geo.get('variable_template', {
-                'dims_geo': {'x': 'longitude', 'y': 'latitude'},
-                'vars_geo': {'x': 'longitude', 'y': 'latitude'},
-            }),
-            time_signature=None, time_direction=None, logger=log, message=False,
-        )
-
-    # Use the planner's member expansion, including shared deterministic sources.
-    sources_by_member = planner.file_by_ensemble('source')
-    destinations_by_member = planner.file_by_ensemble('destination')
-    frequency = planner.time_plan.frequency
-    result = {}
-    for member, times in sources_by_member.items():
-        result[member] = {}
-        for time_key, source_paths in times.items():
-            stamp = pd.Timestamp(time_key)
-            rows = files.loc[files.time.eq(stamp)]
-            member_rows = rows.loc[rows.output_member.eq(member) | rows.ensemble_member.eq(member)]
-            if not member_rows.empty:
-                rows = pd.concat([member_rows, rows.loc[
-                    rows.output_member.isna() & rows.ensemble_member.isna()]])
-            rows = rows.drop_duplicates('variable')
-            data_in, data_out, active_workflows = {}, {}, {}
-            for row in rows.itertuples(index=False):
-                if source_paths[row.variable] is None:
-                    raise ValueError(f'{member}.{time_key}.{row.variable}: no source configured for workflow setup.')
-                cfg = source_settings[row.group][row.variable]
-                collections = destination_settings[row.group] if destinations_by_group else destination_settings
-                if 'file_name' in collections:
-                    collections = {'collection': collections}
-                dst = collections[row.collection]
-                name = workflow_names[row.variable]
-                source_id, destination_id = row.variable.upper() + '_DATA_SRC', row.variable.upper() + '_DATA_DST'
-                source_path = Path(source_paths[row.variable])
-                destination_path = Path(destinations_by_member[member][time_key][row.variable])
-                input_template = deepcopy(cfg.get('variable_template', {
-                    'dims_geo': {cfg['x']: 'longitude', cfg['y']: 'latitude', cfg['time']: 'time'},
-                    'vars_data': {row.source_name: row.variable},
-                }))
-                input_template['vars_data'] = {row.source_name: row.variable}
-                output_template = deepcopy(dst.get('variable_template', {
-                    'dims_geo': {'longitude': 'west_east', 'latitude': 'south_north', 'time': 'time'},
-                    'coords_geo': {'Longitude': 'longitude', 'Latitude': 'latitude'},
-                }))
-                output_template['vars_data'] = {row.variable: row.output_name}
-                output_template['units'] = {row.variable: dst.get('units', {}).get(row.variable, 'NA')}
-                output_type = {
-                    'hmc': 'grid_hmc', 'hmc_forcing': 'grid_hmc',
-                    's3m': 'grid_s3m', 's3m_forcing': 'grid_s3m',
-                }.get(dst['type'], 'grid_' + dst['type'])
-                data_in[source_id] = DataLocal(
-                    path=str(source_path.parent), file_name=source_path.name,
-                    file_type=cfg.get('file_type', 'grid_' + cfg['dims']), file_format=cfg['format'],
-                    file_mode='local', file_variable=source_id, file_workflow=name, file_io='input',
-                    variable_template=input_template, file_args=deepcopy(cfg.get('file_args', {})),
-                    data_mandatory=cfg.get('required', False),
-                    time_signature='period' if cfg['dims'] == '3d' else 'step',
-                    time_reference=stamp, time_period=1, time_freq=frequency,
-                    time_direction='forward', logger=log, message=False,
-                )
-                data_out[destination_id] = DataLocal(
-                    path=str(destination_path.parent), file_name=destination_path.name,
-                    file_type=dst.get('file_type', output_type), file_format=dst['format'],
-                    file_mode='local', file_variable=destination_id, file_workflow=name, file_io='output',
-                    variable_template=output_template, file_args=deepcopy(dst.get('file_args', {})),
-                    time_signature='step', time_reference=stamp, time_period=1,
-                    time_freq=frequency, time_format='%Y%m%d%H%M',
-                    time_direction='forward', logger=log, message=False,
-                )
-                active_workflows[name] = process_lists[name]
-            selected_configuration = {**configuration, 'process_list': active_workflows}
-            orchestrator = Orchestrator.configure(
-                data_package_in=data_in, data_package_out=data_out, data_ref=geo_data,
-                configuration=selected_configuration, logger=log,
-                priority=[name for name in configuration.get('priority', []) if name in active_workflows],
-                tag_orchestrator=f'datasets_{member}_{stamp:%Y%m%d%H%M}', tag_logger='OrchestratorGrid',
-            )
-            result[member][time_key] = {
-                'source': data_in, 'destination': data_out, 'orchestrator': orchestrator,
-            }
-    return result
-
-
+# algorith main
 def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## SETTINGS MANAGEMENT
     # get file settings
     alg_args_obj = ArgumentsManager(settings_folder=os.path.dirname(os.path.realpath(__file__)))
-    parsed = alg_args_obj.get()
-    alg_args_file, alg_args_time = parsed[:2]
-    extra = parsed[2] if len(parsed) == 3 else {}
+    alg_args_file, alg_args_time = alg_args_obj.get()
 
     # create the SHYBOX configuration object and view its LUT
     alg_cfg_obj = ConfigManager.from_source(
@@ -256,6 +101,11 @@ def main(view_table: bool = False):
 
     # view time section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=view_table)
+
+    # get workflow section
+    alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow')
+    # view workflow section
+    alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=view_table)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -300,6 +150,23 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
+    ## GEO MANAGEMENT
+    # geographic reference
+    geo_data = DataLocal(
+        path=alg_cfg_application['geo']['terrain']['path'],
+        file_name=alg_cfg_application['geo']['terrain']['file_name'],
+        file_type='grid_2d', file_format='ascii', file_mode='local',
+        file_variable='terrain', file_io='input', file_workflow='GEO',
+        variable_template={
+            "dims_geo": {"x": "longitude", "y": "latitude"},
+            "vars_geo": {"x": "longitude", "y": "latitude"}
+        },
+        time_signature=None, time_direction=None,
+        logger=logging_handle, message=False
+    )
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
     ## DATASETS MANAGEMENT
     time_tags = DatasetPlanner.create_time_tags(
         template=alg_cfg_obj.get_section(section='template', raise_if_missing=True),
@@ -318,13 +185,14 @@ def main(view_table: bool = False):
     print(alg_cfg_planner.mode, alg_cfg_planner.members)
 
     # check only the requested window and fill the trailing observed gap.
-    planning_options = {
+    planner_cfg_options = {
         'n_step_to_check_obs': 3, 'n_step_to_check_frc': 1,
         'flag_adjust_obs_frc': True, 'rules_to_fill_obs': 'fill_using_frc',
         'rules_to_fill_frc': None,
+        'reset_history' : False, 'flag_history': True, 'pickle_history': "plans_file.workspace",
     }
-    planning_options.update(alg_cfg_application.get('planning', {}))
-    alg_cfg_planner.update_time(**planning_options)
+    planner_cfg_options.update(alg_cfg_application.get('planning', {}))
+    alg_cfg_planner.update_time(**planner_cfg_options)
     # get file planning
     files_planning = alg_cfg_planner.file_plan
 
@@ -336,37 +204,146 @@ def main(view_table: bool = False):
     files_by_ensemble_destination = alg_cfg_planner.file_by_ensemble(kind='destination')
     # ------------------------------------------------------------------------------------------------------------------
 
+    # ------------------------------------------------------------------------------------------------------------------
+    ## PROCESS MANAGEMENT
+    # Discover and register processes required by the planned variables.
+    process_lists = alg_cfg_workflow['process_list']
+    process_locations = alg_cfg_workflow.get('process_locations', [])
+    variable_lists = files_planning.variable.unique()
+
+    # method to configure processes by variable(s)
+    workflow_by_variable = config_process_by_variables(
+        process_list_name=process_lists, process_list_locations=process_locations,
+        variable_list=variable_lists, workflow_template='{variable}_WORKFLOW_FRC',)
+
+    # iterate over ensemble
+    collections_execution = {}
+    for (ensemble_member_src, ensemble_data_src), (ensemble_member_dst, ensemble_data_dst) in zip(
+            files_by_ensemble_source.items(), files_by_ensemble_destination.items()):
+
+        # check ensemble member
+        assert ensemble_member_src == ensemble_member_dst, 'ensemble source and destination are not the same'
+        ensemble_member = ensemble_member_src = ensemble_member_dst
+
+        # iterate over times
+        collections_src, collections_dst = {}, {}
+        for id_time, ( (ensemble_time_src, ensemble_variable_src), (ensemble_time_dst, ensemble_variable_dst) ) in (
+                enumerate(zip(ensemble_data_src.items(), ensemble_data_dst.items()))):
+
+            assert ensemble_time_src == ensemble_time_dst, 'time source and destination are not the same'
+            ensemble_time = pd.Timestamp(ensemble_time_src)
+
+            # iterate in source variables
+            for variable_name_src, variable_path_src in ensemble_variable_src.items():
+
+                # define variable tag
+                variable_tag_src = f"{ensemble_member}:{variable_name_src}_{ensemble_time:%Y%m%d%H%M}_src"
+
+                # get variable settings
+                variable_settings_src = alg_cfg_application['data_source']['forecast'][variable_name_src]
+                # get variable folder and file_name
+                variable_folder_src, variable_file_name_src = os.path.split(variable_path_src)
+                # get workflow variable
+                workflow_variable_src = workflow_by_variable[variable_name_src]
+
+                # instantiate data local source
+                data_src = DataLocal(
+                    path=variable_folder_src, file_name=variable_file_name_src,
+                    file_type='grid_3d', file_format='netcdf', file_mode='local',
+                    file_variable=variable_name_src, file_io='input', file_workflow=workflow_variable_src,
+                    variable_template={
+                        "dims_geo": {
+                            "longitude": variable_settings_src['x'], "latitude": variable_settings_src['y'],
+                            "time": variable_settings_src['time'],
+                        },
+                        "vars_data": variable_settings_src['variable']
+                    },
+                    time_signature='current',
+                    time_reference=ensemble_time, time_period=1, time_freq='h', time_direction='forward',
+                    logger=logging_handle, message=False, tag=variable_tag_src
+                )
+
+                # define collection src
+                collections_src[variable_tag_src] = data_src
+
+            # iterate in destination variables
+            for variable_name_dst, variable_path_dst in ensemble_variable_dst.items():
+
+                # Define variable tag and select its destination collection settings.
+                variable_tag_dst = f"{ensemble_member}:{variable_name_dst}_{ensemble_time:%Y%m%d%H%M}_dst"
+
+                # get variable settings
+                #variable_settings_dst = alg_cfg_application['data_destination']['forecast'][variable_name_dst]
+                variable_settings_dst = alg_cfg_application['data_destination']['collections']
+                # get variable folder and file_name
+                variable_folder_dst, variable_file_name_dst = os.path.split(variable_path_dst)
+                # get workflow variable
+                workflow_variable_dst = workflow_by_variable[variable_name_dst]
+
+                # instantiate data local destination.
+                data_dst = DataLocal(
+                    path=variable_folder_dst, file_name=variable_file_name_dst,
+                    file_type='netcdf',
+                    file_format='hmc_forcing', file_mode='local',
+                    file_variable=variable_name_dst, file_io='output', file_workflow=workflow_variable_dst,
+                    variable_template={
+                        "dims_geo": {
+                            "longitude": variable_settings_dst['x'], "latitude": variable_settings_dst['y'],
+                            "time": variable_settings_dst['time'],
+                        },
+                        "vars_data": {
+                            variable_name_dst: variable_settings_dst['variable'][variable_name_dst]
+                        },
+                        "units": {
+                            variable_name_dst: variable_settings_dst['units'][variable_name_dst]
+                        },
+                    },
+                    file_args=deepcopy(variable_settings_dst.get('file_args', {})),
+                    time_signature='step',
+                    time_reference=ensemble_time, time_period=1, time_freq='h', time_direction='forward',
+                    logger=logging_handle, message=False, tag=variable_tag_dst
+                )
+
+                # Define collection dst.
+                collections_dst[variable_tag_dst] = data_dst
+
+            # selected_configuration = {**configuration, 'process_list': active_workflows}
+            # orchestrator configure
+            orc_process_ensemble = Orchestrator.configure(
+                data_package_in=collections_src,
+                data_package_out=collections_dst,
+                data_ref=geo_data,
+                configuration=alg_cfg_workflow, logger=logging_handle,
+                priority=None,
+                tag_orchestrator=f'runner_datasets_{ensemble_member}_{ensemble_time:%Y%m%d%H%M}',
+                tag_logger='OrchestratorGrid',
+            )
+
+            # orchestrator exec
+            orc_process_ensemble.run(time=ensemble_time, group='by:step')
+
+            # orchestrator history
+            collections_execution[ensemble_member][ensemble_time] = {
+                'source': collections_src, 'destination': collections_dst, 'orchestrator': orc_process_ensemble,
+            }
+
 
     workflows = configure_dataset_workflows(alg_cfg_planner, alg_cfg_workflow, logger=logging_handle)
     logging_handle.info(
         f'Configured dataset workflows for {len(workflows)} members and '
         f'{sum(len(times) for times in workflows.values())} member/time steps')
-
+    # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
     ## INFO END
-    elapsed = round(time.monotonic() - started, 1)
-    logging_handle.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')',
-                               blank_before=True)
+    # info algorithm (end)
+    elapsed = round(time.time() - started, 1)
+
+    logging_handle.info_header(alg_name + ' (Version: ' + alg_version + ' Release_Date: ' + alg_release + ')', blank_before=True)
     logging_handle.info_header('TIME ELAPSED: ' + str(elapsed) + ' seconds')
     logging_handle.info_header('... END')
-    logging_handle.info_header(LoggingManager.rule_line('=', 78))
-    if extra.get('dry-run') or extra.get('plan-files'):
-        summary = alg_cfg_planner.time_plan.as_dict()
-        summary.update({
-            'source_files': int(files_summary_source.file_name.nunique()),
-            'destination_files': int(alg_cfg_planner.file_table('destination').file_name.nunique()),
-            'source_files_available': int(alg_cfg_planner.file_available().file_name.nunique()),
-            'source_files_missing': int(alg_cfg_planner.file_not_available().file_name.nunique()),
-            'destination_files_missing': int(alg_cfg_planner.file_not_available('destination').file_name.nunique()),
-            'configured_workflow_steps': sum(len(times) for times in workflows.values()),
-            'configured_members': list(workflows),
-        })
-        if extra.get('plan-files'):
-            summary['file_plan'] = files_planning.astype(object).where(
-                pd.notna(files_planning), None).to_dict(orient='records')
-        print(json.dumps(summary, indent=2, default=str))
-    return workflows
+    logging_handle.info_header('Bye, Bye')
+    logging_handle.info_header(LoggingManager.rule_line("=", 78))
     # ------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

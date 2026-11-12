@@ -22,6 +22,10 @@ from shybox.orchestrator_toolkit.orchestrator_handler_base import OrchestratorBa
 from shybox.orchestrator_toolkit.lib_orchestrator_utils_workflow import (
     as_list, ensure_variables, normalize_deps, count_variables)
 from shybox.orchestrator_toolkit.mapper_handler import Mapper, build_pairs_and_process, extract_tag_value
+from shybox.orchestrator_toolkit.lib_orchestrator_utils_discovery import load_process
+
+# common decorators
+from shybox import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -373,4 +377,49 @@ def select_workflow_by_name(workflow_config: dict, workflow_name: str) -> dict:
 
     # return normalized configuration
     return {"options": options, "process_list": {workflow_name: process_steps}}
+
+# method to select process by workflow
+@with_logger(var_name='logger_stream')
+def config_process_by_variables(
+        process_list_name: list, process_list_locations: list, variable_list: str,
+        workflow_template: str = '{variable}_WORKFLOW', workflow_format: str = 'upper_case') -> dict:
+
+    # message info start
+    logger_stream.info('Configure orchestrator processes ... ')
+
+    # iterate over variable list to generate workflow (related to template)
+    workflow_names = {}
+    for variable in variable_list:
+        workflow_filled = workflow_template.format(variable=variable)
+        if workflow_format == 'upper_case':
+            workflow_filled = workflow_filled.upper()
+        elif workflow_format == 'lower_case':
+            workflow_filled = workflow_filled.lower()
+        workflow_names[variable] = workflow_filled
+
+    # iterate over workflow to load process(es)
+    for variable, name in workflow_names.items():
+
+        # message workflow start
+        logger_stream.info_up(f'Workflow {name} variable {variable} ...')
+
+        # get process list
+        processes = process_list_name.get(name)
+        if not isinstance(processes, list) or not processes:
+            raise ValueError(f'{variable}: workflow.process_list.{name} must contain at least one process.')
+        # iterate over process(es)
+        for process in processes:
+            # load process
+            load_process(process.get('function'), search_locations=process_list_locations,)
+            # info process
+            logger_stream.info_status(f"Add process {process.get('function')}")
+
+        # message workflow end
+        logger_stream.info_down(f'Workflow {name} variable {variable} ... DONE')
+
+    # message info end
+    logger_stream.info('Configure orchestrator processes ... DONE')
+
+    return workflow_names
+
 # ----------------------------------------------------------------------------------------------------------------------

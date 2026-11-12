@@ -147,96 +147,56 @@
           "rain": {
             "path": "{path_observed}/{path_time_observed}",
             "file_name": "ws.db.{file_time_observed}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "2d",
-            "nodata": -9999,
-            "format": "netcdf",
-            "variable": {
-              "Rain": "rain"
-            },
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "2d",
+            "nodata": -9999, "format": "netcdf",
+            "variable": {"Rain": "rain"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": true
           },
           "air_t": {
             "path": "{path_observed}/{path_time_observed}",
             "file_name": "ws.db.{file_time_observed}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "2d",
-            "nodata": -9999,
-            "format": "netcdf",
-            "variable": {
-              "Air_Temperature": "air_t"
-            },
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "2d",
+            "nodata": -9999, "format": "netcdf",
+            "variable": {"Air_Temperature": "air_t"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": true
           },
           "inc_rad": {
             "path": "{path_observed}/{path_time_observed}",
             "file_name": "ws.db.{file_time_observed}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "2d",
-            "nodata": -9999,
-            "format": "netcdf",
-            "variable": {
-              "Incoming_Radiation": "inc_rad"
-            },
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "2d",
+            "nodata": -9999, "format": "netcdf",
+            "variable": {"Incoming_Radiation": "inc_rad"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": true
           },
           "rel_hum": {
             "path": "{path_observed}/{path_time_observed}",
             "file_name": "ws.db.{file_time_observed}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "2d",
-            "nodata": -9999,
-            "format": "netcdf",
-            "variable": {
-              "Relative_Humidity": "rel_hum"
-            },
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "2d",
+            "nodata": -9999, "format": "netcdf",
+            "variable": {"Relative_Humidity": "rel_hum"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": true
           },
           "wind_speed": {
             "path": "{path_observed}/{path_time_observed}",
             "file_name": "ws.db.{file_time_observed}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "2d",
-            "nodata": -9999,
-            "format": "netcdf",
-            "variable": {
-              "Wind": "wind_speed"
-            },
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "2d",
+            "nodata": -9999, "format": "netcdf",
+            "variable": {"Wind": "wind_speed"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": true
           }
         },
@@ -244,101 +204,62 @@
           "rain": {
             "path": "{path_forecast_rfarm}/{path_time_forecast_rfarm}",
             "file_name": "rf.ecmwf0100.{file_time_forecast_rfarm}_{ensemble_member}.nc.gz",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "3d",
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "3d",
             "nodata": -9999,
             "format": "netcdf",
-            "variable": {
-              "Rain": "rain"
-            },
+            "variable": {"Rain": "rain"},
             "mode": "probabilistic",
-            "ensemble": {
-              "start": "{ensemble_start}",
-              "end": "{ensemble_end}",
-              "format": "{ensemble_format}"
-            },
+            "ensemble": {"start": "{ensemble_start}", "end": "{ensemble_end}", "format": "{ensemble_format}"},
             "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": false
           },
           "air_t": {
             "path": "{path_forecast_nwp}/{path_time_forecast_nwp}",
             "file_name": "nwp.ecmwf0100.{file_time_forecast_nwp}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "3d",
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "3d",
             "nodata": -9999,
             "format": "netcdf",
-            "variable": {
-              "Air_Temperature": "air_t"
-            },
+            "variable": {"Air_Temperature": "air_t"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": false
           },
           "inc_rad": {
             "path": "{path_forecast_nwp}/{path_time_forecast_nwp}",
             "file_name": "nwp.ecmwf0100.{file_time_forecast_nwp}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
+            "x": "longitude", "y": "latitude", "time": "time",
             "dims": "3d",
             "nodata": -9999,
             "format": "netcdf",
-            "variable": {
-              "Incoming_Radiation": "inc_rad"
-            },
+            "variable": {"Incoming_Radiation": "inc_rad"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "scale": 1,
             "as_is": false
           },
           "rel_hum": {
             "path": "{path_forecast_nwp}/{path_time_forecast_nwp}",
             "file_name": "nwp.ecmwf0100.{file_time_forecast_nwp}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "3d",
-            "nodata": -9999,
-            "format": "netcdf",
-            "variable": {
-              "Relative_Humidity": "rel_hum"
-            },
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "3d",
+            "nodata": -9999, "format": "netcdf",
+            "variable": {"Relative_Humidity": "rel_hum"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": false
           },
           "wind_speed": {
             "path": "{path_forecast_nwp}/{path_time_forecast_nwp}",
             "file_name": "nwp.ecmwf0100.{file_time_forecast_nwp}.nc",
-            "x": "longitude",
-            "y": "latitude",
-            "time": "time",
-            "dims": "3d",
-            "nodata": -9999,
-            "format": "netcdf",
-            "variable": {
-              "Wind": "wind_speed"
-            },
+            "x": "longitude", "y": "latitude", "time": "time", "dims": "3d",
+            "nodata": -9999, "format": "netcdf",
+            "variable": {"Wind": "wind_speed"},
             "mode": "deterministic",
-            "ensemble": null,
-            "required": true,
-            "tolerance_steps": 0,
-            "missing_policy": "error",
+            "ensemble": null, "required": true,
+            "tolerance_steps": 0, "missing_policy": "error",
             "as_is": false
           }
         }
@@ -347,9 +268,9 @@
         "collections": {
           "path": "{path_destination}/probabilistic_ensemble/{path_time_run}/run_{ensemble_member}",
           "file_name": "{time_mode}/{path_time_destination}/hmc.forcing-grid.{file_time_destination}.nc.gz",
+          "x": "longitude", "y": "latitude", "time": "time", "dims": "2d",
           "format": "netcdf",
           "type": "hmc_forcing",
-          "dims": "2d",
           "variable": {
             "rain": "Rain",
             "air_t": "Air_Temperature",
@@ -389,90 +310,54 @@
   },
   "workflow": {
     "options": {
-      "io_config": {
-        "mode": "many_data_files_to_one_file"
-      },
-      "intermediate_output": "Memory"
+      "io_config": {"mode": "many_data_files_to_one_file"},
+      "intermediate_output": "Memory",
+      "tmp_dir": "{path_tmp}"
     },
+
+    "process_locations" : [
+      "shybox.processing_grid_toolkit",
+      "shybox.processing_hydro_toolkit"
+    ],
     "process_list": {
-      "RAIN_WORKFLOW": [
+      "RAIN_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
-          "datasets": {
-            "data": "rain"
-          },
-          "results": {
-            "data": "Rain"
-          },
-          "args": {
-            "mask_min": null,
-            "mask_max": null,
-            "mask_format": null
-          }
+          "datasets": {"data": "rain"},
+          "results": {"data": "Rain"},
+          "args": {"mask_min": null, "mask_max": null, "mask_format": null}
         }
       ],
-      "AIR_T_WORKFLOW": [
+      "AIR_T_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
-          "datasets": {
-            "data": "air_t"
-          },
-          "results": {
-            "data": "Air_Temperature"
-          },
-          "args": {
-            "mask_min": null,
-            "mask_max": null,
-            "mask_format": null
-          }
+          "datasets": {"data": "air_t"},
+          "results": {"data": "Air_Temperature"},
+          "args": {"mask_min": null, "mask_max": null, "mask_format": null}
         }
       ],
-      "INC_RAD_WORKFLOW": [
+      "INC_RAD_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
-          "datasets": {
-            "data": "inc_rad"
-          },
-          "results": {
-            "data": "Incoming_Radiation"
-          },
-          "args": {
-            "mask_min": null,
-            "mask_max": null,
-            "mask_format": null
-          }
+          "datasets": {"data": "inc_rad"},
+          "results": {"data": "Incoming_Radiation"},
+          "args": {"mask_min": null, "mask_max": null, "mask_format": null}
         }
       ],
-      "REL_HUM_WORKFLOW": [
+      "REL_HUM_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
-          "datasets": {
-            "data": "rel_hum"
-          },
-          "results": {
-            "data": "Relative_Humidity"
-          },
-          "args": {
-            "mask_min": null,
-            "mask_max": null,
-            "mask_format": null
-          }
+          "datasets": {"data": "rel_hum"},
+          "results": {"data": "Relative_Humidity"},
+          "args": {"mask_min": null, "mask_max": null, "mask_format": null}
         }
       ],
-      "WIND_SPEED_WORKFLOW": [
+      "WIND_SPEED_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
-          "datasets": {
-            "data": "wind_speed"
-          },
-          "results": {
-            "data": "Wind"
-          },
-          "args": {
-            "mask_min": null,
-            "mask_max": null,
-            "mask_format": null
-          }
+          "datasets": {"data": "wind_speed"},
+          "results": {"data": "Wind"},
+          "args": {"mask_min": null, "mask_max": null, "mask_format": null}
         }
       ]
     }

@@ -464,7 +464,24 @@ class DatasetPlanner:
     def update_time(
         self, n_step_to_check_obs=None, n_step_to_check_frc=None, *,
         flag_adjust_obs_frc=True, rules_to_fill_obs="fill_using_frc", rules_to_fill_frc=None,
-        n_steps_observed=None, n_steps_forecast=None, exists=None,):
+        n_steps_observed=None, n_steps_forecast=None, exists=None,
+        reset_history=True, flag_history=True, pickle_history="plans_file.workspace",):
+
+        """Refresh availability, or reuse a matching local workspace.
+
+        History is enabled by default. Reset recomputes and replaces the saved
+        plan; without reset, a compatible workspace restores the time/file
+        plans and their saved availability without probing dataset files.
+        Missing, incompatible or unreadable history is rebuilt. Disable
+        ``flag_history`` to avoid history I/O. Only load trusted pickle files.
+        """
+        import hashlib
+        import pickle
+        import tempfile
+
+        for name, flag in (("reset_history", reset_history), ("flag_history", flag_history)):
+            if not isinstance(flag, bool):
+                raise TypeError(f"{name} must be a boolean.")
 
         # iterate over args
         limits = []
@@ -497,6 +514,48 @@ class DatasetPlanner:
         base = self._base_time_plan
         table = self._base_time_table.copy(deep=True)
 
+        # History must match the configuration, base times and requested checks.
+        history_path = Path(pickle_history).expanduser() if flag_history else None
+        if history_path is not None:
+            context = (
+                self.application, self.options, self.time_tags, sorted(self.ensemble_tags),
+                base, table, self._time_options, n_obs, n_frc, flag_adjust_obs_frc,
+                rules_to_fill_obs, rules_to_fill_frc, str(Path.cwd()),
+                os.path.expandvars(repr(self.application)),
+            )
+            history_key = hashlib.sha256(pickle.dumps(context, protocol=pickle.HIGHEST_PROTOCOL)).hexdigest()
+            self.log.info(f"Time history: {history_path}; available={history_path.is_file()}, "
+                          f"reset={reset_history}")
+            if not reset_history and history_path.is_file():
+                try:
+                    with history_path.open("rb") as stream:
+                        history = pickle.load(stream)
+                    if history.get("version") == 1 and history.get("key") == history_key:
+                        plan, files = history["time_plan"], history["file_plan"]
+                        count = history["check_count"]
+                        if (not isinstance(plan, type(base)) or not isinstance(files, pd.DataFrame)
+                                or not isinstance(count, int) or count < 0
+                                or not plan.table.index.equals(table.index)
+                                or not {"time_checked", "time_available", "time_adjusted"} <= set(plan.table)
+                                or not {"time", "file_source", "file_destination", "source_exists",
+                                        "destination_exists", "time_checked", "time_available",
+                                        "time_adjusted"} <= set(files)):
+                            raise ValueError("Incomplete saved time/file plan.")
+                        self._time_plan = plan
+                        self._time_table = plan.table.copy(deep=True)
+                        self._file_plan = files
+                        self.check_count = count
+                        self.log.info(f"Time history loaded from {history_path} "
+                                      f"(saved {history['saved_at']}); reusing {len(files)} file-plan rows "
+                                      "without new availability checks")
+                        return self.time_plan
+                    self.log.info("Time history does not match the current planning settings; rebuilding")
+                except (OSError, pickle.PickleError, EOFError, AttributeError, ImportError,
+                        ValueError, TypeError, KeyError) as exc:
+                    self.log.warning(f"Cannot reuse time history {history_path}: {exc}; rebuilding")
+        else:
+            self.log.info("Time history disabled; updating availability")
+
         # pass to the property
         self._time_plan = deepcopy(base)
         self._time_table = table.copy(deep=True)
@@ -528,11 +587,12 @@ class DatasetPlanner:
                 cache[key] = bool(probe(path))
             return cache[key]
 
-        # call plan files (to instantiate the object)
-        self.plan_files()
+        def checked_files(times):
+            self.plan_files()
+            return self.check_availability(exists=cached_probe, check_times=times)
 
         # check availability files
-        files = self.check_availability(exists=cached_probe, check_times=checked_times)
+        files = checked_files(checked_times)
         required = {group: self._required_variables(group) for group in self._sources}
 
         # try to adjust observed/forecast steps using a predefined rules
@@ -563,10 +623,8 @@ class DatasetPlanner:
                 # update property time table using the candidate
                 self._time_table = candidate
 
-                # call plan files (to reload the object)
-                self.plan_files()
                 # check availability candidates
-                candidates = self.check_availability(exists=cached_probe, check_times=trailing)
+                candidates = checked_files(trailing)
 
                 # replace (if selected) the step using the candidates
                 needed = required["observed"] | required["forecast"]
@@ -588,10 +646,8 @@ class DatasetPlanner:
         self._time_plan = replace(base, observed=observed, forecast=forecast, table=table)
         self._time_table = self._time_plan.table.copy(deep=True)
 
-        # call plan files (to update the object)
-        self.plan_files()
         # check availability updated
-        refreshed = self.check_availability(exists=cached_probe, check_times=checked_times)
+        refreshed = checked_files(checked_times)
 
         # set time_available column to the time_table
         for stamp in checked_times:
@@ -614,6 +670,26 @@ class DatasetPlanner:
             f"Time update complete: checked={len(checked_times)}, available={available}, "
             f"unavailable={len(checked_times) - available}, forecast replacements={len(replacements)}, "
             f"unchecked={len(table) - len(checked_times)}, unique file checks={self.check_count}")
+
+        # Publish a complete workspace atomically, keeping any previous file on failure.
+        if history_path is not None:
+            temporary_path = None
+            try:
+                history_path.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(mode="wb", dir=history_path.parent,
+                                                 prefix=history_path.name + ".", delete=False) as stream:
+                    temporary_path = Path(stream.name)
+                    pickle.dump({"version": 1, "key": history_key,
+                                 "saved_at": pd.Timestamp.now(tz="UTC").isoformat(),
+                                 "time_plan": self._time_plan, "file_plan": self._file_plan,
+                                 "check_count": self.check_count}, stream, protocol=pickle.HIGHEST_PROTOCOL)
+                os.replace(temporary_path, history_path)
+                self.log.info(f"Time history saved to {history_path}")
+            except (OSError, pickle.PickleError, TypeError) as exc:
+                self.log.warning(f"Cannot save time history {history_path}: {exc}")
+            finally:
+                if temporary_path is not None and temporary_path.exists():
+                    temporary_path.unlink()
 
         # return
         return self.time_plan
