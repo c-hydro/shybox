@@ -13,12 +13,14 @@
 
 SHYBOX brings the stages of a modeling application into a consistent workflow: prepare observations and weather forecasts, organize model inputs, configure and run simulations, then analyze, display and monitor their outputs. Reusable components handle configuration, datasets, time, logging and processing orchestration.
 
-## Release 1.7.0
+## Release 1.7.1
 
-Version **1.7.0** consolidates dataset preparation, HMC/S3M execution,
-RainFARM integration, JSON exports, Hydrapp and execution monitoring on `main`.
-See the [changelog](CHANGELOG) for changes and migration notes. Earlier development
-snapshots are numbered 1.6.0–1.6.3; documentation editions have separate numbering.
+Version **1.7.1** adds per-member dataset summaries, execution tracing,
+observed/forecast file filtering and NetCDF metadata fixes. The sequential dataset
+runner supports planning previews and forcing execution; the experimental
+`datasets_parallel` folder is excluded from this release.
+See the [changelog](CHANGELOG) for changes and migration notes. Documentation
+edition **0.5.0** groups guides into expandable main topics and subtopics.
 
 Runner examples are in [`workflow/runner/execution/`](workflow/runner/execution/)
 and dataset preparation examples in [`workflow/runner/datasets/`](workflow/runner/datasets/).
@@ -55,7 +57,7 @@ The numerical models, their executables and domain datasets are maintained separ
 | Project structure and components | [Overview](https://shybox.readthedocs.io/en/latest/overview.html) |
 | Installation and first application | [Installation](https://shybox.readthedocs.io/en/latest/installation.html) · [Quickstart](https://shybox.readthedocs.io/en/latest/quickstart.html) |
 | Configuration and processing | [Configuration](https://shybox.readthedocs.io/en/latest/configuration.html) · [Workflows and analysis](https://shybox.readthedocs.io/en/latest/workflows.html) |
-| Dataset planning and preparation | [Dataset planning](https://shybox.readthedocs.io/en/latest/dataset_planning.html) · [Forcing preparation](https://shybox.readthedocs.io/en/latest/datasets.html) |
+| Dataset planning and preparation | [Dataset planning](https://shybox.readthedocs.io/en/latest/dataset_planning.html) · [Runner execution](https://shybox.readthedocs.io/en/latest/dataset_execution.html) · [Member summaries](https://shybox.readthedocs.io/en/latest/dataset_summaries.html) |
 | HMC/S3M execution | [Model runners](https://shybox.readthedocs.io/en/latest/runners.html) |
 | Viewing and monitoring | [Hydrapp](https://shybox.readthedocs.io/en/latest/hydrapp.html) · [Monitoring](https://shybox.readthedocs.io/en/latest/monitoring.html) |
 | Development and releases | [Development](https://shybox.readthedocs.io/en/latest/development.html) · [Releases](https://shybox.readthedocs.io/en/latest/releases.html) |
@@ -73,7 +75,7 @@ SHYBOX is developed for reproducible environmental modeling and operational hydr
 
 ## Citation
 
-Use the metadata in [`CITATION.cff`](CITATION.cff) to cite SHYBOX 1.7.0.
+Use the metadata in [`CITATION.cff`](CITATION.cff) to cite SHYBOX 1.7.1.
 GitHub also provides a “Cite this repository” option. Scientific model references
 are listed in the documentation appendices.
 

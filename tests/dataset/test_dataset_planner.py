@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pandas as pd
 
 from shybox.runner_toolkit.datasets.planning_handler import DatasetPlanner, DEFAULT_ENSEMBLE_TAGS
-from shybox.runner_toolkit.datasets.lib_utils_datasets_time import create_time_period
+from shybox.runner_toolkit.datasets.lib_utils_datasets import create_time_period
 
 
 class TestDatasetPlanner(unittest.TestCase):
@@ -407,6 +407,39 @@ class TestDatasetPlannerAvailability(unittest.TestCase):
         self.assertTrue(Path(result['deterministic']['2026-11-09 09:00:00']['rain']).name.startswith('cube.'))
         with self.assertRaisesRegex(ValueError, 'source or destination'):
             planner.file_by_ensemble('invalid')
+
+    def test_files_by_ensemble_filters_both_sides_with_matching_member_and_time_order(self):
+        self.config['data_src_frc']['rain'].update(
+            mode='probabilistic', ensemble={'start': 1, 'end': 2, 'format': '03d'},
+            file_name='rain.{ensemble_member}.{time:%H}.nc')
+        planner = self.planner()
+        before = planner.file_plan
+        for mode in ('observed', 'forecast'):
+            with self.subTest(mode=mode):
+                source = planner.file_by_ensemble('source', time_mode=mode)
+                destination = planner.file_by_ensemble('destination', time_mode=mode)
+                expected_times = [str(stamp) for stamp in planner.time_table.index[
+                    planner.time_table.time_mode.eq(mode)]]
+                self.assertEqual(list(source), list(destination))
+                self.assertEqual(set(source), {'001', '002'})
+                for member in source:
+                    self.assertEqual(list(source[member]), expected_times)
+                    self.assertEqual(list(source[member]), list(destination[member]))
+                    for stamp in source[member]:
+                        self.assertEqual(list(source[member][stamp]), list(destination[member][stamp]))
+        pd.testing.assert_frame_equal(before, planner.file_plan)
+        with self.assertRaisesRegex(ValueError, 'time_mode'):
+            planner.file_by_ensemble(time_mode='invalid')
+
+    def test_files_by_ensemble_filter_tracks_observed_steps_replaced_with_forecasts(self):
+        planner = self.planner()
+        planner.update_time(1, None, exists=self.probe, flag_history=False)
+        observed = planner.file_by_ensemble(time_mode='observed')['deterministic']
+        forecast = planner.file_by_ensemble(time_mode='forecast')['deterministic']
+        for stamp in ('2026-11-09 08:00:00', '2026-11-09 09:00:00'):
+            self.assertNotIn(stamp, observed)
+            self.assertIn(stamp, forecast)
+            self.assertTrue(Path(forecast[stamp]['rain']).name.startswith('cube.'))
 
 
 if __name__ == '__main__':

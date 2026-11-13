@@ -16,8 +16,8 @@
           "hour_reference_forecast": "00:00",
           "time_look_observed": "48h",
           "time_horizon_observed": "midnight",
-          "time_look_forecast": "72h",
-          "time_horizon_forecast": "midnight",
+          "time_look_forecast": "2h",
+          "time_horizon_forecast": null,
           "path_time_observed": null,
           "file_time_observed": null,
           "path_time_forecast_nwp": null,
@@ -266,8 +266,8 @@
       },
       "data_destination": {
         "collections": {
-          "path": "{path_destination}/probabilistic_ensemble/{path_time_run}/run_{ensemble_member}",
-          "file_name": "{time_mode}/{path_time_destination}/hmc.forcing-grid.{file_time_destination}.nc.gz",
+          "path": "{path_destination}/run_{ensemble_member}/{path_time_destination}/",
+          "file_name": "hmc.forcing-grid.{file_time_destination}.nc",
           "x": "longitude", "y": "latitude", "time": "time", "dims": "2d",
           "format": "netcdf",
           "type": "hmc_forcing",
@@ -284,7 +284,8 @@
             "inc_rad": "W m-2",
             "rel_hum": "%",
             "wind_speed": "m s-1"
-          }
+          },
+          "as_compress": true
         }
       },
       "log": {

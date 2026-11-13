@@ -1,6 +1,28 @@
 Software and documentation releases
 ======================================================================
 
+SHYBOX 1.7.1 — Dataset execution and member summaries
+----------------------------------------------------------------------
+
+Prepared on 14 November 2026 for ``main/1.7.1``. Add per-member model-input
+manifests, atomic summary I/O, explicit member collection merging, nested
+execution metadata and observed/forecast grouping. The sequential runner retains
+execution traces without serializing data handlers and checks completed output
+files, including gzip alternatives. Restore planning-only CLI previews and fix
+HMC NetCDF missing-value metadata. See :doc:`dataset_execution` and
+:doc:`dataset_summaries` for the released interfaces.
+
+The ``datasets_parallel`` folder is a local experiment and is excluded from this
+release. The release does not introduce parallel forcing execution.
+
+0.5.0 — Dataset execution and topic navigation
+----------------------------------------------------------------------
+
+Prepared on 14 November 2026 for SHYBOX |package_version|. Organize the sidebar
+into expandable main topics, guides and section entries while retaining existing
+page URLs. Add execution and summary guides, refresh planner/history examples,
+and distinguish the archived composer from the released sequential runner.
+
 SHYBOX 1.7.0 — Consolidated main release
 ----------------------------------------------------------------------
 

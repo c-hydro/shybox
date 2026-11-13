@@ -2,9 +2,39 @@
 Changelog
 =========
 
-Version 1.7.0 is the consolidated main release. The 1.6.0–1.6.3 entries below
+Version 1.7.1 extends the consolidated 1.7.0 main release. The 1.6.0–1.6.3 entries below
 number earlier development snapshots in chronological order; they do not create
 historical release tags. Legacy release dates follow main/* tags where available.
+
+Version 1.7.1 [2026-11-14]
+**************************
+
+- DATASETS: Add fresh per-member output summaries with run/source-cycle times,
+  inclusive forcing bounds, steps, actual plain/gzip paths, readiness and counts.
+- DATASETS: Add atomic write_summary/read_summary and separate summary_execution
+  merging keyed by member; deterministic records use member "deterministic".
+- DATASETS: Validate nested extra_args recursively, skip invalid leaves with
+  warnings and store them under a configurable tag_args (default "execution").
+- DATASETS: Filter file_by_ensemble by observed/forecast mode and preserve the
+  adjusted plan when checking outputs. Reuse compatible trusted planning history.
+- RUNNER: Trace sequential member/time execution without storing handlers; write
+  each member summary after its time loop, with an optional merged JSON export.
+- FIX: Restore planning-only CLI flags and reusable workflow setup; support the
+  supplied HMC/S3M profiles, workflow suffixes and destination collection mappings.
+- FIX: Keep HMC missing-value metadata numeric, accept single-variable xarray
+  Datasets and normalize numeric decoding attributes in the generic NetCDF reader.
+- FIX: Adapt orchestrator field collections to the S3M writer's Dataset interface,
+  preserving model field names, coordinates and units.
+- ORCHESTRATOR: Preserve prior collections for one-process variable workflows,
+  forward output file arguments and expand workflow-tag selection for readability.
+- ORCHESTRATOR: Discover requested processes in default processing toolkits and
+  optional custom locations, with reusable variable/workflow template selection.
+- DOCUMENTATION: Publish edition 0.5.0 with an expandable topic/guide/section
+  navigation tree, sequential execution recipes and member-summary handoff guide.
+- PACKAGE: Update version, citation and build date; rename the dataset time utility
+  module to lib_utils_datasets and update internal callers.
+- SCOPE: Exclude the datasets_parallel test runner, generated execution artifacts
+  and local external-toolkit checkouts from this release.
 
 Version 1.7.0 [2026-11-12]
 **************************

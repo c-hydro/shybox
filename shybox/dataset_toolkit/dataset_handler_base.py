@@ -1482,10 +1482,12 @@ class Dataset(ABC, metaclass=DatasetMeta):
             spatial_dims = dims_names[-2:]
 
             # warn if spatial dimensions are not recognized
-            if spatial_dims[0] not in {'latitude', 'lat', 'y'} or spatial_dims[1] not in {'longitude', 'lon', 'x'}:
+            if (spatial_dims[0] not in
+                    {'latitude', 'lat', 'y', 'south_north'} or spatial_dims[1] not in
+                    {'longitude', 'lon', 'x', 'west_east'}):
                 self.logger.warning(
                     f'Unexpected spatial dimensions {spatial_dims} for variable "{step_key}". '
-                    'Expected (latitude, longitude), (lat, lon), or (y, x).'
+                    'Expected (latitude, longitude), (lat, lon), (y, x) or (south_north, west_east).'
                 )
 
             # define template structure

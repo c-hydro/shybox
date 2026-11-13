@@ -17,54 +17,31 @@ environmental data processing, snow modeling and hydrological modeling.
 It is developed by the CIMA Research Foundation for research and operational
 forecasting, including Flood-PROOFS systems.
 
-This is documentation edition **0.4.0**, describing the repository structure
+This is documentation edition |docs_version|, describing the repository structure
 and development interfaces of SHYBOX |package_version|. Workflow compatibility
 depends on the selected code branch, model version and dataset configuration.
 
-The :doc:`dataset_planning` guide covers the published dataset planner,
-bounded availability checks and the handoff to model execution.
+Start with :doc:`getting_started`, then follow :doc:`data_preparation` to
+plan forcing files, execute the sequential dataset runner and export member
+summaries for the model. Continue with :doc:`model_execution` to launch HMC/S3M
+and :doc:`results` to inspect and monitor their outputs.
 
-The :doc:`datasets` guide covers observed/forecast forcing preparation,
-file planning, validation and ensemble composition. Continue with :doc:`runners`
-for HMC/S3M execution, then :doc:`workflows` for analysis and output formats.
-The reorganized runners, :doc:`monitoring` and :doc:`hydrapp` are included in
-SHYBOX 1.7.0. Dataset composition remains an experimental design, archived
-under ``experiments/dataset_composer/``. For notebook setup and launch commands,
-see :doc:`labs`.
-
-Start with :doc:`installation` to prepare the scientific environment, then
-follow :doc:`quickstart` to configure a workflow for your own datasets.
+The sidebar groups guides by main topic. Expand a topic to see its guides,
+then expand a guide to see its sections. Existing guide URLs remain available.
+The parallel dataset runner is an unpublished experiment and is outside this
+release. The unfinished composer is documented separately as an archived design.
 
 .. toctree::
-   :maxdepth: 2
-   :caption: User guide
+   :maxdepth: 3
+   :hidden:
+   :caption: Main topics
 
-   overview
-   installation
-   quickstart
-   configuration
-   workflows
-   datasets
-   runners
-   monitoring
-   hydrapp
-   labs
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Development and releases
-
-   development
-   publishing
-   releases
-   license
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Model appendices
-
-   appendix_hmc
-   appendix_s3m
+   getting_started
+   data_preparation
+   model_execution
+   results
+   training
+   contributor_guide
 
 Project resources
 -----------------

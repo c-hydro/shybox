@@ -326,8 +326,8 @@ def _normalize_data_package(data_package_in, default_key='var'):
 # ----------------------------------------------------------------------------------------------------------------------
 ## UTILS
 # Utils to select workflow and common options to generate a single workflow
+@with_logger(var_name='logger_stream')
 def select_workflow_by_name(workflow_config: dict, workflow_name: str) -> dict:
-    """Select a workflow, merging options and normalizing the process list."""
 
     # validate workflow configuration
     if not isinstance(workflow_config, dict):
@@ -364,14 +364,9 @@ def select_workflow_by_name(workflow_config: dict, workflow_name: str) -> dict:
 
         # get common process list
         processes = config.get("process_list", {})
-
         # validate selected workflow
         if workflow_name not in processes:
-            raise KeyError(
-                f"Workflow '{workflow_name}' not found. "
-                f"Available workflows: {list(processes.keys())}"
-            )
-
+            raise KeyError(f"Workflow '{workflow_name}' not found. Available workflows: {list(processes.keys())}")
         # get selected process steps
         process_steps = deepcopy(processes[workflow_name])
 

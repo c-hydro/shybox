@@ -847,6 +847,8 @@ class OrchestratorBase:
                 proc_mode, proc_dump = proc_obj.mode, proc_obj.dump_state
                 # get process datasets and results
                 proc_datasets, proc_results = proc_obj.datasets, proc_obj.results
+                # get process items
+                proc_items = len(proc_list)
 
                 # start process block
                 self.logger.info_up(f'Process "{proc_fx}" ...')
@@ -907,6 +909,12 @@ class OrchestratorBase:
 
                         proc_args['collections_history'] = self.process_history
                         proc_args['collections_tags'] = self.process_tag
+
+                    elif proc_id_previous is None and proc_items == 1:
+
+                        # example multi-variable with one process for each variable
+                        proc_args['collections_history'].update( self.process_history)
+                        proc_args['collections_tags'].extend(self.process_tag)
 
                     # define process args
                     proc_args['memory_active'] = self.memory_active
@@ -1013,76 +1021,4 @@ def _merge_by_period(times, separator='|'):
 # method to manage multiple time steps by file
 def _merge_by_file(times, separator='|'):
     return [pd.DatetimeIndex(times).rename(f'time{separator}by:file')]
-
-# helper to merge by process
-@deprecated(since='2026-10-07')
-def _merge_by_process(containers):
-    merged = {}
-    for pc in containers:
-        process, key, variable, sources = pc.args  # adapt if attribute name differs
-        base_key = (process, variable)
-
-        # split existing sources
-        src_list = sources.split(',')
-        if base_key not in merged:
-            merged[base_key] = set(src_list)
-        else:
-            merged[base_key].update(src_list)
-
-    result = []
-    for (process, variable), src_set in merged.items():
-        src_str = ",".join(sorted(src_set))
-        key = f"{variable}:{src_str}"
-        result.append(ProcessorContainer((process, key, variable, src_str)))
-
-    return result
-
-# helper to format time for logging
-@with_logger(var_name='logger_stream')
-def pretty_time_OLD(ts, logger_stream=None):
-
-    # Handle DatetimeIndex
-    if isinstance(ts, pd.DatetimeIndex):
-
-        # Check empty index
-        if len(ts) == 0:
-            logger_stream.warning('DatetimeIndex is empty. No time steps available.')
-            return "NO TIME STEPS AVAILABLE"
-
-        # Check missing timestamps
-        if ts.hasnans:
-            logger_stream.warning('DatetimeIndex contains NaT values.')
-            ts = ts.dropna()
-            if len(ts) == 0:
-                logger_stream.warning('DatetimeIndex contains no valid timestamps.')
-                return "NO TIME STEPS AVAILABLE"
-
-        # Check time ordering
-        if not ts.is_monotonic_increasing:
-            logger_stream.warning('DatetimeIndex is not sorted in ascending order.')
-        # Check duplicated timestamps
-        if ts.has_duplicates:
-            logger_stream.warning('DatetimeIndex contains duplicated timestamps.')
-
-        # Format single timestamp
-        if len(ts) == 1:
-            return ts[0].strftime("%Y-%m-%d %H:%M")
-        else:
-            start = ts[0].strftime("%Y-%m-%d %H:%M")
-            end = ts[-1].strftime("%Y-%m-%d %H:%M")
-            return f"{start} :: {end} ({len(ts)} steps)"
-
-    # Handle single timestamp
-    elif isinstance(ts, pd.Timestamp):
-
-        if pd.isna(ts):
-            logger_stream.warning('Timestamp is NaT.')
-            return "INVALID TIME STAMPS"
-
-        return ts.strftime("%Y-%m-%d %H:%M")
-
-    # Handle unsupported types
-    else:
-        logger_stream.warning(f'Unsupported time type "{type(ts).__name__}". Using string representation.')
-        return str(ts)
 # ----------------------------------------------------------------------------------------------------------------------

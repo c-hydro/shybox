@@ -798,11 +798,20 @@ class ProcessorContainer:
             }
             if fx_mode in ('end', 'unique'):
                 fx_collected_workflows.add(fx_workflow_name.removeprefix('workflow.'))
-            fx_dump_workflows = dict.fromkeys(
-                tag.split('|', 1)[0].removeprefix('workflow.')
-                for tag in [*fx_collections_tags, fx_tag]
-                if tag.split('|', 1)[0].removeprefix('workflow.') in fx_collected_workflows
-            )
+
+            # iterate over workflow tags
+            fx_dump_workflows = {}
+            workflow_tags = [*fx_collections_tags, fx_tag]
+            for tag in workflow_tags:
+
+                # Extract the part before "|" and remove the optional prefix.
+                workflow_name = tag.split('|', 1)[0]
+                workflow_name = workflow_name.removeprefix('workflow.')
+
+                # Keep collected workflows, preserving order and removing duplicates.
+                if workflow_name in fx_collected_workflows:
+                    fx_dump_workflows[workflow_name] = None
+
             fx_dump_tag = ', '.join(fx_dump_workflows) or fx_tag
 
             # info dump start
@@ -862,6 +871,8 @@ class ProcessorContainer:
                 kwargs['units'] = getattr(out_kwargs, 'units', {})
                 variable_template = getattr(out_kwargs, 'variable_template', {}) or {}
                 kwargs['map'] = variable_template.get('vars_data', {})
+                # add args (options and other settings)
+                kwargs.update(getattr(out_handler, 'file_args', {}) or {})
 
                 # add reference object(s) to kwargs from self
                 if getattr(self, 'ref', None) is not None:

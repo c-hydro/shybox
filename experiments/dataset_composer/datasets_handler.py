@@ -21,7 +21,7 @@ import xarray as xr
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
 
-from shybox.runner_toolkit.datasets.lib_utils_datasets_time import TimePeriod as ForcingPlan, create_time_period
+from shybox.runner_toolkit.datasets.lib_utils_datasets import TimePeriod as ForcingPlan, create_time_period
 from shybox.runner_toolkit.datasets.datasets_mode import DatasetMode
 from shybox.runner_toolkit.datasets.lib_utils_datasets import split_3d_to_2d, resample_data, copy_as_is
 from shybox.runner_toolkit.datasets.lib_utils_datasets_geo import read_geographical_info, check_geographical_info

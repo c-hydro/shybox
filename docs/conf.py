@@ -10,9 +10,10 @@ project = 'SHYBOX'
 author = 'CIMA Research Foundation'
 copyright = '2026, CIMA Research Foundation'
 # Documentation editions are independent of package releases.
-release = '0.4.0'
+release = '0.5.0'
 version = release
-rst_epilog = f'\n.. |package_version| replace:: {metadata["version"]}\n'
+rst_epilog = (f'\n.. |package_version| replace:: {metadata["version"]}\n'
+              f'.. |docs_version| replace:: {release}\n')
 extensions = []
 root_doc = 'index'
 source_suffix = {'.rst': 'restructuredtext'}
@@ -21,7 +22,13 @@ language = 'en'
 nitpicky = True
 html_theme = 'sphinx_rtd_theme'
 html_title = f'{project} documentation {release}'
-html_theme_options = {'navigation_depth': 3, 'collapse_navigation': False}
+html_theme_options = {
+    'navigation_depth': 3,
+    'collapse_navigation': False,
+    'sticky_navigation': True,
+    'includehidden': True,
+    'titles_only': False,
+}
 html_static_path = ['_static']
 html_css_files = ['shybox.css']
 html_logo = '_static/images/cima-logo-white.png'

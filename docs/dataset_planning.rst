@@ -10,7 +10,8 @@ Planning does not open data arrays, write forcing files or launch a model.
 Use the scientific environment from :doc:`installation`. The planner itself
 uses pandas and SHYBOX logging. It does not require the development forcing
 composer. Continue with :doc:`runners` for model namelists and execution;
-:doc:`datasets` describes the separate development composition interfaces.
+:doc:`dataset_execution` covers the sequential forcing runner and
+:doc:`dataset_summaries` covers its JSON handoff to other procedures.
 
 Configure the dataset sections
 --------------------------------
@@ -199,12 +200,17 @@ replace that list. Deterministic sources must not use member placeholders.
    grouped = planner.file_by_ensemble()
    # With probabilistic sources:
    # {"001": {"2026-11-09 09:00:00": {"rain": "/data/.../rain.nc"}}, ...}
-   outputs = planner.file_by_ensemble("destination")
+   outputs = planner.file_by_ensemble("destination", time_mode="forecast")
+   forecast_sources = planner.file_by_ensemble("source", time_mode="forecast")
 
 Shared deterministic fields appear under every member. Fully deterministic
 plans use ``"deterministic"`` as the outer key. Time keys are validity timestamp
 strings in chronological order; variable keys are canonical names. Grouping
 uses the current adjusted plan and performs no additional file checks.
+Use the same ``time_mode`` on both sides and look up destinations by the same
+member, timestamp and variable keys; do not depend on two dictionary iteration
+orders. ``None`` includes both modes. Forecast-filled observed gaps belong to
+``forecast`` after adjustment.
 
 Connect planning to runner execution
 --------------------------------------
@@ -223,112 +229,25 @@ Keep namelists, executables, logs and restart/output paths separate per ensemble
 member. Check model exit status and diagnostics after launch; file presence alone
 does not establish a valid or successful simulation.
 
-Configure per-variable DataLocal workflows
---------------------------------------------
+Availability history
+--------------------
 
-The dataset entry point is
-``workflow/runner/datasets/app_runner_workflow_hmc_datasets_main.py``. It follows
-the NWP converter pattern: one source and one destination ``DataLocal`` for
-each canonical variable, combined in one ``OrchestratorConfig`` per ensemble
-member and validity time. Concrete paths and source groups come from the
-current adjusted planner. Source templates map file fields to canonical names;
-destination templates map canonical names to model fields and units.
-
-Add a top-level ``workflow`` section alongside ``configuration`` in the settings
-JSON. Each variable needs a nonempty ``VARIABLE_WORKFLOW`` process list, for
-example ``RAIN_WORKFLOW``, ``AIR_T_WORKFLOW``, ``INC_RAD_WORKFLOW``,
-``REL_HUM_WORKFLOW`` and ``WIND_SPEED_WORKFLOW``. This minimal rainfall workflow
-passes data through without changing values:
-
-.. code-block:: json
-
-   {
-     "workflow": {
-       "options": {
-         "io_config": {"mode": "many_data_files_to_one_file"},
-         "intermediate_output": "Memory"
-       },
-       "process_list": {
-         "RAIN_WORKFLOW": [{
-           "function": "mask_data_by_limits",
-           "datasets": {"data": "rain"},
-           "results": {"data": "Rain"},
-           "args": {"mask_min": null, "mask_max": null, "mask_format": null}
-         }]
-       }
-     }
-   }
-
-Use ``datasets`` names matching canonical source fields and final ``results``
-names matching destination field names. Supplied profiles configure this
-pass-through process for all five model variables; add required interpolation,
-masking or unit conversion explicitly. NWP converter process families are
-registered when needed. Missing variable workflows or unregistered process names
-raise an error during setup. Source ``operations`` and gap-policy metadata do
-not automatically create a process chain. Optional ``workflow.priority`` orders
-the named workflows.
-
-The entry point accepts the deterministic HMC, probabilistic HMC and S3M JSON
-profiles in the same folder:
-
-The optional ``configuration.application.planning`` dictionary controls the
-entry point's availability check and adjustment. The sample profiles declare:
-
-.. code-block:: json
-
-   {
-     "planning": {
-       "n_step_to_check_obs": 3,
-       "n_step_to_check_frc": 1,
-       "flag_adjust_obs_frc": true,
-       "rules_to_fill_obs": "fill_using_frc",
-       "rules_to_fill_frc": null
-     }
-   }
-
-Use null step limits to disable either side. These entry-point defaults differ
-from calling ``planner.update_time()`` directly, whose step limits default to
-``None``. Run the setup with:
-
-.. code-block:: bash
-
-   python -m workflow.runner.datasets.app_runner_workflow_hmc_datasets_main \
-     -settings_file workflow/runner/datasets/app_runner_workflow_hmc_datasets_forcing_deterministic.json \
-     -time "2026-11-09 09:35" --dry-run --plan-files
-
-Set ``DOMAIN_NAME``, ``PATH_GEO``, ``PATH_OBS``, ``PATH_FRC_NWP``, ``PATH_DST``
-and ``PATH_LOG`` for your data. The probabilistic profile additionally uses
-``PATH_FRC_RFARM`` and declares ``run_{ensemble_member}`` in its destination path.
-The command checks steps -3 through +1 and configures the workflows. It does not
-read arrays or write forcing outputs; ``--dry-run --plan-files`` adds a JSON
-report with file rows, configured member IDs and workflow-step counts.
-
-Python integrations can call
-``configure_dataset_workflows(planner, workflow_configuration)`` from the entry
-point. It returns
-``{member: {time: {"source": handlers, "destination": handlers, "orchestrator": obj}}}``.
-For the rainfall configuration used earlier in this guide:
+``update_time()`` supports ``flag_history=True``, ``reset_history=True`` and
+``pickle_history="plans_file.workspace"``. The API refreshes by default.
+Set ``reset_history=False`` to reuse a compatible saved plan without probing
+source files again; changed configuration, run or window options rebuild it.
+Missing or unreadable history also falls back to a fresh check, with log messages.
+Set ``flag_history=False`` to disable history I/O entirely.
 
 .. code-block:: python
 
-   from workflow.runner.datasets.app_runner_workflow_hmc_datasets_main import configure_dataset_workflows
+   planner.update_time(
+       n_step_to_check_obs=3, n_step_to_check_frc=1,
+       flag_history=True, reset_history=False,
+       pickle_history="/work/my_run/plans_file.workspace",
+   )
 
-   workflow_configuration = {
-       "process_list": {
-           "RAIN_WORKFLOW": [{
-               "function": "mask_data_by_limits", "datasets": {"data": "rain"},
-               "results": {"data": "Rain"}, "args": {},
-           }]
-       }
-   }
-   configured = configure_dataset_workflows(planner, workflow_configuration)
-   # Explicit processing, when inputs and the process chain are ready:
-   # import pandas as pd
-   # step = configured["deterministic"]["2026-11-09 09:00:00"]
-   # step["orchestrator"].run(time=[pd.Timestamp("2026-11-09 09:00:00")])
-
-All variable workflows for a step stay in one orchestrator so a combined forcing
-file is assembled together. Use distinct destination paths for each ensemble
-member. Only an explicit orchestrator ``run`` reads data and writes results;
-this setup does not provide the development composer's complete-run validation,
-staging or atomic publication.
+A reused history contains an earlier availability snapshot. Use
+``reset_history=True`` when new upstream files may have arrived. Load only your
+own trusted pickle files. Output summaries always probe destinations afresh,
+even when input planning reused history; see :doc:`dataset_summaries`.

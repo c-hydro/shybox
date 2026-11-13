@@ -855,6 +855,8 @@ def write_dataset_hmc(
                 variable_x.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
                 variable_x.setncattr(attr_key.lower(), str(attr_value))
+            elif attr_key.lower() == 'missing_value':
+                variable_x.setncattr('missing_value', np.asarray(attr_value, dtype=variable_x.dtype))
             else:
                 variable_x.setncattr(attr_key.lower(), str(attr_value).lower())
 
@@ -877,6 +879,8 @@ def write_dataset_hmc(
                 variable_y.setncattr(attr_key.lower(), str(attr_value))
             elif attr_key == 'format':
                 variable_y.setncattr(attr_key.lower(), str(attr_value))
+            elif attr_key.lower() == 'missing_value':
+                variable_y.setncattr('missing_value', np.asarray(attr_value, dtype=variable_y.dtype))
             else:
                 variable_y.setncattr(attr_key.lower(), str(attr_value).lower())
 
@@ -901,7 +905,17 @@ def write_dataset_hmc(
     # iterate over data variables
     for variable_name, variable_data in data.items():
 
-        # copy data to avoid modifying original object
+        # extract the single data variable before converting a Dataset.
+        if isinstance(variable_data, xr.Dataset):
+            if len(variable_data.data_vars) != 1:
+                raise ValueError(f"{variable_name}: expected one data variable, found {list(variable_data.data_vars)}.")
+            dataset_variable = next(iter(variable_data.data_vars))
+            variable_data = variable_data[dataset_variable]
+        # extract the single tdata variable
+        if isinstance(variable_data, xr.DataArray):
+            variable_data = variable_data.values
+
+        # Copy data to avoid modifying the original object.
         variable_data = np.array(variable_data, copy=True)
         # get variable dimensions
         variable_dims = variable_data.ndim
@@ -961,6 +975,9 @@ def write_dataset_hmc(
                 set_units = True
             elif attr_key == 'format':
                 var_handle.setncattr('format', str(attr_value))
+            elif attr_key.lower() == 'missing_value':
+                # Match the variable/_FillValue dtype instead of writing a string.
+                var_handle.setncattr('missing_value', np.asarray(attr_value, dtype=var_handle.dtype))
             else:
                 var_handle.setncattr(attr_key.lower(), str(attr_value).lower())
 

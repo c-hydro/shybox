@@ -305,8 +305,25 @@ def read_from_file(
                                 f'Check the available readers.')
             raise IOError('Reader is not supported for netcdf reading')
         else:
+            # info warning if decoder is not set
             logger_stream.warning(f'File type not defined for netcdf reading: {file_type}. Using default reader.')
-            data = xr.open_dataset(file)
+
+            # read data in generic mode
+            data = xr.open_dataset(file, decode_cf=False)
+            # check some attributes to ensure float type and then decode data
+            for variable in data.variables.values():
+                for attribute in ('scale_factor', 'add_offset'):
+                    if attribute in variable.attrs:
+                        variable.attrs[attribute] = float(variable.attrs[attribute])
+
+                # convert string missing-value markers to numeric values.
+                if 'missing_value' in variable.attrs:
+                    if np.issubdtype(variable.dtype, np.number):
+                        variable.attrs['missing_value'] = np.asarray(
+                            variable.attrs['missing_value'], dtype=variable.dtype,)
+
+            # decode data
+            data = xr.decode_cf(data)
 
         # check if there is a single variable in the dataset
         if len(data.data_vars) == 1:
@@ -477,15 +494,17 @@ def write_to_file(data, path,
     elif file_format == 'netcdf':
 
         # check file type
-        if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc']:
+        if file_type in ['grid_hmc', 'updating_hmc', 'forcing_hmc', 'hmc_forcing', 'hmc_updating']:
 
             # get units and mapping
             variable_units = kwargs.pop('units', None)
             variable_mapping = kwargs.pop('map', None)
+            variable_compression = kwargs.pop('compress', True)
 
             # write hmc forcing datasets
             write_dataset_hmc(path=path, data=data, time=time, attrs_data=None,
                               var_units=variable_units, var_mapping=variable_mapping,
+                              compression_flag=variable_compression,
                               **kwargs)
 
         elif file_type in ['time_series_hmc', 'ts_hmc']:
@@ -498,7 +517,26 @@ def write_to_file(data, path,
                          data_units=variable_units, data_map=variable_mapping, **kwargs)
 
         elif file_type in ['grid_s3m', 'forcing_s3m']:
-            write_dataset_s3m(path=path, data=data, time=time, attrs_data=None, **kwargs)
+            variable_mapping = kwargs.pop('map', None) or {}
+            variable_units = kwargs.pop('units', None) or {}
+            if isinstance(data, dict):
+                fields = {}
+                for name, value in data.items():
+                    if isinstance(value, xr.Dataset):
+                        if len(value.data_vars) != 1:
+                            raise ValueError(f'{name}: expected one S3M data variable.')
+                        value = value[next(iter(value.data_vars))]
+                    if not isinstance(value, xr.DataArray):
+                        raise TypeError(f'{name}: S3M collections require xarray data with coordinates.')
+                    fields[variable_mapping.get(name, name)] = value.copy(deep=True)
+                data = xr.Dataset(fields)
+                dimensions = {'longitude': 'X', 'latitude': 'Y', 'west_east': 'X', 'south_north': 'Y'}
+                data = data.rename({name: target for name, target in dimensions.items() if name in data.dims})
+            attrs_data = {
+                variable_mapping.get(name, name): {'units': units}
+                for name, units in variable_units.items()
+            }
+            write_dataset_s3m(path=path, data=data, time=time, attrs_data=attrs_data, **kwargs)
         elif file_type in ['grid_itwater', 'grid_3d_itwater', 'itwater']:
             write_dataset_itwater(path=path, data=data, time=time, attrs_data=None, **kwargs)
         elif file_type in ['default']:
@@ -673,11 +711,9 @@ def map_dims(data: xr.DataArray,
             # target coordinate already exists and is compatible
             if dim_out in data.coords and data[dim_out].dims == (dim_in,):
                 data = data.swap_dims({dim_in: dim_out})
-
             # target name is available
             elif dim_out not in data.dims and dim_out not in data.coords:
                 data = data.rename({dim_in: dim_out})
-
             else:
                 logging.warning(
                     f'Cannot rename dimension "{dim_in}" to "{dim_out}": '
@@ -691,9 +727,7 @@ def map_dims(data: xr.DataArray,
             if dim_out not in data.dims and dim_out not in data.coords:
                 data = data.rename({dim_in: dim_out})
             else:
-                logging.warning(
-                    f'Cannot rename coordinate "{dim_in}" to "{dim_out}": target name already exists.'
-                )
+                logging.warning(f'Cannot rename coordinate "{dim_in}" to "{dim_out}": target name already exists.')
 
     # ensure each mapped dimension has a coordinate
     for dim_out in dims_geo.values():

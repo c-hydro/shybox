@@ -9,18 +9,26 @@ Version:       '1.0.0'
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
+import os
+import re
+import json
+import tempfile
+import hashlib
+import pickle
+
 from copy import deepcopy
 from dataclasses import replace
 from inspect import signature
 from pathlib import Path
 from string import Formatter
-import os
-import re
 
 import pandas as pd
 
-from shybox.runner_toolkit.datasets.lib_utils_datasets_time import create_time_period as CREATE_TIME_PERIOD_DEFAULT
+from shybox.runner_toolkit.datasets.lib_utils_datasets import create_time_period as CREATE_TIME_PERIOD_DEFAULT
 from shybox.logging_toolkit.logging_handler import LoggingManager
+
+# common decoretors
+from shybox import with_logger
 
 # default settings
 DEFAULT_TIME_TAGS = {
@@ -475,9 +483,6 @@ class DatasetPlanner:
         Missing, incompatible or unreadable history is rebuilt. Disable
         ``flag_history`` to avoid history I/O. Only load trusted pickle files.
         """
-        import hashlib
-        import pickle
-        import tempfile
 
         for name, flag in (("reset_history", reset_history), ("flag_history", flag_history)):
             if not isinstance(flag, bool):
@@ -821,33 +826,22 @@ class DatasetPlanner:
                             "file_source": path,
                             "file_destination": output,
                         })
-
+        # define columns
         columns = [
-            "time",
-            "step",
-            "file_id",
-            "time_step",
-            "time_mode",
-            "time_checked",
-            "time_available",
-            "time_adjusted",
-            "group",
-            "time_reference",
-            "variable",
-            "source_name",
-            "output_name",
-            "mode",
-            "ensemble_member",
-            "output_member",
-            "collection",
-            "file_source",
-            "file_destination",
+            "time", "step", "file_id",
+            "time_step", "time_mode", "time_checked", "time_available", "time_adjusted",
+            "group", "time_reference", "variable",
+            "source_name","output_name",
+            "mode", "ensemble_member", "output_member",
+            "collection", "file_source","file_destination",
         ]
 
+        # filter if requested by source/destination
         self._file_plan = pd.DataFrame(rows, columns=columns)
         for kind in ("source", "destination"):
             self._file_plan[kind + "_exists"] = pd.Series(pd.NA,index=self._file_plan.index, dtype="boolean",)
 
+        # check availability (and fill if not avaialable according to the settings)
         self.check_count = 0
         if check_exists:
             return self.check_availability(check_times=check_times)
@@ -944,13 +938,345 @@ class DatasetPlanner:
         table = self.file_table(kind)
         return table.loc[table.file_exists.eq(False).fillna(False)].reset_index(drop=True)
 
+    # helper to manage summary extra args (to avoid exceptions in writing object)
+    def _summary_extra_args(self, extra_args):
+
+        if extra_args is None:
+            return {}
+        if not isinstance(extra_args, dict):
+            self.log.warning('Skipping extra_args: expected a dictionary.')
+            return {}
+
+        def clean_items(items, location, ancestors):
+            result = {}
+            for key, value in items.items():
+                if not isinstance(key, str):
+                    self.log.warning(f'Skipping {location} key of type {type(key).__name__}: expected a string.')
+                    continue
+                item_location = f'{location}[{key!r}]'
+                if isinstance(value, dict):
+                    if id(value) in ancestors:
+                        self.log.warning(f'Skipping {item_location}: circular dictionary reference.')
+                        continue
+                    result[key] = clean_items(value, item_location, ancestors | {id(value)})
+                    continue
+                if not isinstance(value, (str, int, float, bool)):
+                    self.log.warning(f'Skipping {item_location}: expected a dictionary, string, int, float or bool; '
+                                     f'got {type(value).__name__}.')
+                    continue
+                try:
+                    json.dumps({key: value}, allow_nan=False)
+                except (TypeError, ValueError, OverflowError) as exc:
+                    self.log.warning(f'Skipping {item_location}: value is not writable to JSON ({exc}).')
+                    continue
+                result[key] = value
+            return result
+
+        return clean_items(extra_args, 'extra_args', {id(extra_args)})
+
+    @staticmethod
+    def _summary_tag_args(tag_args):
+        if not isinstance(tag_args, str) or not tag_args.strip():
+            raise ValueError('tag_args must be a nonempty string.')
+        reserved = {
+            'schema_version', 'generated_at', 'verification', 'timezone', 'model', 'domain_name',
+            'time_mode', 'time_run', 'observed_run', 'forecast_run', 'time_start', 'time_end',
+            'time_frequency', 'time_step_seconds', 'time_steps', 'time_period', 'mode',
+            'coverage', 'member', 'ready', 'ready_steps', 'missing_times', 'steps', 'counts',
+        }
+        if tag_args in reserved:
+            raise ValueError(f'tag_args {tag_args!r} would overwrite a core summary field.')
+        return tag_args
+
+    # method to create a summary of execution (to check the created datasets)
+    def summary(self, file_name=None, *, time_mode=None, allow_compressed=True, exists=None,
+                extra_args=None, member=None, tag_args='execution'):
+        """Check destination presence and return a JSON-compatible model-input manifest.
+
+        Optionally publish the manifest atomically to ``file_name``. This always
+        probes outputs afresh, without changing the time plan or source checks.
+        Start/end are inclusive forcing validity timestamps; ``time_steps`` is
+        their count, not a model restart setting. Readiness means file presence
+        for every configured destination variable/member/time, not validation
+        of NetCDF contents. ``exists`` accepts a Path for custom storage probes.
+        ``extra_args`` is stored under ``tag_args`` (default ``execution``): keys must be strings and
+        values nested dictionaries, strings, integers, finite floats or booleans. Invalid entries
+        are skipped with a warning; they do not prevent summary generation.
+        Call after all time iterations for the selected ``member`` have ended.
+        Return and optionally write ONLY that member's flat record. A member
+        must be selected explicitly for a multi-member planner; deterministic
+        planners infer ``"deterministic"``. Use ``summary_execution`` separately
+        to combine completed member records without rescanning outputs.
+        """
+
+        tag_args = self._summary_tag_args(tag_args)
+        # check time mode
+        if time_mode not in (None, "observed", "forecast"):
+            raise ValueError("time_mode must be observed, forecast or None.")
+        # check flags
+        if not isinstance(allow_compressed, bool):
+            raise TypeError("allow_compressed must be a boolean.")
+        members = self.members or ('deterministic',)
+        if member is None:
+            if len(members) != 1:
+                raise ValueError('Select member explicitly when summarizing an ensemble.')
+            member = members[0]
+        if not isinstance(member, str) or member not in members:
+            raise ValueError(f'Unknown summary member {member!r}; expected one of {members}.')
+
+        plan = self.time_plan
+        table = self.time_table.sort_index()
+        if time_mode is not None:
+            table = table.loc[table.time_mode.eq(time_mode)]
+        destinations = self.file_by_ensemble("destination", time_mode=time_mode)
+        probe = Path.is_file if exists is None else exists
+        checked_paths, resolved_paths = {}, {}
+
+        def resolve_destination(expected):
+            if expected is None:
+                return None
+            if expected not in resolved_paths:
+                candidates = [expected]
+                if allow_compressed:
+                    candidates.append(expected[:-3] if expected.endswith('.gz') else expected + '.gz')
+                resolved_paths[expected] = None
+                for candidate in candidates:
+                    if candidate not in checked_paths:
+                        checked_paths[candidate] = bool(probe(Path(candidate)))
+                    if checked_paths[candidate]:
+                        resolved_paths[expected] = candidate
+                        break
+            return resolved_paths[expected]
+
+        times = [pd.Timestamp(stamp).isoformat() for stamp in table.index]
+        common = {
+            'schema_version': 1,
+            'generated_at': pd.Timestamp.now(tz='UTC').isoformat(),
+            'verification': 'file_presence',
+            'timezone': 'UTC',
+            'model': self.application.get('info', {}).get('model'),
+            'domain_name': self.application.get('info', {}).get('domain_name'),
+            'time_mode': time_mode,
+            'time_run': pd.Timestamp(plan.time_run).isoformat(),
+            'observed_run': pd.Timestamp(plan.observed_run).isoformat(),
+            'forecast_run': pd.Timestamp(plan.forecast_run).isoformat(),
+            'time_start': times[0] if times else None,
+            'time_end': times[-1] if times else None,
+            'time_frequency': str(plan.frequency),
+            'time_step_seconds': float(plan.frequency.total_seconds()),
+            'time_steps': len(times),
+            'time_period': times,
+            'mode': self.mode,
+            'coverage': {},
+            tag_args: self._summary_extra_args(extra_args),
+        }
+        for group in ('observed', 'forecast'):
+            group_times = table.index[table.time_mode.eq(group)]
+            common['coverage'][group] = {
+                'time_start': group_times[0].isoformat() if len(group_times) else None,
+                'time_end': group_times[-1].isoformat() if len(group_times) else None,
+                'time_steps': len(group_times),
+            }
+
+        member_paths = destinations.get(member, {})
+        member_summary = deepcopy(common)
+        member_summary.update({
+            'member': member, 'ready': bool(times), 'ready_steps': 0,
+            'missing_times': [], 'steps': [],
+        })
+        file_status = {}
+        for stamp, row in table.iterrows():
+            variables = {}
+            paths = member_paths.get(str(pd.Timestamp(stamp)), {})
+            missing_variables = []
+            for variable, (_, output_name, _) in self._destinations[row.time_mode].items():
+                expected = paths.get(variable)
+                actual = resolve_destination(expected)
+                if expected is not None:
+                    file_status[expected] = actual is not None
+                variables[variable] = {
+                    'output_name': output_name,
+                    'file_expected': expected,
+                    'file_actual': actual,
+                    'exists': actual is not None,
+                }
+                if actual is None:
+                    missing_variables.append(variable)
+            ready = bool(variables) and not missing_variables
+            stamp_key = pd.Timestamp(stamp).isoformat()
+            member_summary['steps'].append({
+                'time': stamp_key,
+                'step': int(row.step),
+                'time_step': int(row.time_step),
+                'time_mode': row.time_mode,
+                'time_adjusted': bool(row.get('time_adjusted', False)),
+                'ready': ready,
+                'missing_variables': missing_variables,
+                'variables': variables,
+            })
+            if ready:
+                member_summary['ready_steps'] += 1
+            else:
+                member_summary['ready'] = False
+                member_summary['missing_times'].append(stamp_key)
+        member_summary['counts'] = {
+            'time_steps': len(times),
+            'ready_steps': member_summary['ready_steps'],
+            'expected_files': len(file_status),
+            'available_files': sum(file_status.values()),
+            'missing_files': sum(not available for available in file_status.values()),
+        }
+
+        if file_name is not None:
+            self.write_summary(file_name, member_summary, tag_args=tag_args)
+        self.log.info(f'Planner summary: member={member}, ready={member_summary["ready"]}, '
+                      f'steps={member_summary["time_steps"]}, '
+                      f'missing files={member_summary["counts"]["missing_files"]}')
+        return member_summary
+
+    def summary_execution(self, summary_collections, file_name=None, *, extra_args=None, tag_args='execution'):
+        """Merge already completed member summaries as {member: record}.
+
+        This method never probes files or summarizes other members on its own.
+        Optionally publish the merged dictionary to one JSON file. Member keys
+        must agree with each record's member tag. Input records are unchanged.
+        """
+        tag_args = self._summary_tag_args(tag_args)
+        additional_args = self._summary_extra_args(extra_args)
+        result = {}
+        for member, record in self._summary_records(summary_collections).items():
+            record = deepcopy(record)
+            if extra_args is not None or tag_args in record:
+                arguments = self._summary_extra_args(record.get(tag_args))
+                arguments.update(additional_args)
+                record[tag_args] = arguments
+            result[member] = record
+        if file_name is not None:
+            self.write_summary(file_name, result, flag_merge=True, tag_args=tag_args)
+        return result
+
+    @staticmethod
+    def _summary_records(summary):
+        """Normalize a single record or a merged dictionary to member-keyed records."""
+        if not isinstance(summary, dict):
+            raise TypeError('summary must be a dictionary.')
+        if 'schema_version' in summary or 'member' in summary:
+            records = {summary.get('member'): summary}
+        else:
+            records = summary
+        if not records:
+            raise ValueError('Summary must contain at least one member record.')
+        for member, record in records.items():
+            if not isinstance(member, str) or not member:
+                raise ValueError('Each summary member key must be a nonempty string.')
+            if not isinstance(record, dict):
+                raise ValueError(f'{member}: summary record must be a dictionary.')
+            if type(record.get('schema_version')) is not int or record['schema_version'] != 1:
+                raise ValueError(f'{member}: unsupported summary schema_version; expected 1.')
+            if record.get('member') != member:
+                raise ValueError(f'{member}: member key and record member tag must match.')
+        return records
+
+    # method to write a planner summary file
+    def write_summary(self, file_name, summary, *, extra_args=None, flag_merge=False, tag_args='execution'):
+        """Atomically write an existing summary without probing files again.
+
+        Accept a single member record or ``{member: record}``, and return the
+        normalized member-keyed dictionary. By default, export one record per
+        file. With ``flag_merge=True``, write the member-keyed dictionary to one
+        file, without a global metadata or members wrapper. Filename
+        placeholders ``{member}`` and ``{ensemble_member}`` are supported. With
+        no placeholder, multiple members get a suffix before the extension;
+        one member retains the supplied filename. Each output is atomic, not
+        the entire group.
+        Optional extra arguments extend or
+        override its existing ``tag_args`` field (default ``execution``) after validation. Input dictionaries
+        are not changed. Only invalid extra arguments are skipped; non-JSON core
+        metadata or file I/O errors are raised, leaving the previous file intact.
+        """
+        tag_args = self._summary_tag_args(tag_args)
+        if not isinstance(flag_merge, bool):
+            raise TypeError('flag_merge must be a boolean.')
+        additional_args = self._summary_extra_args(extra_args)
+        result = {}
+        for member, record in self._summary_records(summary).items():
+            record = dict(record)
+            if extra_args is not None or tag_args in record:
+                arguments = self._summary_extra_args(record.get(tag_args))
+                arguments.update(additional_args)
+                record[tag_args] = arguments
+            result[member] = record
+
+        outputs = []
+        template = os.fspath(file_name)
+        fields = {field for _, field, _, _ in Formatter().parse(template) if field is not None}
+        if fields - {'member', 'ensemble_member'}:
+            raise ValueError('Summary filename supports only {member} and {ensemble_member} placeholders.')
+        if not flag_merge:
+            for member, record in result.items():
+                output = Path(template.format(member=member, ensemble_member=member)).expanduser()
+                if not fields and len(result) > 1:
+                    output = output.with_name(f'{output.stem}.{member}{output.suffix}')
+                outputs.append((output, record))
+        else:
+            if fields:
+                raise ValueError('Member placeholders cannot be used when flag_merge=True.')
+            outputs.append((Path(template).expanduser(), result))
+
+        # Validate all payloads before publishing the first member.
+        output_paths = set()
+        for output, payload in outputs:
+            resolved = str(output.resolve())
+            if resolved in output_paths:
+                raise ValueError(f'Summary filename template maps multiple members to {output}.')
+            output_paths.add(resolved)
+            json.dumps(payload, allow_nan=False)
+        for output, payload in outputs:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=output.parent,
+                                                 prefix=output.name + '.', delete=False) as stream:
+                    temporary_path = Path(stream.name)
+                    json.dump(payload, stream, indent=2, allow_nan=False)
+                    stream.write('\n')
+                os.replace(temporary_path, output)
+            finally:
+                if temporary_path is not None and temporary_path.exists():
+                    temporary_path.unlink()
+            self.log.info(f'Destination summary saved to {output}')
+        return result
+
+    # method to read a planner summary file
+    @staticmethod
+    def read_summary(file_name):
+
+        with Path(file_name).expanduser().open('r', encoding='utf-8') as stream:
+            result = json.load(stream)
+        if not isinstance(result, dict):
+            raise ValueError('Summary JSON must contain a dictionary.')
+        DatasetPlanner._summary_records(result)
+        return result
+
     # organize file by ensemble (if not ensemble tag to deterministic)
-    def file_by_ensemble(self, kind="source"):
+    def file_by_ensemble(self, kind="source", *, time_mode=None):
+        """Group paths by member/time/variable, optionally selecting observed or forecast.
+
+        ``time_mode=None`` includes both groups. Filtering follows the current
+        adjusted plan, so observed gaps filled with forecasts belong to forecast.
+        """
 
         if kind not in ("source", "destination"):
             raise ValueError("kind must be source or destination.")
+        if time_mode not in (None, "observed", "forecast"):
+            raise ValueError("time_mode must be observed, forecast or None.")
+
+        files = self.file_plan
+        if time_mode is not None:
+            files = files.loc[files.time_mode.eq(time_mode)]
+
         result = {}
-        for row in self.file_plan.sort_values("time", kind="stable").itertuples(index=False):
+        for row in files.sort_values("time", kind="stable").itertuples(index=False):
             member = row.output_member if pd.notna(row.output_member) else row.ensemble_member
             members = (str(member),) if pd.notna(member) else self.members or ("deterministic",)
             stamp = str(pd.Timestamp(row.time))

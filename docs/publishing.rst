@@ -26,7 +26,7 @@ in Read the Docs; this guide does not assume a particular slug is available.
 Version management
 ------------------
 
-Documentation edition **0.3.0** is prepared for publication from ``main``. The initial edition
+Documentation edition |docs_version| is prepared for publication from ``main``. The initial edition
 used a dedicated documentation branch; that is no longer the source of the
 public ``latest`` version. Documentation edition numbers remain independent
 of package version |package_version|.

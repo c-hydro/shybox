@@ -53,10 +53,12 @@ class TestDatasetsPlanningCLI(unittest.TestCase):
                     self.assertTrue(all(not row['source_exists'] for row in rows))
                     self.assertTrue(all(not row['destination_exists'] for row in rows))
                     self.assertFalse(any('%' in row['file_destination'] for row in rows))
-                    self.assertEqual(summary['configured_workflow_steps'], outputs)
+                    self.assertEqual(summary['configured_workflow_steps'], 2 if profile == 'probabilistic' else 1)
                     self.assertEqual(summary['configured_members'],
                                      ['001', '002'] if profile == 'probabilistic' else ['deterministic'])
                     self.assertFalse((root / 'forcing').exists())
+                    self.assertFalse((root / 'plans_file.workspace').exists())
+                    self.assertFalse(list(root.glob('datasets.summary.*.json')))
 
 
 if __name__ == '__main__':

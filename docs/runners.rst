@@ -33,16 +33,11 @@ window and can replace a trailing observed gap with complete forecast files.
 Its tables use ``observed``/``forecast`` modes and include source cycles,
 availability and ensemble members.
 
-.. toctree::
-   :maxdepth: 2
-
-   dataset_planning
-
 The :doc:`dataset_planning` guide provides a complete configuration and Python
 example, deferred tags, ``dims="2d"`` / ``"3d"`` source references, window
 limits, forecast fallback, member-organized file dictionaries and per-variable
-``DataLocal`` / ``OrchestratorConfig`` setup in the dataset entry point. The separate
-:doc:`datasets` chapter covers the development forcing-composition workflow.
+``DataLocal`` / ``OrchestratorConfig`` setup in the dataset entry point. Use :doc:`dataset_execution` for sequential forcing execution and
+:doc:`dataset_summaries` for the member manifest consumed by a model runner.
 
 For model execution, ``application_namelist`` configures the model/version,
 forcing paths, simulation interval, restart and output fields;

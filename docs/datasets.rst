@@ -1,5 +1,5 @@
-Preparing forcing datasets
-==========================
+Forcing composer design (archived)
+==================================
 
 The forcing composer combines observed and forecast datasets into HMC/Continuum
 or S3M NetCDF forcing. It plans validity times and source cycles, checks file
@@ -10,11 +10,12 @@ across rainfall ensemble members.
 .. warning::
 
    The composition API below is an unfinished design, archived with its tests
-   under ``experiments/dataset_composer/``. It is not a supported SHYBOX 1.7.0
-   package API. The supported planner and dataset workflow setup are documented
-   in :doc:`dataset_planning`; their CLI configures ``DataLocal`` /
-   ``OrchestratorConfig`` without publishing forcing files. Use the existing
-   converter, merger and disaggregation workflows to prepare model inputs.
+   under ``experiments/dataset_composer/``. It is not a supported SHYBOX package
+   API. The released planner is documented
+   in :doc:`dataset_planning`, the sequential forcing runner in
+   :doc:`dataset_execution`, and output verification in :doc:`dataset_summaries`.
+   The commands and interfaces below describe the archived prototype, not the
+   released dataset CLI.
    Model execution is covered in :doc:`runners`.
 
 Choose the preparation stage
@@ -357,7 +358,7 @@ fallback; execution still validates the selected contents. Unavailable steps
 remain in the plan and are subject to execution's gap policy.
 
 Spatial operations, formats and prepared files
------------------------------------------------
+----------------------------------------------
 
 ``operations.interpolate`` and ``operations.split`` are null when disabled.
 Enable only the operations needed by that source:
