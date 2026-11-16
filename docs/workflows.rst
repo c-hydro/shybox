@@ -18,20 +18,19 @@ intermediate results on disk and final model forcing written separately.
 Model forcing and execution
 ---------------------------
 
-``workflow/runner/datasets/`` plans observed/forecast inputs and configures
-per-variable ``DataLocal`` / orchestrator workflows. Follow :doc:`dataset_planning`
-for configuration, source cycles, file plans, availability windows, forecast
-fallback and member organization. The shared driver reports its plan with
-``--dry-run --plan-files``; processing uses the configured orchestrators
-explicitly. The separate development composition design, including gap policies
-and complete-run publication, is described in :doc:`datasets`.
+Follow :doc:`runner_workflows` for the complete route through the two folders.
 
-``workflow/runner/execution/`` contains HMC and S3M runners. These use utilities under
-``shybox/runner_toolkit/`` to prepare namelists and launch model executables.
-Supply an executable compatible with the selected namelist template, input
-datasets and model version. Follow :doc:`runners` for complete HMC and S3M
-configuration recipes, dry-run/launch commands, time conventions and ensemble
-path isolation.
+``workflow/runner/datasets/`` prepares model forcing. The HMC script handles
+deterministic and probabilistic forecasts; the S3M script handles deterministic
+observations and forecasts. Use :doc:`dataset_execution` for commands and
+configuration, :doc:`dataset_planning` for time windows and forecast fallback,
+and :doc:`dataset_summaries` to verify the resulting member files. The separate
+archived composition design is described in :doc:`datasets`.
+
+``workflow/runner/execution/`` contains the HMC and S3M model drivers. They
+prepare namelists and launch compatible compiled executables using the prepared
+forcing. Follow :doc:`runners` for domain settings, model-specific dry-run and
+launch commands, time conventions, restart configuration and member path isolation.
 
 Geographic preparation and analysis
 -----------------------------------

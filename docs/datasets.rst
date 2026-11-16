@@ -44,69 +44,13 @@ GeoTIFF, raw binary and ESRI ASCII grids, including gzip-compressed files. It
 can select exact times from cubes and interpolate spatially when configured.
 It does not download inputs, generate rainfall ensembles or launch a model.
 
-Plan your first run
--------------------
+Current runner examples
+-----------------------
 
-From the repository root, activate the scientific environment as described in
-:doc:`installation`. A model executable is unnecessary for forcing preparation.
-Copy one of these profiles before changing domain paths, units or source names:
-
-.. list-table:: Profiles in ``workflow/runner/datasets/``
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Profile
-     - JSON filename
-   * - HMC deterministic
-     - ``app_runner_workflow_hmc_datasets_forcing_deterministic.json``
-   * - HMC probabilistic
-     - ``app_runner_workflow_hmc_datasets_forcing_probabilistic.json``
-   * - S3M deterministic
-     - ``app_runner_workflow_s3m_datasets_forcing.json``
-
-All three use ``app_runner_workflow_hmc_datasets_main.py``. Despite its name,
-this shared driver selects HMC or S3M from the configuration. The HMC examples
-use hourly observed grids, an ECMWF forecast cube, and RainFARM rainfall members
-for the probabilistic profile. S3M's example uses prepared files at each time.
-
-.. code-block:: bash
-
-   source ./conda/shybox_base_settings
-   export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-   mkdir -p exec/my_forcing
-   cp workflow/runner/datasets/app_runner_workflow_hmc_datasets_forcing_deterministic.json \
-      exec/my_forcing/settings.json
-
-   export DOMAIN_NAME="my_domain"
-   export PATH_GEO="/absolute/path/to/geographic/grids"
-   export PATH_OBS="/absolute/path/to/observations"
-   export PATH_FRC_NWP="/absolute/path/to/weather/forecasts"
-   export PATH_FRC_RFARM="/absolute/path/to/rainfall/members"
-   export PATH_DST="$PWD/exec/my_forcing/forcing"
-   export PATH_LOG="$PWD/exec/my_forcing/log"
-
-   python -m workflow.runner.datasets.app_runner_workflow_hmc_datasets_main \
-      -settings_file "$PWD/exec/my_forcing/settings.json" \
-      -time "2026-11-09 09:35" --dry-run --plan-files
-
-Replace the absolute input paths and adapt the copied JSON to actual filenames,
-coordinate names and domain terrain. ``PATH_FRC_RFARM`` is needed only by the
-probabilistic HMC profile. The default terrain name is ``{domain_name}.dem.txt``.
-The planning command can run without the input files: missing files are reported
-rather than read. It creates logs, but no forcing output directory or data arrays.
-
-``--dry-run`` prints a JSON summary after the configuration/log tables;
-``--plan-files`` includes individual file rows in that summary. Inspect the
-rounded run, selected periods, source issue time, destination paths and member
-IDs before composition. The current driver calls
-``update_time(n_steps_observed=4, n_steps_forecast=0)``: its file checks cover
-signed steps -4 through zero only. Future file counts are planned totals, and
-unchecked availability remains null. This is not a full-window validation.
-
-Remove ``--dry-run --plan-files`` from the command to read and validate the
-complete selected period and publish forcing. Existing run folders are rejected;
-choose a new destination root when repeating an experiment. Once successful,
-configure the model's forcing paths and interval using :doc:`runners`.
+For supported commands and settings, use :doc:`runner_workflows` and
+:doc:`dataset_execution`. HMC and deterministic S3M have separate entry points.
+The archived composer interfaces below are retained as design background and
+are not commands for the current ``workflow/runner/datasets/`` scripts.
 
 Configuration layout and variable mapping
 -----------------------------------------
@@ -501,5 +445,5 @@ Run the dataset suite in the scientific environment:
 The suite exercises time windows, mode/member handling, file planning, fallback,
 source formats, geography, gap policies and validated model forcing using small
 synthetic datasets. It does not establish scientific forecast skill or replace
-an operational run. The source-level reference is
-``workflow/runner/datasets/README.md``; see :doc:`development` for other checks.
+an operational run. See :doc:`dataset_execution` for current runner examples and :doc:`development`
+for other checks.

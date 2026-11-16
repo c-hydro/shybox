@@ -17,13 +17,16 @@ SHYBOX brings the stages of a modeling application into a consistent workflow: p
 
 Version **1.7.1** adds per-member dataset summaries, execution tracing,
 observed/forecast file filtering and NetCDF metadata fixes. The sequential dataset
-runner supports planning previews and forcing execution; the experimental
+runner prepares forecast forcing, with a separate deterministic S3M entry point
+for observed/forecast inputs; the experimental
 `datasets_parallel` folder is excluded from this release.
 See the [changelog](CHANGELOG) for changes and migration notes. Documentation
 edition **0.5.0** groups guides into expandable main topics and subtopics.
 
 Runner examples are in [`workflow/runner/execution/`](workflow/runner/execution/)
 and dataset preparation examples in [`workflow/runner/datasets/`](workflow/runner/datasets/).
+Follow the [Runner workflows guide](docs/runner_workflows.rst) for environment
+setup, forcing preparation, summary verification and model launch examples.
 Legacy HMC training material is organized under [`labs/hmc/`](labs/hmc/);
 see the [import notes](labs/hmc/IMPORT.rst) before using it. Create a separate
 JupyterLab environment with `./setup_shybox_jupyter.sh --python python3.11`,

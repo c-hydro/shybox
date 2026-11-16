@@ -39,6 +39,10 @@ The application dictionary has these sections:
      - Named output collections with canonical-to-output variable mappings.
    * - ``geo``
      - Optional geography metadata. File planning does not read terrain.
+   * - ``planning.options``
+     - Default availability windows and fallback rules passed as ``options=``.
+   * - ``planning.files`` / ``planning.summary``
+     - History/summary path and filename settings passed as ``files=`` and ``summary=``.
 
 ``from_config`` accepts separate source/destination dictionaries for both groups.
 ``from_application`` accepts the assembled dictionary above and also supports
@@ -111,8 +115,8 @@ Time plans and deferred tags
 
 All planner times are naive UTC. ``time_run`` supplied to the constructor or
 ``from_config`` overrides the configured run. The time factory rounds the run
-and builds observed/forecast windows using the look/horizon priorities described
-in :doc:`datasets`. ``configure_time(time_plan=existing_period)`` reuses a
+and builds observed/forecast windows using the policies below.
+``configure_time(time_plan=existing_period)`` reuses a
 ``TimePeriod``; alternatively pass ``time_factory=callable`` at construction.
 
 The planner accepts ``obs``/``frc`` or ``observed``/``forecast`` in an incoming
@@ -141,6 +145,48 @@ selects a custom tag or overrides its reference. Ordinary time settings are
 excluded. Both input arguments must be dictionaries and selected date templates
 must be nonempty strings.
 
+Choose look windows and clock horizons
+--------------------------------------
+
+``time_look_observed`` measures backward from the rounded run;
+``time_look_forecast`` measures forward. Observations include the run step;
+forecasts begin one forcing step after it.
+
+.. list-table:: Horizon policies
+   :header-rows: 1
+   :widths: 24 76
+
+   * - Value
+     - Behavior
+   * - ``None`` / JSON ``null``
+     - Use the corresponding look boundary, including when priority is ``horizon``.
+   * - ``"midnight"``
+     - Subtract/add the look duration from the source cycle and floor to a day boundary. Compare that candidate with the run-based look boundary using the priority.
+   * - ``"12:00"`` / another ``HH:MM``
+     - Use that exact clock time on the rounded run date; it overrides priority and must fit within the corresponding look window.
+
+For non-clock horizons, ``min`` and ``max`` choose the earlier/later candidate;
+``look`` and ``horizon`` choose one directly. In the JSON LUT these are
+``time_priority_observed`` / ``time_priority_forecast``; the resolved application
+uses ``priority_observed`` / ``priority_forecast``.
+
+With run 14:00 and a 3h look on both sides:
+
+* Null horizons select observations from 11:00 through 14:00 and forecasts from
+  15:00 through 17:00 at hourly frequency.
+* Observed ``"12:00"`` selects 12:00 through 14:00. Forecast ``"15:00"`` ends
+  forecasts at 15:00.
+* Observed ``"15:00"`` is after the run and fails. Observed ``"10:00"`` is
+  outside the look window and also fails. Forecast ``"12:00"`` or ``"18:00"``
+  fails for the corresponding reason.
+
+Both window limits are inclusive. Clock horizons must align with
+``time_frequency``; for example, ``"12:30"`` is invalid at hourly frequency.
+Invalid combinations raise a ``ValueError`` naming the configuration and allowed
+window. A clock horizon is not silently shifted to the preceding or following day.
+Source issue clocks (``hour_reference_*``) are separate: they select the most
+recent issue at or before the run and do not define the forcing interval.
+
 Check a window and adjust the observed cutoff
 -----------------------------------------------
 
@@ -157,8 +203,10 @@ Check a window and adjust the observed cutoff
    summary = planner.file_table("source")
 
 The example checks only signed steps -3 through +1, including zero. A limit of
-zero checks only zero; ``None`` disables that side. Both step limits default to
-``None``, so calling ``update_time()`` checks no files. The older parameter names
+zero checks only zero; ``None`` disables that side. Omitted arguments use
+``planner.options``. Without configured limits, both default to ``None`` and
+no files are checked; the shipped profiles configure -3 through +1. Explicit
+call arguments override stored options without changing them. The older parameter names
 ``n_steps_observed`` and ``n_steps_forecast`` are accepted as aliases.
 
 With adjustment enabled, missing required observations at the end of the checked
@@ -238,6 +286,28 @@ Set ``reset_history=False`` to reuse a compatible saved plan without probing
 source files again; changed configuration, run or window options rebuild it.
 Missing or unreadable history also falls back to a fresh check, with log messages.
 Set ``flag_history=False`` to disable history I/O entirely.
+
+When constructing a planner from resolved runner settings, pass the nested
+planning sections explicitly. ``from_application`` does not automatically
+extract these keyword arguments:
+
+.. code-block:: python
+
+   planning = application['planning']
+   planner = DatasetPlanner.from_application(
+       application, time_tags=date_tags,
+       options=planning['options'], files=planning['files'],
+       summary=planning['summary'],
+   )
+   planner.update_time()  # Uses configured windows, fallback and history flags.
+   print(planner.file_planning)  # Absolute filled path, or None with history disabled.
+
+``files`` accepts ``path``, ``file_name``, ``flag_history`` and ``reset_history``.
+Without it, history defaults to ``plans_file.workspace`` in the working directory
+and refreshes on each call. ``summary`` accepts ``path`` and ``file_name``;
+without it, ``summary()`` returns a record without writing a file unless an
+explicit filename is supplied. After a write, ``file_summary`` holds the latest
+resolved path and ``files_summary`` maps completed members to their saved paths.
 
 .. code-block:: python
 

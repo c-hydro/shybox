@@ -10,6 +10,12 @@ For the scientific model presentations, see :doc:`appendix_hmc` (Appendix A)
 and :doc:`appendix_s3m` (Appendix B). This chapter covers their configuration
 and execution through SHYBOX.
 
+This is the ``workflow/runner/execution/`` stage of :doc:`runner_workflows`.
+Complete :doc:`dataset_execution` and :ref:`runner-dataset-handoff` first.
+In particular, compare the actual forcing directories in the member summary
+with the model's ``sPathData_Forcing_Gridded``: the shipped dataset and model
+examples use different folder layouts and are not connected automatically.
+
 This guide uses the current base runners for one deterministic run. Their JSON
 examples need adaptation to your domain and executable. Commands below are run
 from the SHYBOX repository root.
