@@ -1,6 +1,17 @@
 Software and documentation releases
 ======================================================================
 
+0.7.0 — Application and toolkit guides
+----------------------------------------------------------------------
+
+Prepared on 16 November 2026 for SHYBOX |package_version|. Reorganize the
+Read the Docs navigation around applications, workflows and reusable toolkit
+packages. Add an application catalog covering the shipped workflow entry points
+and a toolkit reference that maps package responsibilities to imports and use
+cases. Expand monitoring documentation with process/host CPU metrics and a
+bounded application example. Documentation edition 0.7.0 does not change the
+SHYBOX package version or bundle compiled HMC/S3M model binaries.
+
 SHYBOX 1.7.1 — Dataset execution and member summaries
 ----------------------------------------------------------------------
 

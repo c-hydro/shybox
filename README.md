@@ -21,7 +21,8 @@ runner prepares forecast forcing, with a separate deterministic S3M entry point
 for observed/forecast inputs; the experimental
 `datasets_parallel` folder is excluded from this release.
 See the [changelog](CHANGELOG) for changes and migration notes. Documentation
-edition **0.5.0** groups guides into expandable main topics and subtopics.
+edition **0.7.0** adds an application catalog, a toolkit-by-toolkit usage guide
+and task-based navigation through the Read the Docs guides.
 
 Runner examples are in [`workflow/runner/execution/`](workflow/runner/execution/)
 and dataset preparation examples in [`workflow/runner/datasets/`](workflow/runner/datasets/).
@@ -37,7 +38,7 @@ then open the labs with `./run_shybox_jupyter.sh` ([details](labs/README.rst)).
 - **Environmental data preparation:** conversion, spatial interpolation, temporal processing, merging and rainfall disaggregation.
 - **Dataset planning:** observed and forecast coverage, source cycles, file availability and ensemble organization.
 - **Model applications:** configuration and execution workflows for HMC/Continuum and S3M, including ensemble applications.
-- **Results and diagnostics:** time-series analysis, maps, figures, interactive viewing and execution monitoring.
+- **Results and diagnostics:** time-series analysis, maps, figures, interactive viewing, and process/host CPU and RAM monitoring.
 - **Reusable workflows:** Python components and JSON configuration that connect these tasks across domains and datasets.
 
 Available workflows and interfaces depend on the selected repository revision and the model version used by an application.

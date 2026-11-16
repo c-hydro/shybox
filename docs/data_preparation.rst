@@ -13,4 +13,5 @@ Return to :doc:`runner_workflows` for the complete route.
    dataset_execution
    dataset_planning
    dataset_summaries
+   dataset_modes
    Composer design (archived) <datasets>

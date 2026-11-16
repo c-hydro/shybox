@@ -25,6 +25,9 @@ class ResourceMonitoringTests(unittest.TestCase):
         target=data['targets'][0]
         self.assertEqual(target['status'],'running');self.assertGreater(target['rss_mib'],0)
         self.assertEqual(target['level'],'critical');self.assertEqual(target['processes'][0]['pid'],os.getpid())
+        self.assertGreaterEqual(target['cpu_percent'],0)
+        self.assertGreaterEqual(target['processes'][0]['cpu_percent'],0)
+        self.assertGreaterEqual(data['host']['cpu_used_percent'],0)
 
     def test_child_process_is_included_once(self):
         child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(10)'])
@@ -51,7 +54,10 @@ class ResourceMonitoringTests(unittest.TestCase):
         snapshot=read_memory_snapshot(self.root/'memory.latest.json')
         self.assertEqual(snapshot['status'],'available')
         path=next(self.root.glob('*.csv'))
-        with path.open() as stream:self.assertEqual(len(list(csv.DictReader(stream))),2)
+        with path.open() as stream:
+            rows=list(csv.DictReader(stream))
+        self.assertEqual(len(rows),2)
+        self.assertIn('cpu_percent',rows[0]);self.assertIn('host_cpu_used_percent',rows[0])
         image=self.root/'memory.png';plot_memory_history(path,image)
         self.assertTrue(image.read_bytes().startswith(b'\x89PNG'))
 

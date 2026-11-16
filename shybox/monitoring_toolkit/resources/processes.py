@@ -5,6 +5,7 @@ import math
 import os
 from pathlib import Path
 import socket
+import tempfile
 import time
 
 from ..common.io import time_string, utc_now, write_status
@@ -49,16 +50,20 @@ class ProcessMemoryMonitor:
         self.config = config
         self.folder = Path(config['output']['folder_name'])
         self.peaks = {}
+        self.cpu_peaks = {}
         self.pid_births = {}
+        self._cpu_processes = {}
 
     def sample(self):
         psutil = self.psutil
         vm = psutil.virtual_memory()
         snapshot = {'schema_version': 1, 'resource': 'memory', 'generated_at': time_string(utc_now()),
-                    'host': {'name': socket.gethostname(), 'memory_total_mib': vm.total / 2**20,
+                    'host': {'name': socket.gethostname(), 'cpu_used_percent': psutil.cpu_percent(interval=None)},
+                    'targets': []}
+        snapshot['host'].update({'memory_total_mib': vm.total / 2**20,
                              'memory_available_mib': vm.available / 2**20,
                              'memory_used_mib': (vm.total - vm.available) / 2**20,
-                             'memory_used_percent': 100 * (vm.total - vm.available) / vm.total}, 'targets': []}
+                             'memory_used_percent': 100 * (vm.total - vm.available) / vm.total})
         for label, spec in self.config['processes'].items():
             roots, errors = [], []
             if 'pid' in spec:
@@ -95,15 +100,22 @@ class ProcessMemoryMonitor:
                         pass
                     except psutil.AccessDenied:
                         errors.append(f'Access denied to children of PID {process.pid}.')
-            rss, vms, sampled = 0, 0, []
+            rss, vms, cpu, sampled = 0, 0, 0.0, []
             for process in processes.values():
                 try:
                     with process.oneshot():
                         if process.status() == psutil.STATUS_ZOMBIE:
                             continue
                         memory = process.memory_info()
-                        sampled.append({'pid': process.pid, 'name': process.name()})
-                        rss += memory.rss; vms += memory.vms
+                        birth = process.create_time()
+                        cpu_process = self._cpu_processes.get(process.pid)
+                        if cpu_process is None or cpu_process[0] != birth:
+                            cpu_process = (birth, psutil.Process(process.pid))
+                            self._cpu_processes[process.pid] = cpu_process
+                        cpu_value = cpu_process[1].cpu_percent(interval=None)
+                        sampled.append({'pid': process.pid, 'name': process.name(),
+                                        'cpu_percent': cpu_value})
+                        rss += memory.rss; vms += memory.vms; cpu += cpu_value
                 except psutil.NoSuchProcess:
                     continue
                 except psutil.AccessDenied:
@@ -111,9 +123,14 @@ class ProcessMemoryMonitor:
             rss_mib = rss / 2**20 if sampled else None
             if rss_mib is not None:
                 self.peaks[label] = max(self.peaks.get(label, 0), rss_mib)
+            cpu_percent = cpu if sampled else None
+            if cpu_percent is not None:
+                self.cpu_peaks[label] = max(self.cpu_peaks.get(label, 0), cpu_percent)
             warning, critical = spec.get('warning_rss_mib', 2048), spec.get('critical_rss_mib', 4096)
             level = 'unknown' if rss_mib is None else 'critical' if rss_mib >= critical else 'warning' if rss_mib >= warning else 'normal'
             snapshot['targets'].append({'label': label, 'status': 'partial' if sampled and errors else 'running' if sampled else 'unavailable' if errors else 'missing',
+                                        'cpu_percent': cpu_percent,
+                                        'peak_cpu_percent': self.cpu_peaks.get(label),
                                         'rss_mib': rss_mib, 'vms_mib': vms / 2**20 if sampled else None,
                                         'peak_rss_mib': self.peaks.get(label), 'level': level,
                                         'process_count': len(sampled), 'processes': sampled, 'errors': errors})
@@ -129,8 +146,22 @@ class ProcessMemoryMonitor:
         write_status(self.folder / 'memory.latest.json', snapshot)
         date = snapshot['generated_at'][:10]
         path = self.folder / f'memory_{date}.csv'
-        fields = ['timestamp', 'label', 'status', 'rss_mib', 'vms_mib', 'peak_rss_mib', 'level',
-                  'process_count', 'pids', 'host_used_mib', 'host_total_mib', 'host_used_percent']
+        fields = ['timestamp', 'label', 'status', 'cpu_percent', 'peak_cpu_percent',
+                  'rss_mib', 'vms_mib', 'peak_rss_mib', 'level', 'process_count', 'pids',
+                  'host_cpu_used_percent', 'host_used_mib', 'host_total_mib', 'host_used_percent']
+        if path.exists():
+            with path.open('r', encoding='utf-8', newline='') as stream:
+                reader = csv.DictReader(stream)
+                old_fields = reader.fieldnames or []
+                old_rows = list(reader) if old_fields != fields else None
+            if old_rows is not None:
+                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', newline='',
+                                                 dir=self.folder, delete=False) as stream:
+                    temporary = Path(stream.name)
+                    writer = csv.DictWriter(stream, fieldnames=fields, extrasaction='ignore')
+                    writer.writeheader()
+                    writer.writerows(old_rows)
+                os.replace(temporary, path)
         new_file = not path.exists() or path.stat().st_size == 0
         with path.open('a', encoding='utf-8', newline='') as stream:
             writer = csv.DictWriter(stream, fieldnames=fields)
@@ -139,6 +170,7 @@ class ProcessMemoryMonitor:
             for target in snapshot['targets']:
                 writer.writerow({'timestamp': snapshot['generated_at'], **{key: target[key] for key in fields if key in target},
                                  'pids': ','.join(str(process['pid']) for process in target['processes']),
+                                 'host_cpu_used_percent': snapshot['host']['cpu_used_percent'],
                                  'host_used_mib': snapshot['host']['memory_used_mib'],
                                  'host_total_mib': snapshot['host']['memory_total_mib'],
                                  'host_used_percent': snapshot['host']['memory_used_percent']})

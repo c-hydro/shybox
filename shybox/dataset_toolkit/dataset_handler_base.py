@@ -1195,10 +1195,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
         if 'variable_names' in list(metadata.keys()):
             variable = metadata.pop('variable_names')
 
-        # flatten single-key dictionary
-        if isinstance(data, dict):
-            if len(data) == 1:
-                data = next(iter(data.values()))
+        # Keep singleton variable mappings for NetCDF writers. They use the
+        # mapping key to name the variable; unwrapping it produces a DataArray
+        # and loses the configured output name.
+        if isinstance(data, dict) and len(data) == 1 and self.file_format != 'netcdf':
+            data = next(iter(data.values()))
 
         # case of file-like data
         if self.file_format == 'file':

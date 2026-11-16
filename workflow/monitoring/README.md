@@ -48,8 +48,10 @@ python -m workflow.monitoring.app_monitoring_status_demo --duration 60 --resourc
 Start Hydrapp with `--config hydrapp/config.demo.json`. The demo covers success,
 failure, skipped, dry-run, stale, missing and incomplete ensemble runs; the
 analyzer heartbeat is live until the script exits. `--resources` samples the demo
-process and writes a Ruler report and RAM figure. The default script output
-folders match this demo configuration, not operational monitoring.
+process every two seconds and writes a Ruler report, a CPU/RAM resource snapshot,
+a daily CSV and RAM figure. The CSV includes process and host CPU percentages
+alongside memory statistics. The default script output folders match this demo
+configuration, not operational monitoring.
 
 ## Process RAM from JSON
 
@@ -62,8 +64,9 @@ Replace `12345` with your process PID. Without `--pid`, the example selects all
 commands containing `HMC_Model_V3_`. JSON also supports an exact `name` or a
 `pid`, optional descendants and RSS warning/critical limits in MiB. Files go to
 `exec/monitoring_ram`: atomic `memory.latest.json`, daily CSV and optional PNG.
-Zero samples means continuous monitoring until Ctrl+C. Install `psutil` in the
-collector environment; plotting requires Matplotlib.
+The CSV includes process and host CPU percentages as well as RSS/VMS and host
+memory. Zero samples means continuous monitoring until Ctrl+C. Install `psutil`
+in the collector environment; plotting requires Matplotlib.
 
 For Ruler host/swap memory, disk, load and process reports, use the same command
 with `--config workflow/monitoring/ruler_monitoring.example.json`. The adapted

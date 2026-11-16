@@ -148,10 +148,11 @@ ported by this execution-monitoring integration.
 Process RAM and Ruler
 ----------------------
 
-``ProcessMemoryMonitor`` samples per-process resident memory (RSS), virtual memory
-(VMS), observed peak RSS and host RAM. Install ``psutil`` in the collector's
-Python environment; it is listed in the base Conda environment and the optional
-``monitoring`` package dependencies. ``--plot`` also uses Matplotlib.
+``ProcessMemoryMonitor`` samples per-process CPU percentage, resident memory
+(RSS), virtual memory (VMS), observed CPU/RSS peaks, host CPU and host RAM.
+Install ``psutil`` in the collector's Python environment; it is listed in the
+base Conda environment and the optional ``monitoring`` package dependencies.
+``--plot`` also uses Matplotlib.
 
 .. code-block:: bash
 
@@ -167,16 +168,40 @@ Use ``--pid 12345`` to override the configured selectors with a known PID.
 Name/command selectors can match multiple processes; explicit PIDs are tracked
 with creation time so a reused PID is not mistaken for the original process.
 
-``warning_rss_mib`` and ``critical_rss_mib`` classify measurements. Units are MiB
-(1024 squared bytes). Summed process RSS can count shared pages repeatedly;
-it is not a measurement of unique physical RAM. Missing processes report null
-memory, not zero. Access failures and partial measurements remain visible.
+``warning_rss_mib`` and ``critical_rss_mib`` classify memory measurements. Units
+are MiB (1024 squared bytes). Summed process RSS can count shared pages
+repeatedly; it is not a measurement of unique physical RAM. CPU percentages are
+measured between samples and summed for selected processes and their descendants,
+so a multi-core process group can exceed 100%. The first CPU reading may be zero
+while ``psutil`` establishes its measurement interval. Host CPU percentage is a
+separate system-wide reading. Missing processes report null measurements, not
+zero. Access failures and partial measurements remain visible.
 
 The collector atomically replaces ``memory.latest.json`` and appends to daily
-``memory_YYYY-MM-DD.csv`` files. Run one writer per output folder. Zero samples
-means continuous polling until Ctrl+C. The optional PNG shows process RSS and
-host RAM use, adapting the supplied HAT system-status plotting tool. The host
-percentage uses total minus available RAM, separate from per-process RSS.
+``memory_YYYY-MM-DD.csv`` files. The CSV includes process/host CPU percentages,
+process and host memory, process IDs, status and sample time. Run one writer per
+output folder. Zero samples means continuous polling until Ctrl+C. The optional
+PNG shows process RSS and host RAM use, adapting the supplied HAT system-status
+plotting tool. The host RAM percentage uses total minus available RAM, separate
+from per-process RSS.
+
+Bounded application example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To monitor a running application from its own process, pass its PID to the
+sampler and keep the lifecycle record separate. The demo below samples its own
+PID every two seconds for one minute; it writes a lifecycle JSON, resource JSON
+and a daily CSV that can be inspected after the run:
+
+.. code-block:: bash
+
+   python -m workflow.monitoring.app_monitoring_status_demo --duration 60 --resources
+
+Open Hydrapp with ``hydrapp/config.demo.json`` to see the live lifecycle record.
+The resource CSV contains process CPU/RAM and host CPU/RAM readings. For a
+controlled memory workload, allocate and retain the desired buffer in the
+application being monitored; use its PID as the sampler target and release the
+buffer when the workload ends.
 
 To enable the integrated Ruler collectors:
 

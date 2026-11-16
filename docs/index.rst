@@ -21,9 +21,10 @@ This is documentation edition |docs_version|, describing the repository structur
 and development interfaces of SHYBOX |package_version|. Workflow compatibility
 depends on the selected code branch, model version and dataset configuration.
 
-Start with :doc:`getting_started`, then follow :doc:`runner_workflows` from
-``runner/datasets`` forcing preparation through ``runner/execution`` model
-launch. Continue with :doc:`results` to inspect and monitor the outputs.
+Start with :doc:`getting_started`, then choose a task in :doc:`applications` or
+follow :doc:`runner_workflows` from forcing preparation through model launch.
+Use :doc:`toolkits` to find the reusable Python package behind each workflow.
+Continue with :doc:`results` to inspect and monitor outputs.
 
 The sidebar groups guides by main topic. Expand a topic to see its guides,
 then expand a guide to see its sections. Existing guide URLs remain available.
@@ -33,12 +34,32 @@ release. The unfinished composer is documented separately as an archived design.
 .. toctree::
    :maxdepth: 3
    :hidden:
-   :caption: Main topics
+   :caption: Start here
 
    getting_started
+
+.. toctree::
+   :maxdepth: 3
+   :hidden:
+   :caption: Applications and workflows
+
+   applications
    runner_workflows
    results
    training
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   :caption: Reusable toolkits
+
+   toolkits
+
+.. toctree::
+   :maxdepth: 3
+   :hidden:
+   :caption: Development
+
    contributor_guide
 
 Project resources

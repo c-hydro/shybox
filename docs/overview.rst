@@ -32,6 +32,7 @@ Repository layout
    │   ├── geo/                   Prepare geographic information
    │   ├── runner/
    │   │   ├── datasets/          Plan and compose observed/forecast forcing
+   │   │   ├── datasets_mode/     Stage deterministic fields and update members
    │   │   └── execution/         Configure and execute HMC/S3M
    │   ├── analyzer/              Analyze model output
    │   └── monitoring/            Monitor lifecycle and resources
@@ -53,26 +54,12 @@ hold environments, datasets and temporary files and are ignored by Git.
 Core package
 ------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Toolkit
-     - Responsibility
-   * - ``config_toolkit``
-     - Read settings, command-line arguments and placeholders.
-   * - ``dataset_toolkit`` / ``io_toolkit``
-     - Describe datasets and read/write their storage formats.
-   * - ``orchestrator_toolkit``
-     - Connect registered processing functions into workflows.
-   * - ``processing_*_toolkit``
-     - Implement grid, point, time-series, geographic and hydro calculations.
-   * - ``runner_toolkit``
-     - Plan/compose forcing datasets, prepare model namelists and manage execution.
-   * - ``external_toolkit``
-     - Locate separately maintained libraries such as RFarm and PRISM.
-   * - ``logging_toolkit`` / ``time_toolkit``
-     - Provide shared logging and time handling.
+The reusable package is organized by responsibility: configuration, time and
+dataset access; file I/O and geospatial helpers; processing adapters; workflow
+orchestration; dataset and model runners; monitoring and publishing; optional
+external integrations. :doc:`toolkits` lists every toolkit directory, its main
+interfaces and a suggested use. :doc:`applications` maps those toolkits to the
+runnable applications in ``workflow/``.
 
 Data and models
 ---------------

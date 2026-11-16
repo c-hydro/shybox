@@ -22,6 +22,11 @@ from shybox.monitoring_toolkit.resources import ProcessMemoryMonitor, plot_memor
 from shybox.monitoring_toolkit.resources.ruler import RulerMonitor, load_ruler_config
 ```
 
+Resource snapshots and the daily CSV include target-process CPU percentage
+(summed across selected processes and children), peak CPU, host CPU percentage,
+and the existing process/host memory fields. The first process CPU sample may
+be zero while `psutil` establishes its measurement interval.
+
 Execution status records and resource metrics have separate schemas and output
 folders. Hydrapp reads both. Ruler's full report driver retains workspace chunks,
 CSV output, process selection, sorting/filtering and process/memory/disk figures.
