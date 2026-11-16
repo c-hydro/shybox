@@ -34,12 +34,13 @@ For deterministic planning, omit ``member`` or pass ``'deterministic'``.
 A single summary is a flat record containing ``"member": "001"``; it has no
 outer member dictionary and contains no other member's files.
 
-The sequential CLI does this after each completed member. With
-``application.summary_merge=False`` (default), it writes
-``datasets.summary.<time_run>.<member>.json`` beside the planning workspace.
-``application.summary_file`` can replace the filename, with ``{member}`` or
-``{ensemble_member}`` placeholders. An untemplated multi-member filename gains
-a member suffix before the extension to prevent overwrites.
+The sequential runners do this after each completed member. Configure the
+output with ``application.planning.summary.path`` and ``file_name``. Templates
+support time tags and ``{member}`` or ``{ensemble_member}``; an untemplated
+multi-member filename gains a member suffix to prevent overwrites. HMC checks
+forecast outputs; deterministic S3M checks observed and forecast outputs.
+The planner exposes the latest filled path as ``file_summary`` and all saved
+member paths as ``files_summary``.
 
 Manifest fields and readiness
 -----------------------------
@@ -102,12 +103,10 @@ also retains its own ``member`` field. This method never probes files, creates
 records for unfinished members or wraps the dictionary in global metadata.
 Input dictionaries are copied and member keys must match each record's tag.
 
-``application.summary_merge=True`` selects this behavior in the CLI: completed
-member records remain in memory until the member loop ends, then one merged
-file is written. The default is ``datasets.summary.<time_run>.json``. Merged
-filenames cannot contain member placeholders. If execution stops early, the
-final merged file is not published; separate mode preserves already completed
-member files.
+The sequential runners save separate member files. Use the Python method above
+to merge records explicitly after execution. Merged filenames cannot contain
+member placeholders. Separate files preserve already completed member records
+if execution stops before a later member finishes.
 
 Extra metadata and JSON validation
 ----------------------------------
@@ -132,8 +131,8 @@ may be strings, integers, finite floats or booleans. Invalid entries, lists,
 ``None``, objects, NaN/infinite values and circular dictionary references are
 skipped with warnings identifying their location. Valid neighboring items are
 preserved, including nesting, without modifying the caller's dictionary.
-The default CLI stores its time-keyed execution trace under ``execution`` and
-adds valid ``application.summary_extra_args`` there too.
+The runners store completed timestamps under ``execution``. Add other metadata
+through the Python ``extra_args`` argument when calling summary methods.
 
 Write and read existing summaries
 ---------------------------------

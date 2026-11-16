@@ -4,7 +4,7 @@ set -euo pipefail
 
 compose_mode="${1:-deterministic}"
 if [[ "$compose_mode" != deterministic && "$compose_mode" != probabilistic ]]; then
-    echo "Usage: bash $0 [deterministic|probabilistic] [--dry-run] [-time 'YYYY-MM-DD HH:MM']" >&2
+    echo "Usage: bash $0 [deterministic|probabilistic] [-time 'YYYY-MM-DD HH:MM']" >&2
     exit 2
 fi
 if [[ $# -gt 0 ]]; then shift; fi
@@ -22,6 +22,9 @@ export PATH_FRC_RFARM="${PATH_FRC_RFARM:-${PATH_RFARM:-$compose_data_root/rfarm}
 export PATH_DST="${PATH_DST:-$compose_repository/exec/case_study_marche/runner_hmc_datasets/forcing}"
 export PATH_LOG="${PATH_LOG:-$compose_repository/exec/case_study_marche/runner_hmc_datasets/log}"
 export PATH_TMP="${PATH_TMP:-$compose_repository/tmp/case_study_marche/runner_hmc_datasets}"
+
+export PATH_PLANNING="${PATH_PLANNING:-$compose_repository/exec/case_study_marche/runner_hmc_datasets/planning}"
+export PATH_SUMMARY="${PATH_SUMMARY:-$compose_repository/exec/case_study_marche/runner_hmc_datasets/summary}"
 
 exec "${SHYBOX_PYTHON:-python}" -B -m workflow.runner.datasets.app_runner_workflow_hmc_datasets_main \
     -settings_file "$compose_script_folder/app_runner_workflow_hmc_datasets_forcing_$compose_mode.json" "$@"

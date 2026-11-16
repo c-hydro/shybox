@@ -229,10 +229,20 @@ These are user LUT values; ``application.time`` references them and maps
 For each side, the planner compares a look boundary from the rounded run with a
 horizon boundary from its source reference. The horizon candidate subtracts or
 adds the look duration, then floors to the configured horizon. ``midnight`` means
-a day boundary; null disables the horizon candidate. ``min``/``max`` select the
+a day boundary; null uses the look boundary, including with ``horizon`` priority. ``min``/``max`` select the
 earlier/later boundary timestamp; ``look``/``horizon`` select the candidate directly.
 Observed priority compares start times; forecast priority compares end times.
 The selected start ceils and the selected end floors to the forcing cadence.
+
+An explicit ``HH:MM`` horizon, such as ``"12:00"`` or ``"15:00"``, sets an
+exact boundary on the rounded run's date and overrides the priority selector.
+An observed clock boundary must fall between ``time_run - time_look_observed``
+and ``time_run``; a forecast boundary must fall between ``time_run`` and
+``time_run + time_look_forecast``. Both limits are inclusive. For example, an
+observed ``"12:00"`` horizon with a ``"3h"`` look allows rounded runs from
+12:00 through 15:00. Invalid combinations raise a ``ValueError`` describing
+the allowed window. Clock boundaries must align with the forcing cadence;
+they are never silently moved to another day or rounded to another clock time.
 
 The example rounds to 9 November at 09:00, with forecast issue at 00:00.
 ``min/min`` yields 58 observed steps from 7 November 00:00 through 9 November

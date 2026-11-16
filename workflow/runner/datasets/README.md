@@ -1,37 +1,41 @@
-# Dataset planning and workflow setup
+# Dataset planning and execution
 
-`app_runner_workflow_hmc_datasets_main.py` plans observed/forecast files,
-checks the configured window and executes forecast forcing sequentially by member
-and time. It writes per-member JSON summaries after all times for that member.
-Use `--dry-run --plan-files` for setup and a JSON plan without reading arrays,
-writing forcing/summaries or reading/writing planning history. Preview can create logs.
+`app_runner_workflow_hmc_datasets_main.py` executes deterministic or probabilistic
+forecast forcing sequentially by member and time. Adjusted observed gaps are
+included in forecast execution. `app_runner_workflow_s3m_datasets_main.py` executes
+both observed and forecast steps and accepts deterministic sources only.
+Each runner saves a member summary after that member's time loop finishes.
 
-Set `DOMAIN_NAME`, `PATH_GEO`, `PATH_OBS`, `PATH_FRC_NWP`, `PATH_DST`, `PATH_LOG`
-and `PATH_FRC_RFARM` for probabilistic rain. From the repository root:
+Set `DOMAIN_NAME`, `PATH_GEO`, `PATH_OBS`, `PATH_FRC_NWP`, `PATH_DST`, `PATH_LOG`,
+`PATH_TMP`, `PATH_PLANNING` and `PATH_SUMMARY`. HMC probabilistic rain also needs
+`PATH_FRC_RFARM`. From the repository root:
 
 ```bash
 python -m workflow.runner.datasets.app_runner_workflow_hmc_datasets_main \
-  -settings_file workflow/runner/datasets/app_runner_workflow_hmc_datasets_forcing_probabilistic.json \
-  -time "2026-11-09 09:35" --dry-run --plan-files
+  -settings_file workflow/runner/datasets/app_runner_workflow_hmc_datasets_forcing_deterministic.json \
+  -time "2026-11-09 10:00"
+
+python -m workflow.runner.datasets.app_runner_workflow_s3m_datasets_main \
+  -settings_file workflow/runner/datasets/app_runner_workflow_s3m_datasets_forcing.json \
+  -time "2026-11-09 10:00"
 ```
 
-Remove both planning flags to read inputs and write forcing. The same command
-accepts the deterministic HMC and S3M profiles. Processing uses every forecast
-step in the adjusted plan, not only the -3/+1 availability-check window.
-Forecast workflows use `<VARIABLE>_WORKFLOW_FRC` when present, otherwise
-`<VARIABLE>_WORKFLOW`; sources map raw fields to canonical names and destinations
-map canonical names to model fields. Sample methods pass values through: adapt
-interpolation, masks and units to your upstream data.
+These commands read inputs and write forcing files. The sequential entry points
+accept `-settings_file` and `-time`. For metadata inspection, use `DatasetPlanner`
+directly; the current scripts have no dry-run or setup-only helper.
 
-`configure_dataset_workflows(planner, configuration, time_mode='forecast')` is the
-reusable setup-only API. It returns member/time dictionaries containing source,
-destination and orchestrator handlers; invoke `.run()` explicitly. The CLI
-returns scalar/path execution traces instead of storing these objects in JSON.
+Configuration uses `application.planning.options` for availability windows and
+fallback rules, `planning.files` for history path/name and history flags, and
+`planning.summary` for summary path/name. `update_time()` uses class options;
+explicit arguments override them for that call. Set `reset_history: true` to
+refresh availability, or `flag_history: false` to disable history I/O.
+Only reuse trusted pickle workspaces. Shipped profiles refresh history by default.
 
-The CLI reuses compatible trusted planning history by default. Use
-`application.planning.reset_history: true` to refresh availability or
-`flag_history: false` to disable history. The default workspace is beside the
-settings file; configure a run-specific `pickle_history` explicitly when needed.
+`data_destination.collections` defines coordinates, field names, units and writer
+arguments. Workflows use `<VARIABLE>_WORKFLOW_FRC` for forecasts and S3M additionally
+uses `<VARIABLE>_WORKFLOW_OBS` for observations. S3M selects only the active mode's
+workflows for each step. Every step writes all variables to one model forcing file.
+Sample chains pass through values; adapt interpolation, masks and units to inputs.
 
 See the [execution guide](../../../docs/dataset_execution.rst),
 [planner guide](../../../docs/dataset_planning.rst),
@@ -85,18 +89,15 @@ The abbreviated records omit other fields. Merging never reruns the planner,
 rechecks files or creates summaries for missing members. It copies the supplied
 records and validates that each key matches its record's member tag.
 
-In the main script, `summary_collections[member]` is populated once that member's
-time iterations finish. `application.summary_merge` (default `false`) chooses
-between individual files written at that point and a merged file written by
-`summary_execution()` after all members finish. The main accepts
-`application.summary_file` and `application.summary_extra_args`.
+The runners call `summary(member=...)` after each member finishes and save the
+configured `application.planning.summary` file. HMC summarizes forecast outputs;
+S3M summarizes both observed and forecast outputs. Neither runner merges records
+automatically; call `summary_execution()` explicitly when a merged handoff is needed.
 
-Default filenames beside the planning workspace are
-`datasets.summary.<time_run>.<member>.json` for separate files and
-`datasets.summary.<time_run>.json` for a merged file. Separate filename templates
-can contain `{member}` or `{ensemble_member}`; the main adds a member suffix to
-an untemplated multi-member filename to prevent overwrites. Merged filenames
-cannot contain member placeholders.
+`planner.file_planning` is the resolved workspace path after `update_time()`.
+`planner.file_summary` is the latest saved member summary path, and
+`planner.files_summary` maps each saved member to its path. Paths are absolute.
+Summary filename templates support `{member}` and `{ensemble_member}`.
 
 ### Verification, extra arguments and summary I/O
 

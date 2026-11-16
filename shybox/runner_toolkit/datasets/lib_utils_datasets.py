@@ -24,13 +24,33 @@ def _horizon(boundary, horizon):
     return boundary.floor('D' if str(horizon).strip().lower() == 'midnight' else str(horizon).strip())
 
 
+def _clock_horizon(run, horizon, look, group, frequency):
+    if not isinstance(horizon, str) or ':' not in horizon:
+        return None
+    value = horizon.strip()
+    if re.fullmatch(r'\d{2}:\d{2}', value) is None:
+        raise ValueError(f'time_horizon_{group}={horizon!r}: expected HH:MM between 00:00 and 23:59.')
+    hours, minutes = map(int, value.split(':'))
+    if hours > 23 or minutes > 59:
+        raise ValueError(f'time_horizon_{group}={horizon!r}: expected HH:MM between 00:00 and 23:59.')
+    boundary = run.normalize() + pd.Timedelta(hours=hours, minutes=minutes)
+    lower, upper = (look, run) if group == 'observed' else (run, look)
+    if not lower <= boundary <= upper:
+        raise ValueError(
+            f'Cannot use time_horizon_{group}={horizon!r} with time_run={run} and '
+            f'time_look_{group}={abs(run - look)}: the same-day horizon {boundary} '
+            f'must be within [{lower}, {upper}]. Change the horizon, look duration or run time.')
+    if boundary != boundary.floor(frequency):
+        raise ValueError(f'time_horizon_{group}={horizon!r} is not aligned with '
+                         f'time_frequency={frequency}; choose an aligned clock time or frequency.')
+    return boundary
+
+
 def _select(look, horizon, priority):
     if priority not in ('look', 'horizon', 'min', 'max'):
         raise ValueError('Priority must be look, horizon, min or max.')
-    if priority == 'look' or horizon is None and priority != 'horizon':
+    if priority == 'look' or horizon is None:
         return look
-    if horizon is None:
-        raise ValueError('Priority horizon requires a configured time_horizon.')
     if priority == 'horizon':
         return horizon
     return min(look, horizon) if priority == 'min' else max(look, horizon)
@@ -116,6 +136,8 @@ def create_time_period(
 
     Look is measured from the rounded run. The horizon candidate is measured
     from the configured cycle and then floored to midnight (or a fixed offset).
+    A null horizon uses the look window. HH:MM specifies an exact boundary on
+    the run date, overriding priority, and must lie within the look window.
     Observed endpoints are inclusive; forecasts start one step after the cutoff.
     """
     run = pd.Timestamp(time_run)
@@ -128,10 +150,14 @@ def create_time_period(
         raise ValueError('Frequency must be positive and look durations nonnegative.')
     observed_run, forecast_run = _reference(run, hour_reference_observed), _reference(run, hour_reference_forecast)
     look_start, look_end = run - back, run + ahead
-    horizon_start = _horizon(observed_run - back, time_horizon_observed)
-    horizon_end = _horizon(forecast_run + ahead, time_horizon_forecast)
-    start = _select(look_start, horizon_start, priority_observed).ceil(frequency)
-    end = _select(look_end, horizon_end, priority_forecast).floor(frequency)
+    clock_start = _clock_horizon(run, time_horizon_observed, look_start, 'observed', frequency)
+    clock_end = _clock_horizon(run, time_horizon_forecast, look_end, 'forecast', frequency)
+    horizon_start = clock_start if clock_start is not None else _horizon(observed_run - back, time_horizon_observed)
+    horizon_end = clock_end if clock_end is not None else _horizon(forecast_run + ahead, time_horizon_forecast)
+    selected_start = _select(look_start, horizon_start, priority_observed)
+    selected_end = _select(look_end, horizon_end, priority_forecast)
+    start = (clock_start if clock_start is not None else selected_start).ceil(frequency)
+    end = (clock_end if clock_end is not None else selected_end).floor(frequency)
     cutoff = run.floor(frequency)
     observed = pd.date_range(start, cutoff, freq=frequency)
     forecast = pd.date_range(cutoff + frequency, end, freq=frequency)

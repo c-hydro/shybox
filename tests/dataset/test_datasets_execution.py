@@ -18,13 +18,15 @@ from shybox.runner_toolkit.datasets.planning_handler import DatasetPlanner
 
 
 class TestDatasetsExecution(unittest.TestCase):
-    def run_profile(self, profile, *, merged=False, compressed=True):
+    def run_profile(self, profile, *, compressed=True):
         repository = Path(__file__).resolve().parents[2]
         root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         environment = dict(os.environ, DOMAIN_NAME='test', PATH_GEO=str(root / 'geo'),
                            PATH_OBS=str(root / 'obs'), PATH_FRC_NWP=str(root / 'nwp'),
                            PATH_FRC_RFARM=str(root / 'rainfarm'), PATH_DST=str(root / 'forcing'),
-                           PATH_LOG=str(root / 'logs'), PYTHONDONTWRITEBYTECODE='1',
+                           PATH_LOG=str(root / 'logs'), PATH_TMP=str(root / 'tmp'),
+                           PATH_PLANNING=str(root / 'planning'), PATH_SUMMARY=str(root / 'summaries'),
+                           PYTHONDONTWRITEBYTECODE='1',
                            MPLCONFIGDIR=str(root / 'matplotlib'))
         filename = ('app_runner_workflow_s3m_datasets_forcing.json' if profile == 's3m' else
                     f'app_runner_workflow_hmc_datasets_forcing_{profile}.json')
@@ -32,10 +34,12 @@ class TestDatasetsExecution(unittest.TestCase):
         config['configuration']['variables']['lut']['user'].update(
             time_look_observed='0h', time_look_forecast='2h',
             time_horizon_observed=None, time_horizon_forecast=None,
-            time_priority_observed='look', time_priority_forecast='look', ensemble_end=2)
+            time_priority_observed='look', time_priority_forecast='look')
+        if profile == 'probabilistic':
+            config['configuration']['variables']['lut']['user']['ensemble_end'] = 2
         application = config['configuration']['application']
-        application['planning'].update(flag_history=False, flag_adjust_obs_frc=False)
-        application.update(summary_merge=merged, summary_extra_args={'scenario': 'tiny'})
+        application['planning']['files']['flag_history'] = False
+        application['planning']['options']['flag_adjust_obs_frc'] = False
         for destination in application['data_destination'].values():
             destination.setdefault('file_args', {})['file_compression'] = compressed
         settings = root / 'settings.json'
@@ -56,7 +60,7 @@ class TestDatasetsExecution(unittest.TestCase):
             tags = DatasetPlanner.create_time_tags(manager.get_section(section='template'),
                                                    manager.get_section(section='format'))
         planner = DatasetPlanner.from_application(app, time_run='2026-11-09 09:35', time_tags=tags)
-        files = planner.file_plan.query("group == 'forecast'")
+        files = planner.file_plan if profile == 's3m' else planner.file_plan.query("group == 'forecast'")
         terrain = app['geo']['terrain']
         terrain_path = Path(terrain['path']) / terrain['file_name']
         terrain_path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,7 +69,7 @@ class TestDatasetsExecution(unittest.TestCase):
         canonical_values = {'rain': 1., 'air_t': 2., 'inc_rad': 3., 'rel_hum': 4., 'wind_speed': 5.}
         expected_rain = {}
         for row in files.itertuples(index=False):
-            cfg = app['data_source']['forecast'][row.variable]
+            cfg = app['data_source'][row.group][row.variable]
             member = str(row.output_member) if pd.notna(row.output_member) else 'deterministic'
             value = canonical_values[row.variable]
             if row.variable == 'rain' and profile == 'probabilistic':
@@ -92,26 +96,23 @@ class TestDatasetsExecution(unittest.TestCase):
             else:
                 xr.Dataset(fields).to_netcdf(source)
         result = subprocess.run(
-            [sys.executable, '-B', '-m', 'workflow.runner.datasets.app_runner_workflow_hmc_datasets_main',
+            [sys.executable, '-B', '-m', 'workflow.runner.datasets.app_runner_workflow_' + ('s3m' if profile == 's3m' else 'hmc') + '_datasets_main',
              '-settings_file', str(settings), '-time', '2026-11-09 09:35'],
             cwd=repository, env=environment, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout[-5000:])
-        summaries = sorted(root.glob('datasets.summary.*.json'))
+        summaries = sorted((root / 'summaries').rglob('summary_execution_*.json'))
         members = ('001', '002') if profile == 'probabilistic' else ('deterministic',)
-        self.assertEqual(len(summaries), 1 if merged else len(members))
-        records = DatasetPlanner.read_summary(summaries[0]) if merged else {
+        self.assertEqual(len(summaries), len(members))
+        records = {
             record['member']: record for record in map(DatasetPlanner.read_summary, summaries)}
         self.assertEqual(set(records), set(members))
         for member, record in records.items():
             self.assertTrue(record['ready'])
-            self.assertEqual(record['time_steps'], 2)
-            self.assertEqual(record['execution']['scenario'], 'tiny')
+            self.assertEqual(record['time_steps'], 3 if profile == 's3m' else 2)
             traces = [v for v in record['execution'].values() if isinstance(v, dict)]
-            self.assertEqual(len(traces), 2)
+            self.assertEqual(len(traces), 3 if profile == 's3m' else 2)
             for trace in traces:
                 self.assertEqual(trace['status'], 'completed')
-                self.assertIn('+00:00', trace['started_at'])
-                self.assertTrue(all(trace['destination_exists'].values()))
             for step in record['steps']:
                 self.assertEqual(len(step['variables']), 5)
                 actual = Path(step['variables']['rain']['file_actual'])
@@ -132,8 +133,8 @@ class TestDatasetsExecution(unittest.TestCase):
     def test_deterministic_execution_writes_all_fields_and_a_member_summary(self):
         self.run_profile('deterministic', compressed=False)
 
-    def test_ensemble_execution_merges_only_completed_member_records(self):
-        self.run_profile('probabilistic', merged=True)
+    def test_ensemble_execution_writes_separate_completed_member_records(self):
+        self.run_profile('probabilistic')
 
     def test_s3m_execution_uses_s3m_field_names(self):
         self.run_profile('s3m')

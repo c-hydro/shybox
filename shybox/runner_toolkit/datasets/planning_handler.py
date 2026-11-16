@@ -50,6 +50,7 @@ DEFAULT_TIME_TAGS = {
 }
 
 DEFAULT_ENSEMBLE_TAGS = ("ensemble_member", "enseble_member", "member", "member_id", "ensemble_id")
+_UNSET = object()
 
 # mandatory settings
 VARIABLES_MANDATORY = {'rain', 'air_t', 'inc_rad', 'rel_hum', 'wind_speed'}
@@ -73,12 +74,13 @@ DESTINATION_FIELDS_MANDATORY = {
 # class dataset planner
 class DatasetPlanner:
 
+    # groups definitions
     GROUPS = {"obs": "observed", "frc": "forecast","observed": "observed", "forecast": "forecast",}
 
     def __init__(
         self, application, time_tags=None, logger=None, *,
         time_run=None, time_factory=None, time_plan=None, options=None,
-        ensemble_tags=None,):
+        ensemble_tags=None, files=None, summary=None, **kwargs):
 
         # set logger
         self.log = LoggingManager.get_logger(logger=logger, name="DatasetPlanner", set_as_current=False,)
@@ -87,6 +89,12 @@ class DatasetPlanner:
         self.application = deepcopy(application)
         # set options
         self.options = deepcopy(options) if options is not None else {}
+        self.files = self._output_config(files, 'files', 'plans_file.workspace')
+        self.summary_config = self._output_config(summary, 'summary', None)
+        # Resolved output paths used by the latest planning/summary calls.
+        self.file_planning = None
+        self.file_summary = None
+        self.files_summary = {}
 
         # set time info
         if time_run is not None:
@@ -129,7 +137,8 @@ class DatasetPlanner:
             data_dst_obs, data_dst_frc, time_run=None,
             *,
             logger: LoggingManager | None = None,
-            geo=None, time_tags=None, options=None, **kwargs):
+            geo=None, time_tags=None, options=None,
+            files=None, summary=None, **kwargs):
 
         # iterate over needed object(s)
         for name, value in (('info', info), ('time', time),
@@ -176,8 +185,21 @@ class DatasetPlanner:
 
         return cls(
             application_settings, time_tags=time_tags, logger=logger,
-            time_run=time_run, options=options, **kwargs,
+            time_run=time_run, options=options, files=files, summary=summary, **kwargs,
         )
+
+    @staticmethod
+    def _output_config(config, name, default_name):
+        if config is not None and not isinstance(config, dict):
+            raise TypeError(f'DatasetPlanner {name} must be a dictionary.')
+        result = deepcopy(config) if config is not None else {}
+        result.setdefault('path', '')
+        result.setdefault('file_name', default_name)
+        if not isinstance(result['path'], (str, os.PathLike)):
+            raise TypeError(f'{name}.path must be a path string.')
+        if result['file_name'] is not None and not isinstance(result['file_name'], (str, os.PathLike)):
+            raise TypeError(f'{name}.file_name must be a path string.')
+        return result
 
     # helper to create time_tags (template and format from luts)
     @staticmethod
@@ -470,10 +492,10 @@ class DatasetPlanner:
 
     # method to update time (to check if observed/forecast file are available or not)
     def update_time(
-        self, n_step_to_check_obs=None, n_step_to_check_frc=None, *,
-        flag_adjust_obs_frc=True, rules_to_fill_obs="fill_using_frc", rules_to_fill_frc=None,
+        self, n_step_to_check_obs=_UNSET, n_step_to_check_frc=_UNSET, *,
+        flag_adjust_obs_frc=_UNSET, rules_to_fill_obs=_UNSET, rules_to_fill_frc=_UNSET,
         n_steps_observed=None, n_steps_forecast=None, exists=None,
-        reset_history=True, flag_history=True, pickle_history="plans_file.workspace",):
+        reset_history=None, flag_history=None, pickle_history=None,):
 
         """Refresh availability, or reuse a matching local workspace.
 
@@ -482,7 +504,29 @@ class DatasetPlanner:
         plans and their saved availability without probing dataset files.
         Missing, incompatible or unreadable history is rebuilt. Disable
         ``flag_history`` to avoid history I/O. Only load trusted pickle files.
+        Omitted history arguments use the configured ``files`` section;
+        its path and filename templates are resolved at the run time.
+        Omitted check windows and fallback rules use ``options``. Explicit
+        arguments override those settings, including ``None`` to disable a rule.
         """
+
+        if n_step_to_check_obs is _UNSET:
+            n_step_to_check_obs = self.options.get('n_step_to_check_obs') if n_steps_observed is None else None
+        if n_step_to_check_frc is _UNSET:
+            n_step_to_check_frc = self.options.get('n_step_to_check_frc') if n_steps_forecast is None else None
+        if flag_adjust_obs_frc is _UNSET:
+            flag_adjust_obs_frc = self.options.get('flag_adjust_obs_frc', True)
+        if rules_to_fill_obs is _UNSET:
+            rules_to_fill_obs = self.options.get('rules_to_fill_obs', 'fill_using_frc')
+        if rules_to_fill_frc is _UNSET:
+            rules_to_fill_frc = self.options.get('rules_to_fill_frc')
+
+        if reset_history is None:
+            reset_history = self.files.get('reset_history', True)
+        if flag_history is None:
+            flag_history = self.files.get('flag_history', True)
+        if pickle_history is None and flag_history:
+            pickle_history = self.fill_file_name(self.files, self.time_plan.time_run, source=False)
 
         for name, flag in (("reset_history", reset_history), ("flag_history", flag_history)):
             if not isinstance(flag, bool):
@@ -521,6 +565,7 @@ class DatasetPlanner:
 
         # History must match the configuration, base times and requested checks.
         history_path = Path(pickle_history).expanduser() if flag_history else None
+        self.file_planning = str(history_path.resolve()) if history_path is not None else None
         if history_path is not None:
             context = (
                 self.application, self.options, self.time_tags, sorted(self.ensemble_tags),
@@ -993,7 +1038,9 @@ class DatasetPlanner:
                 extra_args=None, member=None, tag_args='execution'):
         """Check destination presence and return a JSON-compatible model-input manifest.
 
-        Optionally publish the manifest atomically to ``file_name``. This always
+        Optionally publish the manifest atomically to ``file_name``. When omitted,
+        use the configured ``summary`` path and filename, if supplied, resolving
+        time and member placeholders. This always
         probes outputs afresh, without changing the time plan or source checks.
         Start/end are inclusive forcing validity timestamps; ``time_steps`` is
         their count, not a model restart setting. Readiness means file presence
@@ -1023,6 +1070,15 @@ class DatasetPlanner:
             member = members[0]
         if not isinstance(member, str) or member not in members:
             raise ValueError(f'Unknown summary member {member!r}; expected one of {members}.')
+
+        # define file summary
+        if file_name is None and self.summary_config['file_name'] is not None:
+            file_name = self.fill_file_name(
+                self.summary_config, self.time_plan.time_run, ensemble_member=member, source=False)
+            raw = os.path.join(self.summary_config['path'], self.summary_config['file_name'])
+            if len(members) > 1 and not self._has_ensemble_tag(raw) and '{member}' not in raw:
+                root, extension = os.path.splitext(file_name)
+                file_name = f'{root}.{member}{extension}'
 
         plan = self.time_plan
         table = self.time_table.sort_index()
@@ -1129,6 +1185,11 @@ class DatasetPlanner:
 
         if file_name is not None:
             self.write_summary(file_name, member_summary, tag_args=tag_args)
+            self.file_summary = str(Path(os.fspath(file_name).format(
+                member=member, ensemble_member=member)).expanduser().resolve())
+            self.files_summary[member] = self.file_summary
+        else:
+            self.file_summary = None
         self.log.info(f'Planner summary: member={member}, ready={member_summary["ready"]}, '
                       f'steps={member_summary["time_steps"]}, '
                       f'missing files={member_summary["counts"]["missing_files"]}')

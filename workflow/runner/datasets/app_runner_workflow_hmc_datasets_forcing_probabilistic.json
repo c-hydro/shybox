@@ -14,9 +14,9 @@
           "time_frequency": "1h",
           "hour_reference_observed": null,
           "hour_reference_forecast": "00:00",
-          "time_look_observed": "48h",
+          "time_look_observed": "3h",
           "time_horizon_observed": "midnight",
-          "time_look_forecast": "2h",
+          "time_look_forecast": "3h",
           "time_horizon_forecast": null,
           "path_time_observed": null,
           "file_time_observed": null,
@@ -27,6 +27,10 @@
           "path_time_run": null,
           "path_time_destination": null,
           "file_time_destination": null,
+          "path_time_summary": null,
+          "file_time_summary": null,
+          "path_time_planning": null,
+          "file_time_planning": null,
           "ensemble_start": 1,
           "ensemble_end": 10,
           "ensemble_format": "03d",
@@ -43,7 +47,9 @@
           "path_forecast_rfarm": "PATH_FRC_RFARM",
           "path_destination": "PATH_DST",
           "path_log": "PATH_LOG",
-          "path_tmp": "PATH_TMP"
+          "path_tmp": "PATH_TMP",
+          "path_planning": "PATH_PLANNING",
+          "path_summary": "PATH_SUMMARY"
         }
       },
       "format": {
@@ -79,7 +85,13 @@
         "time_priority_observed": "string",
         "time_priority_forecast": "string",
         "time_mode": "string",
-        "path_tmp": "string"
+        "path_tmp": "string",
+        "path_planning": "string",
+        "path_time_planning": "time",
+        "file_time_planning": "time",
+        "path_summary": "string",
+        "path_time_summary": "time",
+        "file_time_summary": "time"
       },
       "template": {
         "domain_name": "string",
@@ -114,7 +126,13 @@
         "time_priority_observed": "string",
         "time_priority_forecast": "string",
         "time_mode": "string",
-        "path_tmp": "string"
+        "path_tmp": "string",
+        "path_planning": "string",
+        "path_time_planning": "%Y/%m/%d",
+        "file_time_planning": "%Y%m%d%H%M",
+        "path_summary": "string",
+        "path_time_summary": "%Y/%m/%d",
+        "file_time_summary": "%Y%m%d%H%M"
       }
     },
     "application": {
@@ -301,11 +319,20 @@
         "file_name": null
       },
       "planning": {
-        "n_step_to_check_obs": 3,
-        "n_step_to_check_frc": 1,
-        "flag_adjust_obs_frc": true,
-        "rules_to_fill_obs": "fill_using_frc",
-        "rules_to_fill_frc": null
+        "options": {
+          "n_step_to_check_obs": 3, "n_step_to_check_frc": 1,
+          "flag_adjust_obs_frc": true, "flag_adjust_frc_obs": null,
+          "rules_to_fill_obs": "fill_using_frc", "rules_to_fill_frc": null
+        },
+        "files": {
+          "reset_history" : true, "flag_history": true,
+          "path": "{path_planning}/auxiliary/{path_time_planning}",
+          "file_name": "planning_execution_{file_time_planning}.workspace"
+        },
+        "summary": {
+          "path": "{path_summary}/summary/{path_time_summary}",
+          "file_name": "summary_execution_{file_time_summary}_{ensemble_member}.json"
+        }
       }
     }
   },

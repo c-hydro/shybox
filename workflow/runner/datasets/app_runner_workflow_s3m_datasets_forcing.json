@@ -1,5 +1,5 @@
 {
-  "__comment__": "Observed/forecast composition using the SHYBOX configuration/application/workflow structure. Times are naive UTC. Adapt source units and model output names.",
+  "__comment__": "Deterministic S3M observed/forecast forcing; nested planning options, history and per-member summaries. Times are naive UTC.",
   "configuration": {
     "priority": {
       "reference": "environment",
@@ -15,10 +15,6 @@
           "path_time_run": null,
           "path_time_destination": null,
           "file_time_destination": null,
-          "ensemble_start": 1,
-          "ensemble_end": 30,
-          "ensemble_format": "03d",
-          "ensemble_member": null,
           "path_time_observed": null,
           "file_time_observed": null,
           "path_time_forecast_nwp": null,
@@ -26,13 +22,17 @@
           "file_time_forecast_nwp_valid": null,
           "hour_reference_observed": null,
           "hour_reference_forecast": "00:00",
-          "time_look_observed": "48h",
+          "time_look_observed": "3h",
           "time_horizon_observed": "midnight",
-          "time_look_forecast": "72h",
-          "time_horizon_forecast": "midnight",
+          "time_look_forecast": "3h",
+          "time_horizon_forecast": null,
           "time_priority_observed": "min",
           "time_priority_forecast": "min",
-          "time_mode": null
+          "time_mode": null,
+          "path_time_planning": null,
+          "file_time_planning": null,
+          "path_time_summary": null,
+          "file_time_summary": null
         },
         "environment": {
           "domain_name": "DOMAIN_NAME",
@@ -40,7 +40,10 @@
           "path_observed": "PATH_OBS",
           "path_destination": "PATH_DST",
           "path_log": "PATH_LOG",
-          "path_forecast_nwp": "PATH_FRC_NWP"
+          "path_forecast_nwp": "PATH_FRC_NWP",
+          "path_tmp": "PATH_TMP",
+          "path_planning": "PATH_PLANNING",
+          "path_summary": "PATH_SUMMARY"
         }
       },
       "format": {
@@ -55,10 +58,6 @@
         "path_time_run": "time",
         "path_time_destination": "time",
         "file_time_destination": "time",
-        "ensemble_start": "int",
-        "ensemble_end": "int",
-        "ensemble_format": "string",
-        "ensemble_member": "string",
         "path_forecast_nwp": "string",
         "path_time_observed": "time",
         "file_time_observed": "time",
@@ -73,7 +72,14 @@
         "time_horizon_forecast": "string",
         "time_priority_observed": "string",
         "time_priority_forecast": "string",
-        "time_mode": "string"
+        "time_mode": "string",
+        "path_tmp": "string",
+        "path_planning": "string",
+        "path_summary": "string",
+        "path_time_planning": "time",
+        "file_time_planning": "time",
+        "path_time_summary": "time",
+        "file_time_summary": "time"
       },
       "template": {
         "domain_name": "string",
@@ -87,10 +93,6 @@
         "path_time_run": "%Y%m%d%H%M",
         "path_time_destination": "%Y/%m/%d",
         "file_time_destination": "%Y%m%d%H%M",
-        "ensemble_start": "int",
-        "ensemble_end": "int",
-        "ensemble_format": "string",
-        "ensemble_member": "string",
         "path_forecast_nwp": "string",
         "path_time_observed": "%Y/%m/%d",
         "file_time_observed": "%Y%m%d%H%M",
@@ -105,7 +107,14 @@
         "time_horizon_forecast": "string",
         "time_priority_observed": "string",
         "time_priority_forecast": "string",
-        "time_mode": "string"
+        "time_mode": "string",
+        "path_tmp": "string",
+        "path_planning": "string",
+        "path_summary": "string",
+        "path_time_planning": "%Y/%m/%d",
+        "file_time_planning": "%Y%m%d%H%M",
+        "path_time_summary": "%Y/%m/%d",
+        "file_time_summary": "%Y%m%d%H%M"
       }
     },
     "application": {
@@ -370,11 +379,11 @@
         }
       },
       "data_destination": {
-        "forcing": {
+        "collections": {
           "path": "{path_destination}/{path_time_run}",
-          "file_name": "{time_mode}/{path_time_destination}/s3m.forcing-grid.{file_time_destination}.nc.gz",
+          "file_name": "{time_mode}/{path_time_destination}/s3m.forcing-grid.{file_time_destination}.nc",
           "format": "netcdf",
-          "type": "s3m",
+          "type": "forcing_s3m",
           "units": {
             "rain": "mm",
             "air_t": "C",
@@ -389,19 +398,47 @@
             "rel_hum": "RelHumidity",
             "wind_speed": "Wind"
           },
-          "dims": "2d"
+          "dims": "2d",
+          "x": "longitude",
+          "y": "latitude",
+          "time": "time",
+          "file_args": {
+            "file_compression": true
+          },
+          "as_compress": true
         }
       },
       "log": {
-        "path": "{path_log}",
-        "file_name": "composer_s3m_forcing.txt"
+        "path": "{path_log}/{domain_name}",
+        "file_name": "runner_s3m_datasets_deterministic.txt",
+        "handlers": [
+          "file",
+          "stream"
+        ]
       },
       "planning": {
-        "n_step_to_check_obs": 3,
-        "n_step_to_check_frc": 1,
-        "flag_adjust_obs_frc": true,
-        "rules_to_fill_obs": "fill_using_frc",
-        "rules_to_fill_frc": null
+        "options": {
+          "n_step_to_check_obs": 3,
+          "n_step_to_check_frc": 1,
+          "flag_adjust_obs_frc": true,
+          "flag_adjust_frc_obs": null,
+          "rules_to_fill_obs": "fill_using_frc",
+          "rules_to_fill_frc": null
+        },
+        "files": {
+          "reset_history": true,
+          "flag_history": true,
+          "path": "{path_planning}/auxiliary/{path_time_planning}",
+          "file_name": "planning_execution_{file_time_planning}.workspace"
+        },
+        "summary": {
+          "path": "{path_summary}/summary/{path_time_summary}",
+          "file_name": "summary_execution_{file_time_summary}_deterministic.json"
+        }
+      },
+      "tmp": {
+        "path": "{path_tmp}/{domain_name}",
+        "file_name": null
       }
     }
   },
@@ -410,10 +447,11 @@
       "io_config": {
         "mode": "many_data_files_to_one_file"
       },
-      "intermediate_output": "Memory"
+      "intermediate_output": "Memory",
+      "tmp_dir": "{path_tmp}"
     },
     "process_list": {
-      "RAIN_WORKFLOW": [
+      "RAIN_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
           "datasets": {
@@ -429,7 +467,7 @@
           }
         }
       ],
-      "AIR_T_WORKFLOW": [
+      "AIR_T_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
           "datasets": {
@@ -445,7 +483,7 @@
           }
         }
       ],
-      "INC_RAD_WORKFLOW": [
+      "INC_RAD_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
           "datasets": {
@@ -461,7 +499,7 @@
           }
         }
       ],
-      "REL_HUM_WORKFLOW": [
+      "REL_HUM_WORKFLOW_FRC": [
         {
           "function": "mask_data_by_limits",
           "datasets": {
@@ -477,7 +515,87 @@
           }
         }
       ],
-      "WIND_SPEED_WORKFLOW": [
+      "WIND_SPEED_WORKFLOW_FRC": [
+        {
+          "function": "mask_data_by_limits",
+          "datasets": {
+            "data": "wind_speed"
+          },
+          "results": {
+            "data": "Wind"
+          },
+          "args": {
+            "mask_min": null,
+            "mask_max": null,
+            "mask_format": null
+          }
+        }
+      ],
+      "RAIN_WORKFLOW_OBS": [
+        {
+          "function": "mask_data_by_limits",
+          "datasets": {
+            "data": "rain"
+          },
+          "results": {
+            "data": "Rain"
+          },
+          "args": {
+            "mask_min": null,
+            "mask_max": null,
+            "mask_format": null
+          }
+        }
+      ],
+      "AIR_T_WORKFLOW_OBS": [
+        {
+          "function": "mask_data_by_limits",
+          "datasets": {
+            "data": "air_t"
+          },
+          "results": {
+            "data": "AirTemperature"
+          },
+          "args": {
+            "mask_min": null,
+            "mask_max": null,
+            "mask_format": null
+          }
+        }
+      ],
+      "INC_RAD_WORKFLOW_OBS": [
+        {
+          "function": "mask_data_by_limits",
+          "datasets": {
+            "data": "inc_rad"
+          },
+          "results": {
+            "data": "IncRadiation"
+          },
+          "args": {
+            "mask_min": null,
+            "mask_max": null,
+            "mask_format": null
+          }
+        }
+      ],
+      "REL_HUM_WORKFLOW_OBS": [
+        {
+          "function": "mask_data_by_limits",
+          "datasets": {
+            "data": "rel_hum"
+          },
+          "results": {
+            "data": "RelHumidity"
+          },
+          "args": {
+            "mask_min": null,
+            "mask_max": null,
+            "mask_format": null
+          }
+        }
+      ],
+      "WIND_SPEED_WORKFLOW_OBS": [
         {
           "function": "mask_data_by_limits",
           "datasets": {
@@ -493,6 +611,10 @@
           }
         }
       ]
-    }
+    },
+    "process_locations": [
+      "shybox.processing_grid_toolkit",
+      "shybox.processing_hydro_toolkit"
+    ]
   }
 }

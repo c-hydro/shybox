@@ -225,6 +225,22 @@ class TestDatasetPlannerAvailability(unittest.TestCase):
         self.calls.append(str(path))
         return path.name not in ('obs.08.nc', 'obs.09.nc') and path.name.startswith(('obs.', 'cube.'))
 
+    def test_update_without_window_arguments_uses_configured_options(self):
+        planner = DatasetPlanner.from_config(
+            **self.config, logger=self.logger,
+            options={'n_step_to_check_obs': 3, 'n_step_to_check_frc': 1,
+                     'flag_adjust_obs_frc': True, 'rules_to_fill_obs': 'fill_using_frc'})
+        planner.update_time(exists=self.probe, flag_history=False)
+        table = planner.time_table
+        self.assertEqual(int(table.time_checked.sum()), 5)
+        self.assertTrue(table.loc[table.time_step.isin([-1, 0]), 'time_adjusted'].all())
+        self.assertTrue(table.loc[table.time_step.isin([-1, 0]), 'time_mode'].eq('forecast').all())
+
+        # Explicit disabling arguments must override configuration defaults.
+        planner.update_time(0, 0, rules_to_fill_obs=None, exists=self.probe, flag_history=False)
+        self.assertEqual(int(planner.time_table.time_checked.sum()), 1)
+        self.assertFalse(planner.time_table.time_adjusted.any())
+
     def test_trailing_gap_moves_cutoff_and_rebuilds_all_metadata_with_bounded_checks(self):
         planner = self.planner()
         original = planner.time_plan

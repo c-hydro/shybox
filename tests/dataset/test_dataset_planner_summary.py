@@ -29,6 +29,31 @@ class TestDatasetPlannerSummary(unittest.TestCase):
     def planner(self):
         return DatasetPlanner.from_config(**self.config, logger=self.logger)
 
+    def test_configured_history_and_summary_paths(self):
+        planner = DatasetPlanner.from_config(
+            **self.config, logger=self.logger,
+            files={'path': str(self.root / 'history'), 'file_name': 'plan.{time_run:%Y%m%d%H%M}.workspace',
+                   'reset_history': False, 'flag_history': True},
+            summary={'path': str(self.root / 'summary'), 'file_name': 'inputs.{ensemble_member}.json'})
+        planner.update_time(exists=lambda path: True)
+        self.assertEqual(len(list((self.root / 'history').glob('plan.*.workspace'))), 1)
+        self.assertEqual(planner.file_planning, str(next((self.root / 'history').glob('plan.*.workspace'))))
+        record = planner.summary(exists=lambda path: True)
+        self.assertEqual(DatasetPlanner.read_summary(self.root / 'summary' / 'inputs.deterministic.json'), record)
+        self.assertEqual(planner.file_summary, str(self.root / 'summary' / 'inputs.deterministic.json'))
+        self.assertEqual(planner.files_summary, {'deterministic': planner.file_summary})
+
+    def test_output_config_defaults_and_validation(self):
+        planner = self.planner()
+        self.assertEqual(planner.files['file_name'], 'plans_file.workspace')
+        self.assertIsNone(planner.summary_config['file_name'])
+        self.assertIsNone(planner.file_planning)
+        self.assertIsNone(planner.file_summary)
+        self.assertEqual(planner.files_summary, {})
+        for name in ('files', 'summary'):
+            with self.subTest(name=name), self.assertRaises(TypeError):
+                DatasetPlanner.from_config(**self.config, **{name: 'invalid'})
+
     def collect(self, planner, *args, **kwargs):
         # Simulate the application collecting records after each member finishes.
         records = {}
