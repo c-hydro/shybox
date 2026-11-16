@@ -16,7 +16,7 @@ import time
 
 from shybox.monitoring_toolkit.execution import RunMonitor
 
-
+# example of application
 def run_application(step_seconds, fail=False):
     """Replace this function's body with your application code."""
     for step in range(1, 4):

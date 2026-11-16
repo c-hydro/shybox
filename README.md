@@ -13,13 +13,13 @@
 
 SHYBOX brings the stages of a modeling application into a consistent workflow: prepare observations and weather forecasts, organize model inputs, configure and run simulations, then analyze, display and monitor their outputs. Reusable components handle configuration, datasets, time, logging and processing orchestration.
 
-## Release 1.7.1
+## Release 1.7.2
 
-Version **1.7.1** adds per-member dataset summaries, execution tracing,
-observed/forecast file filtering and NetCDF metadata fixes. The sequential dataset
-runner prepares forecast forcing, with a separate deterministic S3M entry point
-for observed/forecast inputs; the experimental
-`datasets_parallel` folder is excluded from this release.
+Version **1.7.2** adds an isolated parallel HMC dataset runner with configurable
+worker and task partitioning, process and host CPU metrics in monitoring, and
+GitHub release automation for `v*` tags. The existing sequential runner remains
+the standard workflow; `datasets_parallel` is an experimental option for testing
+parallel processing with isolated output directories.
 See the [changelog](CHANGELOG) for changes and migration notes. Documentation
 edition **0.7.0** adds an application catalog, a toolkit-by-toolkit usage guide
 and task-based navigation through the Read the Docs guides.

@@ -21,6 +21,7 @@ class RunMonitor:
                  heartbeat_seconds=30, outputs=None):
         if heartbeat_seconds <= 0:
             raise ValueError('heartbeat_seconds must be positive.')
+
         self.heartbeat_seconds = float(heartbeat_seconds)
         self.execution_id = uuid.uuid4().hex
         self.file_path = Path(folder_name) / f'{self.execution_id}.json'

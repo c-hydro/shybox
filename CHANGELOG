@@ -2,17 +2,29 @@
 Changelog
 =========
 
-Version 1.7.1 extends the consolidated 1.7.0 main release. The 1.6.0–1.6.3 entries below
-number earlier development snapshots in chronological order; they do not create
-historical release tags. Legacy release dates follow main/* tags where available.
+Version 1.7.2 follows the consolidated 1.7.0 main release and 1.7.1 dataset
+execution update. The 1.6.0–1.6.3 entries below number earlier development
+snapshots in chronological order; they do not create historical release tags.
+Legacy release dates follow main/* tags where available.
+
+Version 1.7.2 [2026-11-17]
+**************************
+
+- DATASETS: Add an isolated parallel HMC dataset runner with member, time and
+  chunk task partitioning, preflight checks and per-run output directories.
+- MONITORING: Add process and host CPU percentages and peak process CPU to
+  resource snapshots and daily CSV output.
+- RELEASE: Accept both v* and main/* tags in the GitHub release notes workflow.
+- PACKAGE: Update package and citation metadata to version 1.7.2.
+- DOCUMENTATION: Describe the parallel runner and monitoring tools in the
+  package and Read the Docs release notes; retain the sequential runner as the
+  standard path.
 
 Unreleased [2026-11-16]
 ***********************
 
 - DATASETS: Add the HMC mode runner to stage deterministic forcing once, copy
   observed/forecast bases for each member and merge probabilistic forecast fields.
-- MONITORING: Add process and host CPU percentages and peak process CPU to
-  resource snapshots and daily CSV output; document the bounded CPU/RAM demo.
 - DOCUMENTATION: Prepare Read the Docs edition 0.7.0 with an application
   catalog, toolkit usage guide and task-based navigation.
 

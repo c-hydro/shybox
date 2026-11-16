@@ -1,6 +1,15 @@
 Software and documentation releases
 ======================================================================
 
+SHYBOX 1.7.2 — Parallel dataset runner and CPU monitoring
+----------------------------------------------------------------------
+
+Prepared on 17 November 2026 for ``v1.7.2``. Add an experimental isolated HMC
+dataset runner with member, time and chunk task partitioning, per-run output
+directories and worker preflight checks. Add process and host CPU metrics to
+resource monitoring, and support ``v*`` GitHub release tags alongside the
+existing ``main/*`` tags. The sequential runner remains the standard workflow.
+
 0.7.0 — Application and toolkit guides
 ----------------------------------------------------------------------
 

@@ -4,10 +4,11 @@ on:
   push:
     tags:
       - 'main/*'
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing main release tag (for example main/1.7.0)'
+        description: 'Existing release tag (for example v1.8.0 or main/1.7.0)'
         required: true
         type: string
 
@@ -29,9 +30,14 @@ jobs:
           import os
           from pathlib import Path
           tag = os.environ['RELEASE_TAG']
-          if not tag.startswith('main/'):
-              raise SystemExit('Expected a main/<version> release tag')
-          version = tag.removeprefix('main/')
+          if tag.startswith('main/'):
+              version = tag.removeprefix('main/')
+          elif tag.startswith('v'):
+              version = tag.removeprefix('v')
+          else:
+              raise SystemExit('Expected a v<version> or main/<version> release tag')
+          if not version:
+              raise SystemExit('Release tag must include a version')
           lines = Path('CHANGELOG').read_text().splitlines()
           start = next(i for i, line in enumerate(lines)
                        if line.startswith(f'Version {version} ['))
@@ -45,8 +51,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
+          RELEASE_VERSION="${RELEASE_TAG#main/}"
+          RELEASE_VERSION="${RELEASE_VERSION#v}"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --notes-file release-notes.md
           else
-            gh release create "$RELEASE_TAG" --verify-tag --title "SHYBOX ${RELEASE_TAG#main/}" --notes-file release-notes.md --latest
+            gh release create "$RELEASE_TAG" --verify-tag --title "SHYBOX v${RELEASE_VERSION}" --notes-file release-notes.md --latest
           fi
