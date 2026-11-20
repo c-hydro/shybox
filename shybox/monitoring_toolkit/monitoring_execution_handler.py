@@ -56,7 +56,7 @@ def _path_tags(values, prefix=''):
 
 # ----------------------------------------------------------------------------------------------------------------------
 # monitoring class
-class 2:
+class MonitoringExecutionManager:
     """One writer per attempt. Use directly, as a context manager, or from a worker.
 
     UTC timestamps are used throughout; naive model initialization times are
