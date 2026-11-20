@@ -26,10 +26,9 @@ in Read the Docs; this guide does not assume a particular slug is available.
 Version management
 ------------------
 
-Documentation edition |docs_version| is prepared for publication from ``main``. The initial edition
-used a dedicated documentation branch; that is no longer the source of the
-public ``latest`` version. Documentation edition numbers remain independent
-of package version |package_version|.
+The public ``latest`` documentation is built from ``main``. The documentation
+displays the package version from the ``pyproject.toml`` file in the version
+being built.
 
 Read the Docs versions correspond to Git branches or tags. In the project's
 **Versions** tab, activate the documentation branch if you also want a separately

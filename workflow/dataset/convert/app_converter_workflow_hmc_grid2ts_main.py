@@ -45,7 +45,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
 from shybox.processing_ts_toolkit.lib_proc_compute import compute_average_over_mask
-from shybox.processing_ts_toolkit.ts_adapter import exec_average_over_mask
+from shybox.processing_ts_toolkit.ts_mask_adapter import exec_average_over_mask
 
 from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal

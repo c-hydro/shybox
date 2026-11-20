@@ -36,22 +36,61 @@ Geographic preparation and analysis
 -----------------------------------
 
 ``workflow/geo/`` provides geographic preparation drivers, including catchment
-processing. ``workflow/analyzer/`` contains model-output analysis drivers,
-including time-series analysis.
+processing. ``workflow/analyzer/`` contains model-output analysis drivers.
 
-For deterministic HMC time-series analysis, adapt the settings to your domain
-and run from the repository root with the scientific environment active:
+.. _hmc-time-series-analysis:
+
+HMC time-series analysis
+------------------------
+
+The analyzer joins HMC simulations and observations to a section registry on a
+common time axis. Deterministic mode handles one series per variable and
+section. Probabilistic mode adds a member axis to simulated variables and
+shares observation series across the ensemble.
+
+Set the domain and input, output, scratch and log paths for your analysis.
+The Marche examples use ``DOMAIN_NAME``, ``PATH_GEO``, ``PATH_SRC_HMC``,
+``PATH_SRC_OBS``, ``PATH_DST``, ``PATH_TMP`` and ``PATH_LOG``. Configure the
+analysis window through ``TIME_PERIOD`` and the profile's time frequency. Run
+from the repository root with the scientific environment active:
 
 .. code-block:: bash
 
-   python workflow/analyzer/app_analyzer_workflow_hmc_time_series_main.py \
+   python -m workflow.analyzer.app_analyzer_workflow_hmc_time_series_main_deterministic \
      -settings_file workflow/analyzer/app_analyzer_workflow_hmc_time_series_destine_marche_deterministic_netcdf.json \
      -time "2026-08-11 12:00"
 
-The analyzer joins simulated/observed data with a section registry. The selected
-destination configuration determines NetCDF or JSON output. Example filenames
-and domain paths depend on the checkout; configure the matching JSON before
-execution. See the next section for JSON output contracts.
+   python -m workflow.analyzer.app_analyzer_workflow_hmc_time_series_main_probabilistic \
+     -settings_file workflow/analyzer/app_analyzer_workflow_hmc_time_series_destine_marche_probabilistic_json.json \
+     -time "2026-08-11 12:00"
+
+For each mode, select the matching ``_netcdf.json`` or ``_json.json`` example.
+In probabilistic profiles, ``application.ensemble`` configures the inclusive
+``ensemble_start`` and ``ensemble_end``, ``ensemble_step`` and
+``ensemble_format``. For example, ``1`` through ``4`` with ``%03d`` gives
+``001`` through ``004``. The analyzer reads each member under the configured
+``run_{ensemble_member}`` path and keeps missing members as no-data series.
+
+Time-series NetCDF output
+-------------------------
+
+The NetCDF profiles write one file per analysis run. Deterministic series and
+shared observations use ``(time, sections)``. Ensemble simulations use
+``(time, sections, ensemble)``, with member IDs as the ensemble coordinate.
+The ``index_start`` and ``index_end`` attributes on each data variable point
+to per-section offset arrays. Offsets are zero-based and the end is exclusive.
+With four members, ``index_end_ensemble`` contains ``4, 8, 12, ...``.
+Deterministic and shared variables use ``index_end_det`` with width one.
+
+When you need a flattened section-major array, use the offsets as follows:
+
+.. code-block:: python
+
+   var = nc["discharge_simulated"]
+   flat = var[:].reshape(var.shape[0], -1)
+   start = nc[var.index_start][section_position]
+   end = nc[var.index_end][section_position]
+   section_values = flat[:, start:end]
 
 Time-series JSON output
 -----------------------
@@ -91,7 +130,12 @@ resolved by the JSON wrapper. Existing NetCDF settings remain supported.
 
 ``shybox/io_toolkit/json_wrapper.py`` provides
 ``write_json_time_series_sections(data, file_path, ...)``. Its input is the
-analyzer DataFrame with exactly two column levels: variable and section tag.
+analyzer DataFrame with two column levels for deterministic output (variable
+and section tag) or three for ensemble output (variable, section tag and
+member). In ensemble JSON, one field per simulation member is written with the
+member ID as a suffix, for example ``time_series_discharge_simulated_001``.
+Shared observations appear once per section. Both output formats derive
+``run_var`` from the ensemble member IDs when it is unspecified.
 The section registry comes from ``data.attrs['data']`` or an explicit
 ``sections_db``/``attrs_data`` argument, and is matched by its unique ``tag``
 field. The registry must be a pandas DataFrame; sections absent from it are

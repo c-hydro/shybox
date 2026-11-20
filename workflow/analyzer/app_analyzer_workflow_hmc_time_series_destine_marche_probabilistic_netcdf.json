@@ -1,14 +1,8 @@
 {
-  "__comment__": "Marche probabilistic HMC time-series export to netcdf. Ensemble analyzer/writer support is required; run_var declares the expected member IDs.",
+  "__comment__": "Marche probabilistic HMC time-series export to NetCDF. The ensemble section declares the expected member IDs.",
   "configuration": {
-    "priority": {
-      "reference": "environment",
-      "other": "user"
-    },
-    "flags": {
-      "update_namelist": true,
-      "update_execution": true
-    },
+    "priority": {"reference": "environment", "other": "user"},
+    "flags": {"update_namelist": true, "update_execution": true},
     "variables": {
       "lut": {
         "user": {
@@ -20,8 +14,8 @@
           "time_frequency": "H",
           "time_direction": "forward",
           "file_log": "{execution_name}_{domain_name}.log",
-          "execution_name": "analyzer_time_series_hmc",
-          "execution_mode": "history"
+          "execution_name": "analyzer_time_series_hmc_probabilistic_icon-2i",
+          "execution_mode": "probabilistic_icon-2i"
         },
         "environment": {
           "domain_name": "DOMAIN_NAME",
@@ -100,6 +94,9 @@
       "analysis": "{time_period}",
       "dataset": "{time_period}"
     },
+    "ensemble": {
+      "ensemble_start": 1, "ensemble_end": 4, "ensemble_step": 1, "ensemble_format" : "%03d"
+    },
     "static_data": {
       "registry_sections": {
         "path": "{path_geo}/",
@@ -161,14 +158,9 @@
       }
     },
     "dynamic_data_src": {
-      "hmc_discharge_openloop": {
-        "path": "{path_base_source_hmc_discharge}/run_{ensemble_member}/time_series/",
+      "hmc_discharge": {
+        "path": "{path_base_source_hmc_discharge}/run_{ensemble_member}/{path_time_source_hmc_discharge}/",
         "file_name": "hmc.hydrograph_openloop.txt",
-        "units": "m^3/s"
-      },
-      "hmc_discharge_analysis": {
-        "path": "{path_base_source_hmc_discharge}/run_{ensemble_member}/time_series/",
-        "file_name": "hmc.hydrograph_analysis.txt",
         "units": "m^3/s"
       },
       "obs_discharge": {
@@ -188,15 +180,8 @@
       "format": "netcdf",
       "type": null,
       "mode": "time_series",
-      "_variable": [
-        "discharge",
-        "discharge",
-        "discharge",
-        "air_temperature"
-      ],
       "units": {
-        "discharge_sim_openloop": "m^3/s",
-        "discharge_sim_analysis": "m^3/s",
+        "discharge_sim": "m^3/s",
         "discharge_obs": "m^3/s",
         "air_temperature_obs": "C"
       },
@@ -206,18 +191,13 @@
         "ensemble": "ensemble"
       },
       "vars_data": {
-        "discharge_sim_openloop": "discharge_simulated_openloop",
-        "discharge_sim_analysis": "discharge_simulated_analysis",
+        "discharge_sim": "discharge_simulated",
         "discharge_obs": "discharge_observed",
         "air_temperature_obs": "air_temperature_observed"
       },
       "file_args": {
-        "run_metadata": {
-          "run_domain": "marche",
-          "run_mode": "probabilistic_ensemble",
-          "run_name": "rfarm_icon-2i_realtime_marche",
-          "run_var": "001,002,003,004,005,006,007,008,009,010,011,012,013,014,015,016,017,018,019,020,021,022,023,024,025,026,027,028,029,030"
-        }
+        "index_start_name": "index_start",
+        "index_end_name": "index_end"
       }
     }
   },
@@ -225,25 +205,19 @@
     "options": {
       "intermediate_output": "Tmp",
       "tmp_dir": "{path_tmp}/probabilistic_ensemble",
-      "io_config": {
-        "mode": "many_data_ts_to_one_file"
-      }
+      "io_config": {"mode": "many_data_ts_to_one_file"}
     },
     "process_list": {
       "TIME_SERIES_WORKFLOW": [
         {
-          "function": "join_time_series_by_registry",
+          "function": "join_time_series_probabilistic",
           "datasets": {
-            "data|q_sim_open_loop": "discharge_sim_openloop",
-            "data|q_sim_analysis": "discharge_sim_analysis",
+            "data|q_sim": "discharge_sim",
             "data|q_obs": "discharge_obs",
             "data|air_t_obs": "air_temperature_obs"
           },
-          "results": {
-            "data": "time_series"
-          },
-          "fill_value": -9999,
-          "no_data_value": -9999
+          "results": {"data": "time_series"},
+          "args": {"fill_value": -9999, "no_data_value": -9999}
         }
       ]
     }
@@ -251,10 +225,7 @@
   "log": {
     "path": "{path_log}/{domain_name}",
     "file_name": "analyzer_time_series_hmc_probabilistic_netcdf.txt",
-    "handlers": [
-      "file",
-      "stream"
-    ]
+    "handlers": ["file", "stream"]
   },
   "tmp": {
     "path": "{path_tmp}/{domain_name}/probabilistic_ensemble",

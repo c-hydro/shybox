@@ -128,6 +128,8 @@ class OrchestratorBase:
         self.args_in = args_in
         self.args_out = args_out
 
+        self.args_run: dict[str, Any] = {}
+
         self.processes: List[ProcessorContainer] = []
         self.break_points: List[int] = []
 
@@ -615,6 +617,9 @@ class OrchestratorBase:
         # info orchestrator start
         self.logger.info_up('Run orchestrator ...')
 
+        # set args run (if some args are set in the run call)
+        self.args_run = kwargs
+
         # check time availability
         if time is None:
             self.logger.info_status("RunExecution -- TYPE static")
@@ -805,7 +810,7 @@ class OrchestratorBase:
                     # run the processes until the breakpoint
                     self._run_processes(processes_to_run, time, **kwargs)
                     # then run the breakpoint by itself
-                    self.processes[i].run(time, **kwargs)
+                    self.processes[i].run(time, args=self.args_run, **kwargs)
 
                     # reset the list of processes
                     processes_to_run = []
@@ -926,8 +931,18 @@ class OrchestratorBase:
                     # collect results from other workflow(s) if available
                     proc_args['results_history'] = self.result_history
 
+                    # get the run args (global args used by the run)
+                    run_args = self.args_run
+                    # filter args (to avoid args duplicates)
+                    regular_kwargs = {
+                        key: value for key, value in kwargs.items()
+                        if key not in run_args
+                    }
+                    # merge args from class and args from datasets
+                    proc_args = {**regular_kwargs, **proc_args}
+
                     # run process (return obj or dict just to test for iterations ... )
-                    proc_result, proc_memory = proc_obj.run(time, **proc_args)
+                    proc_result, proc_memory = proc_obj.run(time, args=run_args, **proc_args)
 
                     # manage history process
                     if not proc_dump:

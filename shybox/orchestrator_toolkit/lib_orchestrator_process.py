@@ -244,7 +244,7 @@ class ProcessorContainer:
         return default
 
     # method to run the process
-    def run(self, time: Union[dt.datetime, str, pd.Timestamp], **kwargs) \
+    def run(self, time: Union[dt.datetime, str, pd.Timestamp], args=None, **kwargs) \
             -> tuple[Optional[Union[dict, list, None, bool]], Optional[bool]]:
 
         # method to parse time mode
@@ -444,7 +444,7 @@ class ProcessorContainer:
                             time_ref = getattr(dset_obj, "time_reference", None)
 
                             # get data
-                            fx_tmp = dset_obj.get_data(time=time_step, name=dset_tag, as_is=as_is ,**kwargs)
+                            fx_tmp = dset_obj.get_data(time=time_step, name=dset_tag, as_is=as_is, **kwargs)
 
                             # store data (readable)
                             if dset_role == "data":
@@ -582,9 +582,6 @@ class ProcessorContainer:
         # info organize deps end
         self.logger.info(f"Organize deps object(s) ... DONE")
 
-        # info organize data start
-        self.logger.info(f"Organize data object(s) ... ")
-
         # remap fx data keys using mapping information
         self.logger.info("Organize data object(s) ... ")
         fx_variable_workflow, fx_data_remapped = {}, {}
@@ -644,6 +641,11 @@ class ProcessorContainer:
         self.logger.info(f"Process data ...")
         # add fx args
         fx_deps_args.update(fx_args)
+        # add run args (from external orchestrator.run calls
+        # used to set variables computed in previous part of the main script for example)
+        if args is not None:
+            fx_deps_args.update(args)
+
         # execute fx
         fx_result = self.fx_obj(data=fx_data, **fx_deps_args)
 
@@ -1042,14 +1044,6 @@ def _build_tag(variable: str, data_idx=None, time_idx=None, data_name: str = "da
 def _group_tag(data: dict, separator: str = "::", flatten_single: bool = False) -> dict:
     """Group variables by data index, time index, or unique name."""
 
-    # behaviour
-    # data@time|0 -- unique --> data: value
-    # data@time|0, data@time|1 ... -- multiple --> data: {time|0: value0, time|1: value1 ...}
-    # data|{id}::data|i@time|t --> data: {data|i@time|t: value}
-    # data|{t}@time|t1, data|{t}@time|t2 --> data: {time|t1: value, time|t2: value ...}
-    # data|q_sim_open_loop@time|0 --> data!q_sim_open_loop: value
-    # code@time|0 --> code: value ; data@time|0 --> data: value
-
     data_grouped = {}
     repeated_groups = set()
     for data_key, data_obj in data.items():
@@ -1068,10 +1062,12 @@ def _group_tag(data: dict, separator: str = "::", flatten_single: bool = False) 
         data_base = re.sub(r"[|:]\{(?:n|id|t)\}", "", data_base)
 
         # case 1: repeated data variables
-        if is_repeated_data:
+        if is_repeated_data or sep:
 
             # example: data|{id}::data|1@time|0
             # output: data -> {"data|1@time|0": value}
+            # example: data|q_sim::data|1@time|0
+            # output: data|q_sim -> {"data|1@time|0": value}
             if not sep or not data_suffix:
                 raise ValueError(
                     f'Repeated data tag "{data_key}" requires separator "{separator}" '
@@ -1094,20 +1090,11 @@ def _group_tag(data: dict, separator: str = "::", flatten_single: bool = False) 
             item_key = time_suffix
             repeated_groups.add(group_key)
 
-        # case 3: named variables
-        elif "|" in data_base:
-
-            # example: data|q_sim_open_loop@time|0
-            # output: data|q_sim_open_loop -> value
-            data_group, data_name = data_base.split("|", 1)
-
-            group_key = f"{data_group}|{data_name}"
-            item_key = time_suffix if time_sep else None
-
-        # case 4: unique or multiple time variables
+        # case 3: unique or multiple time variables
         else:
 
             # example: data@time|0 -> data: value
+            # example: data|q_obs@time|0 -> data|q_obs: value
             # example: data@time|0, data@time|1 -> data: {time|0: ..., time|1: ...}
             group_key = data_base
             item_key = time_suffix if time_sep else None
@@ -1124,7 +1111,7 @@ def _group_tag(data: dict, separator: str = "::", flatten_single: bool = False) 
     # finalize grouped variables
     for group_key, group_values in list(data_grouped.items()):
 
-        # repeated placeholders remain dictionaries unless flattening is requested
+        # repeated variables remain dictionaries unless flattening is requested
         if group_key in repeated_groups:
 
             if flatten_single and len(group_values) == 1:
@@ -1172,7 +1159,7 @@ def _test_tag():
         # named variable
         (
             {"data|q_sim_open_loop@time|0": 10},
-            {"data!q_sim_open_loop": 10}
+            {"data|q_sim_open_loop": 10}
         ),
 
         # multiple unique variables

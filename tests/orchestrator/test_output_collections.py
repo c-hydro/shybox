@@ -84,13 +84,49 @@ class TestOutputCollections(unittest.TestCase):
             path = Path(folder) / 'series.nc'
             write_to_file(self.select()['time_series'], str(path), file_format='netcdf',
                           file_type='time_series_hmc', map=self.mapping,
-                          units={'discharge_sim_analysis': 'm^3/s', 'discharge_obs': 'm^3/s'})
+                          units={'discharge_sim_analysis': 'm^3/s', 'discharge_obs': 'm^3/s'},
+                          index_start_name='column_start', index_end_name='column_stop')
             with xr.open_dataset(path, engine='netcdf4') as ds:
                 self.assertIn('discharge_simulated_analysis', ds)
                 self.assertIn('discharge_observed', ds)
                 self.assertNotIn('air_temperature_obs', ds)
                 self.assertEqual(ds.discharge_simulated_analysis.attrs['units'], 'm^3/s')
                 np.testing.assert_allclose(ds.discharge_simulated_analysis, [[1.25, 3.], [2.5, 4.]])
+                self.assertEqual(ds.discharge_simulated_analysis.attrs['index_start'], 'column_start_det')
+                self.assertEqual(ds.discharge_simulated_analysis.attrs['index_end'], 'column_stop_det')
+                self.assertEqual(ds.column_start_det.dims, ('sections',))
+                self.assertEqual(ds.column_start_det.values.tolist(), [0, 1])
+                self.assertEqual(ds.column_stop_det.values.tolist(), [1, 2])
+                self.assertNotIn('column_stop_ensemble', ds)
+
+    def test_netcdf_section_offsets_split_ensemble_and_shared_columns(self):
+        sections = ['a', 'b', 'c']
+        members = ['001', '002', '003', '004']
+        simulated = pd.MultiIndex.from_product([['simulated'], sections, members])
+        observed = pd.MultiIndex.from_product([['observed'], sections, ['']])
+        values = np.arange(30).reshape(2, 15)
+        frame = pd.DataFrame(values, index=self.times, columns=simulated.append(observed))
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ensemble.nc'
+            write_to_file(frame, str(path), file_format='netcdf', file_type='time_series_hmc')
+            with xr.open_dataset(path, engine='netcdf4') as ds:
+                for name, suffix, width, source_offset in (
+                    ('simulated', 'ensemble', 4, 0),
+                    ('observed', 'det', 1, 12),
+                ):
+                    with self.subTest(variable=name):
+                        variable = ds[name]
+                        start, end = variable.attrs['index_start'], variable.attrs['index_end']
+                        self.assertEqual((start, end), (f'index_start_{suffix}', f'index_end_{suffix}'))
+                        self.assertEqual(ds[start].dims, ('sections',))
+                        self.assertEqual(ds[start].values.tolist(), [0, width, 2 * width])
+                        self.assertEqual(ds[end].values.tolist(), [width, 2 * width, 3 * width])
+                        flattened = variable.values.reshape(len(self.times), -1)
+                        for left, right in zip(ds[start].values, ds[end].values):
+                            np.testing.assert_array_equal(
+                                flattened[:, left:right], values[:, source_offset + left:source_offset + right],
+                            )
 
     def test_selected_frame_keeps_source_names_for_custom_json_mapping(self):
         with tempfile.TemporaryDirectory() as folder:

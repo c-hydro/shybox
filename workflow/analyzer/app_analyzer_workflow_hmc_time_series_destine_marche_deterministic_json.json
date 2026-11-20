@@ -238,7 +238,7 @@
     "process_list": {
       "TIME_SERIES_WORKFLOW": [
         {
-          "function": "join_time_series_by_registry",
+          "function": "join_time_series_deterministic",
           "datasets": {
             "data|q_sim_open_loop": "discharge_sim_openloop",
             "data|q_sim_analysis": "discharge_sim_analysis",

@@ -512,6 +512,10 @@ def write_to_file(data, path,
             # get units and mapping
             variable_units = kwargs.pop('units', None)
             variable_mapping = kwargs.pop('map', None)
+            if isinstance(data, dict) and len(data) == 1:
+                collection = next(iter(data.values()))
+                if isinstance(collection, pd.DataFrame):
+                    data = collection
             # write hmc time-series datasets
             write_ts_hmc(file_name=path, data=data, time=time, attrs_data=None,
                          data_units=variable_units, data_map=variable_mapping, **kwargs)

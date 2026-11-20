@@ -9,11 +9,9 @@ with (ROOT / 'pyproject.toml').open('rb') as handle:
 project = 'SHYBOX'
 author = 'CIMA Research Foundation'
 copyright = '2026, CIMA Research Foundation'
-# Documentation editions are independent of package releases.
-release = '0.7.0'
+release = metadata['version']
 version = release
-rst_epilog = (f'\n.. |package_version| replace:: {metadata["version"]}\n'
-              f'.. |docs_version| replace:: {release}\n')
+rst_epilog = f'\n.. |package_version| replace:: {release}\n'
 extensions = []
 root_doc = 'index'
 source_suffix = {'.rst': 'restructuredtext'}

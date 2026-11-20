@@ -98,8 +98,9 @@ def create_json_time_series(data, *, section_metadata=None, run_metadata=None,
         raise ValueError('JSON time series requires a valid DatetimeIndex.')
     if not data.index.is_monotonic_increasing or data.index.has_duplicates:
         raise ValueError('JSON time series timestamps must be sorted and unique.')
-    if isinstance(data.columns, pd.MultiIndex) or not data.columns.is_unique:
-        raise ValueError('Section DataFrame must have unique, single-level variable columns.')
+    ensemble = isinstance(data.columns, pd.MultiIndex)
+    if not data.columns.is_unique or (ensemble and data.columns.nlevels != 2):
+        raise ValueError('Expected unique variable or (variable, member) columns for a section.')
     if not np.isfinite(data_no_value):
         raise ValueError('data_no_value must be finite.')
     if decimal_places is not None and (type(decimal_places) is not int or decimal_places < 0):
@@ -140,20 +141,31 @@ def create_json_time_series(data, *, section_metadata=None, run_metadata=None,
     result['time_period'] = ','.join(times)
 
     # map variable to the output name(s)
+    variables = data.columns.get_level_values(0).unique() if ensemble else data.columns
     if var_mapping is not None:
         mapping = {}
         for source, target in (var_mapping or {}).items():
             # The columns may already use output names after earlier processing.
-            if target in data.columns:
+            if target in variables:
                 mapping[target] = target
-            elif source in data.columns:
+            elif source in variables:
                 mapping[source] = target
     else:
-        mapping = _default_mapping(data.columns)
+        mapping = _default_mapping(variables)
 
     # check mapping (if not defined exit)
     if not mapping:
         raise ValueError('At least one time-series variable must be selected.')
+
+    if ensemble:
+        for target in mapping.values():
+            if not isinstance(target, str) or not target:
+                raise ValueError('JSON variable field names must be nonempty strings.')
+        mapping = {
+            (variable, member): f'{target}_{member}' if member else target
+            for variable, target in mapping.items()
+            for member in data.xs(variable, axis=1, level=0).columns
+        }
 
     # iterate over source and target and convert to the output name(s)
     targets = set()

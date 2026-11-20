@@ -82,6 +82,11 @@ class Dataset(ABC, metaclass=DatasetMeta):
         # ensure message (active or not)
         self.message = kwargs.pop('message', True)
 
+        # define file placeholder(s)
+        self.file_placeholder = self._defaults['placeholder']
+        if 'file_placeholder' in kwargs:
+            self.file_placeholder = kwargs.pop('file_placeholder')
+
         # define loc_pattern BEFORE using it
         self.loc_pattern = None
         if 'loc_pattern' in kwargs:
@@ -110,12 +115,19 @@ class Dataset(ABC, metaclass=DatasetMeta):
             else:
                 self.logger.info_up(f'Initialize dataset object [ID: {self.data_id}] ... ')
 
-        # substitute "now" with the current time
+        # manage local pattern of data (replace now and placeholdes if defined)
         if self.loc_pattern is not None:
-            self.loc_pattern = substitute_string(self.loc_pattern, {'now': dt.datetime.now()})
+            default_placeholder = {'now': dt.datetime.now()}
+            file_placeholder = {**default_placeholder, **self.file_placeholder}
+            self.loc_pattern = substitute_string(self.loc_pattern, file_placeholder)
 
+        # manage file_name of data (replace now and placeholdes if defined)
         if 'file_name' in kwargs:
             self.file_name = kwargs.pop('file_name')
+        if self.file_name is not None:
+            default_placeholder = {'now': dt.datetime.now()}
+            file_placeholder = {**default_placeholder, **self.file_placeholder}
+            self.file_name = substitute_string(self.file_name, file_placeholder)
 
         self.file_format = self._defaults['format']
         if 'file_format' in kwargs:
@@ -192,10 +204,6 @@ class Dataset(ABC, metaclass=DatasetMeta):
         self.file_workflow = self._defaults['workflow']
         if 'file_workflow' in kwargs:
             self.file_workflow = kwargs.pop('file_workflow')
-
-        self.file_placeholder = self._defaults['placeholder']
-        if 'file_placeholder' in kwargs:
-            self.file_placeholder = kwargs.pop('file_placeholder')
 
         self.warnings_on_reading = True
         if 'warnings_on_reading' in kwargs:

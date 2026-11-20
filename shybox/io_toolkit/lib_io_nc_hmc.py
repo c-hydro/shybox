@@ -277,28 +277,18 @@ def write_string_1d(ds, name, data_1d, dim_n):
 @with_logger(var_name='logger_stream')
 def write_ts_hmc(
         file_name: str = None,
-        file_format: str = "NETCDF4",
-        file_update: bool = True,
-        data: pd.DataFrame = None,
-        time_name: str = "time",
-        time_format: str = "%Y-%m-%d %H:%M",
-        time_dim: str = "time",
-        time_type: str = "float64",
-        time_calendar: str = time_default_calendar,
-        time_units: str = time_default_units,
-        data_units: dict[str, str] | None = None,
-        data_dim: str = "sections",
-        data_type: str = "float64",
-        data_fill_value: float | int = -9999.0,
-        data_no_value: float | int = -9999.0,
+        file_format: str = "NETCDF4", file_update: bool = True, data: pd.DataFrame = None,
+        time_name: str = "time", time_format: str = "%Y-%m-%d %H:%M", time_dim: str = "time",
+        time_type: str = "float64", time_calendar: str = time_default_calendar, time_units: str = time_default_units,
+        data_units: dict[str, str] | None = None, data_dim: str = "sections",data_type: str = "float64",
+        data_fill_value: float | int = -9999.0, data_no_value: float | int = -9999.0,
         data_map: dict[str, str] | None = None,
-        crs_name: str = "crs",
-        crs_attrs: dict = crs_default,
-        compression_flag: bool = True,
-        compression_level: int | None = 5,
-        debug_flag: bool = True,
-        **kwargs,
-) -> None:
+        crs_name: str = "crs", crs_attrs: dict = crs_default,
+        compression_flag: bool = True,compression_level: int | None = 5, debug_flag: bool = True,
+        *,
+        ensemble_dim: str = "ensemble", run_metadata: dict | None = None,
+        index_start_name: str = "index_start", index_end_name: str = "index_end",
+        **kwargs,) -> None:
 
     # INFO START
     logger_stream.info(f'Writing time series data to netCDF file "{file_name}" ... ')
@@ -328,6 +318,7 @@ def write_ts_hmc(
     #
     # level 0 -> variable name
     # level 1 -> section name
+    # optional level 2 -> ensemble member (empty for shared variables)
     #
     # Example:
     #
@@ -341,9 +332,12 @@ def write_ts_hmc(
         logger_stream.warning("Time-series dataframe columns are not a MultiIndex. Expected column levels: (variable, section).")
         return None
 
-    if data.columns.nlevels < 2:
-        logger_stream.warning("Time-series dataframe MultiIndex must contain at least two levels: variable and section.")
+    if data.columns.nlevels not in (2, 3) or not data.columns.is_unique:
+        logger_stream.warning("Expected unique (variable, section) or (variable, section, member) columns.")
         return None
+
+    ensemble = data.columns.nlevels == 3
+    members = data.columns.get_level_values(2).unique().drop("", errors="ignore") if ensemble else []
 
     # get unique variable names from first level
     variable_names = (data.columns.get_level_values(0).unique().tolist())
@@ -428,10 +422,18 @@ def write_ts_hmc(
 
         # get variable dataframe
         try:
-            ts_var = data[variable_name]
+            ts_var = data.xs(variable_name, axis=1, level=0)
         except KeyError:
             logger_stream.warning(f'Variable "{variable_name}" is not available in dataframe; skipping.')
             continue
+
+        # Put each section's members in coordinate order before forming the cube.
+        dims = (time_dim, data_dim)
+        if ensemble and set(ts_var.columns.get_level_values(1)) != {""}:
+            sections = ts_var.columns.get_level_values(0).unique()
+            columns = pd.MultiIndex.from_product([sections, members], names=ts_var.columns.names)
+            ts_var = ts_var.reindex(columns=columns)
+            dims += (ensemble_dim,)
 
         # convert dataframe to numpy
         try:
@@ -440,11 +442,14 @@ def write_ts_hmc(
             logger_stream.warning(f'Variable "{variable_name}" cannot be converted to numeric data: {exc}. Skipping.')
             continue
 
-        # make sure variable is 2D: time x sections
+        if len(dims) == 3:
+            variable_data = variable_data.reshape(time_n, len(sections), len(members))
+
+        # Preserve the section axis when there is a single column.
         if variable_data.ndim == 1:
             variable_data = variable_data.reshape(-1, 1)
 
-        if variable_data.ndim != 2:
+        if variable_data.ndim != len(dims):
             logger_stream.warning(f'Variable "{variable_name}" has invalid dimensions {variable_data.shape}; skipping.')
             continue
 
@@ -478,7 +483,7 @@ def write_ts_hmc(
             logger_stream.warning(f'Variable "{variable_name}" contains only no-data values ({data_no_value}).')
 
         # save prepared data
-        variables_data[variable_name] = variable_data
+        variables_data[variable_name] = (variable_data, dims)
 
         logger_stream.info_down(f'Preparing variable "{variable_name}" ... DONE')
 
@@ -511,10 +516,19 @@ def write_ts_hmc(
         file_handle.Conventions = "CF-1.8"
         file_handle.title = "time series data (time, variable)"
         file_handle.filedate = "Created " + tm.ctime(tm.time())
+        metadata = run_metadata or {}
+        if len(members):
+            metadata = {"run_var": ",".join(map(str, members)), **metadata}
+        file_handle.setncatts({key: value for key, value in metadata.items()
+                              if key in {"run_domain", "run_mode", "run_name", "run_var"} and value is not None})
 
         # DIMENSIONS
         file_handle.createDimension(data_dim, data_n,)
         file_handle.createDimension(time_dim, time_n,)
+        if len(members):
+            file_handle.createDimension(ensemble_dim, len(members))
+            member_coord = file_handle.createVariable(ensemble_dim, str, (ensemble_dim,))
+            member_coord[:] = np.asarray(members.astype(str), dtype=object)
 
         # TIME OBJECT
         time_obj = file_handle.createVariable(varname=time_name, dimensions=(time_dim,), datatype=time_type,)
@@ -594,9 +608,26 @@ def write_ts_hmc(
         else:
             logger_stream.warning("Info data object is empty or not available.")
 
+        # Ranges describe section-major columns after flattening each variable's section axes.
+        section_indices = {}
+        for dims in dict.fromkeys(dims for _, dims in variables_data.values()):
+            suffix, width = ("ensemble", len(members)) if len(dims) == 3 else ("det", 1)
+            start_name = f"{index_start_name}_{suffix}"
+            end_name = f"{index_end_name}_{suffix}"
+            ends = np.arange(1, data_n + 1) * width
+
+            start_index = file_handle.createVariable(start_name, "i4", (data_dim,))
+            start_index.long_name = "Zero-based start column of each section in the flattened variable"
+            start_index[:] = ends - width
+
+            end_index = file_handle.createVariable(end_name, "i4", (data_dim,))
+            end_index.long_name = "Exclusive end column of each section in the flattened variable"
+            end_index[:] = ends
+            section_indices[dims] = (start_name, end_name)
+
         # DATA VARIABLES
         # iterate over variable(s)
-        for variable_name_in, variable_data in variables_data.items():
+        for variable_name_in, (variable_data, dims) in variables_data.items():
 
             # define input/output variable names
             variable_name_in = str(variable_name_in)
@@ -631,7 +662,7 @@ def write_ts_hmc(
                 varname=variable_name_out,
                 datatype=data_type,
                 fill_value=data_fill_value,
-                dimensions=(time_dim, data_dim),
+                dimensions=dims,
                 zlib=compression_flag,
                 complevel=compression_level,
             )
@@ -640,9 +671,10 @@ def write_ts_hmc(
             data_obj.units = variable_units
             data_obj.missing_value = data_no_value
             data_obj.grid_mapping = crs_name
+            data_obj.index_start, data_obj.index_end = section_indices[dims]
 
             # write values
-            data_obj[:, :] = variable_data
+            data_obj[:] = variable_data
 
             logger_stream.info_down(f'Writing variable "{variable_name_in}" as "{variable_name_out}" ... DONE')
 

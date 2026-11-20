@@ -1,6 +1,18 @@
 import datetime as dt
 import re
 
+# method to get date from string
+def get_date_from_str(value: str) -> dt.datetime:
+    """Parse an ISO date or timestamp, including compact dataset timestamps."""
+    compact_formats = {8: "%Y%m%d", 12: "%Y%m%d%H%M", 14: "%Y%m%d%H%M%S"}
+    if value.isascii() and value.isdigit() and len(value) in compact_formats:
+        return dt.datetime.strptime(value, compact_formats[len(value)])
+
+    # Older versions of fromisoformat require a numeric UTC offset.
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    return dt.datetime.fromisoformat(value)
+
 
 def substitute_values(structure, tag_dict, **kwargs):
     """
@@ -16,6 +28,7 @@ def substitute_values(structure, tag_dict, **kwargs):
     else:
         return structure
 
+# method to fill placeholders in a string (date, string, int, float)
 def substitute_string(string, tag_dict, rec=False):
     """
     Replace the {tags} in the string with the values in the tag_dict.
@@ -35,18 +48,18 @@ def substitute_string(string, tag_dict, rec=False):
         if value is None:
             return match.group(0)  # Return the original match if the key is not found
 
+        if not fmt:
+            return str(value)
+
         if isinstance(value, str):
             try:
                 value = get_date_from_str(value)
             except ValueError:
-                value = value
+                pass
 
-        if isinstance(value, dt.datetime) and fmt:
+        if isinstance(value, dt.datetime):
             return value.strftime(fmt)
-        elif fmt:
-            return format(value, fmt)
-        else:
-            return str(value)
+        return format(value, fmt)
 
     def generate_strings(string, tag_dict):
         matches = re.findall(pattern, string)

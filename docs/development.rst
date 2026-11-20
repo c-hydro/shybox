@@ -58,9 +58,6 @@ revision. Neither process runs the scientific models.
 Automated checks
 ----------------
 
-The monitoring, resource, Hydrapp and expanded model/geo test suites below are
-included in SHYBOX 1.7.0.
-
 Run from the repository root using the SHYBOX scientific environment with Flask
 and psutil installed. The Hydrapp-only environment covers viewer dependencies;
 the model/geo suites also need the scientific/GIS environment. Hydrapp requirements

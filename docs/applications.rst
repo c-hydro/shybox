@@ -138,10 +138,11 @@ grid orientation, pour-point coordinates and expected output layers before
 using the result in a model domain. This application does not prepare dynamic
 forcing datasets.
 
-``workflow/analyzer/app_analyzer_workflow_hmc_time_series_main.py`` joins
-simulated HMC output with observed and section data and writes section time
-series. Four example settings cover deterministic/probabilistic inputs and JSON
-or NetCDF outputs:
+``workflow/analyzer/app_analyzer_workflow_hmc_time_series_main_deterministic.py``
+joins deterministic HMC output with observations and section data.
+``workflow/analyzer/app_analyzer_workflow_hmc_time_series_main_probabilistic.py``
+joins configured HMC ensemble members with shared observations. Four example
+settings cover JSON and NetCDF output for both modes:
 
 * ``app_analyzer_workflow_hmc_time_series_destine_marche_deterministic_json.json``
 * ``app_analyzer_workflow_hmc_time_series_destine_marche_deterministic_netcdf.json``
@@ -149,8 +150,8 @@ or NetCDF outputs:
 * ``app_analyzer_workflow_hmc_time_series_destine_marche_probabilistic_netcdf.json``
 
 The JSON settings select source runs, observation registry, variables, output
-format and section naming. The JSON writer details and example output contract
-are in :doc:`workflows`.
+format and section naming. See :ref:`hmc-time-series-analysis` for the commands,
+member configuration and output layouts.
 
 Run HMC and S3M
 ---------------

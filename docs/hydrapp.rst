@@ -3,8 +3,8 @@ Hydrapp
 
 .. note::
 
-   These integrations are included in SHYBOX 1.7.0 on main. Install the
-   optional dependencies described below before using them.
+   Install the optional dependencies described below before using these
+   integrations.
 
 
 Hydrapp is SHYBOX's Flask viewer, previously located in ``dashboard/``. Its

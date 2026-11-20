@@ -2,10 +2,21 @@
 Changelog
 =========
 
-Version 1.7.2 follows the consolidated 1.7.0 main release and 1.7.1 dataset
-execution update. The 1.6.0–1.6.3 entries below number earlier development
+The 1.6.0–1.6.3 entries below number earlier development
 snapshots in chronological order; they do not create historical release tags.
 Legacy release dates follow main/* tags where available.
+
+Version 1.7.3 [2026-11-20]
+**************************
+
+- ANALYZER: Add deterministic and probabilistic HMC time-series entry points
+  and Marche examples for NetCDF and Continuum hydrograph JSON.
+- ENSEMBLES: Configure ordered, formatted member IDs, expand member input paths
+  and preserve missing member series on the common time and section axes.
+- OUTPUT: Store ensemble simulations on a NetCDF member axis with per-section
+  column offsets, and export member-suffixed JSON series with shared observations.
+- DOCUMENTATION: Describe analyzer setup and both output formats in Read the
+  Docs and update the package and citation metadata to version 1.7.3.
 
 Version 1.7.2 [2026-11-17]
 **************************
@@ -19,10 +30,6 @@ Version 1.7.2 [2026-11-17]
 - DOCUMENTATION: Describe the parallel runner and monitoring tools in the
   package and Read the Docs release notes; retain the sequential runner as the
   standard path.
-
-Unreleased [2026-11-16]
-***********************
-
 - DATASETS: Add the HMC mode runner to stage deterministic forcing once, copy
   observed/forecast bases for each member and merge probabilistic forecast fields.
 - DOCUMENTATION: Prepare Read the Docs edition 0.7.0 with an application

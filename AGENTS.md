@@ -8,6 +8,19 @@
   APIs and configuration formats unless the task requires an explicit change.
 - Follow the package layout under `shybox/`; keep workflow entry points and
   runnable examples under `workflow/`.
+- In new SHYBOX applications, use the shared managers for logging, command-line
+  arguments, and configuration. Import them from the reference modules below
+  and use their existing methods for application setup.
+
+  ```python
+  from shybox.logging_toolkit.logging_handler import LoggingManager
+  from shybox.config_toolkit.arguments_handler import ArgumentsManager
+  from shybox.config_toolkit.config_handler import ConfigManager
+  ```
+
+  Keep logging setup, argument parsing, and configuration loading in these
+  managers. Extend the shared implementation when an application needs behavior
+  they do not yet provide.
 - Add or update focused tests under `tests/` for behavior changes. Run them with
   the repository environment, for example:
 

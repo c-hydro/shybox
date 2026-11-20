@@ -1,6 +1,6 @@
 # SHYBOX — Snow and Hydrologic Modeling Toolbox
 
-[![Release](https://img.shields.io/github/v/release/c-hydro/shybox)](https://github.com/c-hydro/shybox/releases/latest)
+[![Version 1.7.3](https://img.shields.io/badge/version-1.7.3-blue)](pyproject.toml)
 [![Documentation Status](https://readthedocs.org/projects/shybox/badge/?version=latest)](https://shybox.readthedocs.io/en/latest/)
 [![Documentation build](https://github.com/c-hydro/shybox/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/c-hydro/shybox/actions/workflows/docs.yml)
 [![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
@@ -13,16 +13,15 @@
 
 SHYBOX brings the stages of a modeling application into a consistent workflow: prepare observations and weather forecasts, organize model inputs, configure and run simulations, then analyze, display and monitor their outputs. Reusable components handle configuration, datasets, time, logging and processing orchestration.
 
-## Release 1.7.2
+## Release 1.7.3
 
-Version **1.7.2** adds an isolated parallel HMC dataset runner with configurable
-worker and task partitioning, process and host CPU metrics in monitoring, and
-GitHub release automation for `v*` tags. The existing sequential runner remains
-the standard workflow; `datasets_parallel` is an experimental option for testing
-parallel processing with isolated output directories.
-See the [changelog](CHANGELOG) for changes and migration notes. Documentation
-edition **0.7.0** adds an application catalog, a toolkit-by-toolkit usage guide
-and task-based navigation through the Read the Docs guides.
+Version **1.7.3** adds deterministic and probabilistic HMC/Continuum time-series
+analyzer entry points. Both join simulated discharge and observations by time
+and section and can write NetCDF or Continuum hydrograph JSON. Ensemble NetCDF
+stores simulation members on a dedicated axis and includes per-section column
+offsets. Ensemble JSON adds a member suffix to each simulated series and
+includes shared observations once per section. See the [analyzer guide](docs/workflows.rst)
+and [changelog](CHANGELOG).
 
 Runner examples are in [`workflow/runner/execution/`](workflow/runner/execution/)
 and dataset preparation examples in [`workflow/runner/datasets/`](workflow/runner/datasets/).
@@ -38,7 +37,7 @@ then open the labs with `./run_shybox_jupyter.sh` ([details](labs/README.rst)).
 - **Environmental data preparation:** conversion, spatial interpolation, temporal processing, merging and rainfall disaggregation.
 - **Dataset planning:** observed and forecast coverage, source cycles, file availability and ensemble organization.
 - **Model applications:** configuration and execution workflows for HMC/Continuum and S3M, including ensemble applications.
-- **Results and diagnostics:** time-series analysis, maps, figures, interactive viewing, and process/host CPU and RAM monitoring.
+- **Results and diagnostics:** deterministic and ensemble HMC time-series analysis with NetCDF and JSON exports, maps, figures, interactive viewing, and process/host CPU and RAM monitoring.
 - **Reusable workflows:** Python components and JSON configuration that connect these tasks across domains and datasets.
 
 Available workflows and interfaces depend on the selected repository revision and the model version used by an application.
@@ -79,7 +78,7 @@ SHYBOX is developed for reproducible environmental modeling and operational hydr
 
 ## Citation
 
-Use the metadata in [`CITATION.cff`](CITATION.cff) to cite SHYBOX 1.7.1.
+Use the metadata in [`CITATION.cff`](CITATION.cff) to cite this version of SHYBOX.
 GitHub also provides a “Cite this repository” option. Scientific model references
 are listed in the documentation appendices.
 

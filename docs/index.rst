@@ -17,9 +17,9 @@ environmental data processing, snow modeling and hydrological modeling.
 It is developed by the CIMA Research Foundation for research and operational
 forecasting, including Flood-PROOFS systems.
 
-This is documentation edition |docs_version|, describing the repository structure
-and development interfaces of SHYBOX |package_version|. Workflow compatibility
-depends on the selected code branch, model version and dataset configuration.
+This guide describes the repository structure and development interfaces of
+SHYBOX |package_version|. Workflow compatibility depends on the selected code
+branch, model version and dataset configuration.
 
 Start with :doc:`getting_started`, then choose a task in :doc:`applications` or
 follow :doc:`runner_workflows` from forcing preparation through model launch.

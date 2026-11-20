@@ -2,8 +2,8 @@
 """
 SHYBOX - Snow HYdro toolBOX - WORKFLOW ANALYZER TIME-SERIES - HMC
 
-__date__ = '20260208'
-__version__ = '1.2.0'
+__date__ = '20261119'
+__version__ = '1.4.0'
 __author__ =
     'Fabio Delogu (fabio.delogu@cimafoundation.org),
      Andrea Libertino (andrea.libertino@cimafoundation.org)'
@@ -13,19 +13,21 @@ General command line:
 python app_workflow_main.py -settings_file configuration.json -time "YYYY-MM-DD HH:MM"
 
 Examples of environment variables declarations:
-TIME_RUN="2024-10-16 00:34";
+TIME_RUN="2026-08-11 12:34";
 TIME_PERIOD=1;
-DOMAIN_NAME='PoBasin';
-PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/geo/';
+DOMAIN_NAME='marche';
+PATH_GEO='/home/fabio/Desktop/shybox/dset/case_study_marche/analyzer_hmc/geo/';
+PATH_SRC_HMC='/home/fabio/Desktop/shybox/dset/case_study_marche/analyzer_hmc/data/hmc_probabilistic/';
+PATH_SRC_OBS='/home/fabio/Desktop/shybox/dset/case_study_marche/analyzer_hmc/data/obs';
 
-PATH_SRC_HMC='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/data/hmc/';
-PATH_SRC_OBS='/home/fabio/Desktop/shybox/dset/case_study_destine/analyzer_hmc/data/obs/';
-
-PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_destine/analyzer_hmc/data/time_series/';
-PATH_TMP=$HOME/Desktop/shybox/exec/case_study_destine/analyzer_hmc/tmp/;
-PATH_LOG=$HOME/Desktop/shybox/exec/case_study_destine/analyzer_hmc/log/;
+PATH_DST='/home/fabio/Desktop/shybox/exec/case_study_marche/analyzer_hmc/data/time_series/';
+PATH_TMP=$HOME/Desktop/shybox/exec/case_study_marche/analyzer_hmc/tmp/;
+PATH_LOG=$HOME/Desktop/shybox/exec/case_study_marche/analyzer_hmc/log/;
 
 Version(s):
+20261119 (1.4.0) --> Update to deterministic/probabilistic modes and netcdf/json format
+20261110 (1.3.5) --> Update to deterministic netcdf/json format
+20261004 (1.3.0) --> Update to new orchestrator and datasets classes
 20260207 (1.2.0) --> Update to operational version for shybox package
 20260204 (1.1.0) --> Update to latest classes structure
 20260107 (1.0.0) --> Beta release for shybox package
@@ -43,10 +45,11 @@ from shybox.config_toolkit.config_handler import ConfigManager
 from shybox.time_toolkit.time_handler import TimeManager
 
 # fx imported in the PROCESSES (will be used in the global variables PROCESSES) --> DO NOT REMOVE
-from shybox.processing_ts_toolkit.lib_proc_join import join_time_series_by_registry
+from shybox.processing_ts_toolkit.ts_collections_adapter import join_time_series_probabilistic
 
 from shybox.orchestrator_toolkit.orchestrator_handler_config import OrchestratorConfig as Orchestrator
 from shybox.dataset_toolkit.dataset_handler_local import DataLocal
+from shybox.generic_toolkit.lib_utils_ensemble import generate_ensemble_list
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,8 +57,8 @@ from shybox.dataset_toolkit.dataset_handler_local import DataLocal
 project_name = 'shybox'
 alg_name = 'Workflow for analyzer time-series configuration'
 alg_type = 'Package'
-alg_version = '1.2.0'
-alg_release = '2026-02-08'
+alg_version = '1.4.0'
+alg_release = '2026-11-19'
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -65,18 +68,21 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## CONFIGURATION MANAGEMENT
     # get file settings
-    alg_args_obj = ArgumentsManager(
-        handlers=['stream'],
-        settings_folder=os.path.dirname(os.path.realpath(__file__)))
+    alg_args_obj = ArgumentsManager(handlers=['stream'], settings_folder=os.path.dirname(os.path.realpath(__file__)))
     alg_args_file, alg_args_time = alg_args_obj.get()
 
     # crete configuration object
-    alg_cfg_obj = ConfigManager.from_source(
-        src=alg_args_file,
-        root_key="configuration",
-        application_key=None
-    )
+    alg_cfg_obj = ConfigManager.from_source(src=alg_args_file,root_key="configuration", application_key=None)
+    if alg_args_time is not None:
+        alg_cfg_obj.update_lut_using_extra_tags({'time_run': alg_args_time}, overwrite=True)
 
+    ## TEMP MANAGEMENT
+    # get application tmp
+    alg_app_tmp = alg_cfg_obj.fill_obj_from_lut(alg_cfg_obj.get_section('tmp', raise_if_missing=True))
+    # view application tmp
+    alg_cfg_obj.view(section=alg_app_tmp, table_name='application [cfg application tmp]', table_print=view_table)
+
+    ## APPLICATION MANAGEMENT
     # get application section
     alg_cfg_application = alg_cfg_obj.get_section(section='application')
     # fill application section
@@ -92,8 +98,9 @@ def main(view_table: bool = False):
     # view application section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [cfg info]', table_print=True)
 
+    ## WORKFLOW MANAGEMENT
     # get workflow section
-    alg_cfg_workflow = alg_cfg_obj.get_section(section='workflow')
+    alg_cfg_workflow = alg_cfg_obj.fill_obj_from_lut(alg_cfg_obj.get_section('workflow', raise_if_missing=True))
     # view workflow section
     alg_cfg_obj.view(section=alg_cfg_workflow, table_name='workflow', table_print=True)
     # ------------------------------------------------------------------------------------------------------------------
@@ -101,19 +108,7 @@ def main(view_table: bool = False):
     # ------------------------------------------------------------------------------------------------------------------
     ## LOGGING MANAGEMENT
     # get application logging
-    alg_app_log = alg_cfg_obj.get_application("log", root_key=None)
-    # fill application logging
-    alg_app_log = alg_app_log.resolved(
-        time_values=None,  # no fill_section_with_times
-        when=None,  # no LUT time resolution
-        strict=False,
-        resolve_time_placeholders=False,  # do NOT turn time_* into strftime strings
-        expand_env=True,  # BUT expand $HOME, $RUN, ...
-        env_extra=None,  # or {"RUN": "base"} etc
-        validate_result=False,  # or True + allow_placeholders=True if needed
-        validate_allow_placeholders=True,
-        validate_allow_none=False,
-    )
+    alg_app_log = alg_cfg_obj.fill_obj_from_lut(alg_cfg_obj.get_section('log', raise_if_missing=True))
     # view application logging
     alg_cfg_obj.view(section=alg_app_log, table_name='application [cfg application logging]', table_print=view_table)
 
@@ -169,6 +164,11 @@ def main(view_table: bool = False):
 
     # view application section
     alg_cfg_obj.view(section=alg_cfg_application, table_name='application [time info]', table_print=True)
+
+    ## ENSEMBLE MANAGEMENT
+    alg_cfg_ensemble = alg_cfg_application['ensemble']
+    # define reference members
+    alg_reference_ensemble = generate_ensemble_list(**alg_cfg_ensemble)
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -210,38 +210,30 @@ def main(view_table: bool = False):
 
     # ------------------------------------------------------------------------------------------------------------------
     ## DYNAMIC DATASETS MANAGEMENT
-    # source data discharge hmc handler
-    source_data_discharge_hmc_openloop = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['hmc_discharge_openloop']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['hmc_discharge_openloop']['file_name'],
-        data_layout='time_series',
-        file_deps=None,
-        file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE_SIM_OL', file_workflow='TIME_SERIES_WORKFLOW', file_io='input',
-        variable_template={
-            "dims_data": {"y": "time", "x": "sections"},
-            "vars_data": {"DISCHARGE_SIM_OL": "discharge_sim_openloop"}
-        },
-        time_signature='period',
-        time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
-    )
+    # define variable(s)
+    file_variable, ensembles_variable = 'DISCHARGE_SIM', 'discharge_sim'
+    # iterate over member
+    source_data_discharge_hmc_collections = {}
+    for member in alg_reference_ensemble:
 
-    source_data_discharge_hmc_analysis = DataLocal(
-        path=alg_cfg_application['dynamic_data_src']['hmc_discharge_analysis']['path'],
-        file_name=alg_cfg_application['dynamic_data_src']['hmc_discharge_analysis']['file_name'],
-        data_layout='time_series',
-        file_deps=None,
-        file_type='time_series_hmc', file_format='ascii', file_mode='local',
-        file_variable='DISCHARGE_SIM_ANLS', file_workflow='TIME_SERIES_WORKFLOW', file_io='input',
-        variable_template={
-            "dims_data": {"y": "time", "x": "sections"},
-            "vars_data": {"DISCHARGE_SIM_ANLS": "discharge_sim_analysis"}
-        },
-        time_signature='period',
-        time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
-    )
+        # source data discharge sim handler member
+        source_data_discharge_hmc_member = DataLocal(
+            path=alg_cfg_application['dynamic_data_src']['hmc_discharge']['path'],
+            file_name=alg_cfg_application['dynamic_data_src']['hmc_discharge']['file_name'],
+            data_layout='time_series', data_mandatory=False, file_deps=None,
+            file_type='time_series_hmc', file_format='ascii', file_mode='local',
+            file_variable=file_variable, file_workflow='TIME_SERIES_WORKFLOW', file_io='input',
+            file_placeholder={'ensemble_member': member},
+            variable_template={
+                'dims_data': {'y': 'time', 'x': 'sections'},
+                'vars_data': {file_variable: ensembles_variable},
+            },
+            time_signature='period',
+            time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
+            logger=logging_handle, message=False, tag=f'source_hmc_{ensembles_variable}_{member}'
+        )
+        # source data discharge sim handler collections
+        source_data_discharge_hmc_collections[f'{file_variable}_{member}'] = source_data_discharge_hmc_member
 
     # source data discharge obs handler
     source_data_discharge_obs = DataLocal(
@@ -257,7 +249,7 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag=f'source_obs_discharge'
     )
 
     # source data air temperature obs handler
@@ -274,7 +266,7 @@ def main(view_table: bool = False):
         },
         time_signature='period',
         time_reference=alg_reference_time, time_period=1, time_freq='h', time_direction='forward',
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag=f'source_obs_air_temperature'
     )
 
     # destination data discharge handler
@@ -289,21 +281,11 @@ def main(view_table: bool = False):
         variable_template={
             "dims_data": {"time": "time", "sections": "n"},
             "coord_data": {"time": "time", "sections": "n"},
-            "vars_data": {
-                "discharge_sim_openloop": "discharge_simulated_openloop",
-                "discharge_sim_analysis": "discharge_simulated_analysis",
-                "discharge_obs": "discharge_observed",
-                "air_temperature_obs": "air_temperature_obs",
-            },
-            "units": {
-                "discharge_sim_openloop": "m^3/s",
-                "discharge_sim_analysis": "m^3/s",
-                "discharge_obs": "m^3/s",
-                "air_temperature_obs": "C",
-            }
+            "vars_data": alg_cfg_application['dynamic_data_dst']['vars_data'],
+            "units": alg_cfg_application['dynamic_data_dst']['units'],
         },
         time_signature='step', time_period=1, time_format='%Y%m%d%H%M',
-        logger=logging_handle, message=False
+        logger=logging_handle, message=False, tag=f'destination_time_series'
     )
     # ------------------------------------------------------------------------------------------------------------------
 
@@ -312,8 +294,7 @@ def main(view_table: bool = False):
     # orchestrator settings
     orc_process = Orchestrator.configure(
         data_package_in={
-            'DISCHARGE_SIM_OL': source_data_discharge_hmc_openloop,
-            'DISCHARGE_SIM_ANLS': source_data_discharge_hmc_analysis,
+            **source_data_discharge_hmc_collections,
             'AIR_TEMPERATURE_OBS': source_data_airt_obs,
             'DISCHARGE_OBS': source_data_discharge_obs
         },
@@ -325,7 +306,10 @@ def main(view_table: bool = False):
         logger=logging_handle
     )
     # orchestrator exec
-    orc_process.run(time=alg_reference_time)
+    orc_process.run(
+        time=alg_reference_time,
+        ensemble_members=alg_reference_ensemble, ensemble_variables=(ensembles_variable,),
+    )
     # ------------------------------------------------------------------------------------------------------------------
 
     # ------------------------------------------------------------------------------------------------------------------

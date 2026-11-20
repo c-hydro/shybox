@@ -50,8 +50,14 @@ def write_json_time_series_sections(data, file_path, *, layout='sections',
     if not isinstance(data, pd.DataFrame) or data.empty:
         raise ValueError('JSON section output requires a nonempty DataFrame.')
     # check dataframe structure
-    if not isinstance(data.columns, pd.MultiIndex) or data.columns.nlevels != 2 or not data.columns.is_unique:
-        raise ValueError('Expected unique (variable, section) DataFrame columns; ensemble data needs a separate schema.')
+    if (not isinstance(data.columns, pd.MultiIndex) or data.columns.nlevels not in (2, 3)
+            or not data.columns.is_unique):
+        raise ValueError('Expected unique (variable, section) or (variable, section, member) columns.')
+
+    if data.columns.nlevels == 3:
+        members = data.columns.get_level_values(2).unique().drop('', errors='ignore')
+        if len(members):
+            run_metadata = {'run_var': ','.join(map(str, members)), **(run_metadata or {})}
 
     # get and parse the registry
     registry = sections_db if sections_db is not None else attrs_data
@@ -133,7 +139,7 @@ def write_json_time_series_sections(data, file_path, *, layout='sections',
                    time_format=time_format, run_time_format=run_time_format,
                    data_no_value=data_no_value, decimal_places=decimal_places)
     # get file variables
-    file_variables = data.columns.get_level_values(0).unique()
+    file_variables = data.columns.droplevel(1).unique()
 
     # dump a single collection json file
     if layout == 'collections':

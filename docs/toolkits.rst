@@ -78,7 +78,7 @@ Processing and orchestration
      - ``points_adapter`` and ``lib_proc_interpolate_*``
    * - ``processing_ts_toolkit``
      - Join time series by registry and average grid data over masks.
-     - ``ts_adapter``, ``join_time_series_by_registry``
+     - ``ts_mask_adapter``, ``join_time_series_deterministic``, ``join_time_series_probabilistic``
    * - ``processing_hydro_toolkit``
      - Compute evapotranspiration, return-time and soil-moisture products.
      - ``hydro_adapter`` and ``lib_proc_compute_*``

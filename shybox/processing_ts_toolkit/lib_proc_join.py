@@ -3,34 +3,21 @@ Library Features:
 
 Name:          lib_proc_join
 Author(s):     Fabio Delogu (fabio.delogu@cimafoundation.org)
-Date:          '20260309'
-Version:       '1.1.0'
+Date:          '20261019'
+Version:       '1.2.0'
 """
 
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 import pandas as pd
 
-from shybox.logging_toolkit.lib_logging_utils import with_logger
-from shybox.orchestrator_toolkit.lib_orchestrator_utils_processes import as_process
+# common decorators
+from shybox import with_logger
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # method to join time series by registry
-@as_process(
-    input_type='pandas',
-    input_adapter={
-        'data':[
-            {'method': 'mapping_keys_by_separator', 'kwargs': {'key_separator':'|', 'other_separator':'::'}},
-            {'method': 'adapter_variables_to_group', 'kwargs': {}}]
-    },
-    args_adapter=None,
-    output_adapter={
-        'data': {"method": "fx_to_dict", "kwargs": {}},
-    },
-    output_type='pandas',
-    lazy_undefined_args=True, lazy_undefined_value=None)
 @with_logger(var_name='logger_stream')
 def join_time_series_by_registry(
         data: dict[str, pd.DataFrame | None],
@@ -232,7 +219,6 @@ def join_time_series_by_registry(
         df_common.name = name
 
     return df_common
-
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------

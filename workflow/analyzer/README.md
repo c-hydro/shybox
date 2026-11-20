@@ -1,60 +1,30 @@
-# HMC time-series analyzer configurations
+# HMC time-series analyzer
 
-The example configurations distinguish the run mode and output format:
+Run the analyzer from the repository root with the SHYBOX scientific
+environment active. Select the JSON profile that matches your mode and output
+format.
 
-| Configuration | Run mode | Output |
+| Run mode | Entry point under `workflow/analyzer` | Profile suffix |
 | --- | --- | --- |
-| `app_analyzer_workflow_hmc_time_series_destine_marche_deterministic_netcdf.json` | Deterministic | One NetCDF file |
-| `app_analyzer_workflow_hmc_time_series_destine_marche_deterministic_json.json` | Deterministic | One JSON file per section |
-| `app_analyzer_workflow_hmc_time_series_destine_marche_probabilistic_netcdf.json` | Probabilistic ensemble | Planned ensemble NetCDF |
-| `app_analyzer_workflow_hmc_time_series_destine_marche_probabilistic_json.json` | Probabilistic ensemble | Planned ensemble JSON per section |
+| Deterministic | `app_analyzer_workflow_hmc_time_series_main_deterministic.py` | `_deterministic_netcdf.json` or `_deterministic_json.json` |
+| Probabilistic | `app_analyzer_workflow_hmc_time_series_main_probabilistic.py` | `_probabilistic_netcdf.json` or `_probabilistic_json.json` |
 
-The two previous configurations ending in `_marche_netcdf.json` and
-`_marche_json.json` have been renamed to their deterministic counterparts.
-
-All four files configure the run identity at
-`application.dynamic_data_dst.file_args.run_metadata`:
-
-```json
-{
-  "run_domain": "marche",
-  "run_mode": "deterministic",
-  "run_name": "nwp_ecmwf0100_realtime_marche",
-  "run_var": "deterministic"
-}
+```bash
+python -m workflow.analyzer.app_analyzer_workflow_hmc_time_series_main_probabilistic \
+  -settings_file workflow/analyzer/app_analyzer_workflow_hmc_time_series_destine_marche_probabilistic_netcdf.json \
+  -time "2026-08-11 12:00"
 ```
 
-The probabilistic configurations use `run_mode: "probabilistic_ensemble"`,
-`run_name: "rfarm_icon-2i_realtime_marche"`, and a comma-separated `run_var`
-listing members `001` through `030`. This list is the intended source of member
-identities; preserve its ordering and leading zeros. Adapt it to your experiment.
+In probabilistic profiles, `application.ensemble` sets the member range, step
+and ID format. The configured `run_{ensemble_member}` source path is resolved
+for each member. Section registries and observations are shared, and missing
+member files are represented by no-data values.
 
-For probabilistic inputs, `PATH_SRC_HMC` should point to the runner's
-`model_output` folder. Both simulated discharge paths follow the probabilistic
-runner's `run_{ensemble_member}/time_series/` layout. The member placeholder must
-be filled separately for each declared member. Observation inputs and section
-registries are shared. Probabilistic outputs and scratch paths use a separate
-`probabilistic_ensemble` folder, and each mode/format has its own log filename.
-Deterministic source/output paths retain the previous layout.
+NetCDF stores ensemble simulations on `(time, sections, ensemble)` and other
+variables on `(time, sections)`. The `index_start` and `index_end` attributes
+name arrays of per-section offsets for slicing flattened columns. JSON writes
+one hydrograph file per section by default, with member IDs appended to
+simulated field names and shared observations written once per section.
 
-For JSON, the explicit variable mapping selects analysis as the primary
-`time_series_discharge_simulated` series, and exports open-loop discharge under
-`time_series_discharge_simulated_openloop`. The planned ensemble writer should
-append each member ID to member-dependent simulated fields, as in the supplied
-legacy ensemble examples. Change the mapping explicitly if open-loop is your
-primary product. Shared observations have no member suffix.
-
-## Current implementation boundary
-
-These changes configure and name the four examples; they do not implement
-ensemble processing. `app_analyzer_workflow_hmc_time_series_main.py` currently
-reads deterministic inputs, the JSON wrapper accepts two-level
-`(variable, section)` columns, and the NetCDF time-series writer handles
-two-dimensional variables. The probabilistic files are templates for the next
-analyzer/writer update, not runnable ensemble workflows yet.
-
-The deterministic JSON writer already accepts `file_args.run_metadata`.
-Writing the configured metadata as NetCDF global attributes still needs to be
-wired into the NetCDF writer. The future ensemble path should preserve all four
-metadata fields, the expected member list, missing-member availability and one
-shared observation series per section.
+See the [workflow guide](../../docs/workflows.rst) for environment setup and
+output examples.
