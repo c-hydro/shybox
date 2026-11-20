@@ -66,7 +66,7 @@ def load_config(path):
     publications = cfg.setdefault('publications', {})
     if publications.get('folder'):
         publications['folder'] = str((path.parent / Path(publications['folder']).expanduser()).resolve())
-    from shybox.monitoring_toolkit.common.configuration import resolve_monitoring_config
+    from shybox.monitoring_toolkit.lib_monitoring_config import resolve_monitoring_config
     cfg['monitoring'] = resolve_monitoring_config(cfg.get('monitoring'), path.parent)
     return cfg
 

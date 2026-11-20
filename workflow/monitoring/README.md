@@ -4,26 +4,52 @@ From the SHYBOX repository root, run this with your SHYBOX Python environment:
 
 ```bash
 python -m workflow.monitoring.app_monitoring_main_example \
-  --run-time 2026-11-07T12:00:00Z
+  -settings_file workflow/monitoring/app_monitoring.example_run.json \
+  -time "2026-11-07 12:00"
 ```
 
-The example calls `monitor.start()` before the application and
-`monitor.finish(exit_code=0)` after success. Exceptions call
-`monitor.finish(exit_code=1, error=exc)` and return exit code 1 to the shell.
-Ctrl+C records cancellation and returns 130. Heartbeats run automatically.
-Replace `run_application()` with your own code.
+Pass the settings file with `-settings_file`. Edit `configuration.monitoring`
+to change the output path, run identity, heartbeat interval, or demo workload.
+Relative paths are resolved from the working directory. `-time` overrides
+`run_time`, and a `null` `run_time` uses the current UTC time. For an ensemble
+record, set `run_mode` and `ensemble` in the JSON.
 
-This demonstration uses the dashboard's declared HMC identifiers; it does not
-run Continuum. By default, its UUID status file goes to `exec/monitoring`, which
-matches `hydrapp/config.json`. Open `/monitoring` in the running dashboard to
-see it. Use `--folder-name /tmp/shybox-monitoring-demo` for isolated demo records.
+`configuration.monitoring.path` and `file_name` support placeholders. For
+example, `monitoring/{model}` and
+`{model}_{time_run:%Y%m%d%H%M}_{execution_id}.json` organize records by model
+and initialization time. `model` defaults to `application`, and `time_run`
+and `run_time` default to the run timestamp. Set `placeholders` to supply
+values such as `{"model": "zzo"}`. Other monitoring settings can be reused as
+`{run_name}` or `{run_domain}`. Nested custom values such as
+`{"site": {"code": "east"}}` in `placeholders` can be used as `{site.code}` or
+`{placeholders.site.code}`. Unresolved placeholders are logged and stay in the
+resulting path.
 
-Demonstrate a failure or an ensemble member:
+`time_rounding` defaults to `"floor"` (also accepted as `"flat"`). Use `"ceil"`
+to round up to the next UTC hour or `null` to keep the original precision.
+Rounding applies to the run time in the record and to `time_run` and `run_time`
+placeholders. An exact hour stays unchanged with either rounding mode.
 
-```bash
-python -m workflow.monitoring.app_monitoring_main_example --fail
-python -m workflow.monitoring.app_monitoring_main_example --ensemble 1
-```
+If `time_format` is omitted, bare `{time_run}` and `{run_time}` placeholders
+use `%Y%m%d%H%M`. Set `time_format` in JSON to change that default or use an
+inline format such as `{run_time:%Y-%m-%d}` for a specific placeholder. The
+JSON record itself stores the run time in ISO format.
+
+`configuration.log` is optional. Missing `path` and `file_name` default to
+`shybox/logs` under the system temporary directory and
+`app_monitoring_main_example.log`. The example logs to the console by default.
+Set `handlers` to `["stream", "file"]` to also write a log file.
+
+The `MonitoringExecutionManager` context starts the record and heartbeats,
+then saves the final exit code. Success returns 0, an unhandled exception
+returns 1, and Ctrl+C records cancellation and returns 130. Replace
+`run_application()` with your own code.
+
+This demonstration uses the dashboard's declared HMC identifiers. To view the
+record in Hydrapp, set `path` to `exec/monitoring` from the repository root and
+open `/monitoring` in the running dashboard. Use a path such as
+`/tmp/shybox-monitoring-demo` for isolated demo records. Set `fail` to `true`
+to demonstrate a failed execution.
 
 For a subprocess, pass its actual return code to `monitor.finish()`; the success
 code in this example applies to a Python application that completed normally.

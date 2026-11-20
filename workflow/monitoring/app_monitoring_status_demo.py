@@ -9,7 +9,7 @@ from pathlib import Path
 import time
 
 from shybox.monitoring_toolkit.execution import RunMonitor
-from shybox.monitoring_toolkit.common.io import time_string, utc_now, write_status
+from shybox.monitoring_toolkit.lib_monitoring_io import time_string, utc_now, write_status
 
 
 def main():

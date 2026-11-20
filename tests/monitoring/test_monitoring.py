@@ -6,10 +6,9 @@ import tempfile
 import time
 import unittest
 from datetime import timedelta
-from unittest.mock import patch
 
 from shybox.monitoring_toolkit.execution import RunMonitor, MonitoringCatalog, inspect_legacy_run, read_status
-from shybox.monitoring_toolkit.common.io import utc_now, write_status
+from shybox.monitoring_toolkit.lib_monitoring_io import utc_now, write_status
 
 
 class MonitoringTests(unittest.TestCase):

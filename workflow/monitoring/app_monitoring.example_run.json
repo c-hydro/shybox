@@ -1,0 +1,26 @@
+{
+  "configuration": {
+    "priority": {"reference": "environment", "other": "user"},
+    "flags": {},
+    "variables": {
+      "lut": {"environment": {}, "user": {}},
+      "format": {},
+      "template": {}
+    },
+    "monitoring": {
+      "__comment__": "mode: deterministic; probabilistic",
+      "path": "monitoring/{run_name}",
+      "file_name": "monitoring_{run_time}_{run_name}_{app}.json",
+      "placeholders": {"application": "hmc"},
+      "run_name": "nwp_icon_marche",
+      "application": "hmc",
+      "run_domain": "marche",
+      "run_time": null,
+      "time_rounding": "floor",
+      "run_mode": "deterministic",
+      "heartbeat_seconds": 30,
+      "step_seconds": 1,
+      "fail": false
+    }
+  }
+}

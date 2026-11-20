@@ -3,7 +3,7 @@ import argparse
 from pathlib import Path
 
 from shybox.monitoring_toolkit.resources import ProcessMemoryMonitor, load_memory_config, plot_memory_history
-from shybox.monitoring_toolkit.common.io import utc_now
+from shybox.monitoring_toolkit.lib_monitoring_io import utc_now
 
 
 def main():

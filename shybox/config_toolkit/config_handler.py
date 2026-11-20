@@ -14,6 +14,7 @@ import os
 import warnings
 import re
 import copy
+import tempfile
 import numpy as np
 import pandas as pd
 import datetime as dt
@@ -22,6 +23,7 @@ from typing import Iterable
 from tabulate import tabulate
 
 from shybox.logging_toolkit.logging_handler import LoggingManager
+from shybox.default.lib_default_log import log_file
 
 from shybox.config_toolkit.lib_config_utils import (
     autofill_mapping, fill_with_mapping, sanitize_lut_quotes, _normalize_path_like_string)
@@ -302,13 +304,11 @@ class ConfigManager:
         return obj
 
     # Unified accessor for mandatory / optional sections
-    def get_section(
-        self,
-        section: str | None = None,
-        root_key: str | None = None,
-        raise_if_missing: bool = False,
-        convert_none_to_nan: bool = None,
-    ):
+    def get_section(self,
+        section: str | None = None, root_key: str | None = None,
+        raise_if_missing: bool = False, convert_none_to_nan: bool = None, message=True,
+        *,
+        update_by_lut: bool = True, warning_not_filled_by_lut: bool = True,):
         """
         Retrieve a configuration section, checking both mandatory
         sections (priority, flags, variables, application) and
@@ -326,14 +326,23 @@ class ConfigManager:
             If True, raise KeyError when the section cannot be found
             in either the mandatory attributes or the optional
             sections. If False, return None.
+        update_by_lut : bool
+            Fill placeholders in mandatory and optional section values using
+            the LUT, then expand any environment or home paths it introduces.
+            Time placeholders are left for time resolution.
+        warning_not_filled_by_lut : bool
+            Log unresolved placeholders when LUT filling is enabled.
         """
 
+        # info start
+        if message:
+            self.logger.info_up(f"Get section '{section}' ... ", tag="get_section")
+
+        # settings
         default_app_name = getattr(self, "_application_key", None) or "application"
         name = section or default_app_name
 
-        # ------------------------------------------------------------------
         # SPECIAL CASE: treat "lut", "format", "template" as pseudo-sections
-        # ------------------------------------------------------------------
         if name in ("lut", "format", "template"):
             src = None
 
@@ -362,10 +371,8 @@ class ConfigManager:
 
             return src
 
-        # ------------------------------------------------------------------
-        # NORMAL SECTIONS: priority, flags, variables, application, etc.
-        # ------------------------------------------------------------------
 
+        # NORMAL SECTIONS: priority, flags, variables, application, etc.
         # 1) mandatory sections first
         mandatory_map = {
             "priority": getattr(self, "priority", None),
@@ -374,23 +381,27 @@ class ConfigManager:
             "application": getattr(self, "application", None),
         }
 
+        # search section in the object
         section_copy = None
         if name in mandatory_map and mandatory_map[name] is not None:
             section_data = mandatory_map[name]
 
-            # Work on a copy to avoid mutating internal state
+            # work on a copy to avoid mutating internal state
             section_copy = copy.deepcopy(section_data)
 
-            # Expand env ($HOME, $RUN, ...) in this view
+            # expand env ($HOME, $RUN, ...) in this view
             section_copy = self.expand_env(section_copy, deep_copy=False)
 
             if getattr(self, "_convert_none_to_nan", False):
                 section_copy = self._convert_none_to_nan_recursive(section_copy)
 
-            # if section copy is empty (and it is in the mandatory fields). try to search in another section
-            if not section_copy:
-                pass
-            else:
+            # An empty mandatory section can be supplied by the raw config.
+            if section_copy:
+                if update_by_lut:
+                    section_copy = self.fill_obj_from_lut(
+                        section_copy, warning_not_filled_by_lut=warning_not_filled_by_lut,
+                    )
+                    section_copy = self.expand_env(section_copy, deep_copy=False)
                 return section_copy
 
         if (name in mandatory_map) and not section_copy:
@@ -399,9 +410,9 @@ class ConfigManager:
 
         # 2) optional sections via raw config (if available)
         if self._raw_config is not None:
+
             # first try under the main root (e.g. 'settings' or 'configuration')
             main_root = root_key if root_key is not None else self._root_key
-
             section_data = None
 
             if main_root is not None:
@@ -419,16 +430,31 @@ class ConfigManager:
                     raise_if_missing=raise_if_missing,
                 )
 
+            # check section object
             if section_data is not None:
+
+                # copy to avoid errors in updating
                 section_copy = copy.deepcopy(section_data)
+                # expand env (if available in section)
                 section_copy = self.expand_env(section_copy, deep_copy=False)
 
+                # convert None to nan if reuqested
                 if convert_none_to_nan is not None:
                     if convert_none_to_nan:
                         section_copy = self._convert_none_to_nan_recursive(section_copy)
-
                 elif getattr(self, "_convert_none_to_nan", False):
                     section_copy = self._convert_none_to_nan_recursive(section_copy)
+
+                # update by lut and check the env
+                if update_by_lut:
+                    section_copy = self.fill_obj_from_lut(
+                        section_copy, warning_not_filled_by_lut=warning_not_filled_by_lut,
+                    )
+                    section_copy = self.expand_env(section_copy, deep_copy=False)
+
+                # info end (DONE)
+                if message:
+                    self.logger.info_down(f"Get section '{section}' ... DONE", tag="get_section")
 
                 return section_copy
 
@@ -437,10 +463,33 @@ class ConfigManager:
             self.logger.error(f"Section '{name}' not found in mandatory or optional config.")
             raise KeyError(f"Section '{name}' not found in mandatory or optional config.")
 
+        # info end (NOT FOUND)
+        if message:
+            self.logger.info_down(f"Get section '{section}' ... NOT FOUND", tag="get_section")
+
         return None
 
+    # method to fill section using default information
+    @staticmethod
+    def fill_section_by_default(section: dict | None,
+                                defaults: dict | None = None, *, fill_method: str | None = None,) -> dict:
 
-    # --------------------------------------------------------------
+        # fill using a predefined methods
+        values = dict(defaults or {})
+        if fill_method == "method-by_tmp":
+            values.setdefault("path", os.path.join(tempfile.gettempdir(), "shybox", "logs"))
+            values.setdefault("file_name", log_file)
+        elif fill_method is not None:
+            raise ValueError(f"Unknown section default method: {fill_method!r}.")
+
+        result = copy.deepcopy(section) if section is not None else {}
+        for key, value in values.items():
+            current = result.get(key)
+            if (current is None or (isinstance(current, str) and not current)
+                    or (isinstance(current, (float, np.floating)) and np.isnan(current))):
+                result[key] = copy.deepcopy(value)
+        return result
+
     # Helper: get an ApplicationConfig wrapper
     def get_application(
         self,
@@ -469,6 +518,10 @@ class ConfigManager:
         KeyError
             If the requested section cannot be found.
         """
+
+        # info start
+        self.logger.info_up(f"Get application field '{section_name}' ... ", tag="get_application")
+
         # Decide application section name
         if section_name is None:
             default_app_name = getattr(self, "_application_key", None) or "application"
@@ -483,14 +536,15 @@ class ConfigManager:
             ):
                 root_key = self._root_key
 
-        # Early check
+        # use the same method used by section (suppress message to avoid duplicates)
         _ = self.get_section(section_name, root_key=root_key, raise_if_missing=True,
-                             convert_none_to_nan=convert_none_to_nan)
+                             convert_none_to_nan=convert_none_to_nan, message=False)
 
-        return ApplicationConfig(self, section_name,
-                                 root_key=root_key, convert_none_to_nan=convert_none_to_nan)
+        # info end
+        self.logger.info_down(f"Get application field '{section_name}' ... DONE", tag="get_application")
 
-    # --------------------------------------------------------------
+        return ApplicationConfig(self, section_name, root_key=root_key, convert_none_to_nan=convert_none_to_nan)
+
     # Priority handling
     def select_variable_priority(self) -> tuple[str, str]:
         if self.priority is None:
@@ -503,7 +557,6 @@ class ConfigManager:
 
         return self.priority["reference"], self.priority["other"]
 
-    # --------------------------------------------------------------
     # Merge LUT by priority (and update variables['lut'])
     def merge_lut_by_priority(self) -> dict:
         """
@@ -540,7 +593,6 @@ class ConfigManager:
 
         return merged
 
-    # --------------------------------------------------------------
     # Helper: detect if a template string is a "time template"
     @staticmethod
     def _is_time_template(template_value: str) -> bool:
@@ -548,7 +600,6 @@ class ConfigManager:
             return False
         return bool(re.search(r"%[a-zA-Z]", template_value))
 
-    # --------------------------------------------------------------
     # Validate LUT structure (strict or lazy) + apply template to None
     def validate_variables_keys(
         self,
@@ -664,7 +715,6 @@ class ConfigManager:
 
         return result
 
-    # --------------------------------------------------------------
     # Resolve time templates using datetime or pandas.Timestamp
     def resolve_time_templates(
         self,
@@ -1451,19 +1501,26 @@ class ConfigManager:
             resolve_time_placeholders: bool = False,
             time_keys: tuple[str, ...] | list[str] | None = None,
             template_keys: tuple[str, ...] | list[str] | None = None,
+            *,
+            warning_not_filled_by_lut: bool = True,
     ):
         """
         Fill an object from LUT placeholders with advanced time handling.
+
+        Disable warning_not_filled_by_lut to suppress warnings in non-strict mode.
         """
 
         # base LUT
         if lut is None:
-            base_lut = self.lut if hasattr(self, "lut") else self.variables["lut"]
+            base_lut = getattr(self, "lut", None)
+            if base_lut is None:
+                base_lut = getattr(self, "variables", {}).get("lut")
+            base_lut = base_lut or {}
         else:
             base_lut = lut
 
         # all time-like keys detected from config
-        detected_time_keys = self._collect_time_keys()
+        detected_time_keys = self._collect_time_keys() if base_lut else set()
 
         # which time keys are explicitly requested?
         if time_keys is None:
@@ -1539,7 +1596,7 @@ class ConfigManager:
             if strict:
                 self.logger.error("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
                 raise KeyError("The condition is strict; all placeholders must be resolved.")
-            else:
+            elif warning_not_filled_by_lut:
                 self.logger.warning("Settings unresolved placeholder(s): " + " ".join(sorted(unfilled)))
 
         return filled

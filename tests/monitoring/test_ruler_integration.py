@@ -74,7 +74,7 @@ class RulerIntegrationTests(unittest.TestCase):
     def test_previous_public_paths_still_resolve_to_same_implementations(self):
         from shybox.monitoring_toolkit import RunMonitor as root_monitor
         from shybox.monitoring_toolkit.memory_monitor import ProcessMemoryMonitor as old_resources
-        from shybox.monitoring_toolkit.monitoring_handler import RunMonitor as old_monitor
+        from shybox.monitoring_toolkit.monitoring_execution_handler import RunMonitor as old_monitor
         self.assertIs(root_monitor,RunMonitor);self.assertIs(old_monitor,RunMonitor)
         self.assertIs(old_resources,ProcessMemoryMonitor)
 

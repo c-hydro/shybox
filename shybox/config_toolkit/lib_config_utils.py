@@ -194,7 +194,9 @@ def _fill_obj_recursive(obj, tags: dict, strict: bool, unresolved: set, none_as_
                         unresolved.add(key)
                         return s
 
-                    return str(val)
+                    value = str(val)
+                    unresolved.update(_PLACEHOLDER_RE.findall(value))
+                    return value
 
                 unresolved.add(key)
                 return s
@@ -238,6 +240,7 @@ def _fill_obj_recursive(obj, tags: dict, strict: bool, unresolved: set, none_as_
                 return match.group(0)
 
             s = _PLACEHOLDER_RE.sub(replace_remaining, s)
+            unresolved.update(_PLACEHOLDER_RE.findall(s))
 
         return s
 
