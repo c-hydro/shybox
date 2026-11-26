@@ -198,6 +198,10 @@ class ConfigManager:
                 )
             # Expose it as generic attribute 'application'
             self.application = base[application_key]
+            if self.flags.get('filter_active_db_variables', False):
+                from shybox.db_toolkit.db_handler_base import ConfigurationDB
+
+                self.application = ConfigurationDB.filter_application(self.application)
 
         return blocks_of_mandatory
 

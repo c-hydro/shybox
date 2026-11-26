@@ -71,7 +71,7 @@ def main(view_table: bool = False):
     alg_args_obj = ArgumentsManager(handlers=['stream'], settings_folder=os.path.dirname(os.path.realpath(__file__)))
     alg_args_file, alg_args_time = alg_args_obj.get()
 
-    # crete configuration object
+    # create configuration object
     alg_cfg_obj = ConfigManager.from_source(src=alg_args_file,root_key="configuration", application_key=None)
     if alg_args_time is not None:
         alg_cfg_obj.update_lut_using_extra_tags({'time_run': alg_args_time}, overwrite=True)

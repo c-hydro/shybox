@@ -44,6 +44,10 @@ monitoring = ["psutil>=5.9", "matplotlib>=3.8"]
 [project.urls]
 Repository = "https://github.com/c-hydro/shybox"
 
+[tool.setuptools.packages.find]
+include = ["shybox", "shybox.*"]
+namespaces = false
+
 [tool.shybox.external_toolkits.rfarm]
 repository = "https://github.com/c-hydro/rfarm.git"
 branch = "main"

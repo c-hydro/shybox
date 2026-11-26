@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from tabulate import tabulate
 from typing import Optional, Dict, Any, Tuple, Set
 import warnings
@@ -928,6 +929,8 @@ class TimeManager:
 
         In both cases:
             - if time_run is defined and is outside [time_start, time_end], emit a warning
+
+        A numeric prefix on a supported frequency unit is discarded with a warning.
         """
 
         # Set up logger for this ConfigManager instance
@@ -941,6 +944,16 @@ class TimeManager:
                 f"ref_key='{ref_key}' is not a valid key in cfg. "
                 f"Available keys: {list(cfg.keys())}"
             )
+
+        time_frequency = cfg["time_frequency"]
+        prefixed_frequency = (
+            re.fullmatch(r"[0-9]+([hHD])", time_frequency)
+            if isinstance(time_frequency, str) else None
+        )
+        if prefixed_frequency:
+            unit = prefixed_frequency.group(1)
+            logger.warning(f"Ignoring the numeric prefix in time_frequency '{time_frequency}'. Using '{unit}'.")
+            time_frequency = unit
 
         # priority-based adjustment
         if priority == "period":
@@ -974,7 +987,6 @@ class TimeManager:
             ts_start = ts_end - ts_delta
 
             ts_delta = ts_end - ts_start
-            time_frequency = cfg["time_frequency"]
             if time_frequency == "h" or time_frequency == "H":
                 ts_period = int(ts_delta.total_seconds() / 3600)
             elif time_frequency == "D":
@@ -993,7 +1005,13 @@ class TimeManager:
                 raise ValueError("ref_key must be provided when priority='period'.")
 
             time_ref = cfg.get(cfg_key)
-            time_period = cfg.get("time_period")
+            time_period = cfg.get("time_period", 0)
+
+            # check time period
+            if time_period is None:
+                logger.warning(
+                    'Variable time_period is NoneType; for time_priority run is must be defined at least by 0')
+                time_period = 0
 
             time_start = cfg.get("time_start", None)
             time_end = cfg.get("time_end", None)
@@ -1007,22 +1025,22 @@ class TimeManager:
                         "Consider defining 'time_ref' and 'time_period' from these bounds."
                     )
 
-                raise RuntimeError(
-                    "Priority is 'time_period', but 'time_ref' and/or 'time_period' are None."
-                )
+                raise RuntimeError("Priority is 'time_period', but 'time_ref' and/or 'time_period' are None.")
 
             ts_start = pd.Timestamp(time_ref)
-            delta = pd.to_timedelta(time_period.lower())
+            delta = max(pd.to_timedelta(time_period), pd.Timedelta(0))
             ts_end = ts_start + delta
 
             ts_delta = ts_end - ts_start
-            time_frequency = cfg["time_frequency"]
-            if time_frequency == "h" or time_frequency == "H":
-                ts_period = int(ts_delta.total_seconds() / 3600)
-            elif time_frequency == "D":
-                ts_period = int(ts_delta.total_seconds() / 86400)
+            if ts_end == ts_start:
+                ts_period = 0
             else:
-                raise NotImplementedError(f"Time frequency '{time_frequency}' is not supported")
+                if time_frequency == "h" or time_frequency == "H":
+                    ts_period = int(ts_delta.total_seconds() / 3600)
+                elif time_frequency == "D":
+                    ts_period = int(ts_delta.total_seconds() / 86400)
+                else:
+                    raise NotImplementedError(f"Time frequency '{time_frequency}' is not supported")
 
             cfg["time_start"] = ts_start
             cfg["time_end"] = ts_end
@@ -1048,7 +1066,6 @@ class TimeManager:
 
             # compute time period
             ts_delta = ts_end - ts_start
-            time_frequency = cfg["time_frequency"]
             if time_frequency == "h" or time_frequency == "H":
                 ts_period = int(ts_delta.total_seconds() / 3600)
             elif time_frequency == "D":
@@ -1113,7 +1130,6 @@ class TimeManager:
 
         # recompute steps
         ts_delta = ts_end - ts_start
-        time_frequency = cfg["time_frequency"]
         if time_frequency == "h" or time_frequency == "H":
             ts_period = int(ts_delta.total_seconds() / 3600)
         elif time_frequency == "D":
@@ -1125,6 +1141,7 @@ class TimeManager:
         # return time info
         cfg["time_start"] = ts_start
         cfg["time_end"] = ts_end
+        cfg["time_frequency"] = time_frequency
         cfg["time_period"] = f"{ts_period}{time_frequency}"
 
         return cfg

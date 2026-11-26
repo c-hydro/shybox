@@ -1,0 +1,277 @@
+{
+  "configuration": {
+    "priority": {"reference": "environment", "other": "user"},
+    "flags": {"filter_active_db_variables": true},
+    "variables": {
+      "lut": {
+        "user": {
+          "path_time_data": null,
+          "file_time_data": null,
+          "time_frequency": "h"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "path_log": "PATH_LOG",
+          "path_base_data": "PATH_DATA",
+          "time_run": "TIME_RUN",
+          "time_period": "TIME_PERIOD"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_log": "string",
+        "path_base_data": "string",
+        "path_time_data": "timestamp",
+        "file_time_data": "timestamp",
+        "time_run": "string",
+        "time_period": "int",
+        "time_frequency": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_log": "string",
+        "path_base_data": "string",
+        "path_time_data": "%Y%m%d_%H",
+        "file_time_data": "%Y%m%d%H00",
+        "time_run": "%Y%m%d%H00",
+        "time_period": "int",
+        "time_frequency": "string"
+      }
+    },
+    "application": {
+      "time": {
+        "time_start": "{time_run}",
+        "time_end": "{time_run}"
+      },
+      "source": {
+        "provider": {
+          "package": "shybox.db_toolkit.access_point_db",
+          "file": "access_point_vda.py"
+        },
+        "backend": "postgresql",
+        "database": {
+          "host": "127.0.0.1",
+          "port": 16432,
+          "name": "rete_llpp",
+          "user": "user_cima",
+          "password_env": "SHYBOX_DB_PASSWORD",
+          "connect_timeout": 15,
+          "auth_method": "auto",
+          "netrc_file": "~/.netrc",
+          "netrc_host": "192.168.7.11",
+          "user_env": "SHYBOX_DB_USER"
+        },
+        "variables": {
+          "rain": {
+            "active": true,
+            "variable": "RAIN",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": true, "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "temperature": {
+            "active": true,
+            "variable": "TEMPERATURE",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": true,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "humidity": {
+            "active": true,
+            "variable": "HUMIDITY",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": false,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "wind": {
+            "active": true,
+            "variable": "WIND",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": false,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "snow": {
+            "active": true,
+            "variable": "SNOW",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": true,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "radiation": {
+            "active": true,
+            "variable": "RADIATION",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": false,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "discharge": {
+            "active": false,
+            "variable": "DISCHARGE",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": true,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "soilsat_10": {
+            "active": false,
+            "variable": "SOILSAT_10",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": false,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "soilsat_20": {
+            "active": false,
+            "variable": "SOILSAT_20",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": false,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          },
+          "soilsat_40": {
+            "active": false,
+            "variable": "SOILSAT_40",
+            "networks": ["cf-vda", "arpa-vda", "piemonte"],
+            "geosupervisor": false,
+            "geolimits": [null, null, null, null],
+            "quality_level": 1
+          }
+        }
+      },
+      "destination": {
+        "rain": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";", "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S", "missing_value": -9999, "decimal": "."
+          }
+        },
+        "temperature": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "humidity": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "wind": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "snow": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "radiation": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "discharge": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "soilsat_10": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "soilsat_20": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "soilsat_40": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "weather_stations_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        }
+      }
+    }
+  },
+  "log": {
+    "path": "$PATH_LOG/$DOMAIN_NAME",
+    "file_name": "downloader_weather_stations_datasets.txt",
+    "handlers": ["file", "stream"],
+    "level": "INFO"
+  },
+  "tmp": {
+    "path": "{path_tmp}/{domain_name}/downloader_weather_stations",
+    "file_name": null
+  }
+}

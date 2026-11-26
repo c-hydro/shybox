@@ -25,7 +25,10 @@ dependencies:
   - cfgrib
   - pyresample
   - cartopy
-
+  
+  # Database utils
+  - psycopg
+  
   # Tools
   - psutil
   - pip
