@@ -1,6 +1,6 @@
 # SHYBOX — Snow and Hydrologic Modeling Toolbox
 
-[![Version 1.7.3](https://img.shields.io/badge/version-1.7.3-blue)](pyproject.toml)
+[![Version 1.7.4](https://img.shields.io/badge/version-1.7.4-blue)](pyproject.toml)
 [![Documentation Status](https://readthedocs.org/projects/shybox/badge/?version=latest)](https://shybox.readthedocs.io/en/latest/)
 [![Documentation build](https://github.com/c-hydro/shybox/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/c-hydro/shybox/actions/workflows/docs.yml)
 [![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
@@ -13,14 +13,13 @@
 
 SHYBOX brings the stages of a modeling application into a consistent workflow: prepare observations and weather forecasts, organize model inputs, configure and run simulations, then analyze, display and monitor their outputs. Reusable components handle configuration, datasets, time, logging and processing orchestration.
 
-## Release 1.7.3
+## Release 1.7.4
 
-Version **1.7.3** adds deterministic and probabilistic HMC/Continuum time-series
-analyzer entry points. Both join simulated discharge and observations by time
-and section and can write NetCDF or Continuum hydrograph JSON. Ensemble NetCDF
-stores simulation members on a dedicated axis and includes per-section column
-offsets. Ensemble JSON adds a member suffix to each simulated series and
-includes shared observations once per section. See the [analyzer guide](docs/workflows.rst)
+Version **1.7.4** adds an hourly PostgreSQL observation downloader. The local
+SSH-tunnel and direct server profiles write station CSVs for six weather
+variables and include optional discharge and soil saturation. The Bash
+launcher supports realtime and historical runs with per-hour locks and JSON
+and environment reports. See the [downloader guide](docs/downloader_workflows.rst)
 and [changelog](CHANGELOG).
 
 Runner examples are in [`workflow/runner/execution/`](workflow/runner/execution/)
@@ -60,6 +59,7 @@ The numerical models, their executables and domain datasets are maintained separ
 | Project structure and components | [Overview](https://shybox.readthedocs.io/en/latest/overview.html) |
 | Installation and first application | [Installation](https://shybox.readthedocs.io/en/latest/installation.html) · [Quickstart](https://shybox.readthedocs.io/en/latest/quickstart.html) |
 | Configuration and processing | [Configuration](https://shybox.readthedocs.io/en/latest/configuration.html) · [Workflows and analysis](https://shybox.readthedocs.io/en/latest/workflows.html) |
+| Observation downloads | [Hourly observation downloader](https://shybox.readthedocs.io/en/latest/downloader_workflows.html) |
 | Dataset planning and preparation | [Dataset planning](https://shybox.readthedocs.io/en/latest/dataset_planning.html) · [Runner execution](https://shybox.readthedocs.io/en/latest/dataset_execution.html) · [Member summaries](https://shybox.readthedocs.io/en/latest/dataset_summaries.html) |
 | HMC/S3M execution | [Model runners](https://shybox.readthedocs.io/en/latest/runners.html) |
 | Viewing and monitoring | [Hydrapp](https://shybox.readthedocs.io/en/latest/hydrapp.html) · [Monitoring](https://shybox.readthedocs.io/en/latest/monitoring.html) |

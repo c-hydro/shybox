@@ -30,6 +30,20 @@ often refer to a particular domain or operational data layout. The dedicated
 guides describe configuration fields and safe preview or dry-run options where
 available.
 
+Download observations
+---------------------
+
+The observation downloader in ``workflow/downloader/`` queries PostgreSQL and
+writes hourly station CSVs. The supplied VDA profiles cover local SSH
+forwarding and direct server connections. See :doc:`downloader_workflows`
+for variable options, examples and realtime or history execution.
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+
+   downloader_workflows
+
 Prepare datasets
 ----------------
 

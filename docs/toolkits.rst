@@ -35,6 +35,9 @@ Configuration, time and data access
        to configured coordinates and variables.
      - ``DataLocal``, ``DataMemory``, ``DataOnDemand``, ``DataTemporary``,
        ``DataCollection``
+   * - ``db_toolkit``
+     - Select a database provider, download observations and write station CSVs.
+     - ``ConfigurationDB``, ``DataProvider``, ``lib_db_io``
    * - ``io_toolkit``
      - Read and write NetCDF, GRIB, ASCII grids, HMC sections and time-series
        JSON; convert file-specific layouts.

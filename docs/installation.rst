@@ -32,7 +32,7 @@ Check the selected interpreter:
    python -c "import shybox; print(shybox.__version__)"
 
 The base YAML includes NumPy, SciPy, pandas, xarray, NetCDF, GDAL, rasterio,
-cfgrib and spatial resampling dependencies. The short dependency list in
+cfgrib, spatial resampling dependencies and Psycopg for PostgreSQL observation downloads. The short dependency list in
 ``pyproject.toml`` does not describe the complete workflow environment.
 
 Geographic processing

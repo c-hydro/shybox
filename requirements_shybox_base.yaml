@@ -26,6 +26,9 @@ dependencies:
   - pyresample
   - cartopy
 
+  # Database access
+  - psycopg
+
   # Tools
   - psutil
   - pip

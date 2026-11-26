@@ -4,7 +4,8 @@ Overview and repository structure
 SHYBOX separates reusable processing code, workflow configuration and data
 distribution. It supports workflows around HMC (Hydrological Model Continuum)
 and S3M (Snow Multidata Mapping and Modeling), alongside dataset conversion,
-interpolation, merging and analysis.
+interpolation, merging and analysis. The :doc:`downloader_workflows` guide
+explains how to retrieve hourly station observations from PostgreSQL.
 
 The model presentations are collected in :doc:`appendix_hmc` (Appendix A) and
 :doc:`appendix_s3m` (Appendix B). Algorithm procedures, configuration and operating
@@ -28,6 +29,7 @@ Repository layout
    shybox/
    ├── shybox/                    Reusable Python package
    ├── workflow/                  Workflow drivers and JSON examples
+   │   ├── downloader/            Retrieve hourly station observations
    │   ├── dataset/               Convert, merge and disaggregate data
    │   ├── geo/                   Prepare geographic information
    │   ├── runner/
