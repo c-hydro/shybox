@@ -1,16 +1,16 @@
 Hourly observation downloader
 =============================
 
-The application in ``workflow/downloader/`` reads station observations from
-PostgreSQL and writes one CSV for each active variable and hour. It includes
-local and server profiles for the Valle d'Aosta station database.
+The VDA weather-station and CVA dam workflows in ``workflow/downloader/``
+read observations from PostgreSQL and write one CSV for each active variable
+and hour. Both workflows include local SSH tunnel and direct server profiles.
 
 Setup and connection
 --------------------
 
 Install the :doc:`SHYBOX base environment <installation>` and confirm that
-Python can import ``psycopg``. The Bash launcher also uses ``python3`` for
-run reports and Linux ``flock`` for locking.
+Python can import ``psycopg``. The launchers use Bash, GNU ``date`` and
+Linux ``flock``.
 
 .. list-table::
    :header-rows: 1
@@ -18,10 +18,14 @@ run reports and Linux ``flock`` for locking.
 
    * - Settings file in ``workflow/downloader/``
      - Connection
-   * - ``app_downloader_workflow_obs_rain_server.json``
+   * - ``app_downloader_workflow_vda_obs_ws_server.json``
      - Direct PostgreSQL at ``192.168.7.11:6432`` from a host with access.
-   * - ``app_downloader_workflow_obs_rain_local.json``
+   * - ``app_downloader_workflow_vda_obs_ws_local.json``
      - Local SSH forwarding at ``127.0.0.1:16432``.
+   * - ``app_downloader_workflow_cva_obs_dam_server.json``
+     - Direct PostgreSQL for CVA.
+   * - ``app_downloader_workflow_cva_obs_dam_local.json``
+     - Local SSH forwarding for CVA.
 
 For the local profile, open an SSH session through your organization's
 bastion and keep it running while downloading:
@@ -31,7 +35,7 @@ bastion and keep it running while downloading:
    ssh -N -T -o ExitOnForwardFailure=yes \
      -L 127.0.0.1:16432:192.168.7.11:6432 user@bastion.example.org
 
-Replace ``user@bastion.example.org`` with your approved SSH login. Both
+Replace ``user@bastion.example.org`` with your approved SSH login. The
 profiles use ``auth_method: auto``, which checks ``~/.netrc`` and then the
 configured environment variables. The example settings use
 ``SHYBOX_DB_USER`` and ``SHYBOX_DB_PASSWORD``. With the local tunnel the
@@ -46,6 +50,9 @@ variable. Its matching key under ``configuration.application.destination``
 defines where to write it. Set ``active`` to ``false`` to skip a variable
 and its destination. The workflows validate the active source and output pairs
 and require at least one active variable.
+
+VDA weather stations
+~~~~~~~~~~~~~~~~~~~~
 
 .. list-table::
    :header-rows: 1
@@ -82,7 +89,7 @@ and require at least one active variable.
 
 The examples use ``cf-vda``, ``arpa-vda`` and ``piemonte``. The provider also
 recognizes ``france`` and ``switzerland``. Use ``quality_level`` 1 for
-validity codes of at least −1, or 2 to apply an upper bound of 4 as well.
+validity codes of at least −1, or 2 to also require a code below 4.
 Instantaneous readings also accept codes −64 and −65. In ``geolimits``, the
 four values are minimum latitude, maximum latitude, minimum longitude and
 maximum longitude. Use ``null`` for an open bound.
@@ -92,23 +99,36 @@ The VDA output columns are ``station``, ``longitude``, ``latitude``,
 UTF-8 and ``-9999`` for missing fields. Set ``destination.<variable>.options``
 to change CSV formatting.
 
+CVA dams
+~~~~~~~~
+
+Both CVA profiles enable ``reservoir_water_level`` (database parameter 100,
+``LIVELLI-DIGHE``) and ``turbine_discharge`` (parameter 101, ``TURBINATE``).
+The provider queries the ``tables_cva`` schema, including inactive stations for
+historical downloads. It averages readings on ten-minute marks with validity
+codes of at least −1 and rounds to two decimal places. Set ``geolimits`` to
+restrict station coordinates. Missing values are written as ``-9999``.
+
+The CSV includes the station ID, name, coordinates, altitude, alert area, time,
+value, unit and variable. Any transformation into plant forcing belongs to the
+downstream workflow.
+
 Run the downloader
 ------------------
 
-Set the folder, application and default settings paths at the top of
-``workflow/downloader/exec_downloader_workflow_obs.sh`` for your deployment.
-The launcher checks the selected environment before running. It defaults to
-``shybox_base_libraries``. Use ``SHYBOX_CONDA_ENV``, ``SHYBOX_CONDA_BIN``
-or ``SHYBOX_PYTHON`` to select another installed environment or interpreter.
+The launchers declare their deployment paths in the header and default to
+the direct PostgreSQL profiles and FloodProofs interpreter. Adjust the header
+paths for your deployment. Set ``SHYBOX_PYTHON`` to use another interpreter,
+or set ``SHYBOX_CONDA_BIN`` and optionally ``SHYBOX_CONDA_ENV`` for a named
+environment. Select another profile with ``--settings-file`` or
+``SHYBOX_OBS_SETTINGS_FILE``.
 
 .. code-block:: bash
 
-   workflow/downloader/exec_downloader_workflow_obs.sh realtime
-   workflow/downloader/exec_downloader_workflow_obs.sh history \
+   workflow/downloader/exec_downloader_workflow_vda_obs_ws.sh realtime
+   workflow/downloader/exec_downloader_workflow_cva_obs_dam.sh realtime
+   workflow/downloader/exec_downloader_workflow_cva_obs_dam.sh history \
      "2026-11-25 08:00" "2026-11-25 12:00"
-   workflow/downloader/exec_downloader_workflow_obs.sh \
-     --settings-file workflow/downloader/app_downloader_workflow_obs_rain_local.json \
-     realtime
 
 Realtime rounds down to the current Europe/Rome hour. The default
 ``TIME_PERIOD=4`` is a four-hour lookback, which yields five hourly timestamps
@@ -124,35 +144,34 @@ and set the same variables along with ``TIME_PERIOD``:
 
    export DOMAIN_NAME=vda PATH_LOG="$PWD/run/log" PATH_DATA="$PWD/run/data"
    export TIME_PERIOD=4
-   python workflow/downloader/app_downloader_workflow_obs_main.py \
-     -settings_file workflow/downloader/app_downloader_workflow_obs_rain_local.json \
+   python -m workflow.downloader.app_downloader_workflow_cva_obs_dam_main \
+     -settings_file "$PWD/workflow/downloader/app_downloader_workflow_cva_obs_dam_local.json" \
      -time "2026-11-25 12:00"
 
 Run reports and locks
 ---------------------
 
-The Bash launcher guards each mode and run hour with
-``lock_<run_name>_<YYYYMMDD_HH>.lock``. The run name is ``realtime`` or
-``history``. An overlapping invocation for that key exits with code 75, leaving
-the active run's report accessible. The lock is released at process exit.
+The launchers use ``lock_<run_name>_<run_variable>_<YYYYMMDD_HH>.lock`` and
+write ``report_<run_name>_<run_variable>_<YYYYMMDD_HH>.env`` after the run
+finishes. The mode is ``realtime`` or ``history``. The default run label is
+``rain`` for VDA and ``dam`` for CVA. ``SHYBOX_RUN_VARIABLE`` changes the
+label. The JSON settings control which observations are downloaded.
 
-The launcher writes ``report_<run_name>_<YYYYMMDD_HH>.env`` and a JSON record.
-The JSON directory defaults to ``$PATH_LOG/$DOMAIN_NAME/runs``. The lock and
-report folders are declared separately in the Bash script. Override the three
-locations with ``SHYBOX_LOCK_DIR``, ``SHYBOX_REPORT_DIR`` and
-``SHYBOX_RUN_DIR``.
+An invocation with the same lock key exits with code 75 while the first
+run holds the lock. The lock is released at process exit. Set
+``SHYBOX_LOCK_DIR`` and ``SHYBOX_REPORT_DIR`` to change the file locations.
 
-The reports contain run bounds, elapsed seconds, exit code and a status of
-``running``, ``success``, ``failed`` or ``interrupted``. A Bash consumer can
-source the ``.env`` report and check ``STATUS``, ``TIME_RUN``,
-``EXECUTION_TIME`` and ``EXIT_CODE`` before starting downstream processing.
+A Bash consumer can source the environment report and check ``STATUS``
+(``success`` or ``failed``), ``TIME_RUN``, ``TIME_START``, ``TIME_END``,
+``TIME_PERIOD``, ``EXECUTION_TIME`` in seconds, and ``EXIT_CODE``.
 
 Provider interface
 ------------------
 
-``configuration.application.source.provider`` selects the VDA access point.
-The examples use the package ``shybox.db_toolkit.access_point_db`` and file
-``access_point_vda.py``. The loader also accepts a dotted module name or
-the ``vda`` alias. A provider supplies ``get_data(source, selection, start, end)``
+``configuration.application.source.provider`` selects the access point.
+The examples use the package ``shybox.db_toolkit.access_point_db`` and the files
+``access_point_vda.py`` and ``access_point_cva.py``. The loader also accepts a
+dotted module name or the ``vda`` alias. A provider supplies
+``get_data(source, selection, start, end)``
 and can override ``write_data()``. Providers that use the default CSV writer
 can pass their own column mapping or use their input columns.

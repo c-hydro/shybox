@@ -33,10 +33,10 @@ available.
 Download observations
 ---------------------
 
-The observation downloader in ``workflow/downloader/`` queries PostgreSQL and
-writes hourly station CSVs. The supplied VDA profiles cover local SSH
-forwarding and direct server connections. See :doc:`downloader_workflows`
-for variable options, examples and realtime or history execution.
+The VDA weather-station and CVA dam downloaders in ``workflow/downloader/``
+query PostgreSQL and write one CSV per active variable and hour. Each workflow
+includes settings for local SSH forwarding and direct server connections.
+See :doc:`downloader_workflows` for configuration and run commands.
 
 .. toctree::
    :maxdepth: 2

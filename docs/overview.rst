@@ -5,7 +5,7 @@ SHYBOX separates reusable processing code, workflow configuration and data
 distribution. It supports workflows around HMC (Hydrological Model Continuum)
 and S3M (Snow Multidata Mapping and Modeling), alongside dataset conversion,
 interpolation, merging and analysis. The :doc:`downloader_workflows` guide
-explains how to retrieve hourly station observations from PostgreSQL.
+explains how to retrieve hourly weather-station and dam observations from PostgreSQL.
 
 The model presentations are collected in :doc:`appendix_hmc` (Appendix A) and
 :doc:`appendix_s3m` (Appendix B). Algorithm procedures, configuration and operating

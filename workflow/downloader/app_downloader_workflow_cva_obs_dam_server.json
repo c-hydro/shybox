@@ -1,0 +1,116 @@
+{
+  "configuration": {
+    "priority": {
+      "reference": "environment",
+      "other": "user"
+    },
+    "flags": {
+      "filter_active_db_variables": true
+    },
+    "variables": {
+      "lut": {
+        "user": {
+          "path_time_data": null,
+          "file_time_data": null,
+          "time_frequency": "h"
+        },
+        "environment": {
+          "domain_name": "DOMAIN_NAME",
+          "path_log": "PATH_LOG",
+          "path_base_data": "PATH_DATA",
+          "time_run": "TIME_RUN",
+          "time_period": "TIME_PERIOD"
+        }
+      },
+      "format": {
+        "domain_name": "string",
+        "path_log": "string",
+        "path_base_data": "string",
+        "path_time_data": "timestamp",
+        "file_time_data": "timestamp",
+        "time_run": "string",
+        "time_period": "int",
+        "time_frequency": "string"
+      },
+      "template": {
+        "domain_name": "string",
+        "path_log": "string",
+        "path_base_data": "string",
+        "path_time_data": "%Y%m%d_%H",
+        "file_time_data": "%Y%m%d%H00",
+        "time_run": "%Y%m%d%H00",
+        "time_period": "int",
+        "time_frequency": "string"
+      }
+    },
+    "application": {
+      "time": {
+        "time_start": "{time_run}",
+        "time_end": "{time_run}"
+      },
+      "source": {
+        "provider": {
+          "package": "shybox.db_toolkit.access_point_db",
+          "file": "access_point_cva.py"
+        },
+        "backend": "postgresql",
+        "database": {
+          "host": "192.168.7.11",
+          "port": 6432,
+          "name": "rete_llpp",
+          "user": "user_cima",
+          "password_env": "SHYBOX_DB_PASSWORD",
+          "connect_timeout": 15,
+          "auth_method": "auto",
+          "netrc_file": "~/.netrc",
+          "user_env": "SHYBOX_DB_USER"
+        },
+        "variables": {
+          "reservoir_water_level": {
+            "active": true,
+            "variable": "LIVELLI-DIGHE"
+          },
+          "turbine_discharge": {
+            "active": true,
+            "variable": "TURBINATE"
+          }
+        }
+      },
+      "destination": {
+        "reservoir_water_level": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "cva_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        },
+        "turbine_discharge": {
+          "path": "{path_base_data}/{path_time_data}",
+          "file_name": "cva_{variable}_{file_time_data}.csv",
+          "format": "csv",
+          "options": {
+            "delimiter": ";",
+            "encoding": "utf-8",
+            "time_format": "%Y-%m-%d %H:%M:%S",
+            "missing_value": -9999,
+            "decimal": "."
+          }
+        }
+      }
+    }
+  },
+  "log": {
+    "path": "$PATH_LOG/$DOMAIN_NAME",
+    "file_name": "downloader_cva_dam_observations.txt",
+    "handlers": [
+      "file",
+      "stream"
+    ],
+    "level": "INFO"
+  }
+}

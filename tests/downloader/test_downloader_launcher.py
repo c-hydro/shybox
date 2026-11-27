@@ -3,7 +3,6 @@
 import fcntl
 import json
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -14,7 +13,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
-LAUNCHER = Path(__file__).resolve().parents[2] / 'workflow/downloader/exec_downloader_workflow_obs.sh'
+LAUNCHER = Path(__file__).resolve().parents[2] / 'workflow/downloader/exec_downloader_workflow_vda_obs_ws.sh'
+CVA_LAUNCHER = LAUNCHER.with_name('exec_downloader_workflow_cva_obs_dam.sh')
 
 
 @unittest.skipUnless(shutil.which('flock'), 'flock is required')
@@ -23,36 +23,21 @@ class TestDownloaderLauncher(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
-        self.runs = self.root / 'runs'
         self.locks = self.root / 'locks'
         self.reports = self.root / 'reports'
         self.invocation = self.root / 'invocation.json'
-        self.launcher = self.root / LAUNCHER.name
-        launcher_source = LAUNCHER.read_text(encoding='utf-8')
-        checkout_paths = {
-            'script_folder': LAUNCHER.parents[2],
-            'script_file': LAUNCHER.with_name('app_downloader_workflow_obs_main.py'),
-            'settings_file': LAUNCHER.with_name('app_downloader_workflow_obs_rain_server.json'),
-        }
-        for setting, target in checkout_paths.items():
-            launcher_source, count = re.subn(
-                rf'^{setting}=.*$', lambda _: f'{setting}={shlex.quote(str(target))}',
-                launcher_source, count=1, flags=re.MULTILINE,
-            )
-            self.assertEqual(count, 1, f'Missing launcher setting {setting}')
-        self.launcher.write_text(launcher_source, encoding='utf-8')
-        self.launcher.chmod(0o700)
         python = self.root / 'python'
         python.write_text(
             '#!/usr/bin/env python3\n'
             'import json, os, sys\n'
             'from pathlib import Path\n'
-            'if sys.argv[1:3] == ["-B", "-c"]:\n'
-            '    sys.exit(0)\n'
-            'Path(os.environ["LAUNCHER_TEST_INVOCATION"]).write_text(json.dumps({\n'
-            '    "args": sys.argv[1:], "time_run": os.environ["TIME_RUN"],\n'
-            '    "time_period": os.environ["TIME_PERIOD"],\n'
-            '}))\n'
+            'with Path(os.environ["LAUNCHER_TEST_INVOCATION"]).open("x") as output:\n'
+            '    json.dump({\n'
+            '        "args": sys.argv[1:], "time_run": os.environ["TIME_RUN"],\n'
+            '        "time_period": os.environ["TIME_PERIOD"],\n'
+            '        "domain": os.environ["DOMAIN_NAME"], "data": os.environ["PATH_DATA"],\n'
+            '        "log": os.environ["PATH_LOG"],\n'
+            '    }, output)\n'
             'sys.exit(int(os.environ.get("LAUNCHER_TEST_EXIT_CODE", "0")))\n',
             encoding='utf-8',
         )
@@ -61,7 +46,6 @@ class TestDownloaderLauncher(unittest.TestCase):
             **os.environ,
             'SHYBOX_PYTHON': str(python),
             'SHYBOX_CONDA_ENV': 'shybox_base_libraries',
-            'SHYBOX_RUN_DIR': str(self.runs),
             'SHYBOX_LOCK_DIR': str(self.locks),
             'SHYBOX_REPORT_DIR': str(self.reports),
             'PATH_LOG': str(self.root / 'logs'),
@@ -69,25 +53,76 @@ class TestDownloaderLauncher(unittest.TestCase):
             'LAUNCHER_TEST_INVOCATION': str(self.invocation),
         }
         self.env.pop('TIME_PERIOD', None)
+        self.env.pop('SHYBOX_RUN_VARIABLE', None)
         self.env.pop('SHYBOX_OBS_SETTINGS_FILE', None)
         self.env.pop('LAUNCHER_TEST_EXIT_CODE', None)
 
-    def launch(self, *args):
+    def launch(self, *args, launcher=LAUNCHER):
         return subprocess.run(
-            [str(self.launcher), *args], cwd=self.root, env=self.env,
+            [str(launcher), *args], cwd=self.root, env=self.env,
             capture_output=True, text=True, timeout=15,
         )
 
-    def read_record(self, name):
-        return json.loads((self.runs / name).read_text(encoding='utf-8'))
-
     def read_report(self, name):
+        keys = ('STATUS', 'RUN_NAME', 'RUN_VARIABLE', 'TIME_RUN', 'TIME_START', 'TIME_END', 'TIME_PERIOD',
+                'EXECUTION_TIME', 'EXIT_CODE')
         result = subprocess.run(
-            ['bash', '-ec', 'source "$1"; printf "%s\\n" "$RUN_NAME" "$TIME_RUN" "$STATUS" "$EXIT_CODE" "$EXECUTION_TIME"',
-             'bash', str(self.reports / name)],
+            ['bash', '-ec', 'source "$1"; shift; for name; do printf "%s\\n" "${!name}"; done',
+             'bash', str(self.reports / name), *keys],
             capture_output=True, text=True, check=True,
         )
-        return result.stdout.splitlines()
+        return dict(zip(keys, result.stdout.splitlines(), strict=True))
+
+    def test_cva_realtime_uses_the_dam_server_profile(self):
+        self.env.pop('PATH_DATA')
+        zone = ZoneInfo('Europe/Rome')
+        before = datetime.now(zone).strftime('%Y-%m-%d %H:00')
+        result = self.launch(launcher=CVA_LAUNCHER)
+        after = datetime.now(zone).strftime('%Y-%m-%d %H:00')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        invocation = json.loads(self.invocation.read_text())
+        folder = '/home/idrologia/share/FloodProofs_v4'
+        self.assertEqual(invocation['args'], [
+            '-B', f'{folder}/library/package_shybox/workflow/downloader/app_downloader_workflow_cva_obs_dam_main.py',
+            '-settings_file', f'{folder}/fp_tools_downloading/ground_network/app_downloader_workflow_cva_obs_dam_server.json',
+            '-time', invocation['time_run'],
+        ])
+        self.assertEqual(invocation['data'], f'{folder}/data/data_dynamic/source/ground_network/dams/')
+        self.assertIn(invocation['time_run'], {before, after})
+        self.assertEqual(invocation['time_period'], '4')
+        hour = datetime.fromisoformat(invocation['time_run']).strftime('%Y%m%d_%H')
+        self.assertTrue((self.locks / f'lock_realtime_dam_{hour}.lock').is_file())
+        report = self.read_report(f'report_realtime_dam_{hour}.env')
+        self.assertEqual((report['STATUS'], report['RUN_VARIABLE']), ('success', 'dam'))
+
+    def test_cva_history_records_failure_and_accepts_a_run_label(self):
+        self.env.update(LAUNCHER_TEST_EXIT_CODE='17', SHYBOX_RUN_VARIABLE='turbine_discharge')
+        settings = CVA_LAUNCHER.with_name('app_downloader_workflow_cva_obs_dam_local.json')
+        start, end = '2026-11-25 11:00', '2026-11-25 14:00'
+        result = self.launch('--settings-file', str(settings), 'history', start, end, launcher=CVA_LAUNCHER)
+
+        self.assertEqual(result.returncode, 17, result.stderr)
+        invocation = json.loads(self.invocation.read_text())
+        self.assertEqual(invocation['args'][-4:], ['-settings_file', str(settings), '-time', end])
+        self.assertEqual((invocation['time_run'], invocation['time_period']), (end, '3'))
+        self.assertTrue((self.locks / 'lock_history_turbine_discharge_20261125_14.lock').is_file())
+        report = self.read_report('report_history_turbine_discharge_20261125_14.env')
+        self.assertEqual((report['TIME_START'], report['TIME_END']), (start, end))
+        self.assertEqual((report['STATUS'], report['EXIT_CODE']), ('failed', '17'))
+
+    def test_cva_history_preserves_the_report_while_locked(self):
+        self.locks.mkdir()
+        self.reports.mkdir()
+        report = self.reports / 'report_history_dam_20261125_14.env'
+        report.write_text('STATUS=running\n', encoding='utf-8')
+        with (self.locks / 'lock_history_dam_20261125_14.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.launch('history', '2026-11-25 11:00', '2026-11-25 14:00', launcher=CVA_LAUNCHER)
+
+        self.assertEqual(result.returncode, 75, result.stderr)
+        self.assertEqual(report.read_text(encoding='utf-8'), 'STATUS=running\n')
+        self.assertFalse(self.invocation.exists())
 
     def test_realtime_floors_current_hour_and_defaults_to_four(self):
         zone = ZoneInfo('Europe/Rome')
@@ -95,45 +130,50 @@ class TestDownloaderLauncher(unittest.TestCase):
         result = self.launch()
         after = datetime.now(zone).strftime('%Y-%m-%d %H:00')
         self.assertEqual(result.returncode, 0, result.stderr)
-        run_file, = self.runs.glob('realtime_*.json')
-        record = self.read_record(run_file.name)
-        self.assertIn(record['time_run'], {before, after})
-        self.assertEqual(record['time_period'], 4)
-        self.assertEqual(record['status'], 'success')
-        self.assertEqual(record['exit_code'], 0)
-        self.assertEqual(record['settings_file'], str(LAUNCHER.with_name('app_downloader_workflow_obs_rain_server.json')))
+        command_line = next(line for line in result.stdout.splitlines() if line.startswith(' ==> COMMAND LINE:'))
+        invocation = json.loads(self.invocation.read_text())
+        self.assertEqual(shlex.split(command_line.split(':', 1)[1]), [self.env['SHYBOX_PYTHON'], *invocation['args']])
+        self.assertIn(' ==> START ...', result.stdout)
+        self.assertIn(' ==> ... END', result.stdout)
+        self.assertIn(' ==> Bye, Bye', result.stdout)
+        report_file, = self.reports.glob('report_realtime_*.env')
+        report = self.read_report(report_file.name)
+        self.assertIn(report['TIME_RUN'], {before, after})
+        self.assertEqual(report['TIME_PERIOD'], '4')
+        self.assertEqual(report['RUN_VARIABLE'], 'rain')
+        self.assertEqual((report['RUN_NAME'], report['STATUS'], report['EXIT_CODE']), ('realtime', 'success', '0'))
         self.assertEqual(
-            json.loads(self.invocation.read_text())['args'][1],
-            str(LAUNCHER.with_name('app_downloader_workflow_obs_main.py')),
+            json.loads(self.invocation.read_text())['args'],
+            [
+                '-B',
+                '/home/idrologia/share/FloodProofs_v4/library/package_shybox/workflow/downloader/'
+                'app_downloader_workflow_vda_obs_ws_main.py',
+                '-settings_file',
+                '/home/idrologia/share/FloodProofs_v4/fp_tools_downloading/ground_network/'
+                'app_downloader_workflow_vda_obs_ws_server.json',
+                '-time', report['TIME_RUN'],
+            ],
         )
-        self.assertIsNotNone(record['finished_at'])
-        start = datetime.fromisoformat(record['time_start'])
-        self.assertEqual(datetime.fromisoformat(record['time_run']) - start, timedelta(hours=4))
-        hour = datetime.fromisoformat(record['time_run']).strftime('%Y%m%d_%H')
-        self.assertTrue((self.locks / f'lock_realtime_{hour}.lock').is_file())
-        self.assertEqual(
-            self.read_report(f'report_realtime_{hour}.env'),
-            ['realtime', record['time_run'], 'success', '0', str(record['execution_time'])],
-        )
+        run_time = datetime.fromisoformat(report['TIME_RUN'])
+        self.assertEqual(run_time - datetime.fromisoformat(report['TIME_START']), timedelta(hours=4))
+        hour = run_time.strftime('%Y%m%d_%H')
+        self.assertTrue((self.locks / f'lock_realtime_rain_{hour}.lock').is_file())
+        self.assertEqual(report_file.name, f'report_realtime_rain_{hour}.env')
 
     def test_history_passes_end_and_duration_and_records_app_failure(self):
         self.env['LAUNCHER_TEST_EXIT_CODE'] = '17'
         start, end = '2026-11-25 11:00', '2026-11-25 14:00'
-        settings = LAUNCHER.with_name('app_downloader_workflow_obs_rain_local.json')
+        settings = LAUNCHER.with_name('app_downloader_workflow_vda_obs_ws_local.json')
         result = self.launch('history', start, end, '--settings-file', str(settings))
         self.assertEqual(result.returncode, 17, result.stderr)
+        self.assertNotIn(' ==> ... END', result.stdout)
         invocation = json.loads(self.invocation.read_text())
         self.assertEqual(invocation['args'][-4:], ['-settings_file', str(settings), '-time', end])
         self.assertEqual((invocation['time_run'], invocation['time_period']), (end, '3'))
-        record = self.read_record('history_202611251400.json')
-        self.assertEqual((record['time_start'], record['time_end']), (start, end))
-        self.assertEqual((record['status'], record['exit_code']), ('failed', 17))
-        self.assertEqual(record['execution_time_unit'], 'seconds')
-        self.assertGreaterEqual(record['execution_time'], 0)
-        self.assertEqual(
-            self.read_report('report_history_20261125_14.env'),
-            ['history', end, 'failed', '17', str(record['execution_time'])],
-        )
+        report = self.read_report('report_history_rain_20261125_14.env')
+        self.assertEqual((report['TIME_START'], report['TIME_END']), (start, end))
+        self.assertEqual((report['STATUS'], report['EXIT_CODE']), ('failed', '17'))
+        self.assertGreaterEqual(int(report['EXECUTION_TIME']), 0)
 
     def test_history_rejects_non_hourly_dates(self):
         result = self.launch('history', '2026-11-25 11:30', '2026-11-25 14:00')
@@ -141,43 +181,75 @@ class TestDownloaderLauncher(unittest.TestCase):
         self.assertIn('hourly dates', result.stderr)
         self.assertFalse(self.invocation.exists())
 
+    def test_launcher_exports_the_server_defaults(self):
+        for name in ('DOMAIN_NAME', 'PATH_DATA', 'PATH_LOG'):
+            self.env.pop(name, None)
+        result = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        invocation = json.loads(self.invocation.read_text())
+        folder = '/home/idrologia/share/FloodProofs_v4'
+        self.assertEqual(invocation['domain'], 'vda')
+        self.assertEqual(invocation['data'], f'{folder}/data/data_dynamic/source/ground_network/weather_stations/')
+        self.assertEqual(invocation['log'], f'{folder}/logs/downloader/ground_network/')
+
     def test_lock_contention_preserves_the_existing_record(self):
-        self.runs.mkdir()
         self.locks.mkdir()
         self.reports.mkdir()
-        run_file = self.runs / 'history_202611251400.json'
-        run_file.write_text('{"status": "running"}', encoding='utf-8')
-        report = self.reports / 'report_history_20261125_14.env'
+        report = self.reports / 'report_history_rain_20261125_14.env'
         report.write_text('STATUS=running\n', encoding='utf-8')
-        with (self.locks / 'lock_history_20261125_14.lock').open('a') as lock:
+        with (self.locks / 'lock_history_rain_20261125_14.lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             result = self.launch('history', '2026-11-25 11:00', '2026-11-25 14:00')
         self.assertEqual(result.returncode, 75, result.stderr)
-        self.assertEqual(self.read_record(run_file.name), {'status': 'running'})
         self.assertEqual(report.read_text(encoding='utf-8'), 'STATUS=running\n')
         self.assertFalse(self.invocation.exists())
+
+    def test_run_variable_changes_the_lock_and_report_names(self):
+        self.env['SHYBOX_RUN_VARIABLE'] = 'snow'
+        result = self.launch('history', '2026-11-25 14:00', '2026-11-25 14:00')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.locks / 'lock_history_snow_20261125_14.lock').is_file())
+        report = self.read_report('report_history_snow_20261125_14.env')
+        self.assertEqual(report['RUN_VARIABLE'], 'snow')
 
     def test_unavailable_conda_is_recorded_before_running_the_app(self):
         self.env.pop('SHYBOX_PYTHON')
         self.env['SHYBOX_CONDA_BIN'] = str(self.root / 'missing-conda')
         result = self.launch('history', '2026-11-25 14:00', '2026-11-25 14:00')
-        self.assertEqual(result.returncode, 1)
-        record = self.read_record('history_202611251400.json')
-        self.assertEqual(record['status'], 'failed')
-        self.assertEqual(record['time_period'], 0)
-        self.assertIn('Conda executable', record['message'])
+        self.assertEqual(result.returncode, 127)
+        report = self.read_report('report_history_rain_20261125_14.env')
+        self.assertEqual((report['STATUS'], report['EXIT_CODE'], report['TIME_PERIOD']), ('failed', '127', '0'))
         self.assertFalse(self.invocation.exists())
+
+    def test_default_launch_uses_the_configured_interpreter_directly(self):
+        launcher = self.root / LAUNCHER.name
+        script = LAUNCHER.read_text()
+        server_python = (
+            '/home/idrologia/share/FloodProofs_v4/library/conda_shybox_base/'
+            'envs/shybox_base_libraries/bin/python'
+        )
+        self.assertEqual(script.count(server_python), 1)
+        python = self.env.pop('SHYBOX_PYTHON')
+        self.env.pop('SHYBOX_CONDA_BIN', None)
+        launcher.write_text(script.replace(server_python, python))
+        launcher.chmod(0o700)
+
+        result = self.launch('history', '2026-11-25 14:00', '2026-11-25 14:00', launcher=launcher)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.invocation.is_file())
 
     def test_unavailable_named_environment_is_recorded_before_running_the_app(self):
         conda = self.root / 'conda'
-        conda.write_text('#!/bin/bash\nexit 1\n', encoding='utf-8')
+        conda.write_text('#!/bin/bash\n[[ "$*" == "run --no-capture-output --name unavailable-env python -B "* ]]\nexit 1\n',
+                         encoding='utf-8')
         conda.chmod(0o700)
         self.env.pop('SHYBOX_PYTHON')
         self.env['SHYBOX_CONDA_BIN'] = str(conda)
         self.env['SHYBOX_CONDA_ENV'] = 'unavailable-env'
         result = self.launch('history', '2026-11-25 14:00', '2026-11-25 14:00')
         self.assertEqual(result.returncode, 1)
-        record = self.read_record('history_202611251400.json')
-        self.assertEqual((record['status'], record['conda_environment']), ('failed', 'unavailable-env'))
-        self.assertIn('unavailable-env', record['message'])
+        report = self.read_report('report_history_rain_20261125_14.env')
+        self.assertEqual((report['STATUS'], report['EXIT_CODE']), ('failed', '1'))
         self.assertFalse(self.invocation.exists())

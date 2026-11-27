@@ -15,12 +15,12 @@ SHYBOX brings the stages of a modeling application into a consistent workflow: p
 
 ## Release 1.7.4
 
-Version **1.7.4** adds an hourly PostgreSQL observation downloader. The local
-SSH-tunnel and direct server profiles write station CSVs for six weather
-variables and include optional discharge and soil saturation. The Bash
-launcher supports realtime and historical runs with per-hour locks and JSON
-and environment reports. See the [downloader guide](docs/downloader_workflows.rst)
-and [changelog](CHANGELOG).
+Version **1.7.4** includes hourly PostgreSQL observation downloads for VDA
+weather stations and CVA dams. Local SSH tunnel and direct server profiles
+write one CSV per variable and hour, including reservoir water level and
+turbine discharge for CVA. The Bash launchers support realtime and historical
+runs with per-hour locks and environment reports. See the
+[downloader guide](docs/downloader_workflows.rst) and [changelog](CHANGELOG).
 
 Runner examples are in [`workflow/runner/execution/`](workflow/runner/execution/)
 and dataset preparation examples in [`workflow/runner/datasets/`](workflow/runner/datasets/).

@@ -14,8 +14,11 @@ Version 1.7.4 [2026-11-26]
 - CONFIGURATION: Select database providers and validate active source and
   destination pairs. Enable rain, temperature, humidity, wind, snow and
   radiation. Configure optional discharge and soil saturation.
-- OPERATIONS: Add realtime and history launch modes with Conda preflight,
-  per-hour locks and JSON and environment reports for downstream jobs.
+- DOWNLOADER: Add a CVA dam provider and local and server profiles for
+  hourly reservoir water level and turbine discharge. Name the launchers
+  and profiles by provider and observation type.
+- OPERATIONS: Run the selected Conda interpreter in realtime and history
+  modes. Use per-hour, per-label locks and Bash environment reports.
 - DOCUMENTATION: Add the downloader guide and update the package, citation
   and Read the Docs release metadata.
 

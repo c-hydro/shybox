@@ -1,16 +1,19 @@
-# Observation downloader
+# Observation downloaders
 
-Run hourly station downloads from PostgreSQL using
-`app_downloader_workflow_obs_main.py` or its Bash launcher,
-`exec_downloader_workflow_obs.sh`. Edit the launcher deployment paths before
-using it in a different checkout.
+The VDA weather-station and CVA dam workflows query PostgreSQL and write
+hourly CSVs.
 
-- `app_downloader_workflow_obs_rain_local.json` uses an SSH tunnel.
-- `app_downloader_workflow_obs_rain_server.json` uses a direct PostgreSQL connection.
+| Workflow | Launcher | Python module |
+| --- | --- | --- |
+| VDA weather stations | `exec_downloader_workflow_vda_obs_ws.sh` | `app_downloader_workflow_vda_obs_ws_main.py` |
+| CVA dams | `exec_downloader_workflow_cva_obs_dam.sh` | `app_downloader_workflow_cva_obs_dam_main.py` |
 
-Both profiles enable rain, temperature, humidity, wind, snow and radiation.
-Discharge and the three soil saturation depths are configured for optional use.
+Each workflow has a `_local.json` profile for an SSH tunnel and a
+`_server.json` profile for direct PostgreSQL access. The CVA profiles enable
+reservoir water level and turbine discharge. The VDA profiles enable rain,
+temperature, humidity, wind, snow and radiation. Discharge and soil
+saturation are available as optional VDA variables.
 
 See the [hourly observation downloader guide](../../docs/downloader_workflows.rst)
-for connection setup, variable options, realtime and history commands, and run
-reports.
+for connection settings, deployment paths, realtime and history commands, and
+lock and report formats.

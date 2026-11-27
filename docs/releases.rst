@@ -4,12 +4,12 @@ Current release
 SHYBOX 1.7.4 — Hourly database observations
 ----------------------------------------------------------------------
 
-Prepared on 26 November 2026. The observation downloader reads hourly station
-data from PostgreSQL and writes a CSV for each active variable and hour. The
-VDA profiles support a direct server connection and a local SSH tunnel. The
-Bash launcher checks the Conda environment, locks each mode and run hour, and
-publishes JSON and environment reports. See :doc:`downloader_workflows` for
-settings, commands and report fields.
+Prepared on 26 November 2026. The VDA and CVA workflows read hourly data
+from PostgreSQL and write one CSV per active variable and hour. The CVA
+provider covers reservoir water level and turbine discharge. Both workflows
+ship with local SSH tunnel and direct server profiles. The realtime and
+history launchers use per-hour locks and write environment reports. See
+:doc:`downloader_workflows` for settings, commands and report fields.
 
 SHYBOX 1.7.3 — Deterministic and probabilistic time-series analysis
 ----------------------------------------------------------------------

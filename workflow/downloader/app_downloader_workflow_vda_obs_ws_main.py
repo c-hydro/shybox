@@ -12,9 +12,9 @@ __author__ =
 __library__ = 'shybox'
 
 General command line:
-python app_downloader_workflow_obs_main.py -settings_file app_downloader_workflow_obs_rain_local.json -time "YYYY-MM-DD HH:MM"
+python app_downloader_workflow_vda_obs_ws_main.py -settings_file app_downloader_workflow_vda_obs_ws_local.json -time "YYYY-MM-DD HH:MM"
 
-Use app_downloader_workflow_obs_rain_server.json on a server with direct access to PostgreSQL.
+Use app_downloader_workflow_vda_obs_ws_server.json on a server with direct access to PostgreSQL.
 Set configuration.application.source.provider to select the observation provider.
 The local and server examples both use vda with their respective connection settings.
 Each destination selects an output writer with file_format, which defaults to csv.
