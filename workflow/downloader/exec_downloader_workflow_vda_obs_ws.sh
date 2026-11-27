@@ -45,11 +45,12 @@ export PYTHONPATH="$script_folder${PYTHONPATH:+:$PYTHONPATH}"
 usage() {
     cat <<'HELP'
 Usage:
-  exec_downloader_workflow_vda_obs_ws.sh [--settings-file FILE] [realtime [TIME_PERIOD]]
-  exec_downloader_workflow_vda_obs_ws.sh [--settings-file FILE] history TIME_START TIME_END
+  exec_downloader_workflow_vda_obs_ws.sh [-f|--force] [--settings-file FILE] [realtime [TIME_PERIOD]]
+  exec_downloader_workflow_vda_obs_ws.sh [-f|--force] [--settings-file FILE] history TIME_START TIME_END
 
 Realtime uses the current Europe/Rome hour and a four-hour lookback by default.
 History takes inclusive hourly bounds in the form 'YYYY-MM-DD HH:00'.
+Use -f or --force to run despite a held lock and write a separate report.
 SHYBOX_RUN_VARIABLE overrides the variable label used in lock and report names.
 HELP
 }
@@ -60,6 +61,7 @@ usage_error() {
     exit 2
 }
 
+force=false
 arguments=()
 while (($#)); do
     case "$1" in
@@ -68,6 +70,7 @@ while (($#)); do
             settings_file="$2"
             shift
             ;;
+        -f|--force) force=true ;;
         -h|--help) usage; exit 0 ;;
         -*) usage_error "Unknown option $1." ;;
         *) arguments+=("$1") ;;
@@ -132,8 +135,14 @@ report_file="$(render_run_path "$report_file_template")"
 exec 9>>"$lock_file"
 flock -n -E 75 9 || {
     result=$?
-    if ((result == 75)); then printf 'Run is locked: %s\n' "$lock_file" >&2; fi
-    exit "$result"
+    if ((result != 75)); then exit "$result"; fi
+    if [[ "$force" == false ]]; then
+        printf 'Run is locked: %s\n' "$lock_file" >&2
+        exit "$result"
+    fi
+    exec 9>&-
+    report_file="${report_file%.env}_forced_$$.env"
+    printf 'Forcing run despite held lock %s\n' "$lock_file" >&2
 }
 
 started=$SECONDS

@@ -161,6 +161,11 @@ An invocation with the same lock key exits with code 75 while the first
 run holds the lock. The lock is released at process exit. Set
 ``SHYBOX_LOCK_DIR`` and ``SHYBOX_REPORT_DIR`` to change the file locations.
 
+Use ``-f`` or ``--force`` to run despite a held lock. The forced run writes
+``report_<run_name>_<run_variable>_<YYYYMMDD_HH>_forced_<PID>.env`` and
+preserves the lock and report of the active run. When the lock is available,
+the launcher acquires it and uses the standard report file.
+
 A Bash consumer can source the environment report and check ``STATUS``
 (``success`` or ``failed``), ``TIME_RUN``, ``TIME_START``, ``TIME_END``,
 ``TIME_PERIOD``, ``EXECUTION_TIME`` in seconds, and ``EXIT_CODE``.

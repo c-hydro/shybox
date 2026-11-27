@@ -213,6 +213,36 @@ class TestDownloaderLauncher(unittest.TestCase):
         report = self.read_report('report_history_snow_20261125_14.env')
         self.assertEqual(report['RUN_VARIABLE'], 'snow')
 
+    def test_force_runs_despite_contention_and_preserves_the_original_lock_and_report(self):
+        self.locks.mkdir()
+        self.reports.mkdir()
+        start, end = '2026-11-25 11:00', '2026-11-25 14:00'
+        for launcher, label, option in ((LAUNCHER, 'rain', '-f'), (CVA_LAUNCHER, 'dam', '--force')):
+            with self.subTest(launcher=launcher.name):
+                report = self.reports / f'report_history_{label}_20261125_14.env'
+                report.write_text('STATUS=running\n', encoding='utf-8')
+                lock_path = self.locks / f'lock_history_{label}_20261125_14.lock'
+                with lock_path.open('a') as lock:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    result = self.launch(option, 'history', start, end, launcher=launcher)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn('Forcing run despite held lock', result.stderr)
+                    blocked = self.launch('history', start, end, launcher=launcher)
+                    self.assertEqual(blocked.returncode, 75, blocked.stderr)
+
+                self.assertEqual(report.read_text(encoding='utf-8'), 'STATUS=running\n')
+                forced_report, = self.reports.glob(f'{report.stem}_forced_*.env')
+                record = self.read_report(forced_report.name)
+                self.assertEqual((record['STATUS'], record['TIME_RUN']), ('success', end))
+                self.invocation.unlink()
+
+    def test_force_uses_the_normal_report_when_the_lock_is_available(self):
+        result = self.launch('history', '2026-11-25 14:00', '2026-11-25 14:00', '-f')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report, = self.reports.glob('*.env')
+        self.assertEqual(report.name, 'report_history_rain_20261125_14.env')
+
     def test_unavailable_conda_is_recorded_before_running_the_app(self):
         self.env.pop('SHYBOX_PYTHON')
         self.env['SHYBOX_CONDA_BIN'] = str(self.root / 'missing-conda')
