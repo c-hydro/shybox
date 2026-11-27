@@ -168,17 +168,16 @@ class TestRemoteDatabase(unittest.TestCase):
 
     def test_vda_csv_dispatch_uses_the_provider_hook(self):
         database = ConfigurationDB({'name': 'observations'})
-        data = object()
+        data = DataFrame([{'station_name': 'Test station', 'post_validity_code': 0}])
         destination = {'format': 'csv', 'path': 'output', 'file_name': 'rain.csv', 'options': {'delimiter': '|'}}
         with patch.object(access_point_vda, 'write_csv_default') as shared_writer:
             self.assertIs(database.write_data(data, destination, variable='rain'), shared_writer.return_value)
-        shared_writer.assert_called_once_with(
-            Path('output/rain.csv'), data, options=destination['options'], variable='rain', logger=database.logger,
-            column={
-                'station_name': 'station', 'longitude': 'longitude', 'latitude': 'latitude',
-                'post_validity_code': 'code', 'value': 'value', 'time': 'time',
-            },
-        )
+        shared_writer.assert_called_once()
+        path, observations = shared_writer.call_args.args
+        self.assertEqual(path, Path('output/rain.csv'))
+        self.assertEqual(observations.columns.tolist(), access_point_vda.CSV_COLUMNS)
+        self.assertEqual(shared_writer.call_args.kwargs,
+                         {'options': destination['options'], 'variable': 'rain', 'logger': database.logger})
 
     def test_write_data_dispatches_to_a_format_specific_writer(self):
         data, logger = object(), object()
@@ -334,7 +333,6 @@ class TestObservationsWorkflow(unittest.TestCase):
                         {f'weather_stations_{name}_20261125{hour}00.csv' for name in active},
                     )
                     target = output / f'weather_stations_rain_20261125{hour}00.csv'
-                    self.assertEqual(target.read_text().splitlines(), [
-                        'station|longitude|latitude|code|value|time',
-                        'Test station|7,5|45,5|-9999|1,25|12:00',
-                    ])
+                    header, row = target.read_text().splitlines()
+                    self.assertEqual(header.split('|'), access_point_vda.CSV_COLUMNS)
+                    self.assertEqual(row.split('|')[:6], ['Test station', '7,5', '45,5', '-9999', '1,25', '12:00'])

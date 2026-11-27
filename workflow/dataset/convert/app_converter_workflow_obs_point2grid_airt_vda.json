@@ -93,18 +93,18 @@
     "dynamic_data_src": {
       "data": {
         "path": "{path_dynamic_source}/{path_time_source}/",
-        "file_name": "AirTemperature_{file_time_source}.csv",
+        "file_name": "weather_station_temperature_{file_time_source}.csv",
         "format": "csv"
       },
       "code": {
         "path": "{path_dynamic_source}/{path_time_source}/",
-        "file_name": "CalCode_AirTemperature_{file_time_source}.csv",
+        "file_name": "weather_station_temperature_{file_time_source}.csv",
         "format": "csv"
       }
     },
     "dynamic_data_dst": {
       "path": "{path_dynamic_destination}/{path_time_destination}/",
-      "file_name": "AirTemperature_{file_time_destination}.tiff",
+      "file_name": "map_air_temperature_{file_time_destination}.tiff",
       "format": "tiff",
       "type": null,
       "mode": "grid",

@@ -10,6 +10,7 @@ Version:       '1.0.0'
 # ----------------------------------------------------------------------------------------------------------------------
 # libraries
 from collections.abc import Mapping
+from math import isfinite
 from pathlib import Path
 import pandas as pd
 
@@ -43,6 +44,14 @@ VARIABLES = {
 ALIASES = {'p': 'rain', 'r': 'radiation', 't': 'temperature', 'v': 'wind',
            'u': 'humidity', 'gg': 'snow', 'us10': 'soilsat_10',
            'us20': 'soilsat_20', 'us40': 'soilsat_40'}
+
+OBSERVATION_COLUMNS = [
+    'station_id', 'station_name', 'latitude', 'longitude', 'altitude',
+    'is_ott', 'is_heated', 'network', 'alert_area', 'time', 'value',
+    'unit', 'post_validity_code', 'variable',
+]
+CSV_LEGACY_COLUMNS = ['station', 'longitude', 'latitude', 'code', 'value', 'time']
+CSV_COLUMNS = CSV_LEGACY_COLUMNS + [name for name in OBSERVATION_COLUMNS if name not in CSV_LEGACY_COLUMNS]
 # ----------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -226,6 +235,9 @@ def get_data(source, configuration, time_start, time_end):
                         dt = record[0]
                         # get code and value
                         code, value = (record[1], record[2]) if instantaneous else (None, record[1])
+                        # MATLAB Drops uses zero when an observation has no returned code.
+                        if code is None or not isfinite(code):
+                            code = 0
 
                         # append to the row
                         rows.append(dict(station_id=station_id, station_name=station_name,
@@ -242,15 +254,7 @@ def get_data(source, configuration, time_start, time_end):
                 # info message end
                 logger_stream.info_down(f'Get from "{network}" -- "{variable}" ... DONE')
 
-    # expected columns
-    columns = ['station_id', 'station_name', 'latitude', 'longitude', 'altitude',
-               'is_ott', 'is_heated', 'network', 'alert_area', 'time', 'value',
-               'unit', 'post_validity_code', 'variable']
-
-    # create dataframe
-    data = pd.DataFrame(rows, columns=columns)
-
-    return data
+    return pd.DataFrame(rows, columns=OBSERVATION_COLUMNS)
 
 # helper to read rows by cursor
 def read_rows(cursor, query, parameters):
@@ -262,21 +266,15 @@ def read_rows(cursor, query, parameters):
 # method to configure writer for vda case
 def write_csv_vda(data, configuration: Mapping, *, variable: str, logger):
 
-    # set columns
-    column = {
-        'station_name': 'station',
-        'longitude': 'longitude',
-        'latitude': 'latitude',
-        'post_validity_code': 'code',
-        'value': 'value',
-        'time': 'time',
-    }
+    # Preserve the original CSV columns and include the full provider metadata.
+    observations = data.reindex(columns=OBSERVATION_COLUMNS)
+    observations = observations.assign(station=observations['station_name'], code=observations['post_validity_code'])
     # get options and path (folder and file_name)
     options = configuration.get('options', configuration.get('csv', {}))
     path = Path(configuration['path']) / configuration['file_name']
 
     # call default writer
-    return write_csv_default(path, data, options=options, variable=variable, logger=logger, column=column)
+    return write_csv_default(path, observations[CSV_COLUMNS], options=options, variable=variable, logger=logger)
 
 # method to overwrite the write_data
 def write_data(data, configuration: Mapping, *, variable: str = 'observations', logger=None):
