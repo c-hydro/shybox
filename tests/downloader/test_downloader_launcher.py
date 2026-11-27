@@ -13,7 +13,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
-LAUNCHER = Path(__file__).resolve().parents[2] / 'workflow/downloader/exec_downloader_workflow_obs.sh'
+LAUNCHER = Path(__file__).resolve().parents[2] / 'workflow/downloader/exec_downloader_workflow_vda_obs_ws.sh'
+CVA_LAUNCHER = LAUNCHER.with_name('exec_downloader_workflow_cva_obs_dam.sh')
 
 
 @unittest.skipUnless(shutil.which('flock'), 'flock is required')
@@ -72,6 +73,57 @@ class TestDownloaderLauncher(unittest.TestCase):
         )
         return dict(zip(keys, result.stdout.splitlines(), strict=True))
 
+    def test_cva_realtime_uses_the_dam_server_profile(self):
+        self.env.pop('PATH_DATA')
+        zone = ZoneInfo('Europe/Rome')
+        before = datetime.now(zone).strftime('%Y-%m-%d %H:00')
+        result = self.launch(launcher=CVA_LAUNCHER)
+        after = datetime.now(zone).strftime('%Y-%m-%d %H:00')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        invocation = json.loads(self.invocation.read_text())
+        folder = '/home/idrologia/share/FloodProofs_v4'
+        self.assertEqual(invocation['args'], [
+            '-B', f'{folder}/library/package_shybox/workflow/downloader/app_downloader_workflow_cva_obs_dam_main.py',
+            '-settings_file', f'{folder}/fp_tools_downloading/ground_network/app_downloader_workflow_cva_obs_dam_server.json',
+            '-time', invocation['time_run'],
+        ])
+        self.assertEqual(invocation['data'], f'{folder}/data/data_dynamic/source/ground_network/dams/')
+        self.assertIn(invocation['time_run'], {before, after})
+        self.assertEqual(invocation['time_period'], '4')
+        hour = datetime.fromisoformat(invocation['time_run']).strftime('%Y%m%d_%H')
+        self.assertTrue((self.locks / f'lock_realtime_dam_{hour}.lock').is_file())
+        report = self.read_report(f'report_realtime_dam_{hour}.env')
+        self.assertEqual((report['STATUS'], report['RUN_VARIABLE']), ('success', 'dam'))
+
+    def test_cva_history_records_failure_and_accepts_a_run_label(self):
+        self.env.update(LAUNCHER_TEST_EXIT_CODE='17', SHYBOX_RUN_VARIABLE='turbine_discharge')
+        settings = CVA_LAUNCHER.with_name('app_downloader_workflow_cva_obs_dam_local.json')
+        start, end = '2026-11-25 11:00', '2026-11-25 14:00'
+        result = self.launch('--settings-file', str(settings), 'history', start, end, launcher=CVA_LAUNCHER)
+
+        self.assertEqual(result.returncode, 17, result.stderr)
+        invocation = json.loads(self.invocation.read_text())
+        self.assertEqual(invocation['args'][-4:], ['-settings_file', str(settings), '-time', end])
+        self.assertEqual((invocation['time_run'], invocation['time_period']), (end, '3'))
+        self.assertTrue((self.locks / 'lock_history_turbine_discharge_20261125_14.lock').is_file())
+        report = self.read_report('report_history_turbine_discharge_20261125_14.env')
+        self.assertEqual((report['TIME_START'], report['TIME_END']), (start, end))
+        self.assertEqual((report['STATUS'], report['EXIT_CODE']), ('failed', '17'))
+
+    def test_cva_history_preserves_the_report_while_locked(self):
+        self.locks.mkdir()
+        self.reports.mkdir()
+        report = self.reports / 'report_history_dam_20261125_14.env'
+        report.write_text('STATUS=running\n', encoding='utf-8')
+        with (self.locks / 'lock_history_dam_20261125_14.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.launch('history', '2026-11-25 11:00', '2026-11-25 14:00', launcher=CVA_LAUNCHER)
+
+        self.assertEqual(result.returncode, 75, result.stderr)
+        self.assertEqual(report.read_text(encoding='utf-8'), 'STATUS=running\n')
+        self.assertFalse(self.invocation.exists())
+
     def test_realtime_floors_current_hour_and_defaults_to_four(self):
         zone = ZoneInfo('Europe/Rome')
         before = datetime.now(zone).strftime('%Y-%m-%d %H:00')
@@ -95,10 +147,10 @@ class TestDownloaderLauncher(unittest.TestCase):
             [
                 '-B',
                 '/home/idrologia/share/FloodProofs_v4/library/package_shybox/workflow/downloader/'
-                'app_downloader_workflow_obs_main.py',
+                'app_downloader_workflow_vda_obs_ws_main.py',
                 '-settings_file',
                 '/home/idrologia/share/FloodProofs_v4/fp_tools_downloading/ground_network/'
-                'app_downloader_workflow_obs_rain_server.json',
+                'app_downloader_workflow_vda_obs_ws_server.json',
                 '-time', report['TIME_RUN'],
             ],
         )
@@ -111,7 +163,7 @@ class TestDownloaderLauncher(unittest.TestCase):
     def test_history_passes_end_and_duration_and_records_app_failure(self):
         self.env['LAUNCHER_TEST_EXIT_CODE'] = '17'
         start, end = '2026-11-25 11:00', '2026-11-25 14:00'
-        settings = LAUNCHER.with_name('app_downloader_workflow_obs_rain_local.json')
+        settings = LAUNCHER.with_name('app_downloader_workflow_vda_obs_ws_local.json')
         result = self.launch('history', start, end, '--settings-file', str(settings))
         self.assertEqual(result.returncode, 17, result.stderr)
         self.assertNotIn(' ==> ... END', result.stdout)
@@ -160,6 +212,36 @@ class TestDownloaderLauncher(unittest.TestCase):
         self.assertTrue((self.locks / 'lock_history_snow_20261125_14.lock').is_file())
         report = self.read_report('report_history_snow_20261125_14.env')
         self.assertEqual(report['RUN_VARIABLE'], 'snow')
+
+    def test_force_runs_despite_contention_and_preserves_the_original_lock_and_report(self):
+        self.locks.mkdir()
+        self.reports.mkdir()
+        start, end = '2026-11-25 11:00', '2026-11-25 14:00'
+        for launcher, label, option in ((LAUNCHER, 'rain', '-f'), (CVA_LAUNCHER, 'dam', '--force')):
+            with self.subTest(launcher=launcher.name):
+                report = self.reports / f'report_history_{label}_20261125_14.env'
+                report.write_text('STATUS=running\n', encoding='utf-8')
+                lock_path = self.locks / f'lock_history_{label}_20261125_14.lock'
+                with lock_path.open('a') as lock:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    result = self.launch(option, 'history', start, end, launcher=launcher)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn('Forcing run despite held lock', result.stderr)
+                    blocked = self.launch('history', start, end, launcher=launcher)
+                    self.assertEqual(blocked.returncode, 75, blocked.stderr)
+
+                self.assertEqual(report.read_text(encoding='utf-8'), 'STATUS=running\n')
+                forced_report, = self.reports.glob(f'{report.stem}_forced_*.env')
+                record = self.read_report(forced_report.name)
+                self.assertEqual((record['STATUS'], record['TIME_RUN']), ('success', end))
+                self.invocation.unlink()
+
+    def test_force_uses_the_normal_report_when_the_lock_is_available(self):
+        result = self.launch('history', '2026-11-25 14:00', '2026-11-25 14:00', '-f')
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report, = self.reports.glob('*.env')
+        self.assertEqual(report.name, 'report_history_rain_20261125_14.env')
 
     def test_unavailable_conda_is_recorded_before_running_the_app(self):
         self.env.pop('SHYBOX_PYTHON')

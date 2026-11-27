@@ -63,7 +63,7 @@
         },
         "variables": {
           "rain": {
-            "active": true,
+            "active": false,
             "variable": "RAIN",
             "networks": ["cf-vda", "arpa-vda", "piemonte"],
             "geosupervisor": true, "geolimits": [null, null, null, null],
@@ -78,7 +78,7 @@
             "quality_level": 1
           },
           "humidity": {
-            "active": true,
+            "active": false,
             "variable": "HUMIDITY",
             "networks": ["cf-vda", "arpa-vda", "piemonte"],
             "geosupervisor": false,
@@ -86,7 +86,7 @@
             "quality_level": 1
           },
           "wind": {
-            "active": true,
+            "active": false,
             "variable": "WIND",
             "networks": ["cf-vda", "arpa-vda", "piemonte"],
             "geosupervisor": false,
@@ -94,7 +94,7 @@
             "quality_level": 1
           },
           "snow": {
-            "active": true,
+            "active": false,
             "variable": "SNOW",
             "networks": ["cf-vda", "arpa-vda", "piemonte"],
             "geosupervisor": true,
@@ -102,7 +102,7 @@
             "quality_level": 1
           },
           "radiation": {
-            "active": true,
+            "active": false,
             "variable": "RADIATION",
             "networks": ["cf-vda", "arpa-vda", "piemonte"],
             "geosupervisor": false,

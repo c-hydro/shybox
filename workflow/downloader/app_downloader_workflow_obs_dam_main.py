@@ -12,7 +12,7 @@ __author__ =
 __library__ = 'shybox'
 
 General command line:
-python app_downloader_workflow_obs_main.py -settings_file app_downloader_workflow_obs_rain_local.json -time "YYYY-MM-DD HH:MM"
+python app_downloader_workflow_vda_obs_ws_main.py -settings_file app_downloader_workflow_obs_rain_local.json -time "YYYY-MM-DD HH:MM"
 
 Use app_downloader_workflow_obs_rain_server.json on a server with direct access to PostgreSQL.
 Set configuration.application.source.provider to select the observation provider.
@@ -46,7 +46,7 @@ from shybox.time_toolkit.time_handler import TimeManager
 # ----------------------------------------------------------------------------------------------------------------------
 # algorithm information
 project_name = 'shybox'
-alg_name = 'Workflow for downloading observed datasets'
+alg_name = 'Workflow for downloading observed datasets (dams network)'
 alg_type = 'Package'
 alg_version = '1.0.0'
 alg_release = '2026-11-25'
