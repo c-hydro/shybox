@@ -7,7 +7,7 @@ build_date = "2026-11-26"
 
 [project]
 name = "shybox"
-version = "1.7.4"
+version = "1.7.5"
 description = "A package to set and run snow and hydrological models and analyze results, developed by CIMA Research Foundation"
 
 authors = [

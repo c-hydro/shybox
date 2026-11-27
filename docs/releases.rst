@@ -1,6 +1,16 @@
 Current release
 ======================================================================
 
+SHYBOX 1.7.5 — VDA station CSV metadata and quality codes
+----------------------------------------------------------------------
+
+Prepared on 27 November 2026. The VDA weather-station downloader writes the
+full observation metadata after the original six CSV columns. Finite
+PostgreSQL quality codes are preserved. Missing or non-finite codes default
+to zero, as in the MATLAB Drops workflow. Missing measurements keep the
+configured marker. See :doc:`downloader_workflows` for the CSV schema and
+quality-code handling.
+
 SHYBOX 1.7.4 — Hourly database observations
 ----------------------------------------------------------------------
 

@@ -6,6 +6,17 @@ The 1.6.0–1.6.3 entries below number earlier development
 snapshots in chronological order; they do not create historical release tags.
 Legacy release dates follow main/* tags where available.
 
+Version 1.7.5 [2026-11-27]
+**************************
+
+- DOWNLOADER: Include all VDA observation fields in the hourly weather-station
+  CSV. Preserve the original column order at the start of each row.
+- QUALITY: Preserve finite SQL quality codes. Use zero as the MATLAB Drops
+  placeholder when a code is missing or non-finite. Keep the configured
+  missing-value marker for measurements.
+- DOCUMENTATION: Update the downloader schema, release notes, README and
+  citation metadata.
+
 Version 1.7.4 [2026-11-26]
 **************************
 

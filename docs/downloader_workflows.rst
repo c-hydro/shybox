@@ -94,10 +94,20 @@ Instantaneous readings also accept codes −64 and −65. In ``geolimits``, the
 four values are minimum latitude, maximum latitude, minimum longitude and
 maximum longitude. Use ``null`` for an open bound.
 
-The VDA output columns are ``station``, ``longitude``, ``latitude``,
-``code``, ``value`` and ``time``. The examples use semicolon delimiters,
-UTF-8 and ``-9999`` for missing fields. Set ``destination.<variable>.options``
-to change CSV formatting.
+The first six VDA CSV columns are ``station``, ``longitude``, ``latitude``,
+``code``, ``value`` and ``time``. They are followed by ``station_id``,
+``station_name``, ``altitude``, ``is_ott``, ``is_heated``, ``network``,
+``alert_area``, ``unit``, ``post_validity_code`` and ``variable``.
+The ``station`` and ``code`` columns mirror ``station_name`` and
+``post_validity_code``.
+
+The downloader preserves a finite quality code returned by SQL. It writes
+zero when no finite code is returned, including for hourly aggregates where
+SQL filters the ten-minute samples before aggregation. Zero is also the
+placeholder used by MATLAB Drops. Use ``value`` to identify missing
+measurements. The examples use semicolon delimiters, UTF-8 and ``-9999`` as
+the missing-value marker. Set ``destination.<variable>.options`` to change
+CSV formatting.
 
 CVA dams
 ~~~~~~~~

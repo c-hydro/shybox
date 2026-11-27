@@ -36,7 +36,8 @@ Download observations
 The VDA weather-station and CVA dam downloaders in ``workflow/downloader/``
 query PostgreSQL and write one CSV per active variable and hour. Each workflow
 includes settings for local SSH forwarding and direct server connections.
-See :doc:`downloader_workflows` for configuration and run commands.
+VDA exports include station metadata and a quality-code column. See
+:doc:`downloader_workflows` for the CSV schema, configuration and commands.
 
 .. toctree::
    :maxdepth: 2

@@ -1,6 +1,6 @@
 # SHYBOX — Snow and Hydrologic Modeling Toolbox
 
-[![Version 1.7.4](https://img.shields.io/badge/version-1.7.4-blue)](pyproject.toml)
+[![Version 1.7.5](https://img.shields.io/badge/version-1.7.5-blue)](pyproject.toml)
 [![Documentation Status](https://readthedocs.org/projects/shybox/badge/?version=latest)](https://shybox.readthedocs.io/en/latest/)
 [![Documentation build](https://github.com/c-hydro/shybox/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/c-hydro/shybox/actions/workflows/docs.yml)
 [![License](https://img.shields.io/badge/license-EUPL--1.2-blue.svg)](LICENSE)
@@ -13,13 +13,12 @@
 
 SHYBOX brings the stages of a modeling application into a consistent workflow: prepare observations and weather forecasts, organize model inputs, configure and run simulations, then analyze, display and monitor their outputs. Reusable components handle configuration, datasets, time, logging and processing orchestration.
 
-## Release 1.7.4
+## Release 1.7.5
 
-Version **1.7.4** includes hourly PostgreSQL observation downloads for VDA
-weather stations and CVA dams. Local SSH tunnel and direct server profiles
-write one CSV per variable and hour, including reservoir water level and
-turbine discharge for CVA. The Bash launchers support realtime and historical
-runs with per-hour locks and environment reports. See the
+Version **1.7.5** expands the hourly VDA weather-station CSV to include the
+station ID, altitude, network, alert area, unit, and other observation metadata.
+The original six columns stay first. The quality code preserves finite SQL
+values and defaults to zero when no finite code is available. See the
 [downloader guide](docs/downloader_workflows.rst) and [changelog](CHANGELOG).
 
 Runner examples are in [`workflow/runner/execution/`](workflow/runner/execution/)
