@@ -5,20 +5,20 @@
 set -euo pipefail
 
 # script info
-script_name='SHYBOX OBSERVATION DOWNLOADER'
+script_name='SHYBOX CVA DAM OBSERVATION DOWNLOADER'
 script_version='1.0.0'
-script_date='2026/11/26'
+script_date='2026/11/27'
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------------------------------------------------------------
 # declaration(s)
 script_folder='/home/idrologia/share/FloodProofs_v4/library/package_shybox/'
-script_file='/home/idrologia/share/FloodProofs_v4/library/package_shybox/workflow/downloader/app_downloader_workflow_vda_obs_ws_main.py'
-settings_file='/home/idrologia/share/FloodProofs_v4/fp_tools_downloading/ground_network/app_downloader_workflow_vda_obs_ws_server.json'
+script_file='/home/idrologia/share/FloodProofs_v4/library/package_shybox/workflow/downloader/app_downloader_workflow_obs_dam_main.py'
+settings_file='/home/idrologia/share/FloodProofs_v4/fp_tools_downloading/ground_network/app_downloader_workflow_obs_dam_cva_server.json'
 lock_folder='/home/idrologia/share/FloodProofs_v4/locks/downloader/ground_network/'
 report_folder='/home/idrologia/share/FloodProofs_v4/reports/downloader/ground_network/'
 virtual_env_python='/home/idrologia/share/FloodProofs_v4/library/conda_shybox_base/envs/shybox_base_libraries/bin/python'
-run_variable='rain'
+run_variable='dam'
 
 # check variables from system or script
 settings_file="${SHYBOX_OBS_SETTINGS_FILE:-$settings_file}"
@@ -35,7 +35,7 @@ report_file_template="${report_folder%/}/report_{run_name}_{run_variable}_{run_t
 # ----------------------------------------------------------------------------------------------------------------------------------
 # environmental variable(s)
 export DOMAIN_NAME="${DOMAIN_NAME:-vda}"
-export PATH_DATA="${PATH_DATA:-/home/idrologia/share/FloodProofs_v4/data/data_dynamic/source/ground_network/weather_stations/}"
+export PATH_DATA="${PATH_DATA:-/home/idrologia/share/FloodProofs_v4/data/data_dynamic/source/ground_network/dams/}"
 export PATH_LOG="${PATH_LOG:-/home/idrologia/share/FloodProofs_v4/logs/downloader/ground_network/}"
 export PYTHONPATH="$script_folder${PYTHONPATH:+:$PYTHONPATH}"
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -45,8 +45,8 @@ export PYTHONPATH="$script_folder${PYTHONPATH:+:$PYTHONPATH}"
 usage() {
     cat <<'HELP'
 Usage:
-  exec_downloader_workflow_vda_obs_ws.sh [-f|--force] [--settings-file FILE] [realtime [TIME_PERIOD]]
-  exec_downloader_workflow_vda_obs_ws.sh [-f|--force] [--settings-file FILE] history TIME_START TIME_END
+  exec_downloader_workflow_obs_dam.sh [-f|--force] [--settings-file FILE] [realtime [TIME_PERIOD]]
+  exec_downloader_workflow_obs_dam.sh [-f|--force] [--settings-file FILE] history TIME_START TIME_END
 
 Realtime uses the current Europe/Rome hour and a four-hour lookback by default.
 History takes inclusive hourly bounds in the form 'YYYY-MM-DD HH:00'.

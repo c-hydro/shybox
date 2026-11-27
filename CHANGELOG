@@ -15,13 +15,13 @@ Version 1.7.4 [2026-11-26]
   destination pairs. Enable rain, temperature, humidity, wind, snow and
   radiation. Configure optional discharge and soil saturation.
 - DOWNLOADER: Add a CVA dam provider and local and server profiles for
-  hourly reservoir water level and turbine discharge. Name the launchers
-  and profiles by provider and observation type.
+  hourly reservoir water level and turbine discharge. Name launchers by
+  observation type and include the provider in the JSON profile names.
 - OPERATIONS: Run the selected Conda interpreter in realtime and history
   modes. Use per-hour, per-label locks and Bash environment reports.
   Add ``-f`` to run despite a held lock and write a separate report.
 - DOCUMENTATION: Add the downloader guide and update the package, citation
-  and Read the Docs release metadata.
+  and Read the Docs release metadata. Document the branch and tag names.
 
 Version 1.7.3 [2026-11-20]
 **************************

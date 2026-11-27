@@ -17,7 +17,7 @@ from shybox.db_toolkit import lib_db_io
 from shybox.db_toolkit.db_handler_base import ConfigurationDB, write_csv_default
 from shybox.db_toolkit.access_point_db import access_point_vda
 from shybox.db_toolkit.lib_db_providers import DataProvider, get_provider
-from workflow.downloader import app_downloader_workflow_vda_obs_ws_main as workflow
+from workflow.downloader import app_downloader_workflow_obs_ws_main as workflow
 
 
 class TestSharedDatabaseIO(unittest.TestCase):
@@ -248,7 +248,7 @@ class TestObservationsWorkflow(unittest.TestCase):
         inactive = ['discharge', 'soilsat_10', 'soilsat_20', 'soilsat_40']
         for mode in ('local', 'server'):
             with self.subTest(mode=mode):
-                settings = workflow.settings_folder / f'app_downloader_workflow_vda_obs_ws_{mode}.json'
+                settings = workflow.settings_folder / f'app_downloader_workflow_obs_ws_vda_{mode}.json'
                 application = json.loads(settings.read_text())['configuration']['application']
                 variables = application['source']['variables']
                 self.assertEqual(list(variables), active + inactive)
@@ -296,7 +296,7 @@ class TestObservationsWorkflow(unittest.TestCase):
     def test_entry_point_writes_csv_for_active_variables_only(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
-            config = json.loads((workflow.settings_folder / 'app_downloader_workflow_vda_obs_ws_local.json').read_text())
+            config = json.loads((workflow.settings_folder / 'app_downloader_workflow_obs_ws_vda_local.json').read_text())
             application = config['configuration']['application']
             application['destination']['soilsat_10']['path'] = '{inactive_output_path}'
             application['destination']['rain']['options'].update(delimiter='|', decimal=',', time_format='%H:%M')

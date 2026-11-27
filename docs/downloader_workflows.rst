@@ -18,13 +18,13 @@ Linux ``flock``.
 
    * - Settings file in ``workflow/downloader/``
      - Connection
-   * - ``app_downloader_workflow_vda_obs_ws_server.json``
+   * - ``app_downloader_workflow_obs_ws_vda_server.json``
      - Direct PostgreSQL at ``192.168.7.11:6432`` from a host with access.
-   * - ``app_downloader_workflow_vda_obs_ws_local.json``
+   * - ``app_downloader_workflow_obs_ws_vda_local.json``
      - Local SSH forwarding at ``127.0.0.1:16432``.
-   * - ``app_downloader_workflow_cva_obs_dam_server.json``
+   * - ``app_downloader_workflow_obs_dam_cva_server.json``
      - Direct PostgreSQL for CVA.
-   * - ``app_downloader_workflow_cva_obs_dam_local.json``
+   * - ``app_downloader_workflow_obs_dam_cva_local.json``
      - Local SSH forwarding for CVA.
 
 For the local profile, open an SSH session through your organization's
@@ -125,9 +125,9 @@ environment. Select another profile with ``--settings-file`` or
 
 .. code-block:: bash
 
-   workflow/downloader/exec_downloader_workflow_vda_obs_ws.sh realtime
-   workflow/downloader/exec_downloader_workflow_cva_obs_dam.sh realtime
-   workflow/downloader/exec_downloader_workflow_cva_obs_dam.sh history \
+   workflow/downloader/exec_downloader_workflow_obs_ws.sh realtime
+   workflow/downloader/exec_downloader_workflow_obs_dam.sh realtime
+   workflow/downloader/exec_downloader_workflow_obs_dam.sh history \
      "2026-11-25 08:00" "2026-11-25 12:00"
 
 Realtime rounds down to the current Europe/Rome hour. The default
@@ -144,8 +144,8 @@ and set the same variables along with ``TIME_PERIOD``:
 
    export DOMAIN_NAME=vda PATH_LOG="$PWD/run/log" PATH_DATA="$PWD/run/data"
    export TIME_PERIOD=4
-   python -m workflow.downloader.app_downloader_workflow_cva_obs_dam_main \
-     -settings_file "$PWD/workflow/downloader/app_downloader_workflow_cva_obs_dam_local.json" \
+   python -m workflow.downloader.app_downloader_workflow_obs_dam_main \
+     -settings_file "$PWD/workflow/downloader/app_downloader_workflow_obs_dam_cva_local.json" \
      -time "2026-11-25 12:00"
 
 Run reports and locks

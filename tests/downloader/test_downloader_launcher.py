@@ -13,8 +13,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
-LAUNCHER = Path(__file__).resolve().parents[2] / 'workflow/downloader/exec_downloader_workflow_vda_obs_ws.sh'
-CVA_LAUNCHER = LAUNCHER.with_name('exec_downloader_workflow_cva_obs_dam.sh')
+LAUNCHER = Path(__file__).resolve().parents[2] / 'workflow/downloader/exec_downloader_workflow_obs_ws.sh'
+CVA_LAUNCHER = LAUNCHER.with_name('exec_downloader_workflow_obs_dam.sh')
 
 
 @unittest.skipUnless(shutil.which('flock'), 'flock is required')
@@ -84,8 +84,8 @@ class TestDownloaderLauncher(unittest.TestCase):
         invocation = json.loads(self.invocation.read_text())
         folder = '/home/idrologia/share/FloodProofs_v4'
         self.assertEqual(invocation['args'], [
-            '-B', f'{folder}/library/package_shybox/workflow/downloader/app_downloader_workflow_cva_obs_dam_main.py',
-            '-settings_file', f'{folder}/fp_tools_downloading/ground_network/app_downloader_workflow_cva_obs_dam_server.json',
+            '-B', f'{folder}/library/package_shybox/workflow/downloader/app_downloader_workflow_obs_dam_main.py',
+            '-settings_file', f'{folder}/fp_tools_downloading/ground_network/app_downloader_workflow_obs_dam_cva_server.json',
             '-time', invocation['time_run'],
         ])
         self.assertEqual(invocation['data'], f'{folder}/data/data_dynamic/source/ground_network/dams/')
@@ -98,7 +98,7 @@ class TestDownloaderLauncher(unittest.TestCase):
 
     def test_cva_history_records_failure_and_accepts_a_run_label(self):
         self.env.update(LAUNCHER_TEST_EXIT_CODE='17', SHYBOX_RUN_VARIABLE='turbine_discharge')
-        settings = CVA_LAUNCHER.with_name('app_downloader_workflow_cva_obs_dam_local.json')
+        settings = CVA_LAUNCHER.with_name('app_downloader_workflow_obs_dam_cva_local.json')
         start, end = '2026-11-25 11:00', '2026-11-25 14:00'
         result = self.launch('--settings-file', str(settings), 'history', start, end, launcher=CVA_LAUNCHER)
 
@@ -147,10 +147,10 @@ class TestDownloaderLauncher(unittest.TestCase):
             [
                 '-B',
                 '/home/idrologia/share/FloodProofs_v4/library/package_shybox/workflow/downloader/'
-                'app_downloader_workflow_vda_obs_ws_main.py',
+                'app_downloader_workflow_obs_ws_main.py',
                 '-settings_file',
                 '/home/idrologia/share/FloodProofs_v4/fp_tools_downloading/ground_network/'
-                'app_downloader_workflow_vda_obs_ws_server.json',
+                'app_downloader_workflow_obs_ws_vda_server.json',
                 '-time', report['TIME_RUN'],
             ],
         )
@@ -163,7 +163,7 @@ class TestDownloaderLauncher(unittest.TestCase):
     def test_history_passes_end_and_duration_and_records_app_failure(self):
         self.env['LAUNCHER_TEST_EXIT_CODE'] = '17'
         start, end = '2026-11-25 11:00', '2026-11-25 14:00'
-        settings = LAUNCHER.with_name('app_downloader_workflow_vda_obs_ws_local.json')
+        settings = LAUNCHER.with_name('app_downloader_workflow_obs_ws_vda_local.json')
         result = self.launch('history', start, end, '--settings-file', str(settings))
         self.assertEqual(result.returncode, 17, result.stderr)
         self.assertNotIn(' ==> ... END', result.stdout)

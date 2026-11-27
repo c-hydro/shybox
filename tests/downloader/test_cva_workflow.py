@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from shybox.db_toolkit.access_point_db import access_point_cva
 from shybox.db_toolkit.db_handler_base import ConfigurationDB
-from workflow.downloader import app_downloader_workflow_cva_obs_dam_main as workflow
+from workflow.downloader import app_downloader_workflow_obs_dam_main as workflow
 
 
 class TestCvaWorkflow(unittest.TestCase):
@@ -26,7 +26,7 @@ class TestCvaWorkflow(unittest.TestCase):
         cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
         station = (4, 9, 'Test dam', 'tables_cva.dam', 'm', 'test-zone', 1800, 45.5, 7.1)
         cursor.fetchall.side_effect = [[station], [(hour, Decimal('5.25'))], [station], [(hour, None)]]
-        settings = Path(workflow.__file__).with_name(f'app_downloader_workflow_cva_obs_dam_{profile}.json')
+        settings = Path(workflow.__file__).with_name(f'app_downloader_workflow_obs_dam_cva_{profile}.json')
         environment = {
             'DOMAIN_NAME': 'test', 'PATH_LOG': str(folder / 'logs'), 'PATH_DATA': str(folder / 'data'),
             'TIME_RUN': '2026-11-25 12:00', 'TIME_PERIOD': '0',

@@ -5,8 +5,8 @@ hourly CSVs.
 
 | Workflow | Launcher | Python module |
 | --- | --- | --- |
-| VDA weather stations | `exec_downloader_workflow_vda_obs_ws.sh` | `app_downloader_workflow_vda_obs_ws_main.py` |
-| CVA dams | `exec_downloader_workflow_cva_obs_dam.sh` | `app_downloader_workflow_cva_obs_dam_main.py` |
+| VDA weather stations | `exec_downloader_workflow_obs_ws.sh` | `app_downloader_workflow_obs_ws_main.py` |
+| CVA dams | `exec_downloader_workflow_obs_dam.sh` | `app_downloader_workflow_obs_dam_main.py` |
 
 Each workflow has a `_local.json` profile for an SSH tunnel and a
 `_server.json` profile for direct PostgreSQL access. The CVA profiles enable

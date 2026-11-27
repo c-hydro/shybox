@@ -16,6 +16,31 @@ For a new configurable processing step:
 #. Add the function name and argument mappings to the JSON ``process_list``.
 #. Check a small input/output example, including coordinates and timestamps.
 
+Branches and release tags
+-------------------------
+
+.. list-table::
+   :header-rows: 1
+
+   * - Name
+     - Purpose
+   * - ``main``
+     - Published code and the Read the Docs ``latest`` build.
+   * - ``dev``
+     - Development integration.
+   * - ``docs/<version>_<topic>``
+     - Documentation editions, such as ``docs/0.3.0_dataset-preparation``.
+   * - ``ideas/<topic>_<version>``
+     - Experimental work, such as ``ideas/monitoring_1.7.3``.
+   * - ``dashboard/<version>``
+     - Dashboard snapshots, such as ``dashboard/1.6.0``.
+   * - ``old/<branch>``
+     - Legacy project and publication branches kept for reference.
+
+Use ``main/<version>`` for release tags and ``dev/<version>`` for development
+tags. Git stores tags and branches separately, so ``main/1.7.4`` can coexist
+with the ``main`` branch. See :doc:`publishing` for documentation builds.
+
 Build the documentation
 -----------------------
 
